@@ -1,0 +1,783 @@
+                                                J E S 2   J O B   L O G
+
+
+21.35.15 JOB 3179  IEF677I WARNING MESSAGE(S) FOR JOB FILETEST ISSUED
+21.35.15 JOB 3179  $HASP373 FILETEST STARTED - INIT  1 - CLASS A - SYS TK5R
+21.35.15 JOB 3179  IEF403I FILETEST - STARTED - TIME=21.35.15
+21.35.16 JOB 3179  IEFACTRT - Stepname  Procstep  Program   Retcode
+21.35.16 JOB 3179  FILETEST   ASM       ASM       IFOX00    RC= 0000
+21.35.16 JOB 3179  FILETEST   ASM       LKED      IEWL      RC= 0000
+21.35.16 JOB 3179  FILETEST   ASM       GO        PGM=*.DD  RC= 0000
+21.35.16 JOB 3179  IEF404I FILETEST - ENDED - TIME=21.35.16
+21.35.16 JOB 3179  $HASP395 FILETEST ENDED
+
+
+------ JES2 JOB STATISTICS ------
+
+
+ 25 AUG 26 JOB EXECUTION DATE
+
+
+       197 CARDS READ
+
+
+       664 SYSOUT PRINT RECORDS
+
+
+        25 SYSOUT PUNCH RECORDS
+
+
+      0.00 MINUTES EXECUTION TIME
+
+    1     //FILETEST JOB (5161A020,1A11),'SLICE 6 FILES',                         JOB 3179
+          //             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+          //             USER=HERC01,PASSWORD=
+          ***
+          *** Slice 6: QSAM sequential files. OPEN/READ/WRITE/CLOSE with the
+          *** AT END clause done by patching DCBEODAD before each GET, which is
+          *** what IKFCBL00 does. Expected: 4 records copied, count 00004.
+          ***
+    2     //ASM      EXEC ASMFCLG
+    3     XXASMFCLG  PROC MAC='SYS1.MACLIB',MAC1='SYS1.MACLIB',                   00000100
+          XX         MAC2='SYS1.MACLIB',MAC3='SYS1.MACLIB',SOUT='*'               00000200
+    4     XXASM      EXEC PGM=IFOX00,PARM=OBJ,REGION=128K                         00000300
+    5     XXSYSLIB   DD   DSN=&MAC,DISP=SHR                                       00000400
+    6     XX         DD   DSN=&MAC1,DISP=SHR                                      00000500
+    7     XX         DD   DSN=&MAC2,DISP=SHR                                      00000600
+    8     XX         DD   DSN=&MAC3,DISP=SHR                                      00000700
+    9     XXSYSUT1   DD   DSN=&&SYSUT1,UNIT=SYSSQ,SPACE=(1700,(600,100)),         00000800
+          XX             SEP=(SYSLIB)                                             00000900
+   10     XXSYSUT2   DD   DSN=&&SYSUT2,UNIT=SYSSQ,SPACE=(1700,(300,50)),          00001000
+          XX             SEP=(SYSLIB,SYSUT1)                                      00001100
+   11     XXSYSUT3   DD   DSN=&&SYSUT3,UNIT=SYSSQ,SPACE=(1700,(300,50))           00001200
+   12     XXSYSPRINT DD   SYSOUT=&SOUT,DCB=BLKSIZE=1089                           00001300
+   13     XXSYSPUNCH DD   SYSOUT=B                                                00001400
+   14     XXSYSGO    DD   DSN=&&OBJSET,UNIT=SYSSQ,SPACE=(80,(200,50)),            00001500
+          XX             DISP=(MOD,PASS)                                          00001600
+   15     //ASM.SYSIN DD  *
+   16     XXLKED     EXEC PGM=IEWL,PARM=(XREF,LET,LIST,NCAL),REGION=128K,         00001700
+          XX             COND=(8,LT,ASM)                                          00001800
+   17     XXSYSLIN   DD   DSN=&&OBJSET,DISP=(OLD,DELETE)                          00001900
+   18     XX         DD   DDNAME=SYSIN                                            00002000
+   19     XXSYSLMOD  DD   DSN=&&GOSET(GO),UNIT=SYSDA,SPACE=(1024,(50,20,1)),      00002100
+          XX             DISP=(MOD,PASS)                                          00002200
+   20     XXSYSUT1   DD   DSN=&&SYSUT1,UNIT=(SYSDA,SEP=(SYSLIN,SYSLMOD)),         00002300
+          XX             SPACE=(1024,(50,20))                                     00002400
+   21     XXSYSPRINT DD   SYSOUT=&SOUT                                            00002500
+   22     XXGO       EXEC PGM=*.LKED.SYSLMOD,COND=((8,LT,ASM),(4,LT,LKED))        00002600
+   23     //GO.SYSOUT  DD  SYSOUT=Z
+   24     //GO.OUTFILE DD  SYSOUT=Z
+   25     //GO.INFILE  DD  *
+
+ STMT NO. MESSAGE
+-
+    5     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    6     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    7     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    8     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+   12     IEF653I SUBSTITUTION JCL - SYSOUT=*,DCB=BLKSIZE=1089
+   21     IEF653I SUBSTITUTION JCL - SYSOUT=*
+   22     IEF686I DDNAME REFERRED TO ON DDNAME KEYWORD IN PRIOR STEP WAS NOT RESOLVED
+IEF236I ALLOC. FOR FILETEST ASM ASM
+IEF237I 390  ALLOCATED TO SYSLIB
+IEF237I 390  ALLOCATED TO
+IEF237I 390  ALLOCATED TO
+IEF237I 390  ALLOCATED TO
+IEF237I 291  ALLOCATED TO SYSUT1
+IEF237I 292  ALLOCATED TO SYSUT2
+IEF237I 293  ALLOCATED TO SYSUT3
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I JES2 ALLOCATED TO SYSPUNCH
+IEF237I 290  ALLOCATED TO SYSGO
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF142I FILETEST ASM ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS1.MACLIB                                  KEPT          *-------25
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS26237.T213515.RA000.FILETEST.SYSUT1       DELETED       *------253
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26237.T213515.RA000.FILETEST.SYSUT2       DELETED       *-------35
+IEF285I   VOL SER NOS= WORK03.
+IEF285I   SYS26237.T213515.RA000.FILETEST.SYSUT3       DELETED       *--------8
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   JES2.JOB03179.SO0103                         SYSOUT
+IEF285I   JES2.JOB03179.SO0104                         SYSOUT
+IEF285I   SYS26237.T213515.RA000.FILETEST.OBJSET       PASSED        *-------25
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   JES2.JOB03179.SI0101                         SYSIN
+IEF373I STEP /ASM     / START 26237.2135
+IEF374I STEP /ASM     / STOP  26237.2135 CPU    0MIN 00.06SEC SRB    0MIN 00.01SEC VIRT   128K SYS   200K
+************************************************************************************************************************************
+*     1. Jobstep of job: FILETEST    Stepname: ASM         Program name: IFOX00     Executed on 25.08.26 from 21.35.15 to 21.35.16 *
+*         elapsed time  00:00:00,09                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,07               Virtual Storage used:    128K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,07   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:    178                                                                           *
+*     390......25 390.......0 390.......0 390.......0 291.....253 292......35 293.......8 DMY.......0 DMY.......0 290......25      *
+*     DMY.......0                                                                                                                  *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,11                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR FILETEST LKED ASM
+IEF237I 290  ALLOCATED TO SYSLIN
+IEF237I DMY  ALLOCATED TO
+IEF237I 291  ALLOCATED TO SYSLMOD
+IEF237I 293  ALLOCATED TO SYSUT1
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF142I FILETEST LKED ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26237.T213515.RA000.FILETEST.OBJSET       DELETED       *-------26
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   SYS26237.T213515.RA000.FILETEST.GOSET        PASSED        *-------10
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26237.T213515.RA000.FILETEST.SYSUT1       DELETED       *--------0
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   JES2.JOB03179.SO0105                         SYSOUT
+IEF373I STEP /LKED    / START 26237.2135
+IEF374I STEP /LKED    / STOP  26237.2135 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT   128K SYS   164K
+************************************************************************************************************************************
+*     2. Jobstep of job: FILETEST    Stepname: LKED        Program name: IEWL       Executed on 25.08.26 from 21.35.16 to 21.35.16 *
+*         elapsed time  00:00:00,02                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:    128K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      0                                                                           *
+*     290......26 DMY.......0 291......10 293.......0 DMY.......0                                                                  *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR FILETEST GO ASM
+IEF237I 291  ALLOCATED TO PGM=*.DD
+IEF237I JES2 ALLOCATED TO SYSOUT
+IEF237I JES2 ALLOCATED TO OUTFILE
+IEF237I JES2 ALLOCATED TO INFILE
+IEF142I FILETEST GO ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26237.T213515.RA000.FILETEST.GOSET        KEPT          *--------0
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   JES2.JOB03179.SO0106                         SYSOUT
+IEF285I   JES2.JOB03179.SO0107                         SYSOUT
+IEF285I   JES2.JOB03179.SI0102                         SYSIN
+IEF373I STEP /GO      / START 26237.2135
+IEF374I STEP /GO      / STOP  26237.2135 CPU    0MIN 00.00SEC SRB    0MIN 00.00SEC VIRT     8K SYS   164K
+IEF237I 291  ALLOCATED TO SYS00001
+IEF285I   SYS26237.T213516.RA000.FILETEST.R0000001     KEPT          *--------0
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26237.T213515.RA000.FILETEST.GOSET        DELETED
+IEF285I   VOL SER NOS= WORK02.
+IEF375I  JOB /FILETEST/ START 26237.2135
+IEF376I  JOB /FILETEST/ STOP  26237.2135 CPU    0MIN 00.07SEC SRB    0MIN 00.01SEC
+
+                                               EXTERNAL SYMBOL DICTIONARY                                      PAGE    1
+
+
+SYMBOL   TYPE  ID   ADDR  LENGTH LDID                                                            ASM 0201 21.35 08/25/26
+
+FILETEST  SD  0001 000000 000358
+COBDISP   ER  0002
+COBTERM   ER  0003
+COBRT     SD  0004 000358 00021C
+COBDISP   LD       000358        0004
+COBTERM   LD       0003D0        0004
+                                                                                                               PAGE    2
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+                                      1 *---------------------------------------------------------------
+                                      2 * Generated by cobc370 from tests/filetest.cbl
+                                      3 * Standard OS/360 entry linkage. SYS1.COBLIB is never referenced.
+                                      4 * DISPLAY is served by our own COBRT runtime, below.
+                                      5 *---------------------------------------------------------------
+000000                                6 FILETEST CSECT
+000000 90EC D00C      0000C           7          STM   14,12,12(13)        save caller's registers
+000004 05C0                           8          BALR  12,0                establish addressability
+                            00006     9          USING *,12
+000006 50D0 C30E      00314          10          ST    13,SAVEAREA+4       backward chain to caller
+00000A 41B0 C30A      00310          11          LA    11,SAVEAREA
+00000E 50BD 0008      00008          12          ST    11,8(13)            forward chain from caller
+000012 18DB                          13          LR    13,11               our save area is now current
+                                     14 * MAIN-PARA.
+000014                               15 P0000    DS    0H
+                                     16 * OPEN INPUT IN-FILE
+                                     17          OPEN  (FD000,INPUT)
+000014                               18+         CNOP  0,4                               ALIGN LIST TO FULLWORD 01740001
+000014 4510 C016      0001C          19+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR. 01780000
+000018 80                            20+         DC    AL1(128)                          OPTION BYTE            01900000
+
+000019 000248                        21+         DC    AL3(FD000)                        DCB ADDRESS            01920000
+00001C 0A13                          22+         SVC   19                                ISSUE OPEN SVC         04000000
+                                     23 * OPEN OUTPUT OUT-FILE
+                                     24          OPEN  (FD001,OUTPUT)
+00001E 0700                          25+         CNOP  0,4                               ALIGN LIST TO FULLWORD 01740001
+000020 4510 C022      00028          26+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR. 01780000
+000024 8F                            27+         DC    AL1(143)                          OPTION BYTE            01900000
+000025 0002A8                        28+         DC    AL3(FD001)                        DCB ADDRESS            01920000
+000028 0A13                          29+         SVC   19                                ISSUE OPEN SVC         04000000
+                                     30 * PERFORM READ-PARA THRU READ-EXIT
+00002A 41F0 C030      00036          31          LA    15,R0001            return here
+00002E 50F0 C0EA      000F0          32          ST    15,X0002            into the range's exit cell
+000032 47F0 C084      0008A          33          B     P0001
+000036                               34 R0001    DS    0H
+000036 41F0 C0E8      000EE          35          LA    15,F0002            restore fall-through
+00003A 50F0 C0EA      000F0          36          ST    15,X0002
+                                     37 * CLOSE IN-FILE
+                                     38          CLOSE (FD000)
+00003E 0700                          39+         CNOP  0,4                               ALIGN LIST TO FULLWORD 02420002
+000040 4510 C042      00048          40+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR  02460002
+000044 80                            41+         DC    AL1(128)                          OPTION BYTE            02580000
+000045 000248                        42+         DC    AL3(FD000)                        DCB ADDRESS            02600000
+000048 0A14                          43+         SVC   20                                ISSUE CLOSE SVC        01640000
+                                     44 * CLOSE OUT-FILE
+                                     45          CLOSE (FD001)
+00004A 0700                          46+         CNOP  0,4                               ALIGN LIST TO FULLWORD 02420002
+00004C 4510 C04E      00054          47+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR  02460002
+000050 80                            48+         DC    AL1(128)                          OPTION BYTE            02580000
+000051 0002A8                        49+         DC    AL3(FD001)                        DCB ADDRESS            02600000
+
+000054 0A14                          50+         SVC   20                                ISSUE CLOSE SVC        01640000
+                                     51 * MOVE REC-COUNT -> OUT-NUM
+000056 5820 C1A2      001A8          52          L     2,D0002
+00005A 4E20 C1B2      001B8          53          CVD   2,DWK               binary -> packed
+00005E F877 C1BA C1B2 001C0 001B8    54          ZAP   PWK1(8),DWK(8)
+000064 F347 C1A6 C1BA 001AC 001C0    55          UNPK  D0003(5),PWK1(8)    packed -> zoned
+                                                                                                               PAGE    3
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+00006A 96F0 C1AA      001B0          56          OI    D0003+4,X'F0'       unsigned: force an F zone
+                                     57 * DISPLAY OUT-NUM
+00006E 4110 C0F6      000FC          58          LA    1,PARM0001
+000072 58F0 C0EE      000F4          59          L     15,VDISP
+000076 05EF                          60          BALR  14,15
+                                     61 * STOP RUN
+000078 58F0 C0F2      000F8          62          L     15,VTERM            close anything the runtime opened
+00007C 05EF                          63          BALR  14,15
+00007E 58DD 0004      00004          64          L     13,4(13)            restore caller's save area
+000082 98EC D00C      0000C          65          LM    14,12,12(13)        restore caller's registers
+000086 1BFF                          66          SR    15,15               return code 0
+000088 07FE                          67          BR    14                  return to caller
+                                     68 * READ-PARA.
+00008A                               69 P0001    DS    0H
+                                     70 * READ IN-FILE
+00008A 4110 C09E      000A4          71          LA    1,L0001             this READ's AT END
+00008E BE17 C263      00269          72          STCM  1,7,FD000+33        into DCBEODAD
+                                     73          GET   FD000,D0000         QSAM move mode
+000092 4110 C242      00248          74+         LA    1,FD000                           LOAD PARAMETER REG 1   01900002
+000096 4100 C100      00106          75+         LA    0,D0000                           LOAD PARAMETER REG 0   02500002
+00009A 58F0 1030      00030          76+         L     15,48(0,1)               LOAD GET ROUTINE ADDR           00600000
+
+00009E 05EF                          77+         BALR  14,15                    LINK TO GET ROUTINE             00625000
+0000A0 47F0 C0A2      000A8          78          B     L0002
+0000A4                               79 L0001    DS    0H                  AT END
+                                     80 * GO TO READ-EXIT
+0000A4 47F0 C0E2      000E8          81          B     P0002
+0000A8                               82 L0002    DS    0H
+                                     83 * ADD 1 -> REC-COUNT
+0000A8 5820 C1A2      001A8          84          L     2,D0002
+0000AC 4E20 C1B2      001B8          85          CVD   2,DWK               binary -> packed
+0000B0 F877 C1BA C1B2 001C0 001B8    86          ZAP   PWK1(8),DWK(8)
+0000B6 F877 C1C2 C302 001C8 00308    87          ZAP   PWK2(8),K0001(8)    literal
+0000BC FA77 C1BA C1C2 001C0 001C8    88          AP    PWK1(8),PWK2(8)
+0000C2 F877 C1B2 C1BA 001B8 001C0    89          ZAP   DWK(8),PWK1(8)
+0000C8 4F20 C1B2      001B8          90          CVB   2,DWK               packed -> binary
+0000CC 5020 C1A2      001A8          91          ST    2,D0002
+                                     92 * MOVE IN-REC -> OUT-REC
+0000D0 D24F C150 C100 00156 00106    93          MVC   D0001(80),D0000     alphanumeric move
+                                     94 * WRITE OUT-REC
+                                     95          PUT   FD001,D0001
+0000D6 4110 C2A2      002A8          96+         LA    1,FD001                           LOAD PARAMETER REG 1   01900002
+0000DA 4100 C150      00156          97+         LA    0,D0001                           LOAD PARAMETER REG 0   02500002
+0000DE 58F0 1030      00030          98+         L     15,48(0,1)               LOAD PUT ROUTINE ADDR           00550000
+0000E2 05EF                          99+         BALR  14,15                    LINK TO PUT ROUTINE             00600000
+                                    100 * GO TO READ-PARA
+0000E4 47F0 C084      0008A         101          B     P0001
+                                    102 * READ-EXIT.
+0000E8                              103 P0002    DS    0H
+                                    104 * EXIT
+                                    105 * end of a PERFORM range: return through its cell
+
+0000E8 58F0 C0EA      000F0         106          L     15,X0002
+0000EC 07FF                         107          BR    15
+
+0000EE                              108 F0002    DS    0H                  fall-through when not performed
+0000EE 0000
+0000F0 000000EE                     109 X0002    DC    A(F0002)            READ-EXIT
+                                                                                                               PAGE    4
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+0000F4 00000000                     110 VDISP    DC    V(COBDISP)
+0000F8 00000000                     111 VTERM    DC    V(COBTERM)
+0000FC 000001AC                     112 PARM0001 DC    A(D0003)
+000100 80000104                     113          DC    X'80',AL3(LEN0001)  last parameter
+000104 0005                         114 LEN0001  DC    H'5'
+                                    115 * WORKING-STORAGE
+000106 4040404040404040             116 D0000    DC    CL80' '             IN-REC PIC X(80)
+000156 4040404040404040             117 D0001    DC    CL80' '             OUT-REC PIC X(80)
+0001A6 0000
+0001A8 00000000                     118 D0002    DC    F'0'                REC-COUNT PIC S9(5)v0 COMP
+0001AC F0F0F0F0C0                   119 D0003    DC    ZL5'0'              OUT-NUM PIC 9(5)v0 DISP
+                                    120 * work areas for decimal arithmetic
+0001B8                              121 DWK      DS    D                   CVD/CVB doubleword
+0001C0                              122 PWK1     DS    PL8
+0001C8                              123 PWK2     DS    PL8
+0001D0                              124 MULT8    DS    PL8                 MP right operand
+0001D8                              125 DIVR8    DS    PL8                 DP divisor
+0001E0                              126 QTMP     DS    PL8                 DP quotient
+0001E8                              127 WK0      DS    PL16                expression stack
+0001F8                              128 WK1      DS    PL16
+000208                              129 WK2      DS    PL16
+000218                              130 WK3      DS    PL16
+000228                              131 WK4      DS    PL16
+000238                              132 WK5      DS    PL16
+
+                                    133 * file control blocks
+                                    134 FD000    DCB   DDNAME=INFILE,DSORG=PS,MACRF=(GM),RECFM=FB,             X
+                                                       LRECL=80,BLKSIZE=80
+
+
+                                    136+*                       DATA CONTROL BLOCK                              22770000
+                                    137+*                                                                       22860000
+000248                              138+FD000    DC    0F'0'                   ORIGIN ON WORD BOUNDARY          22914000
+
+                                    140+*                       DIRECT ACCESS DEVICE INTERFACE                  27360000
+
+000248 0000000000000000             142+         DC    BL16'0'                  FDAD,DVTBL                      27540000
+000258 00000000                     143+         DC    A(0)                     KEYLE,DEVT,TRBAL                27720000
+
+                                    145+*                       COMMON ACCESS METHOD INTERFACE                  48690000
+
+00025C 00                           147+         DC    AL1(0)                  BUFNO                            49050000
+00025D 000001                       148+         DC    AL3(1)                  BUFCB                            54720000
+000260 0000                         149+         DC    AL2(0)             BUFL                                  55170000
+000262 4000                         150+         DC    BL2'0100000000000000'                                   *55800000
+                                       +                                                 DSORG                  55890000
+000264 00000001                     151+         DC    A(1)                     IOBAD                           56340000
+
+                                    153+*                       FOUNDATION EXTENSION                            56610000
+
+000268 00                           155+         DC    BL1'00000000'                  BFTEK,BFLN,HIARCHY        59850000
+000269 000001                       156+         DC    AL3(1)                  EODAD                            65970000
+00026C 90                           157+         DC    BL1'10010000'                                           *66150000
+                                       +                                       RECFM                            66240000
+00026D 000000                       158+         DC    AL3(0)                  EXLST                            66330000
+
+
+                                                                                                               PAGE    5
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+                                    160+*                       FOUNDATION BLOCK                                66690000
+
+000270 C9D5C6C9D3C54040             162+         DC    CL8'INFILE'             DDNAME                           66870000
+000278 02                           163+         DC    BL1'00000010'           OFLGS                            68220000
+000279 00                           164+         DC    BL1'00000000'                          IFLG              68310000
+00027A 5000                         165+         DC    BL2'0101000000000000'                                   *68400000
+                                       +                                                                       *68490000
+                                       +                                       MACR                             68580000
+
+                                    167+*                       BSAM-BPAM-QSAM INTERFACE                        74430000
+
+00027C 00                           169+         DC    BL1'00000000'                                           *74610000
+                                       +                                                                   RER1 74700000
+00027D 000001                       170+         DC    AL3(1)                  CHECK, GERR, PERR                74790000
+000280 00000001                     171+         DC    A(1)                    SYNAD                            74880000
+000284 0000                         172+         DC    H'0'                    CIND1, CIND2                     74970000
+000286 0050                         173+         DC    AL2(80)                 BLKSIZE                          75240000
+000288 00000000                     174+         DC    F'0'                    WCPO, WCPL, OFFSR, OFFSW         75870000
+00028C 00000001                     175+         DC    A(1)                    IOBA                             75960000
+000290 00                           176+         DC    AL1(0)                  NCP                              76050000
+000291 000001                       177+         DC    AL3(1)                  EOBR, EOBAD                      76140000
+
+                                    179+*                            QSAM INTERFACE                             81450000
+
+000294 00000001                     181+         DC    A(1)                     RECAD                           81630000
+000298 0000                         182+         DC    H'0'                    QSWS                             81810000
+
+00029A 0050                         183+         DC    AL2(80)        LRECL                                     80730000
+00029C 00                           184+         DC    BL1'00000000'           EROPT                            82530000
+00029D 000001                       185+         DC    AL3(1)                  CNTRL                            82620000
+0002A0 00000000                     186+         DC    F'0'                    PRECL                            82710000
+0002A4 00000001                     187+         DC    A(1)                    EOB                              82800000
+                                    188 FD001    DCB   DDNAME=OUTFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
+                                                       LRECL=80,BLKSIZE=80
+
+
+                                    190+*                       DATA CONTROL BLOCK                              22770000
+                                    191+*                                                                       22860000
+0002A8                              192+FD001    DC    0F'0'                   ORIGIN ON WORD BOUNDARY          22914000
+
+                                    194+*                       DIRECT ACCESS DEVICE INTERFACE                  27360000
+
+0002A8 0000000000000000             196+         DC    BL16'0'                  FDAD,DVTBL                      27540000
+0002B8 00000000                     197+         DC    A(0)                     KEYLE,DEVT,TRBAL                27720000
+
+                                    199+*                       COMMON ACCESS METHOD INTERFACE                  48690000
+
+0002BC 00                           201+         DC    AL1(0)                  BUFNO                            49050000
+0002BD 000001                       202+         DC    AL3(1)                  BUFCB                            54720000
+0002C0 0000                         203+         DC    AL2(0)             BUFL                                  55170000
+0002C2 4000                         204+         DC    BL2'0100000000000000'                                   *55800000
+                                       +                                                 DSORG                  55890000
+0002C4 00000001                     205+         DC    A(1)                     IOBAD                           56340000
+
+                                    207+*                       FOUNDATION EXTENSION                            56610000
+
+                                                                                                               PAGE    6
+
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+
+0002C8 00                           209+         DC    BL1'00000000'                  BFTEK,BFLN,HIARCHY        59850000
+0002C9 000001                       210+         DC    AL3(1)                  EODAD                            65970000
+0002CC 90                           211+         DC    BL1'10010000'                                           *66150000
+                                       +                                       RECFM                            66240000
+0002CD 000000                       212+         DC    AL3(0)                  EXLST                            66330000
+
+                                    214+*                       FOUNDATION BLOCK                                66690000
+
+0002D0 D6E4E3C6C9D3C540             216+         DC    CL8'OUTFILE'            DDNAME                           66870000
+0002D8 02                           217+         DC    BL1'00000010'           OFLGS                            68220000
+0002D9 00                           218+         DC    BL1'00000000'                          IFLG              68310000
+0002DA 0050                         219+         DC    BL2'0000000001010000'                                   *68400000
+                                       +                                                                       *68490000
+                                       +                                       MACR                             68580000
+
+                                    221+*                       BSAM-BPAM-QSAM INTERFACE                        74430000
+
+0002DC 00                           223+         DC    BL1'00000000'                                           *74610000
+                                       +                                                                   RER1 74700000
+0002DD 000001                       224+         DC    AL3(1)                  CHECK, GERR, PERR                74790000
+0002E0 00000001                     225+         DC    A(1)                    SYNAD                            74880000
+0002E4 0000                         226+         DC    H'0'                    CIND1, CIND2                     74970000
+0002E6 0050                         227+         DC    AL2(80)                 BLKSIZE                          75240000
+0002E8 00000000                     228+         DC    F'0'                    WCPO, WCPL, OFFSR, OFFSW         75870000
+0002EC 00000001                     229+         DC    A(1)                    IOBA                             75960000
+0002F0 00                           230+         DC    AL1(0)                  NCP                              76050000
+0002F1 000001                       231+         DC    AL3(1)                  EOBR, EOBAD                      76140000
+
+                                    233+*                            QSAM INTERFACE                             81450000
+
+
+0002F4 00000001                     235+         DC    A(1)                     RECAD                           81630000
+0002F8 0000                         236+         DC    H'0'                    QSWS                             81810000
+0002FA 0050                         237+         DC    AL2(80)        LRECL                                     80730000
+0002FC 00                           238+         DC    BL1'00000000'           EROPT                            82530000
+0002FD 000001                       239+         DC    AL3(1)                  CNTRL                            82620000
+000300 00000000                     240+         DC    F'0'                    PRECL                            82710000
+000304 00000001                     241+         DC    A(1)                    EOB                              82800000
+000308 000000000000001C             242 K0001    DC    PL8'1'              numeric constants
+000310                              243 SAVEAREA DS    18F
+                                    244 *---------------------------------------------------------------
+                                    245 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
+                                    246 * DISPLAY reaches SYSOUT through QSAM directly, which is the
+                                    247 * same access-method path IKFCBL00 uses for its own file I/O.
+                                    248 * Not reentrant: MVS 3.8j batch does not require it.
+                                    249 *---------------------------------------------------------------
+000358                              250 COBRT    CSECT
+                                    251          ENTRY COBDISP,COBTERM
+                                    252 *
+                                    253 * COBDISP -- write one line to SYSOUT.
+                                    254 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
+                                    255 *
+000358 90EC D00C      0000C         256 COBDISP  STM   14,12,12(13)
+00035C 05C0                         257          BALR  12,0
+                            0035E   258          USING *,12
+00035E 50D0 C12A      00488         259          ST    13,RTSAVE1+4
+                                                                                                               PAGE    7
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+000362 41B0 C126      00484         260          LA    11,RTSAVE1
+
+000366 50BD 0008      00008         261          ST    11,8(13)
+00036A 18DB                         262          LR    13,11
+00036C 5820 1000      00000         263          L     2,0(0,1)            A(text)
+000370 5830 1004      00004         264          L     3,4(0,1)            A(length)
+000374 4840 3000      00000         265          LH    4,0(0,3)            length
+000378 9501 C0A8      00406         266          CLI   RTOPEN,X'01'        already open?
+00037C 4780 C030      0038E         267          BE    COBD010
+                                    268          OPEN  (RTDCB,OUTPUT)
+000380                              269+         CNOP  0,4                               ALIGN LIST TO FULLWORD 01740001
+000380 4510 C02A      00388         270+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR. 01780000
+000384 8F                           271+         DC    AL1(143)                          OPTION BYTE            01900000
+000385 000514                       272+         DC    AL3(RTDCB)                        DCB ADDRESS            01920000
+000388 0A13                         273+         SVC   19                                ISSUE OPEN SVC         04000000
+00038A 9201 C0A8      00406         274          MVI   RTOPEN,X'01'
+00038E 9240 C0AC      0040A         275 COBD010  MVI   RTLINE,C' '         ASA: single space
+000392 D277 C0AD C0AC 0040B 0040A   276          MVC   RTLINE+1(120),RTLINE  blank the text area
+
+000398 1244                         277          LTR   4,4
+00039A 47D0 C052      003B0         278          BNP   COBD020             empty: emit a blank line
+00039E 4940 C0AA      00408         279          CH    4,RTMAX
+0003A2 47D0 C04C      003AA         280          BNH   COBD015
+0003A6 4840 C0AA      00408         281          LH    4,RTMAX             truncate at line width
+0003AA 0640                         282 COBD015  BCTR  4,0                 EX wants length-1
+0003AC 4440 C06C      003CA         283          EX    4,COBDMVC
+                                    284 COBD020  PUT   RTDCB,RTLINE
+0003B0 4110 C1B6      00514         285+COBD020  LA    1,RTDCB                           LOAD PARAMETER REG 1   01900002
+0003B4 4100 C0AC      0040A         286+         LA    0,RTLINE                          LOAD PARAMETER REG 0   02500002
+0003B8 58F0 1030      00030         287+         L     15,48(0,1)               LOAD PUT ROUTINE ADDR           00550000
+0003BC 05EF                         288+         BALR  14,15                    LINK TO PUT ROUTINE             00600000
+0003BE 58DD 0004      00004         289          L     13,4(13)
+0003C2 98EC D00C      0000C         290          LM    14,12,12(13)
+0003C6 1BFF                         291          SR    15,15
+0003C8 07FE                         292          BR    14
+0003CA D200 C0AD 2000 0040B 00000   293 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
+                                    294 *
+                                    295 * COBTERM -- close SYSOUT if COBDISP ever opened it.
+                                    296 *
+0003D0 90EC D00C      0000C         297 COBTERM  STM   14,12,12(13)
+0003D4 05C0                         298          BALR  12,0
+                            003D6   299          USING *,12
+0003D6 50D0 C0FA      004D0         300          ST    13,RTSAVE2+4
+0003DA 41B0 C0F6      004CC         301          LA    11,RTSAVE2
+0003DE 50BD 0008      00008         302          ST    11,8(13)
+0003E2 18DB                         303          LR    13,11
+0003E4 9501 C030      00406         304          CLI   RTOPEN,X'01'
+0003E8 4770 C024      003FA         305          BNE   COBT010
+
+                                    306          CLOSE (RTDCB)
+0003EC                              307+         CNOP  0,4                               ALIGN LIST TO FULLWORD 02420002
+0003EC 4510 C01E      003F4         308+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR  02460002
+0003F0 80                           309+         DC    AL1(128)                          OPTION BYTE            02580000
+0003F1 000514                       310+         DC    AL3(RTDCB)                        DCB ADDRESS            02600000
+0003F4 0A14                         311+         SVC   20                                ISSUE CLOSE SVC        01640000
+0003F6 9200 C030      00406         312          MVI   RTOPEN,X'00'
+0003FA 58DD 0004      00004         313 COBT010  L     13,4(13)
+0003FE 98EC D00C      0000C         314          LM    14,12,12(13)
+                                                                                                               PAGE    8
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+000402 1BFF                         315          SR    15,15
+000404 07FE                         316          BR    14
+000406 00                           317 RTOPEN   DC    X'00'
+000407 00
+000408 0078                         318 RTMAX    DC    H'120'
+00040A 4040404040404040             319 RTLINE   DC    CL121' '            ASA byte + 120 columns
+000484                              320 RTSAVE1  DS    18F
+0004CC                              321 RTSAVE2  DS    18F
+                                    322 RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,            X
+                                                       LRECL=121,BLKSIZE=121
+
+
+                                    324+*                       DATA CONTROL BLOCK                              22770000
+                                    325+*                                                                       22860000
+000514                              326+RTDCB    DC    0F'0'                   ORIGIN ON WORD BOUNDARY          22914000
+
+                                    328+*                       DIRECT ACCESS DEVICE INTERFACE                  27360000
+
+000514 0000000000000000             330+         DC    BL16'0'                  FDAD,DVTBL                      27540000
+
+000524 00000000                     331+         DC    A(0)                     KEYLE,DEVT,TRBAL                27720000
+
+                                    333+*                       COMMON ACCESS METHOD INTERFACE                  48690000
+
+000528 00                           335+         DC    AL1(0)                  BUFNO                            49050000
+000529 000001                       336+         DC    AL3(1)                  BUFCB                            54720000
+00052C 0000                         337+         DC    AL2(0)             BUFL                                  55170000
+00052E 4000                         338+         DC    BL2'0100000000000000'                                   *55800000
+                                       +                                                 DSORG                  55890000
+000530 00000001                     339+         DC    A(1)                     IOBAD                           56340000
+
+                                    341+*                       FOUNDATION EXTENSION                            56610000
+
+000534 00                           343+         DC    BL1'00000000'                  BFTEK,BFLN,HIARCHY        59850000
+000535 000001                       344+         DC    AL3(1)                  EODAD                            65970000
+000538 94                           345+         DC    BL1'10010100'                                           *66150000
+                                       +                                       RECFM                            66240000
+000539 000000                       346+         DC    AL3(0)                  EXLST                            66330000
+
+                                    348+*                       FOUNDATION BLOCK                                66690000
+
+00053C E2E8E2D6E4E34040             350+         DC    CL8'SYSOUT'             DDNAME                           66870000
+000544 02                           351+         DC    BL1'00000010'           OFLGS                            68220000
+000545 00                           352+         DC    BL1'00000000'                          IFLG              68310000
+000546 0050                         353+         DC    BL2'0000000001010000'                                   *68400000
+                                       +                                                                       *68490000
+                                       +                                       MACR                             68580000
+
+                                    355+*                       BSAM-BPAM-QSAM INTERFACE                        74430000
+
+
+000548 00                           357+         DC    BL1'00000000'                                           *74610000
+                                       +                                                                   RER1 74700000
+000549 000001                       358+         DC    AL3(1)                  CHECK, GERR, PERR                74790000
+00054C 00000001                     359+         DC    A(1)                    SYNAD                            74880000
+000550 0000                         360+         DC    H'0'                    CIND1, CIND2                     74970000
+000552 0079                         361+         DC    AL2(121)                BLKSIZE                          75240000
+                                                                                                               PAGE    9
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 21.35 08/25/26
+
+000554 00000000                     362+         DC    F'0'                    WCPO, WCPL, OFFSR, OFFSW         75870000
+000558 00000001                     363+         DC    A(1)                    IOBA                             75960000
+00055C 00                           364+         DC    AL1(0)                  NCP                              76050000
+00055D 000001                       365+         DC    AL3(1)                  EOBR, EOBAD                      76140000
+
+                                    367+*                            QSAM INTERFACE                             81450000
+
+000560 00000001                     369+         DC    A(1)                     RECAD                           81630000
+000564 0000                         370+         DC    H'0'                    QSWS                             81810000
+000566 0079                         371+         DC    AL2(121)       LRECL                                     80730000
+000568 00                           372+         DC    BL1'00000000'           EROPT                            82530000
+000569 000001                       373+         DC    AL3(1)                  CNTRL                            82620000
+00056C 00000000                     374+         DC    F'0'                    PRECL                            82710000
+000570 00000001                     375+         DC    A(1)                    EOB                              82800000
+                                    376          END
+                                                  RELOCATION DICTIONARY                                        PAGE   10
+
+
+POS.ID   REL.ID   FLAGS   ADDRESS                                                                ASM 0201 21.35 08/25/26
+
+ 0001     0001      08     000019
+ 0001     0001      08     000025
+ 0001     0001      08     000045
+
+ 0001     0001      08     000051
+ 0001     0001      0C     0000F0
+ 0001     0001      0C     0000FC
+ 0001     0001      08     000101
+ 0001     0002      1C     0000F4
+
+ 0001     0003      1C     0000F8
+ 0004     0004      08     000385
+ 0004     0004      08     0003F1
+
+                                                  CROSS-REFERENCE                                              PAGE   11
+
+
+SYMBOL    LEN   VALUE   DEFN    REFERENCES                                                       ASM 0201 21.35 08/25/26
+
+COBDISP  00004 00000358 00256  00251
+COBDMVC  00006 000003CA 00293  00283
+COBD010  00004 0000038E 00275  00267
+COBD015  00002 000003AA 00282  00280
+COBD020  00004 000003B0 00285  00278
+COBTERM  00004 000003D0 00297  00251
+COBT010  00004 000003FA 00313  00305
+DWK      00008 000001B8 00121  00053 00054 00085 00086 00089 00090
+D0000    00080 00000106 00116  00075 00093
+D0001    00080 00000156 00117  00093 00097
+D0002    00004 000001A8 00118  00052 00084 00091
+D0003    00005 000001AC 00119  00055 00056 00112
+FD000    00004 00000248 00138  00021 00042 00072 00074
+FD001    00004 000002A8 00192  00028 00049 00096
+F0002    00002 000000EE 00108  00035 00109
+K0001    00008 00000308 00242  00087
+LEN0001  00002 00000104 00114  00113
+L0001    00002 000000A4 00079  00071
+L0002    00002 000000A8 00082  00078
+PARM0001 00004 000000FC 00112  00058
+PWK1     00008 000001C0 00122  00054 00055 00086 00088 00089
+PWK2     00008 000001C8 00123  00087 00088
+P0001    00002 0000008A 00069  00033 00101
+
+P0002    00002 000000E8 00103  00081
+RTDCB    00004 00000514 00326  00272 00285 00310
+RTLINE   00121 0000040A 00319  00275 00276 00276 00286 00293
+RTMAX    00002 00000408 00318  00279 00281
+RTOPEN   00001 00000406 00317  00266 00274 00304 00312
+RTSAVE1  00004 00000484 00320  00259 00260
+RTSAVE2  00004 000004CC 00321  00300 00301
+R0001    00002 00000036 00034  00031
+SAVEAREA 00004 00000310 00243  00010 00011
+VDISP    00004 000000F4 00110  00059
+VTERM    00004 000000F8 00111  00062
+X0002    00004 000000F0 00109  00032 00036 00106
+                                                  ASSEMBLER DIAGNOSTICS AND STATISTICS                         PAGE   12
+
+
+                                                                                                 ASM 0201 21.35 08/25/26
+
+NO STATEMENTS FLAGGED IN THIS ASSEMBLY
+HIGHEST SEVERITY WAS    0
+OPTIONS FOR THIS ASSEMBLY
+  ALIGN, ALOGIC, BUFSIZE(STD), DECK, ESD, FLAG(0), LINECOUNT(55), LIST, NOMCALL, YFLAG, WORKSIZE(2097152)
+  NOMLOGIC, NONUMBER, OBJECT, NORENT, RLD, NOSTMT, NOLIBMAC, NOTERMINAL, NOTEST, XREF(SHORT)
+  SYSPARM()
+WORK FILE BUFFER SIZE/NUMBER = 7678/ 1
+TOTAL RECORDS READ FROM SYSTEM INPUT        178
+TOTAL RECORDS READ FROM SYSTEM LIBRARY     3181
+TOTAL RECORDS PUNCHED                        25
+TOTAL RECORDS PRINTED                       485
+
+
+ F64-LEVEL LINKAGE EDITOR OPTIONS SPECIFIED XREF,LET,LIST,NCAL
+          DEFAULT OPTION(S) USED -  SIZE=(98304,55296)
+
+
+
+                                                CROSS REFERENCE TABLE
+
+
+  CONTROL SECTION                       ENTRY
+
+    NAME    ORIGIN  LENGTH                NAME   LOCATION     NAME   LOCATION     NAME   LOCATION     NAME   LOCATION
+  FILETEST      00     358
+  COBRT        358     21C
+                                        COBDISP      358    COBTERM      3D0
+
+
+
+  LOCATION  REFERS TO SYMBOL  IN CONTROL SECTION             LOCATION  REFERS TO SYMBOL  IN CONTROL SECTION
+       F4            COBDISP         COBRT                         F8            COBTERM         COBRT
+
+ ENTRY ADDRESS       00
+
+ TOTAL LENGTH       578
+****GO        DOES NOT EXIST BUT HAS BEEN ADDED TO DATA SET
+AUTHORIZATION CODE IS         0.
+
+
+
+00004
+
+RECORD ONE
+RECORD TWO
+RECORD THREE
+RECORD FOUR
+
+                 FFFFFFFFFFFF   IIIIIIIIII   LL            EEEEEEEEEEEE  TTTTTTTTTTTT  EEEEEEEEEEEE   SSSSSSSSSS   TTTTTTTTTTTT
+                FFFFFFFFFFFF   IIIIIIIIII   LL            EEEEEEEEEEEE  TTTTTTTTTTTT  EEEEEEEEEEEE  SSSSSSSSSSSS  TTTTTTTTTTTT
+               FF                 II       LL            EE                 TT       EE            SS        SS       TT
+              FF                 II       LL            EE                 TT       EE            SS                 TT
+             FF                 II       LL            EE                 TT       EE            SSS                TT
+            FFFFFFFF           II       LL            EEEEEEEE           TT       EEEEEEEE       SSSSSSSSS         TT
+           FFFFFFFF           II       LL            EEEEEEEE           TT       EEEEEEEE        SSSSSSSSS        TT
+          FF                 II       LL            EE                 TT       EE                     SSS       TT
+         FF                 II       LL            EE                 TT       EE                      SS       TT
+        FF                 II       LL            EE                 TT       EE            SS        SS       TT
+       FF             IIIIIIIIII   LLLLLLLLLLLL  EEEEEEEEEEEE       TT       EEEEEEEEEEEE  SSSSSSSSSSSS       TT
+      FF             IIIIIIIIII   LLLLLLLLLLLL  EEEEEEEEEEEE       TT       EEEEEEEEEEEE   SSSSSSSSSS        TT
+
+
+
+                    JJJJJJJJJJ   3333333333        11       777777777777   9999999999                 ZZZZZZZZZZZZ
+                    JJJJJJJJJJ  333333333333      111       77777777777   999999999999                ZZZZZZZZZZZZ
+                        JJ      33        33     1111       77      77    99        99                         ZZ
+                        JJ                33       11              77     99        99                        ZZ
+                        JJ                33       11             77      99        99                       ZZ
+                        JJ             3333        11            77       999999999999                   ZZZZZZZ
+                        JJ             3333        11            77       999999999999                   ZZZZZZZ
+                        JJ                33       11            77                 99                    ZZ
+                  JJ    JJ                33       11            77                 99                   ZZ
+                  JJ    JJ      33        33       11            77       99        99                  ZZ
+                  JJJJJJJJ      333333333333   1111111111        77       999999999999                 ZZZZZZZZZZZ
+                   JJJJJJ        3333333333    1111111111        77        9999999999                 ZZZZZZZZZZZZ

@@ -268,7 +268,8 @@ static Node *node(int kind)
 
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT,
-       ST_LABEL, ST_BRANCH, ST_IFTEST };
+       ST_LABEL, ST_BRANCH, ST_IFTEST,
+       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO };
 
 typedef struct {
     int  op;
@@ -283,7 +284,30 @@ typedef struct {
     char para[31];          /* ST_PARA name, or PERFORM's first paragraph */
     char thru[31];          /* PERFORM ... THRU */
     Cond *cond;             /* ST_IFTEST */
+    int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
 } Stmt;
+
+/* Files. One DCB each, emitted into the program CSECT. QSAM move mode: the
+ * 01 record under the FD is a real area and GET/PUT move into and out of it. */
+typedef struct {
+    char name[31];
+    char label[9];     /* DCB label */
+    char ddname[9];
+    int  rec_sym;      /* the 01 record beneath the FD */
+    int  reclen;
+    int  opened_input; /* which OPEN modes appear, so MACRF can be set */
+    int  opened_output;
+} File;
+
+#define MAXFILE 16
+static File files[MAXFILE];
+static int nfile;
+
+static int file_index(const char *n)
+{
+    for (int i = 0; i < nfile; i++) if (!strcmp(files[i].name, n)) return i;
+    return -1;
+}
 
 /* Paragraphs, resolved after parsing so a PERFORM may name one that has not
  * been seen yet. */
@@ -413,10 +437,10 @@ static void parse_data_division(void)
 {
     if (!is("DATA")) return;
     next(); expect("DIVISION"); expect(".");
-    if (is("FILE"))
-        die("FILE SECTION is not implemented yet");
-    if (!is("WORKING-STORAGE")) { while (!tok.eof && !is("PROCEDURE")) next(); return; }
-    next(); expect("SECTION"); expect(".");
+    if (is("FILE")) { next(); expect("SECTION"); expect("."); }
+    else if (is("WORKING-STORAGE")) { next(); expect("SECTION"); expect("."); }
+    else { while (!tok.eof && !is("PROCEDURE")) next(); return; }
+    int cur_file = -1;
 
     /* Open groups, innermost last. A group's size is not known until an item
      * at the same or a lower level closes it. */
@@ -424,8 +448,28 @@ static void parse_data_division(void)
     int cursor = 0;
 
     while (!tok.eof && !is("PROCEDURE")) {
+        if (is("WORKING-STORAGE")) {
+            next(); expect("SECTION"); expect(".");
+            while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+            if (cursor > wslen) wslen = cursor;
+            cur_file = -1;
+            continue;
+        }
+        if (is("FD")) {
+            next();
+            while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+            if (cursor > wslen) wslen = cursor;
+            cur_file = file_index(tok.text);
+            if (cur_file < 0) die("FD names a file that was not named in a SELECT");
+            next();
+            /* The FD clauses describe what the DD statement and the label
+             * already carry, so accept and ignore them. */
+            while (!tok.eof && !is(".")) next();
+            expect(".");
+            continue;
+        }
         if (!isdigit((unsigned char)tok.text[0]))
-            die("expected a level number in WORKING-STORAGE");
+            die("expected a level number, FD, or a section header");
         int level = atoi(tok.text);
         if (level != 77 && level != 88 && (level < 1 || level > 49))
             die("level number out of range (01-49, 77, or 88)");
@@ -521,6 +565,8 @@ static void parse_data_division(void)
             sy->offset = cursor;
             if (sy->has_value) die("a group item may not carry VALUE here");
             if (sp >= 32) die("group nesting too deep");
+            if (cur_file >= 0 && level == 1 && files[cur_file].rec_sym < 0)
+                files[cur_file].rec_sym = nsym;
             stack[sp++] = nsym;
             nsym++;
             if (level == 1 || level == 77) { /* wslen advances when it closes */ }
@@ -563,13 +609,73 @@ static void parse_data_division(void)
         sy->offset = cursor;
         cursor += sy->bytes;
         if (level == 1 || level == 77) wslen = cursor;
+        if (cur_file >= 0 && level == 1 && files[cur_file].rec_sym < 0) {
+            files[cur_file].rec_sym = nsym;
+            files[cur_file].reclen = sy->bytes;
+        }
         nsym++;
     }
     while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
     if (cursor > wslen) wslen = cursor;
+    for (int i = 0; i < nfile; i++) {
+        if (files[i].rec_sym < 0) die("an FD has no record description");
+        files[i].reclen = syms[files[i].rec_sym].bytes;
+    }
     if (wslen > 3800)
         die("WORKING-STORAGE exceeds one base-register displacement; "
             "base locator cells are not implemented yet");
+}
+
+/* SELECT f ASSIGN TO UT-S-DDNAME.  The ddname is the part after the last
+ * hyphen of the ANS COBOL system-name. */
+static void parse_environment(void)
+{
+    if (!is("ENVIRONMENT")) return;
+    next(); expect("DIVISION"); expect(".");
+    while (!tok.eof && !is("DATA") && !is("PROCEDURE")) {
+        if (is("CONFIGURATION")) {
+            next(); expect("SECTION"); expect(".");
+            while (!tok.eof && !is("INPUT-OUTPUT") && !is("DATA") && !is("PROCEDURE")) next();
+            continue;
+        }
+        if (is("INPUT-OUTPUT")) {
+            next(); expect("SECTION"); expect(".");
+            if (is("FILE-CONTROL")) { next(); expect("."); }
+            while (is("SELECT")) {
+                next();
+                if (nfile >= MAXFILE) die("too many files");
+                File *f = &files[nfile];
+                memset(f, 0, sizeof *f);
+                snprintf(f->name, sizeof f->name, "%s", tok.text);
+                if (file_index(f->name) >= 0) die("duplicate file name");
+                snprintf(f->label, sizeof f->label, "FD%03d", nfile);
+                f->rec_sym = -1;
+                next();
+                if (is("OPTIONAL")) die("SELECT OPTIONAL is not implemented yet");
+                expect("ASSIGN"); if (is("TO")) next();
+                {
+                    const char *dash = strrchr(tok.text, '-');
+                    const char *dd = dash ? dash + 1 : tok.text;
+                    if (strlen(dd) > 8) die("ddname longer than 8 characters");
+                    snprintf(f->ddname, sizeof f->ddname, "%s", dd);
+                }
+                next();
+                while (!tok.eof && !is(".")) {
+                    if (is("ACCESS")) { next(); if (is("IS")) next();
+                        if (!is("SEQUENTIAL")) die("only ACCESS IS SEQUENTIAL is implemented");
+                        next(); continue; }
+                    if (is("ORGANIZATION")) { next(); if (is("IS")) next();
+                        if (!is("SEQUENTIAL")) die("only ORGANIZATION IS SEQUENTIAL is implemented");
+                        next(); continue; }
+                    die("this SELECT clause is not implemented yet");
+                }
+                expect(".");
+                nfile++;
+            }
+            continue;
+        }
+        next();
+    }
 }
 
 static void skip_division(const char *kw)
@@ -856,6 +962,84 @@ static void parse_one_statement(void)
         return;
     }
 
+    if (is("GO")) {
+        next();
+        if (is("TO")) next();
+        Stmt *st = new_stmt(ST_GOTO);
+        snprintf(st->para, sizeof st->para, "%s", tok.text);
+        next();
+        if (is("DEPENDING")) die("GO TO ... DEPENDING ON is not implemented yet");
+        eat_period();
+        return;
+    }
+
+    if (is("OPEN")) {
+        next();
+        while (is("INPUT") || is("OUTPUT") || is("I-O") || is("EXTEND")) {
+            if (is("I-O") || is("EXTEND")) die("OPEN I-O and EXTEND are not implemented yet");
+            int mode = is("INPUT") ? 1 : 2;
+            next();
+            int any = 0;
+            while (!tok.eof && !is(".") && !is("INPUT") && !is("OUTPUT")) {
+                int fi = file_index(tok.text);
+                if (fi < 0) die("OPEN names something that is not a file");
+                if (mode == 1) files[fi].opened_input = 1; else files[fi].opened_output = 1;
+                Stmt *st = new_stmt(ST_OPEN); st->dst = fi; st->src = mode;
+                any = 1; next();
+            }
+            if (!any) die("OPEN with no file named");
+        }
+        eat_period();
+        return;
+    }
+
+    if (is("CLOSE")) {
+        next();
+        int any = 0;
+        while (!tok.eof && !is(".")) {
+            int fi = file_index(tok.text);
+            if (fi < 0) die("CLOSE names something that is not a file");
+            new_stmt(ST_CLOSE)->dst = fi;
+            any = 1; next();
+        }
+        if (!any) die("CLOSE with no file named");
+        eat_period();
+        return;
+    }
+
+    if (is("READ")) {
+        next();
+        int fi = file_index(tok.text);
+        if (fi < 0) die("READ names something that is not a file");
+        next();
+        if (is("RECORD")) next();
+        if (is("INTO")) die("READ INTO is not implemented yet");
+        Stmt *st = new_stmt(ST_READ);
+        st->dst = fi;
+        st->lab1 = ++nlabel;                 /* AT END */
+        st->lab2 = ++nlabel;                 /* continue */
+        if (is("AT") || is("END")) {
+            if (is("AT")) next();
+            expect("END");
+            parse_stmt_list(1);
+        }
+        new_stmt(ST_LABEL)->dst = st->lab2;
+        return;
+    }
+
+    if (is("WRITE")) {
+        next();
+        int i = need_sym(tok.text);
+        int fi = -1;
+        for (int k = 0; k < nfile; k++) if (files[k].rec_sym == i) fi = k;
+        if (fi < 0) die("WRITE names something that is not a file's record");
+        next();
+        if (is("FROM")) die("WRITE FROM is not implemented yet");
+        new_stmt(ST_WRITE)->dst = fi;
+        eat_period();
+        return;
+    }
+
     if (is("STOP")) {
         next();
         if (!is("RUN")) die("STOP literal is not implemented yet");
@@ -916,6 +1100,12 @@ static void parse_procedure(void)
     for (int i = 0; i < nstmt; i++) if (stmts[i].op == ST_STOP) stopped = 1;
     if (!stopped) die("PROCEDURE DIVISION has no STOP RUN");
     for (int i = 0; i < nstmt; i++) {
+        if (stmts[i].op == ST_GOTO) {
+            int a = para_index(stmts[i].para);
+            if (a < 0) { char m[96]; snprintf(m, sizeof m, "GO TO names an unknown paragraph '%s'", stmts[i].para); die(m); }
+            stmts[i].dst = a;
+            continue;
+        }
         if (stmts[i].op != ST_PERFORM) continue;
         int a = para_index(stmts[i].para), b = para_index(stmts[i].thru);
         if (a < 0) { char m[96]; snprintf(m, sizeof m, "PERFORM names an unknown paragraph '%s'", stmts[i].para); die(m); }
@@ -1411,6 +1601,55 @@ static void generate(void)
             asm_comment(" IF");
             gen_cond(st->cond, st->dst, 0);
             break;
+        case ST_OPEN: {
+            File *f = &files[st->dst];
+            snprintf(b, sizeof b, " OPEN %s %s", st->src == 1 ? "INPUT" : "OUTPUT", f->name);
+            asm_comment(b);
+            snprintf(b, sizeof b, "(%s,%s)", f->label, st->src == 1 ? "INPUT" : "OUTPUT");
+            asm_line("", "OPEN", b, "");
+            break;
+        }
+        case ST_CLOSE: {
+            File *f = &files[st->dst];
+            snprintf(b, sizeof b, " CLOSE %s", f->name);
+            asm_comment(b);
+            snprintf(b, sizeof b, "(%s)", f->label);
+            asm_line("", "CLOSE", b, "");
+            break;
+        }
+        case ST_READ: {
+            File *f = &files[st->dst];
+            char le[16], lc[16];
+            snprintf(le, sizeof le, "L%04d", st->lab1);
+            snprintf(lc, sizeof lc, "L%04d", st->lab2);
+            snprintf(b, sizeof b, " READ %s", f->name);
+            asm_comment(b);
+            /* COBOL's AT END is per-READ but DCBEODAD is per-file, so patch it
+             * before each GET. Offset 33 (X'21') holds the low three bytes of
+             * the address -- exactly what IKFCBL00 does. */
+            snprintf(b, sizeof b, "1,%s", le);       asm_line("", "LA", b, "this READ's AT END");
+            snprintf(b, sizeof b, "1,7,%s+33", f->label); asm_line("", "STCM", b, "into DCBEODAD");
+            snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
+            asm_line("", "GET", b, "QSAM move mode");
+            asm_line("", "B", lc, "");
+            asm_line(le, "DS", "0H", "AT END");
+            break;
+        }
+        case ST_GOTO: {
+            char p[16]; snprintf(p, sizeof p, "P%04d", st->dst);
+            snprintf(b, sizeof b, " GO TO %s", st->para);
+            asm_comment(b);
+            asm_line("", "B", p, "");
+            break;
+        }
+        case ST_WRITE: {
+            File *f = &files[st->dst];
+            snprintf(b, sizeof b, " WRITE %s", syms[f->rec_sym].name);
+            asm_comment(b);
+            snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
+            asm_line("", "PUT", b, "");
+            break;
+        }
         case ST_PERFORM: {
             char p1[16], x[16], f[16], r[16];
             snprintf(p1, sizeof p1, "P%04d", st->dst);
@@ -1620,6 +1859,18 @@ static void generate(void)
             asm_line(w, "DS", "PL16", i == 0 ? "expression stack" : "");
         }
     }
+    for (int i = 0; i < nfile; i++) {
+        File *f = &files[i];
+        char first[96];
+        const char *macrf = f->opened_output ? "PM" : "GM";
+        snprintf(first, sizeof first,
+                 "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(%s),RECFM=FB,",
+                 f->label, f->ddname, macrf);
+        char second[64];
+        snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", f->reclen, f->reclen);
+        if (i == 0) asm_comment(" file control blocks");
+        asm_cont(first, second);
+    }
     for (int i = 0; i < nconst; i++) {
         snprintf(b, sizeof b, "PL8'%s'", consts[i].digits);
         asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");
@@ -1658,7 +1909,7 @@ int main(int argc, char **argv)
 
     next();
     parse_program_id();
-    skip_division("ENVIRONMENT");
+    parse_environment();
     parse_data_division();
     parse_procedure();
     generate();

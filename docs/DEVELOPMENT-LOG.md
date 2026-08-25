@@ -416,6 +416,56 @@ The second: level-88 items were being emitted into WORKING-STORAGE as
 `DC ZL0'0'`, and the assembler rejected it with `IFO199 INVALID LENGTH
 MODIFIER`. A condition name has no storage.
 
+## Slice 6 is done: sequential files
+
+The first slice that is mostly runtime rather than codegen, and the one where
+the characterisation from probe 2 pays off directly.
+
+`SELECT f ASSIGN TO UT-S-DDNAME` (the ddname is the part after the last hyphen
+of the ANS COBOL system-name), `FD` with its record description, and
+`OPEN INPUT/OUTPUT`, `READ ... AT END`, `WRITE`, `CLOSE`. `GO TO` came with it —
+36 uses in the corpus, and a read loop needs it.
+
+Each file gets a DCB in the program CSECT, QSAM **move mode** (`MACRF=(GM)` or
+`(PM)`), so the `01` record under the FD is a real area that `GET`/`PUT` move
+into and out of. `OPEN` and `CLOSE` are the macros, which is `SVC 19` and
+`SVC 20` — the same path IKFCBL00 takes. Still nothing from `SYS1.COBLIB`.
+
+**`AT END` is the interesting part.** COBOL's `AT END` is per-READ, but
+`DCBEODAD` is per-file, so the address has to be patched before each `GET`:
+
+    * READ IN-FILE
+             LA    1,L0001             this READ's AT END
+             STCM  1,7,FD000+33        into DCBEODAD
+             GET   FD000,D0000         QSAM move mode
+             B     L0002
+    L0001    DS    0H                  AT END
+
+Offset 33 is `X'21'`, the low three bytes of the `DCBEODAD` fullword. That
+number came straight from reading what IKFCBL00 emitted back in slice 0's
+probe — `MVC 021(3,2),011(12)`. Characterising the old compiler by reading its
+listings, rather than disassembling it, paid for itself here.
+
+The classic ANS COBOL read loop works end to end: a `PERFORM range THRU exit`
+with `GO TO exit` inside it, the range's exit cell returning control to the
+caller.
+
+Verified against GnuCOBOL: four records copied in order and a record count of
+`00004` from both.
+
+### Two traps, neither of them the compiler
+
+`cc ... 2>&1 | head -3` sent the C compiler `SIGPIPE` before it finished
+linking, so a stale `cobc370` ran and reported a construct as unimplemented that
+had just been implemented. Do not pipe the build through `head`.
+
+The GnuCOBOL side first reported **five** records from a four-line input.
+`ORGANIZATION SEQUENTIAL` reads fixed-length records and does not care about
+newlines, so four 80-character lines each ending in a newline is 324 bytes, not
+320 — a fifth, partial record. The oracle's input must be an exact multiple of
+the record length with no line terminators at all. On MVS the same data comes
+from `DD *` card images, which are already exactly 80 bytes.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
