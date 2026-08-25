@@ -5,12 +5,16 @@
 *---------------------------------------------------------------
 FILETEST CSECT
          STM   14,12,12(13)        save caller's registers
-         BALR  12,0                establish addressability
-         USING *,12
+         BALR  12,0                first code base
+COBBEG   EQU   *
+         USING COBBEG,12
+         LA    11,2048(,12)        second code base
+         LA    11,2048(,11)
+         USING COBBEG+4096,11
          ST    13,SAVEAREA+4       backward chain to caller
-         LA    11,SAVEAREA
-         ST    11,8(13)            forward chain from caller
-         LR    13,11               our save area is now current
+         LA    0,SAVEAREA
+         ST    0,8(13)             forward chain from caller
+         LR    13,0                our save area is now current
 * MAIN-PARA.
 P0000    DS    0H
 * OPEN INPUT IN-FILE
@@ -29,6 +33,8 @@ R0001    DS    0H
 * CLOSE OUT-FILE
          CLOSE (FD001)
 * MOVE REC-COUNT -> OUT-NUM
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0002
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(8),DWK(8)
@@ -45,18 +51,24 @@ R0001    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+         DROP  8
 * READ-PARA.
 P0001    DS    0H
 * READ IN-FILE
          LA    1,L0001             this READ's AT END
          STCM  1,7,FD000+33        into DCBEODAD
+         L     8,BL0000            base locator
+         USING WSC0000,8
          GET   FD000,D0000         QSAM move mode
          B     L0002
 L0001    DS    0H                  AT END
+         DROP  8
 * GO TO READ-EXIT
          B     P0002
 L0002    DS    0H
 * ADD 1 -> REC-COUNT
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0002
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(8),DWK(8)
@@ -71,6 +83,7 @@ L0002    DS    0H
          PUT   FD001,D0001
 * GO TO READ-PARA
          B     P0001
+         DROP  8
 * READ-EXIT.
 P0002    DS    0H
 * EXIT
@@ -84,11 +97,6 @@ VTERM    DC    V(COBTERM)
 PARM0001 DC    A(D0003)
          DC    X'80',AL3(LEN0001)  last parameter
 LEN0001  DC    H'5'
-* WORKING-STORAGE
-D0000    DC    CL80' '             IN-REC PIC X(80)
-D0001    DC    CL80' '             OUT-REC PIC X(80)
-D0002    DC    F'0'                REC-COUNT PIC S9(5)v0 COMP
-D0003    DC    ZL5'0'              OUT-NUM PIC 9(5)v0 DISP
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL8
@@ -108,7 +116,16 @@ FD000    DCB   DDNAME=INFILE,DSORG=PS,MACRF=(GM),RECFM=FB,             X
 FD001    DCB   DDNAME=OUTFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
                LRECL=80,BLKSIZE=80
 K0001    DC    PL8'1'              numeric constants
+* base locator cells, one per 4096 bytes of COBWS
+BL0000   DC    A(WSC0000)
 SAVEAREA DS    18F
+COBWS    CSECT
+WSC0000  EQU   COBWS               chunk origins
+* WORKING-STORAGE
+D0000    DC    CL80' '             IN-REC PIC X(80)
+D0001    DC    CL80' '             OUT-REC PIC X(80)
+D0002    DC    F'0'                REC-COUNT PIC S9(5)v0 COMP
+D0003    DC    ZL5'0'              OUT-NUM PIC 9(5)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

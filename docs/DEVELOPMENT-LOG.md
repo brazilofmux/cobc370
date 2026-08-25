@@ -265,9 +265,8 @@ with the right dialect.
 - `OCCURS` and `REDEFINES` are not implemented (8 and 7 uses in the corpus).
 - `GIVING` on ADD/SUBTRACT, and the `MULTIPLY`/`DIVIDE` statements, are not
   implemented (2 and 4 uses in the corpus against COMPUTE's 35).
-- WORKING-STORAGE is capped at one base-register displacement (~3800 bytes) and
-  says so. Base locator cells are the structural fix, and are what IKFCBL00's
-  `BL=1` cells do.
+- ~~WORKING-STORAGE is capped at one base-register displacement.~~ **Fixed in
+  slice 7.**
 - Decimal overflow on store is not masked; test values stay in range.
 - `DISPLAY` of signed or COMP items is rejected with a diagnostic telling you to
   MOVE to a display item first, which keeps the oracle exact rather than
@@ -465,6 +464,63 @@ newlines, so four 80-character lines each ending in a newline is 324 bytes, not
 320 — a fifth, partial record. The oracle's input must be an exact multiple of
 the record length with no line terminators at all. On MVS the same data comes
 from `DD *` card images, which are already exactly 80 bytes.
+
+## Slice 7 is done: base locator cells
+
+WORKING-STORAGE and the file records now live in their own CSECT, `COBWS`, cut
+into 4096-byte chunks. Each chunk has a **base locator cell** in the program
+CSECT holding its address; a data base register is loaded from the cell and a
+`USING` makes that chunk's symbols resolvable:
+
+    * MOVE MSG1 -> MSG2
+             L     8,BL0001            base locator
+             USING WSC0001,8
+             L     9,BL0000            base locator
+             USING WSC0000,9
+             MVC   D0003(5),D0000      alphanumeric move
+
+Three registers (R8, R9, R10) rotate, and a chunk already loaded is not
+reloaded. Chunk origins are `EQU`s, so no padding is needed and a field may
+straddle a boundary — only its first byte has to be within 4095 of the base.
+The limit went from 3800 bytes to 64K.
+
+This is the same mechanism the DMAP showed IKFCBL00 using with its `BL=1` cells,
+and it is what decouples the size of the data from code addressability. The code
+side got a second base register at the same time, doubling the reach to 8K.
+
+**The `USING` state has to match what the registers actually hold at run time**,
+which is the part that needs care: it is dropped at every label, every
+paragraph, at an `AT END` target, and after every `PERFORM` — anywhere control
+can arrive from somewhere that left different chunks loaded.
+
+### The bug, which is a good one
+
+All eight tests abended, including six that had passed for slices. The cause:
+
+    000004 05C0    COBBEG   BALR  12,0
+                            USING COBBEG,12
+
+`BALR` loads the address of the **next** instruction, 0x006, but `COBBEG`
+labelled the `BALR` itself at 0x004 — so `USING` declared a base two bytes below
+what the register actually held, and every R12-relative displacement was off by
+two. The earlier `USING *,12` was right because `*` is the location *after* the
+instruction. The base label now sits after the `BALR` as an `EQU *`.
+
+What made it interesting is that `stoprun` still passed. Its only R12 references
+are the save-area store and the matching load, both off by the same two bytes,
+so they cancelled and it returned cleanly. A test suite of one would have said
+the compiler was fine.
+
+Found by reading the assembler's object code in the listing — the displacement
+`C126` against a register whose value was two higher than the `USING` claimed.
+Not by staring at the generator.
+
+### And a scripted regression, at last
+
+`bin/cobc-regress` assembles, links and runs every test on the guest and checks
+each program's output against its recorded oracle. Every slice so far was
+verified this way by hand; base locators touched every emit site at once, which
+is what made a scripted full-suite run worth the twenty minutes.
 
 ## Suggested order
 

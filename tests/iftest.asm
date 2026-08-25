@@ -5,15 +5,21 @@
 *---------------------------------------------------------------
 IFTEST   CSECT
          STM   14,12,12(13)        save caller's registers
-         BALR  12,0                establish addressability
-         USING *,12
+         BALR  12,0                first code base
+COBBEG   EQU   *
+         USING COBBEG,12
+         LA    11,2048(,12)        second code base
+         LA    11,2048(,11)
+         USING COBBEG+4096,11
          ST    13,SAVEAREA+4       backward chain to caller
-         LA    11,SAVEAREA
-         ST    11,8(13)            forward chain from caller
-         LR    13,11               our save area is now current
+         LA    0,SAVEAREA
+         ST    0,8(13)             forward chain from caller
+         LR    13,0                our save area is now current
 * MAIN-PARA.
 P0000    DS    0H
 * IF
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
@@ -25,15 +31,21 @@ P0000    DS    0H
 * MOVE LESS   -> OUT-MSG
          MVC   D0006(6),S0001      literal move, space padded
          B     L0002
+         DROP  8
 L0001    DS    0H
 * MOVE NOTLES -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0002      literal move, space padded
+         DROP  8
 L0002    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 * IF
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
@@ -51,15 +63,21 @@ L0002    DS    0H
 * MOVE ANDOK  -> OUT-MSG
          MVC   D0006(6),S0003      literal move, space padded
          B     L0004
+         DROP  8
 L0003    DS    0H
 * MOVE ANDBAD -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0004      literal move, space padded
+         DROP  8
 L0004    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
 * IF
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
@@ -76,43 +94,61 @@ L0019    DS    0H
 * MOVE OROK   -> OUT-MSG
          MVC   D0006(6),S0005      literal move, space padded
          B     L0006
+         DROP  8
 L0005    DS    0H
 * MOVE ORBAD  -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0006      literal move, space padded
+         DROP  8
 L0006    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 * IF
+         L     8,BL0000            base locator
+         USING WSC0000,8
          CLC   D0003(3),S0007      alphanumeric compare
          BNE   L0007
 * MOVE STREQ  -> OUT-MSG
          MVC   D0006(6),S0008      literal move, space padded
          B     L0008
+         DROP  8
 L0007    DS    0H
 * MOVE STRNE  -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0009      literal move, space padded
+         DROP  8
 L0008    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 * IF
+         L     8,BL0000            base locator
+         USING WSC0000,8
          CLC   D0004(1),S0010      alphanumeric compare
          BNE   L0009
 * MOVE EOFYES -> OUT-MSG
          MVC   D0006(6),S0011      literal move, space padded
          B     L0010
+         DROP  8
 L0009    DS    0H
 * MOVE EOFNO  -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0012      literal move, space padded
+         DROP  8
 L0010    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
 * MOVE Y -> EOF-FLAG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0004(1),S0010      literal move, space padded
 * IF
          CLC   D0004(1),S0010      alphanumeric compare
@@ -120,15 +156,21 @@ L0010    DS    0H
 * MOVE EOFYES -> OUT-MSG
          MVC   D0006(6),S0011      literal move, space padded
          B     L0012
+         DROP  8
 L0011    DS    0H
 * MOVE EOFNO  -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0012      literal move, space padded
+         DROP  8
 L0012    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
 * IF
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ZAP   WK0(16),D0002(4)
          ZAP   WK1(16),K0001(8)    literal
          SRP   WK1(16),2,0         align scale (left)
@@ -137,15 +179,21 @@ L0012    DS    0H
 * MOVE NONZER -> OUT-MSG
          MVC   D0006(6),S0013      literal move, space padded
          B     L0014
+         DROP  8
 L0013    DS    0H
 * MOVE ISZERO -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0014      literal move, space padded
+         DROP  8
 L0014    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 * IF
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
@@ -164,14 +212,21 @@ L0014    DS    0H
 * MOVE NEST1  -> OUT-MSG
          MVC   D0006(6),S0015      literal move, space padded
          B     L0017
+         DROP  8
 L0016    DS    0H
 * MOVE NEST2  -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0016      literal move, space padded
+         DROP  8
 L0017    DS    0H
          B     L0018
 L0015    DS    0H
 * MOVE NEST3  -> OUT-MSG
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0006(6),S0017      literal move, space padded
+         DROP  8
 L0018    DS    0H
 * DISPLAY OUT-MSG
          LA    1,PARM0008
@@ -210,13 +265,6 @@ LEN0007  DC    H'6'
 PARM0008 DC    A(D0006)
          DC    X'80',AL3(LEN0008)  last parameter
 LEN0008  DC    H'6'
-* WORKING-STORAGE
-D0000    DC    F'10'               A PIC S9(5)v0 COMP
-D0001    DC    F'20'               B PIC S9(5)v0 COMP
-D0002    DC    PL4'000'            BAL PIC S9(7)v2 COMP-3
-D0003    DC    CL3'ABC'            CODE-X PIC X(3)
-D0004    DC    CL1'N'              EOF-FLAG PIC X(1)
-D0006    DC    CL6' '              OUT-MSG PIC X(6)
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL8
@@ -250,7 +298,18 @@ S0014    DC    CL6'ISZERO'
 S0015    DC    CL6'NEST1 '
 S0016    DC    CL6'NEST2 '
 S0017    DC    CL6'NEST3 '
+* base locator cells, one per 4096 bytes of COBWS
+BL0000   DC    A(WSC0000)
 SAVEAREA DS    18F
+COBWS    CSECT
+WSC0000  EQU   COBWS               chunk origins
+* WORKING-STORAGE
+D0000    DC    F'10'               A PIC S9(5)v0 COMP
+D0001    DC    F'20'               B PIC S9(5)v0 COMP
+D0002    DC    PL4'000'            BAL PIC S9(7)v2 COMP-3
+D0003    DC    CL3'ABC'            CODE-X PIC X(3)
+D0004    DC    CL1'N'              EOF-FLAG PIC X(1)
+D0006    DC    CL6' '              OUT-MSG PIC X(6)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

@@ -4,16 +4,25 @@
 *---------------------------------------------------------------
 STOPRUN  CSECT
          STM   14,12,12(13)        save caller's registers
-         BALR  12,0                establish addressability
-         USING *,12
+         BALR  12,0                first code base
+COBBEG   EQU   *
+         USING COBBEG,12
+         LA    11,2048(,12)        second code base
+         LA    11,2048(,11)
+         USING COBBEG+4096,11
          ST    13,SAVEAREA+4       backward chain to caller
-         LA    11,SAVEAREA
-         ST    11,8(13)            forward chain from caller
-         LR    13,11               our save area is now current
+         LA    0,SAVEAREA
+         ST    0,8(13)             forward chain from caller
+         LR    13,0                our save area is now current
 * STOP RUN
          L     13,4(13)            restore caller's save area
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+* base locator cells, one per 4096 bytes of COBWS
+BL0000   DC    A(WSC0000)
 SAVEAREA DS    18F
+COBWS    CSECT
+WSC0000  EQU   COBWS               chunk origins
+* WORKING-STORAGE
          END

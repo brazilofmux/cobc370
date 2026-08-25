@@ -621,9 +621,9 @@ static void parse_data_division(void)
         if (files[i].rec_sym < 0) die("an FD has no record description");
         files[i].reclen = syms[files[i].rec_sym].bytes;
     }
-    if (wslen > 3800)
-        die("WORKING-STORAGE exceeds one base-register displacement; "
-            "base locator cells are not implemented yet");
+    if (wslen > 64 * 1024)
+        die("WORKING-STORAGE beyond 64K would need more base locator cells "
+            "than this emits");
 }
 
 /* SELECT f ASSIGN TO UT-S-DDNAME.  The ddname is the part after the last
@@ -1116,6 +1116,60 @@ static void parse_procedure(void)
     }
 }
 
+/* ---- base locator cells -------------------------------------------------
+ * WORKING-STORAGE and the file records live in their own CSECT, COBWS, cut
+ * into 4096-byte chunks. Each chunk has a BL cell in the program CSECT
+ * holding its address; a data base register is loaded from the cell and a
+ * USING makes the chunk's symbols resolvable. This is the same idea the DMAP
+ * showed IKFCBL00 using with its BL=1 cells, and it is what decouples the
+ * size of WORKING-STORAGE from code addressability.
+ *
+ * A field may straddle a chunk boundary: only its first byte has to be within
+ * 4095 of the base.
+ *
+ * The USING state has to match what the registers actually hold at run time,
+ * so it is dropped at every label and after every PERFORM -- anywhere control
+ * can arrive from somewhere that left different chunks loaded.
+ */
+#define CHUNK 4096
+#define NBASE 3
+static const int base_reg[NBASE] = { 8, 9, 10 };
+static int base_chunk[NBASE] = { -1, -1, -1 };
+static int base_next;
+
+static void reset_bases(void)
+{
+    char b[64]; int j = 0, any = 0;
+    b[0] = 0;
+    for (int i = 0; i < NBASE; i++) {
+        if (base_chunk[i] < 0) continue;
+        j += snprintf(b + j, sizeof b - j, "%s%d", any ? "," : "", base_reg[i]);
+        any = 1;
+        base_chunk[i] = -1;
+    }
+    if (any) asm_line("", "DROP", b, "");
+    base_next = 0;
+}
+
+static void need_base(int chunk)
+{
+    char b[64];
+    for (int i = 0; i < NBASE; i++) if (base_chunk[i] == chunk) return;
+    int slot = base_next % NBASE;
+    base_next++;
+    if (base_chunk[slot] >= 0) {
+        snprintf(b, sizeof b, "%d", base_reg[slot]);
+        asm_line("", "DROP", b, "");
+    }
+    snprintf(b, sizeof b, "%d,BL%04d", base_reg[slot], chunk);
+    asm_line("", "L", b, "base locator");
+    snprintf(b, sizeof b, "WSC%04d,%d", chunk, base_reg[slot]);
+    asm_line("", "USING", b, "");
+    base_chunk[slot] = chunk;
+}
+
+static void need_sym_base(const Sym *sy) { need_base(sy->offset / CHUNK); }
+
 /* ---- arithmetic ---------------------------------------------------------
  * Everything is computed in packed decimal, which is what COBOL semantics
  * want and what S/370 does in hardware. Binary (COMP) operands are converted
@@ -1127,6 +1181,7 @@ static void parse_procedure(void)
 static void gen_load(const Sym *sy, const char *wk)
 {
     char b[96];
+    need_sym_base(sy);
     switch (sy->usage) {
     case U_DISPLAY:
         snprintf(b, sizeof b, "%s(8),%s(%d)", wk, sy->label, sy->bytes);
@@ -1165,6 +1220,7 @@ static void gen_rescale(const char *wk, int from, int to)
 static void gen_store(const Sym *sy, const char *wk)
 {
     char b[96];
+    need_sym_base(sy);
     switch (sy->usage) {
     case U_DISPLAY:
         snprintf(b, sizeof b, "%s(%d),%s(8)", sy->label, sy->bytes, wk);
@@ -1227,6 +1283,7 @@ static const char *intern_str(const char *text, int len, int pad)
 static void gen_load16(const Sym *sy, const char *wk)
 {
     char b[96];
+    need_sym_base(sy);
     switch (sy->usage) {
     case U_DISPLAY:
         snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->label, sy->bytes);
@@ -1346,6 +1403,7 @@ static int gen_expr(Node *n, int d, int tgtscale)
 static void gen_move_alpha(const Sym *d, const Sym *sv)
 {
     char b[128];
+    need_sym_base(d); need_sym_base(sv);
     int n = d->bytes < sv->bytes ? d->bytes : sv->bytes;
     if (n > 256) die("MVC is limited to 256 bytes; long moves need a loop, "
                      "which is not implemented yet");
@@ -1511,6 +1569,8 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
                 die("alphanumeric comparison needs an identifier on one side");
             const Sym *ls = &syms[L->sym];
             int n = ls->bytes;
+            need_sym_base(ls);
+            if (R->kind == N_SYM && node_alpha(R)) need_sym_base(&syms[R->sym]);
             if (R->kind == N_STR) {
                 const char *sl = intern_str(R->lit, R->litlen, n);
                 snprintf(b, sizeof b, "%s(%d),%s", ls->label, n, sl);
@@ -1555,12 +1615,21 @@ static void generate(void)
 
     asm_line(progid, "CSECT", "", "");
     asm_line("", "STM", "14,12,12(13)", "save caller's registers");
-    asm_line("", "BALR", "12,0", "establish addressability");
-    asm_line("", "USING", "*,12", "");
+    asm_line("", "BALR", "12,0", "first code base");
+    /* BALR loads the address of the NEXT instruction, so the base label has to
+       sit after it. Labelling the BALR itself puts every displacement two
+       bytes out. */
+    asm_line("COBBEG", "EQU", "*", "");
+    asm_line("", "USING", "COBBEG,12", "");
+    /* One base register covers 4096 bytes of code; a second doubles it. The
+     * data no longer competes for this, since it lives in COBWS. */
+    asm_line("", "LA", "11,2048(,12)", "second code base");
+    asm_line("", "LA", "11,2048(,11)", "");
+    asm_line("", "USING", "COBBEG+4096,11", "");
     asm_line("", "ST", "13,SAVEAREA+4", "backward chain to caller");
-    asm_line("", "LA", "11,SAVEAREA", "");
-    asm_line("", "ST", "11,8(13)", "forward chain from caller");
-    asm_line("", "LR", "13,11", "our save area is now current");
+    asm_line("", "LA", "0,SAVEAREA", "");
+    asm_line("", "ST", "0,8(13)", "forward chain from caller");
+    asm_line("", "LR", "13,0", "our save area is now current");
 
     int ndlit = 0, cur_para = -1, nret = 0;
     genlabel = nlabel;
@@ -1573,9 +1642,11 @@ static void generate(void)
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "L", b, "");
             asm_line("", "BR", "15", "");
             asm_line(f, "DS", "0H", "fall-through when not performed");
+            reset_bases();
         }
         switch (st->op) {
         case ST_PARA: {
+            reset_bases();
             char p[16];
             snprintf(p, sizeof p, "P%04d", st->dst);
             snprintf(b, sizeof b, " %s.", st->para);
@@ -1588,6 +1659,7 @@ static void generate(void)
             asm_comment(" EXIT");
             break;
         case ST_LABEL: {
+            reset_bases();
             char l[16]; snprintf(l, sizeof l, "L%04d", st->dst);
             asm_line(l, "DS", "0H", "");
             break;
@@ -1629,10 +1701,12 @@ static void generate(void)
              * the address -- exactly what IKFCBL00 does. */
             snprintf(b, sizeof b, "1,%s", le);       asm_line("", "LA", b, "this READ's AT END");
             snprintf(b, sizeof b, "1,7,%s+33", f->label); asm_line("", "STCM", b, "into DCBEODAD");
+            need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
             asm_line("", "GET", b, "QSAM move mode");
             asm_line("", "B", lc, "");
             asm_line(le, "DS", "0H", "AT END");
+            reset_bases();
             break;
         }
         case ST_GOTO: {
@@ -1646,6 +1720,7 @@ static void generate(void)
             File *f = &files[st->dst];
             snprintf(b, sizeof b, " WRITE %s", syms[f->rec_sym].name);
             asm_comment(b);
+            need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
             asm_line("", "PUT", b, "");
             break;
@@ -1663,6 +1738,7 @@ static void generate(void)
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
             asm_line("", "B", p1, "");
             asm_line(r, "DS", "0H", "");
+            reset_bases();   /* the performed range left its own chunks loaded */
             /* restore the cell so a later fall-through is not diverted */
             snprintf(b, sizeof b, "15,%s", f);  asm_line("", "LA", b, "restore fall-through");
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
@@ -1722,6 +1798,7 @@ static void generate(void)
                     if (!(d->is_alpha || d->is_group))
                         die("MOVE of a nonnumeric literal to a numeric item is "
                             "not implemented yet");
+                    need_sym_base(d);
                     const char *sl = intern_str(st->immdigits, st->immscale, d->bytes);
                     if (d->bytes > 256) die("MVC is limited to 256 bytes");
                     snprintf(b, sizeof b, "%s(%d),%s", d->label, d->bytes, sl);
@@ -1808,45 +1885,7 @@ static void generate(void)
         }
     }
 
-    /* ---- WORKING-STORAGE ---- */
     if (nsym) {
-        asm_comment(" WORKING-STORAGE");
-        for (int i = 0; i < nsym; i++) {
-            Sym *sy = &syms[i];
-            char cmt[96];
-            if (sy->is_88) continue;      /* a condition name has no storage */
-            if (sy->is_group) {
-                snprintf(b, sizeof b, "0CL%d", sy->bytes);
-                snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
-                asm_line(sy->label, "DS", b, cmt);
-                continue;
-            }
-            if (sy->is_alpha) {
-                if (sy->has_value == 3) {
-                    char op[MAXTOK * 2 + 16]; int j = 0;
-                    j += snprintf(op + j, sizeof op - j, "CL%d'", sy->bytes);
-                    for (const char *q = sy->value; *q; q++) {
-                        if (*q == '\'' || *q == '&') op[j++] = *q;
-                        op[j++] = *q;
-                    }
-                    op[j++] = '\''; op[j] = 0;
-                    snprintf(b, sizeof b, "%s", op);
-                } else snprintf(b, sizeof b, "CL%d' '", sy->bytes);
-                snprintf(cmt, sizeof cmt, "%s PIC X(%d)", sy->name, sy->bytes);
-                asm_line(sy->label, "DC", b, cmt);
-                continue;
-            }
-            const char *v = (sy->has_value == 1) ? sy->value : "0";
-            switch (sy->usage) {
-            case U_DISPLAY: snprintf(b, sizeof b, "ZL%d'%s'", sy->bytes, v); break;
-            case U_COMP3:   snprintf(b, sizeof b, "PL%d'%s'", sy->bytes, v); break;
-            default:        snprintf(b, sizeof b, "%s'%s'", sy->bytes == 2 ? "H" : "F", v); break;
-            }
-            snprintf(cmt, sizeof cmt, "%s PIC %s9(%d)v%d %s",
-                     sy->name, sy->is_signed ? "S" : "", sy->digits, sy->scale,
-                     sy->usage == U_COMP ? "COMP" : sy->usage == U_COMP3 ? "COMP-3" : "DISP");
-            asm_line(sy->label, "DC", b, cmt);
-        }
         asm_comment(" work areas for decimal arithmetic");
         asm_line("DWK", "DS", "D", "CVD/CVB doubleword");
         asm_line("PWK1", "DS", "PL8", "");
@@ -1885,7 +1924,85 @@ static void generate(void)
         op[j++] = '\''; op[j] = 0;
         asm_line(sconsts[i].label, "DC", op, i ? "" : "nonnumeric constants");
     }
+    /* One base locator per 4096-byte chunk of COBWS. */
+    {
+        int nchunk = (wslen + CHUNK - 1) / CHUNK;
+        if (nchunk < 1) nchunk = 1;
+        asm_comment(" base locator cells, one per 4096 bytes of COBWS");
+        for (int i = 0; i < nchunk; i++) {
+            char lab[16];
+            snprintf(lab, sizeof lab, "BL%04d", i);
+            snprintf(b, sizeof b, "A(WSC%04d)", i);
+            asm_line(lab, "DC", b, "");
+        }
+    }
     asm_line("SAVEAREA", "DS", "18F", "");
+
+    /* ---- COBWS: WORKING-STORAGE and the file records ----
+     * A separate CSECT so its size never competes with code addressability.
+     * Chunk origins are EQUs, so no padding is needed and a field may straddle
+     * a boundary: only its first byte must be within 4095 of its base. */
+    {
+        int nchunk = (wslen + CHUNK - 1) / CHUNK;
+        if (nchunk < 1) nchunk = 1;
+        asm_line("COBWS", "CSECT", "", "");
+        for (int i = 0; i < nchunk; i++) {
+            char lab[16];
+            snprintf(lab, sizeof lab, "WSC%04d", i);
+            if (i == 0) snprintf(b, sizeof b, "COBWS");
+            else snprintf(b, sizeof b, "COBWS+%d", i * CHUNK);
+            asm_line(lab, "EQU", b, i ? "" : "chunk origins");
+        }
+        asm_comment(" WORKING-STORAGE");
+        for (int i = 0; i < nsym; i++) {
+            Sym *sy = &syms[i];
+            char cmt[96];
+            if (sy->is_88) continue;      /* a condition name has no storage */
+            if (sy->is_group) {
+                /* The C-type length modifier maxes at 256; a group only needs
+                   a label at the right offset, so drop the length when big. */
+                if (sy->bytes <= 256) snprintf(b, sizeof b, "0CL%d", sy->bytes);
+                else                  snprintf(b, sizeof b, "0C");
+                snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
+                asm_line(sy->label, "DS", b, cmt);
+                continue;
+            }
+            if (sy->is_alpha) {
+                if (sy->has_value == 3 && sy->bytes > 256)
+                    die("a VALUE literal on an item longer than 256 bytes is "
+                        "not implemented yet");
+                if (sy->has_value == 3) {
+                    char op[MAXTOK * 2 + 16]; int j = 0;
+                    j += snprintf(op + j, sizeof op - j, "CL%d'", sy->bytes);
+                    for (const char *q = sy->value; *q; q++) {
+                        if (*q == '\'' || *q == '&') op[j++] = *q;
+                        op[j++] = *q;
+                    }
+                    op[j++] = '\''; op[j] = 0;
+                    snprintf(b, sizeof b, "%s", op);
+                } else if (sy->bytes <= 256) {
+                    snprintf(b, sizeof b, "CL%d' '", sy->bytes);
+                } else {
+                    /* Past 256 the length modifier is illegal, but a
+                       duplication factor is not. */
+                    snprintf(b, sizeof b, "%dC' '", sy->bytes);
+                }
+                snprintf(cmt, sizeof cmt, "%s PIC X(%d)", sy->name, sy->bytes);
+                asm_line(sy->label, "DC", b, cmt);
+                continue;
+            }
+            const char *v = (sy->has_value == 1) ? sy->value : "0";
+            switch (sy->usage) {
+            case U_DISPLAY: snprintf(b, sizeof b, "ZL%d'%s'", sy->bytes, v); break;
+            case U_COMP3:   snprintf(b, sizeof b, "PL%d'%s'", sy->bytes, v); break;
+            default:        snprintf(b, sizeof b, "%s'%s'", sy->bytes == 2 ? "H" : "F", v); break;
+            }
+            snprintf(cmt, sizeof cmt, "%s PIC %s9(%d)v%d %s",
+                     sy->name, sy->is_signed ? "S" : "", sy->digits, sy->scale,
+                     sy->usage == U_COMP ? "COMP" : sy->usage == U_COMP3 ? "COMP-3" : "DISP");
+            asm_line(sy->label, "DC", b, cmt);
+        }
+    }
 
     if (has_display) emit_runtime();
     asm_line("", "END", "", "");

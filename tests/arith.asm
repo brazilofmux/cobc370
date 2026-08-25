@@ -5,13 +5,19 @@
 *---------------------------------------------------------------
 ARITH    CSECT
          STM   14,12,12(13)        save caller's registers
-         BALR  12,0                establish addressability
-         USING *,12
+         BALR  12,0                first code base
+COBBEG   EQU   *
+         USING COBBEG,12
+         LA    11,2048(,12)        second code base
+         LA    11,2048(,11)
+         USING COBBEG+4096,11
          ST    13,SAVEAREA+4       backward chain to caller
-         LA    11,SAVEAREA
-         ST    11,8(13)            forward chain from caller
-         LR    13,11               our save area is now current
+         LA    0,SAVEAREA
+         ST    0,8(13)             forward chain from caller
+         LR    13,0                our save area is now current
 * ADD P1 -> P2
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ZAP   PWK1(8),D0001(4)
          ZAP   PWK2(8),D0000(4)
          AP    PWK1(8),PWK2(8)
@@ -118,19 +124,6 @@ LEN0004  DC    H'9'
 PARM0005 DC    A(D0011)
          DC    X'80',AL3(LEN0005)  last parameter
 LEN0005  DC    H'4'
-* WORKING-STORAGE
-D0000    DC    PL4'12345'          P1 PIC S9(7)v2 COMP-3
-D0001    DC    PL4'6789'           P2 PIC S9(7)v2 COMP-3
-D0002    DC    PL4'105'            P3 PIC S9(6)v1 COMP-3
-D0003    DC    F'1000'             B1 PIC S9(7)v0 COMP
-D0004    DC    F'250'              B2 PIC S9(7)v0 COMP
-D0005    DC    ZL7'9999'           Z1 PIC S9(7)v2 DISP
-D0006    DC    PL2'00'             SC PIC S9(2)v1 COMP-3
-D0007    DC    ZL9'000'            R1 PIC 9(9)v2 DISP
-D0008    DC    ZL9'0'              R2 PIC 9(9)v0 DISP
-D0009    DC    ZL9'000'            R3 PIC 9(9)v2 DISP
-D0010    DC    ZL9'000'            R4 PIC 9(9)v2 DISP
-D0011    DC    ZL4'00'             R5 PIC 9(4)v1 DISP
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL8
@@ -145,7 +138,24 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    DC    PL8'005'            numeric constants
+* base locator cells, one per 4096 bytes of COBWS
+BL0000   DC    A(WSC0000)
 SAVEAREA DS    18F
+COBWS    CSECT
+WSC0000  EQU   COBWS               chunk origins
+* WORKING-STORAGE
+D0000    DC    PL4'12345'          P1 PIC S9(7)v2 COMP-3
+D0001    DC    PL4'6789'           P2 PIC S9(7)v2 COMP-3
+D0002    DC    PL4'105'            P3 PIC S9(6)v1 COMP-3
+D0003    DC    F'1000'             B1 PIC S9(7)v0 COMP
+D0004    DC    F'250'              B2 PIC S9(7)v0 COMP
+D0005    DC    ZL7'9999'           Z1 PIC S9(7)v2 DISP
+D0006    DC    PL2'00'             SC PIC S9(2)v1 COMP-3
+D0007    DC    ZL9'000'            R1 PIC 9(9)v2 DISP
+D0008    DC    ZL9'0'              R2 PIC 9(9)v0 DISP
+D0009    DC    ZL9'000'            R3 PIC 9(9)v2 DISP
+D0010    DC    ZL9'000'            R4 PIC 9(9)v2 DISP
+D0011    DC    ZL4'00'             R5 PIC 9(4)v1 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

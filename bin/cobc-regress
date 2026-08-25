@@ -1,0 +1,74 @@
+#!/bin/bash
+# Assemble, link and run every cobc370 test on the guest, and check each
+# program's output against the GnuCOBOL oracle recorded beside it.
+#
+# Every slice so far has been verified this way, but by hand. Base locators
+# touched every emit site at once and broke all eight tests, which is what
+# made a scripted full-suite run worth having.
+#
+#   cobc-regress            run everything
+#   cobc-regress arith      run one
+set -u
+. "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
+CC="$(cd "$(dirname "$0")/../cobol/cc" && pwd)"
+WORK=${TMPDIR:-/tmp}/cobc-regress
+mkdir -p "$WORK"
+
+herc_running || die "Hercules is not running -- 'tk5-up' first."
+( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
+
+ALL="stoprun hello arith compute grpperf iftest bigws filetest"
+TESTS=${*:-$ALL}
+pass=0; fail=0
+
+for t in $TESTS; do
+    [ -f "$CC/tests/$t.cbl" ] || { say "$t: no such test"; fail=$((fail+1)); continue; }
+    ( cd "$CC" && ./cobc370 "tests/$t.cbl" -o "tests/$t.asm" ) || { say "$t: COMPILE FAILED"; fail=$((fail+1)); continue; }
+
+    # column 72 is the continuation flag, never spare room
+    if awk 'length($0)>72 || (length($0)==72 && substr($0,72,1)!="X")' "$CC/tests/$t.asm" | grep -q .; then
+        say "$t: COLUMN 72 VIOLATION"; fail=$((fail+1)); continue
+    fi
+
+    jn=$(echo "R$t" | tr 'a-z' 'A-Z' | cut -c1-8)
+    {
+        printf '//%-8s JOB (5161A020,1A11),%s,\n' "$jn" "'REGRESSION'"
+        printf '//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),\n'
+        printf '//             USER=HERC01,PASSWORD=@HERC01PW@\n'
+        printf '//ASM      EXEC ASMFCLG\n//ASM.SYSIN DD  *\n'
+        cat "$CC/tests/$t.asm"
+        printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
+        if [ "$t" = filetest ]; then
+            printf '//GO.OUTFILE DD  SYSOUT=Z\n//GO.INFILE  DD  *\n'
+            for r in "RECORD ONE" "RECORD TWO" "RECORD THREE" "RECORD FOUR"; do
+                printf '%-72s\n' "$r"
+            done
+            printf '/*\n'
+        fi
+    } > "$WORK/$t.jcl.new" && mv "$WORK/$t.jcl.new" "$WORK/$t.jcl"
+
+    "$(dirname "$0")/tk5-run" "$WORK/$t.jcl" "$WORK/$t.out" >/dev/null 2>&1
+    rc=$(grep -oE 'PGM=\*\.DD  RC= [0-9]+' "$WORK/$t.out" | tail -1 | grep -oE '[0-9]+$')
+    ab=$(grep -oE 'AB S[0-9A-F]+' "$WORK/$t.out" | tail -1)
+    if [ -n "$ab" ]; then say "  $t: $ab"; fail=$((fail+1)); continue; fi
+    if [ "${rc:-x}" != "0000" ]; then say "  $t: GO step RC=${rc:-none}"; fail=$((fail+1)); continue; fi
+
+    if [ -f "$CC/tests/$t.expected" ]; then
+        # The expected lines must appear consecutively; JES2 separator pages
+        # are full of block letters that match almost any loose pattern.
+        if python3 - "$CC/tests/$t.expected" "$WORK/$t.out" <<'PY'
+import sys
+exp = [l.rstrip() for l in open(sys.argv[1], errors="replace").read().splitlines() if l.strip()]
+got = [l.rstrip() for l in open(sys.argv[2], errors="replace").read().splitlines()]
+sys.exit(0 if any(got[i:i+len(exp)] == exp for i in range(len(got)-len(exp)+1)) else 1)
+PY
+        then say "  $t: ok (matches oracle)"; pass=$((pass+1))
+        else say "  $t: OUTPUT DIFFERS FROM ORACLE"; fail=$((fail+1)); fi
+    else
+        say "  $t: ok (ran clean; no oracle recorded)"; pass=$((pass+1))
+    fi
+done
+
+say ""
+say "$pass passed, $fail failed"
+[ "$fail" -eq 0 ]

@@ -5,12 +5,16 @@
 *---------------------------------------------------------------
 GRPPERF  CSECT
          STM   14,12,12(13)        save caller's registers
-         BALR  12,0                establish addressability
-         USING *,12
+         BALR  12,0                first code base
+COBBEG   EQU   *
+         USING COBBEG,12
+         LA    11,2048(,12)        second code base
+         LA    11,2048(,11)
+         USING COBBEG+4096,11
          ST    13,SAVEAREA+4       backward chain to caller
-         LA    11,SAVEAREA
-         ST    11,8(13)            forward chain from caller
-         LR    13,11               our save area is now current
+         LA    0,SAVEAREA
+         ST    0,8(13)             forward chain from caller
+         LR    13,0                our save area is now current
 * MAIN-PARA.
 P0000    DS    0H
 * PERFORM ADD-PARA THRU ADD-EXIT
@@ -35,6 +39,8 @@ R0003    DS    0H
          LA    15,F0002            restore fall-through
          ST    15,X0002
 * MOVE CUSTOMER-REC -> SAVE-REC
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0004(16),D0000     alphanumeric move
 * MOVE SAVE-NAME -> OUT-NAME
          MVC   D0009(9),D0005      alphanumeric move
@@ -66,6 +72,7 @@ R0003    DS    0H
          ST    15,X0003            into the range's exit cell
          B     P0003
 R0004    DS    0H
+         DROP  8
          LA    15,F0003            restore fall-through
          ST    15,X0003
 * STOP RUN
@@ -78,6 +85,8 @@ R0004    DS    0H
 * ADD-PARA.
 P0001    DS    0H
 * ADD 1 -> COUNTER
+         L     8,BL0000            base locator
+         USING WSC0000,8
          LH    2,D0008
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(8),DWK(8)
@@ -91,6 +100,7 @@ P0001    DS    0H
          ZAP   PWK2(8),K0002(8)    literal
          AP    PWK1(8),PWK2(8)
          ZAP   D0003(4),PWK1(8)
+         DROP  8
 * ADD-EXIT.
 P0002    DS    0H
 * EXIT
@@ -101,6 +111,8 @@ F0002    DS    0H                  fall-through when not performed
 * SHOW-PARA.
 P0003    DS    0H
 * MOVE CUST-CODE -> OUT-CODE
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0010(3),D0002      alphanumeric move
 * DISPLAY OUT-CODE
          LA    1,PARM0004
@@ -126,19 +138,6 @@ LEN0003  DC    H'7'
 PARM0004 DC    A(D0010)
          DC    X'80',AL3(LEN0004)  last parameter
 LEN0004  DC    H'3'
-* WORKING-STORAGE
-D0000    DS    0CL16               CUSTOMER-REC (01 group)
-D0001    DC    CL9'ACME CORP'      CUST-NAME PIC X(9)
-D0002    DC    CL3'AAA'            CUST-CODE PIC X(3)
-D0003    DC    PL4'10000'          CUST-BAL PIC S9(7)v2 COMP-3
-D0004    DS    0CL16               SAVE-REC (01 group)
-D0005    DC    CL9' '              SAVE-NAME PIC X(9)
-D0006    DC    CL3' '              SAVE-CODE PIC X(3)
-D0007    DC    PL4'000'            SAVE-BAL PIC S9(7)v2 COMP-3
-D0008    DC    H'0'                COUNTER PIC S9(4)v0 COMP
-D0009    DC    CL9' '              OUT-NAME PIC X(9)
-D0010    DC    CL3' '              OUT-CODE PIC X(3)
-D0011    DC    ZL7'000'            OUT-NUM PIC 9(7)v2 DISP
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL8
@@ -154,7 +153,24 @@ WK4      DS    PL16
 WK5      DS    PL16
 K0001    DC    PL8'1'              numeric constants
 K0002    DC    PL8'1050'
+* base locator cells, one per 4096 bytes of COBWS
+BL0000   DC    A(WSC0000)
 SAVEAREA DS    18F
+COBWS    CSECT
+WSC0000  EQU   COBWS               chunk origins
+* WORKING-STORAGE
+D0000    DS    0CL16               CUSTOMER-REC (01 group)
+D0001    DC    CL9'ACME CORP'      CUST-NAME PIC X(9)
+D0002    DC    CL3'AAA'            CUST-CODE PIC X(3)
+D0003    DC    PL4'10000'          CUST-BAL PIC S9(7)v2 COMP-3
+D0004    DS    0CL16               SAVE-REC (01 group)
+D0005    DC    CL9' '              SAVE-NAME PIC X(9)
+D0006    DC    CL3' '              SAVE-CODE PIC X(3)
+D0007    DC    PL4'000'            SAVE-BAL PIC S9(7)v2 COMP-3
+D0008    DC    H'0'                COUNTER PIC S9(4)v0 COMP
+D0009    DC    CL9' '              OUT-NAME PIC X(9)
+D0010    DC    CL3' '              OUT-CODE PIC X(3)
+D0011    DC    ZL7'000'            OUT-NUM PIC 9(7)v2 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the
