@@ -116,3 +116,44 @@ VSAM has it is untested here.)
 `FW.ACCOUNTS`, the flat input `LDGLACCT` loads from, no longer exists — it is an
 older schema. `SVD001.GLACCT` therefore **cannot be rebuilt from source** and
 must be preserved as data. See `doc/DISASTER-RECOVERY.md`.
+
+## The JCL, which is worse than the access method
+
+This is the part the historical record is thinnest on, so the working decks are
+kept verbatim in `jcl/isam/LDGLACCT.jcl` and `jcl/isam/EXGLACCT.jcl`. The shapes
+for creating and for reading are not the same, which is the trap.
+
+**Creating** an ISAM dataset takes **three concatenated DD statements under one
+ddname**, in this order, with the area named by an element suffix on the DSNAME:
+
+    //GO.GLACCT DD DSNAME=SVD001.GLACCT(INDEX),DISP=(,KEEP),UNIT=3380,
+    //             VOL=SER=SVD003,SPACE=(CYL,2),
+    //             DCB=(DSORG=IS,RECFM=F)
+    //          DD DSNAME=SVD001.GLACCT(PRIME),DISP=(,KEEP),UNIT=3380,
+    //             VOL=SER=SVD003,SPACE=(CYL,20),DCB=*.GLACCT
+    //          DD DSNAME=SVD001.GLACCT(OVFLOW),DISP=(,KEEP),UNIT=3380,
+    //             VOL=SER=SVD003,SPACE=(CYL,5),DCB=*.GLACCT
+
+Each area gets its own `SPACE`. Only the first carries a real `DCB`; the other
+two back-reference it with `DCB=*.GLACCT`. `(INDEX)` and `(OVFLOW)` are
+optional in principle and painful in practice — supply all three.
+
+**Reading** an existing one is a single ordinary DD with no element suffix:
+
+    //GO.GLACCT DD DSNAME=SVD001.GLACCT,DISP=(OLD,KEEP),
+    //             DCB=DSORG=IS,VOL=SER=SVD003,UNIT=3380
+
+`DCB=DSORG=IS` is not actually required — OPEN takes DSORG, RECFM, LRECL,
+BLKSIZE, KEYLEN and RKP from the label. The regression harness allocates it as
+plain `DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003` and that is enough.
+
+**Deleting** one, so a load can be rerun, uses `IEFBR14` with
+
+    //DSN2DEL DD DSN=SVD001.GLACCT,DISP=(MOD,DELETE,DELETE),
+    //           UNIT=3380,VOL=SER=SVD003
+
+`MOD` rather than `OLD` so the step works whether or not the dataset is there.
+
+Two constraints that are properties of ISAM, not of the JCL: the dataset must be
+**loaded in ascending key order** in a single pass, and the load program writes
+it sequentially — there is no incremental create.
