@@ -1,0 +1,73 @@
+Corpus: 30 programs in SVD001.DEFTLY.COBOL
+Programs using the Report Writer feature: 6
+
+== Divisions and sections
+   IDENTIFICATION DIVISION           30
+   ENVIRONMENT DIVISION              30
+   DATA DIVISION                     30
+   WORKING-STORAGE SECTION           30
+   PROCEDURE DIVISION                30
+   CONFIGURATION SECTION             22
+   INPUT-OUTPUT SECTION              21
+   FILE SECTION                      21
+   LINKAGE SECTION                   15
+   REPORT SECTION                     6
+
+== Verbs
+   MOVE           457
+   PERFORM        204
+   IF             130
+   EXIT           128
+   ADD             57
+   CALL            43
+   READ            40
+   GO              36
+   COMPUTE         35
+   DISPLAY         35
+   GENERATE        33
+   OPEN            31
+   SUBTRACT        29
+   CLOSE           24
+   STOP            19
+   WRITE           19
+   INITIATE         6
+   TERMINATE        6
+   DIVIDE           4
+   SEARCH           4
+   MULTIPLY         2
+
+== PERFORM forms
+   PERFORM ... THRU         113
+   PERFORM (simple)          90
+   PERFORM ... UNTIL          1
+
+== Report Writer clauses
+   RD                   121
+   TYPE                  65
+   HEADING               12
+   REPORT SECTION         6
+   PAGE LIMIT             6
+   FIRST DETAIL           6
+   LAST DETAIL            6
+
+== Data description clauses
+   level-02-49          841
+   REDEFINES              8
+   OCCURS                 7
+   SYNC                   2
+
+== USAGE
+   COMP                 177
+   COMP-3                12
+   DISPLAY                1
+
+== PICTURE categories
+   X (alphanumeric)                     435
+   9 (unsigned integer)                 355
+   S9 (signed integer)                  113
+   9..V9 (unsigned decimal)              61
+   S9..V9 (signed decimal)               30
+   edited (Z , . - + CR DB * $ B 0 /)    23
+
+== CALL targets
+   DYNALOAD          43
