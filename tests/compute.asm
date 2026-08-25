@@ -104,31 +104,38 @@ COBBEG   EQU   *
          ZAP   PWK1(8),WK0(16)
          UNPK  D0009(9),PWK1(8)    packed -> zoned
          OI    D0009+8,X'F0'       unsigned: force an F zone
-* DISPLAY R1
+* DISPLAY
+         MVC   DSPBUF+0(9),D0003
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
-* DISPLAY R2
+* DISPLAY
+         MVC   DSPBUF+0(9),D0004
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
-* DISPLAY R3
+* DISPLAY
+         MVC   DSPBUF+0(9),D0005
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
-* DISPLAY R4
+* DISPLAY
+         MVC   DSPBUF+0(9),D0006
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
-* DISPLAY R5
+* DISPLAY
+         MVC   DSPBUF+0(9),D0007
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
-* DISPLAY R6
+* DISPLAY
+         MVC   DSPBUF+0(9),D0008
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
-* DISPLAY R7
+* DISPLAY
+         MVC   DSPBUF+0(9),D0009
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
@@ -141,25 +148,25 @@ COBBEG   EQU   *
          BR    14                  return to caller
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
-PARM0001 DC    A(D0003)
+PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
 LEN0001  DC    H'9'
-PARM0002 DC    A(D0004)
+PARM0002 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0002)  last parameter
 LEN0002  DC    H'9'
-PARM0003 DC    A(D0005)
+PARM0003 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0003)  last parameter
 LEN0003  DC    H'9'
-PARM0004 DC    A(D0006)
+PARM0004 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0004)  last parameter
 LEN0004  DC    H'9'
-PARM0005 DC    A(D0007)
+PARM0005 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0005)  last parameter
 LEN0005  DC    H'9'
-PARM0006 DC    A(D0008)
+PARM0006 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0006)  last parameter
 LEN0006  DC    H'9'
-PARM0007 DC    A(D0009)
+PARM0007 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0007)  last parameter
 LEN0007  DC    H'9'
 * work areas for decimal arithmetic
@@ -180,6 +187,7 @@ WK5      DS    PL16
 K0001    DC    PL8'0'              numeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
+DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins

@@ -39,13 +39,14 @@ L0001    DS    0H
          MVC   D0006(6),S0002      literal move, space padded
          DROP  8
 L0002    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 * IF
-         L     8,BL0000            base locator
-         USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
@@ -71,13 +72,14 @@ L0003    DS    0H
          MVC   D0006(6),S0004      literal move, space padded
          DROP  8
 L0004    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
 * IF
-         L     8,BL0000            base locator
-         USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
@@ -102,13 +104,14 @@ L0005    DS    0H
          MVC   D0006(6),S0006      literal move, space padded
          DROP  8
 L0006    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 * IF
-         L     8,BL0000            base locator
-         USING WSC0000,8
          CLC   D0003(3),S0007      alphanumeric compare
          BNE   L0007
 * MOVE STREQ  -> OUT-MSG
@@ -122,13 +125,14 @@ L0007    DS    0H
          MVC   D0006(6),S0009      literal move, space padded
          DROP  8
 L0008    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 * IF
-         L     8,BL0000            base locator
-         USING WSC0000,8
          CLC   D0004(1),S0010      alphanumeric compare
          BNE   L0009
 * MOVE EOFYES -> OUT-MSG
@@ -142,13 +146,14 @@ L0009    DS    0H
          MVC   D0006(6),S0012      literal move, space padded
          DROP  8
 L0010    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
 * MOVE Y -> EOF-FLAG
-         L     8,BL0000            base locator
-         USING WSC0000,8
          MVC   D0004(1),S0010      literal move, space padded
 * IF
          CLC   D0004(1),S0010      alphanumeric compare
@@ -164,13 +169,14 @@ L0011    DS    0H
          MVC   D0006(6),S0012      literal move, space padded
          DROP  8
 L0012    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
 * IF
-         L     8,BL0000            base locator
-         USING WSC0000,8
          ZAP   WK0(16),D0002(4)
          ZAP   WK1(16),K0001(8)    literal
          SRP   WK1(16),2,0         align scale (left)
@@ -187,13 +193,14 @@ L0013    DS    0H
          MVC   D0006(6),S0014      literal move, space padded
          DROP  8
 L0014    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 * IF
-         L     8,BL0000            base locator
-         USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
@@ -228,7 +235,10 @@ L0015    DS    0H
          MVC   D0006(6),S0017      literal move, space padded
          DROP  8
 L0018    DS    0H
-* DISPLAY OUT-MSG
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(6),D0006
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
@@ -241,28 +251,28 @@ L0018    DS    0H
          BR    14                  return to caller
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
-PARM0001 DC    A(D0006)
+PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
 LEN0001  DC    H'6'
-PARM0002 DC    A(D0006)
+PARM0002 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0002)  last parameter
 LEN0002  DC    H'6'
-PARM0003 DC    A(D0006)
+PARM0003 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0003)  last parameter
 LEN0003  DC    H'6'
-PARM0004 DC    A(D0006)
+PARM0004 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0004)  last parameter
 LEN0004  DC    H'6'
-PARM0005 DC    A(D0006)
+PARM0005 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0005)  last parameter
 LEN0005  DC    H'6'
-PARM0006 DC    A(D0006)
+PARM0006 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0006)  last parameter
 LEN0006  DC    H'6'
-PARM0007 DC    A(D0006)
+PARM0007 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0007)  last parameter
 LEN0007  DC    H'6'
-PARM0008 DC    A(D0006)
+PARM0008 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0008)  last parameter
 LEN0008  DC    H'6'
 * work areas for decimal arithmetic
@@ -302,6 +312,7 @@ S0016    DC    CL6'NEST2 '
 S0017    DC    CL6'NEST3 '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
+DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins

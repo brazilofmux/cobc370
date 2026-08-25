@@ -15,11 +15,13 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
-* DISPLAY 'HELLO FROM COBC. NO SYS1.COBLIB HERE.'
+* DISPLAY
+         MVC   DSPBUF+0(37),S0001
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
-* DISPLAY 'SECOND LINE, WITH A QUOTE: DON'T PANIC.'
+* DISPLAY
+         MVC   DSPBUF+0(39),S0002
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -32,16 +34,17 @@ COBBEG   EQU   *
          BR    14                  return to caller
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
-PARM0001 DC    A(LIT0001)
+PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
-LIT0001  DC    C'HELLO FROM COBC. NO SYS1.COBLIB HERE.'
 LEN0001  DC    H'37'
-PARM0002 DC    A(LIT0002)
+PARM0002 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0002)  last parameter
-LIT0002  DC    C'SECOND LINE, WITH A QUOTE: DON''T PANIC.'
 LEN0002  DC    H'39'
+S0001    DC    CL37'HELLO FROM COBC. NO SYS1.COBLIB HERE.'  nonnumeric
+S0002    DC    CL39'SECOND LINE, WITH A QUOTE: DON''T PANIC.'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
+DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins

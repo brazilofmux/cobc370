@@ -30,7 +30,8 @@ P0000    DS    0H
          MVI   0(1),C'-'
 G0001    DS    0H
          MVC   D0001(15),EDWK+1    the edited result
-* DISPLAY E1
+* DISPLAY
+         MVC   DSPBUF+0(15),D0001
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -40,7 +41,8 @@ G0001    DS    0H
          MVC   EDWK(12),M0002      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0002(10),EDWK+2    the edited result
-* DISPLAY E2
+* DISPLAY
+         MVC   DSPBUF+0(10),D0002
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -55,7 +57,8 @@ G0001    DS    0H
 G0003    MVI   EDWK+3,C'+'
 G0004    DS    0H
          MVC   D0003(6),EDWK+3     the edited result
-* DISPLAY E3
+* DISPLAY
+         MVC   DSPBUF+0(6),D0003
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -65,7 +68,8 @@ G0004    DS    0H
          MVC   EDWK(12),M0004      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0004(10),EDWK+2    the edited result
-* DISPLAY E4
+* DISPLAY
+         MVC   DSPBUF+0(10),D0004
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -80,7 +84,8 @@ G0004    DS    0H
          MVI   0(1),C'-'
 G0005    DS    0H
          MVC   D0005(11),EDWK+2    the edited result
-* DISPLAY E5
+* DISPLAY
+         MVC   DSPBUF+0(11),D0005
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
@@ -93,19 +98,19 @@ G0005    DS    0H
          BR    14                  return to caller
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
-PARM0001 DC    A(D0001)
+PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
 LEN0001  DC    H'15'
-PARM0002 DC    A(D0002)
+PARM0002 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0002)  last parameter
 LEN0002  DC    H'10'
-PARM0003 DC    A(D0003)
+PARM0003 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0003)  last parameter
 LEN0003  DC    H'6'
-PARM0004 DC    A(D0004)
+PARM0004 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0004)  last parameter
 LEN0004  DC    H'10'
-PARM0005 DC    A(D0005)
+PARM0005 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0005)  last parameter
 LEN0005  DC    H'11'
 * work areas for decimal arithmetic
@@ -133,6 +138,7 @@ M0004    DC    XL12'5C202020206B2021204B2020'
 M0005    DC    XL13'40204020206B2020206B202120'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
+DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins

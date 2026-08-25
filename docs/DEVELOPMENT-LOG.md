@@ -747,6 +747,35 @@ the old callers never produced.
 
 Regression: 13 passed, 0 failed.
 
+## Slice 13: ISAM — sequential yes, random no
+
+Sequential ISAM works and is verified against the live `SVD001.GLACCT`. Random
+ISAM does not, and is rejected at code generation rather than emitting a program
+that abends. `cobol/ISAM-NOTES.md` records what the probes in `jcl/isam/`
+established; the short version is that OPEN succeeds, the access method's entry
+point is loaded, and the branch into it faults S0C4 anyway.
+
+Two things came along with it:
+
+**Multi-operand DISPLAY.** `DISPLAY 'FOUND ' OUT-KEY ' ' GLAC-NAME` — COBOL
+concatenates the operands into one line, which the corpus relies on.
+
+**An unsigned packed sign bug.** `PIC 9(n) COMP-3` must carry an `F` sign;
+`ZAP` leaves `C`. Invisible while packed fields were only compared
+arithmetically, and wrong the moment one is compared byte-wise — which is what
+an ISAM key is.
+
+Regression: 14 passed, 0 failed.
+
+### The regression earned its keep
+
+Three tests broke at once, and the cause was not in any of them: an index-based
+edit that sliced from `case ST_DISPLAY_LIT:` to `case ST_MOVE:` silently
+deleted the `case ST_COMPUTE:` sitting between them. Every program using
+COMPUTE quietly stopped computing and displayed its initialised values instead.
+Nothing in the compiler complained, because a missing `switch` case is not an
+error.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

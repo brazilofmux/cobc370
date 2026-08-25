@@ -34,7 +34,8 @@ P0000    DS    0H
          ZAP   PWK1(8),0(5,7)
          UNPK  D0005(9),PWK1(8)    packed -> zoned
          OI    D0005+8,X'F0'       unsigned: force an F zone
-* DISPLAY OUT-NUM
+* DISPLAY
+         MVC   DSPBUF+0(9),D0005
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -47,7 +48,7 @@ P0000    DS    0H
          BR    14                  return to caller
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
-PARM0001 DC    A(D0005)
+PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
 LEN0001  DC    H'9'
 * work areas for decimal arithmetic
@@ -69,6 +70,7 @@ K0001    DC    PL8'70000'          numeric constants
 H0001    DC    H'10'               element sizes
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
+DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins

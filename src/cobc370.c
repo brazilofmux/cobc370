@@ -306,6 +306,8 @@ typedef struct {
     Node *dsub, *ssub;      /* subscripts on dst and src */
     int  vary_sym;          /* PERFORM ... VARYING identifier, -1 if none */
     Node *vary_from, *vary_by, *times_expr;
+    int  ndop;              /* DISPLAY operands */
+    struct { int sym; char lit[MAXTOK]; int litlen; } dop[8];
 } Stmt;
 
 /* Files. One DCB each, emitted into the program CSECT. QSAM move mode: the
@@ -319,11 +321,16 @@ typedef struct {
     int  opened_input; /* which OPEN modes appear, so MACRF can be set */
     int  opened_output;
     int  report;       /* the RD this FD carries, or -1 */
+    int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
+    int  key_sym, nominal_sym;
 } File;
 
 #define MAXFILE 16
 static File files[MAXFILE];
 static int nfile;
+/* RECORD KEY and NOMINAL KEY name items declared later, so hold the names and
+ * resolve once the data division has been read. */
+static char keyname[MAXFILE][31], nomname[MAXFILE][31];
 
 static int file_index(const char *n)
 {
@@ -881,6 +888,10 @@ static void parse_data_division(void)
         if (files[i].report >= 0) { files[i].reclen = 133; continue; }
         if (files[i].rec_sym < 0) die("an FD has no record description");
         files[i].reclen = syms[files[i].rec_sym].bytes;
+        if (keyname[i][0]) files[i].key_sym = need_sym(keyname[i]);
+        if (nomname[i][0]) files[i].nominal_sym = need_sym(nomname[i]);
+        if (files[i].isam == 2 && files[i].nominal_sym < 0)
+            die("ACCESS IS RANDOM needs a NOMINAL KEY");
     }
     if (wslen > 64 * 1024)
         die("WORKING-STORAGE beyond 64K would need more base locator cells "
@@ -912,6 +923,7 @@ static void parse_environment(void)
                 snprintf(f->label, sizeof f->label, "FD%03d", nfile);
                 f->rec_sym = -1;
                 f->report = -1;
+                f->key_sym = f->nominal_sym = -1;
                 next();
                 if (is("OPTIONAL")) die("SELECT OPTIONAL is not implemented yet");
                 expect("ASSIGN"); if (is("TO")) next();
@@ -930,10 +942,28 @@ static void parse_environment(void)
                         continue;
                     }
                     if (is("ACCESS")) { next(); if (is("IS")) next();
-                        if (!is("SEQUENTIAL")) die("only ACCESS IS SEQUENTIAL is implemented");
-                        next(); continue; }
+                        if (is("SEQUENTIAL")) { next(); continue; }
+                        if (is("RANDOM")) {
+                        die("ACCESS IS RANDOM (BISAM) does not work yet. OPEN "
+                            "succeeds and the DCB's read routine address is "
+                            "loaded, but the READ macro itself faults S0C4. "
+                            "See doc in cobol/README.md; sequential ISAM works.");
+                    }
+                        die("only ACCESS IS SEQUENTIAL and ACCESS IS RANDOM are implemented"); }
                     if (is("ORGANIZATION")) { next(); if (is("IS")) next();
-                        if (!is("SEQUENTIAL")) die("only ORGANIZATION IS SEQUENTIAL is implemented");
+                        if (is("INDEXED")) { if (!f->isam) f->isam = 1; next(); continue; }
+                        if (!is("SEQUENTIAL")) die("only ORGANIZATION SEQUENTIAL and INDEXED are implemented");
+                        next(); continue; }
+                    if (is("RECORD")) {      /* RECORD KEY IS x -- resolved later */
+                        next(); expect("KEY"); if (is("IS")) next();
+                        snprintf(f->name + 31 - 1, 0, "%s", "");   /* no-op */
+                        if (!f->isam) f->isam = 1;
+                        snprintf(keyname[nfile], sizeof keyname[0], "%s", tok.text);
+                        next(); continue; }
+                    if (is("NOMINAL")) {
+                        next(); expect("KEY"); if (is("IS")) next();
+                        f->isam = 2;
+                        snprintf(nomname[nfile], sizeof nomname[0], "%s", tok.text);
                         next(); continue; }
                     die("this SELECT clause is not implemented yet");
                 }
@@ -1132,26 +1162,31 @@ static void parse_one_statement(void)
 {
     if (is("DISPLAY")) {
         next();
-        if (tok.literal) {
-            Stmt *st = new_stmt(ST_DISPLAY_LIT);
-            memcpy(st->lit, tok.text, (size_t)tok.len + 1);
-            st->litlen = tok.len;
+        Stmt *st = new_stmt(ST_DISPLAY_LIT);
+        /* COBOL concatenates the operands into one line. */
+        while (!tok.eof && !is(".")) {
+            if (st->ndop >= 8) die("too many DISPLAY operands");
+            if (tok.literal) {
+                memcpy(st->dop[st->ndop].lit, tok.text, (size_t)tok.len + 1);
+                st->dop[st->ndop].litlen = tok.len;
+                st->dop[st->ndop].sym = -1;
+            } else {
+                int i = need_sym(tok.text);
+                if (syms[i].is_group) die("DISPLAY of a group item is not implemented yet");
+                if (syms[i].is_88) die("DISPLAY of a condition name is meaningless");
+                if (!syms[i].is_alpha && !syms[i].edited &&
+                    (syms[i].usage != U_DISPLAY || syms[i].is_signed))
+                    die("DISPLAY takes an alphanumeric, edited, or unsigned "
+                        "DISPLAY item; MOVE to one first.");
+                st->dop[st->ndop].sym = i;
+                st->dop[st->ndop].litlen = 0;
+            }
+            st->ndop++;
             next();
-            if (tok.literal) die("DISPLAY of several operands is not implemented yet");
-        } else {
-            int i = need_sym(tok.text);
-            if (syms[i].is_group) die("DISPLAY of a group item is not implemented yet");
-            if (syms[i].is_88) die("DISPLAY of a condition name is meaningless");
-            if (!syms[i].is_alpha && !syms[i].edited &&
-                (syms[i].usage != U_DISPLAY || syms[i].is_signed))
-                die("DISPLAY takes an alphanumeric, edited, or unsigned DISPLAY "
-                    "item in this slice; MOVE to one first.");
-            Stmt *st = new_stmt(ST_DISPLAY_ID);
-            st->src = i;
-            next();
-            st->ssub = opt_subscript();
-            if (st->ssub) die("DISPLAY of a subscripted item is not implemented yet");
+            if (is("(")) die("DISPLAY of a subscripted item is not implemented yet");
+            if (is("UPON")) die("DISPLAY UPON is not implemented yet");
         }
+        if (!st->ndop) die("DISPLAY with no operands");
         eat_period();
         return;
     }
@@ -1323,7 +1358,10 @@ static void parse_one_statement(void)
         st->dst = fi;
         st->lab1 = ++nlabel;                 /* AT END */
         st->lab2 = ++nlabel;                 /* continue */
-        if (is("AT") || is("END")) {
+        if (is("INVALID")) {
+            next(); expect("KEY");
+            parse_stmt_list(1);
+        } else if (is("AT") || is("END")) {
             if (is("AT")) next();
             expect("END");
             parse_stmt_list(1);
@@ -1771,6 +1809,14 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
         snprintf(b, sizeof b, "%s,%s(8)", f, wk);
         asm_line("", "ZAP", b, "");
+        if (!sy->is_signed) {
+            /* ZAP leaves a C sign; an unsigned packed item carries F, which
+               matters the moment the field is compared byte-wise -- an ISAM
+               key, for instance. */
+            if (sub) snprintf(b, sizeof b, "%d(6),X'0F'", sy->elem - 1);
+            else     snprintf(b, sizeof b, "%s+%d,X'0F'", sy->label, sy->elem - 1);
+            asm_line("", "OI", b, "unsigned: force an F sign");
+        }
         break;
     case U_COMP:
         snprintf(b, sizeof b, "DWK(8),%s(8)", wk);
@@ -2365,6 +2411,23 @@ static void generate(void)
             snprintf(lc, sizeof lc, "L%04d", st->lab2);
             snprintf(b, sizeof b, " READ %s", f->name);
             asm_comment(b);
+            if (f->isam == 2) {
+                /* BISAM. The READ macro plants its DECB inline and branches
+                 * around it, so it is safe in the instruction stream. A record
+                 * that is not there raises an exception, which CHECK routes to
+                 * SYNAD -- that is what sets the flag INVALID KEY tests. */
+                asm_line("", "MVI", "ISFLG,X'00'", "");
+                snprintf(b, sizeof b, "DB%03d,K,%s,%s,'S',%s", i, f->label,
+                         syms[f->rec_sym].label, syms[f->nominal_sym].label);
+                asm_line("", "READ", b, "random by NOMINAL KEY");
+                snprintf(b, sizeof b, "DB%03d", i);
+                asm_line("", "CHECK", b, "");
+                asm_line("", "CLI", "ISFLG,X'00'", "record found?");
+                asm_line("", "BE", lc, "");
+                asm_line(le, "DS", "0H", "INVALID KEY");
+                reset_bases();
+                break;
+            }
             /* COBOL's AT END is per-READ but DCBEODAD is per-file, so patch it
              * before each GET. Offset 33 (X'21') holds the low three bytes of
              * the address -- exactly what IKFCBL00 does. */
@@ -2513,23 +2576,34 @@ static void generate(void)
             asm_line("", "SR", "15,15", "return code 0");
             asm_line("", "BR", "14", "return to caller");
             break;
-        case ST_DISPLAY_LIT:
-            snprintf(b, sizeof b, " DISPLAY '%s'", st->lit);
-            asm_comment(b);
+        case ST_DISPLAY_LIT: {
+            int off = 0;
+            asm_comment(" DISPLAY");
+            for (int k = 0; k < st->ndop; k++) {
+                if (st->dop[k].sym < 0) {
+                    const char *sl = intern_str(st->dop[k].lit, st->dop[k].litlen,
+                                                st->dop[k].litlen);
+                    snprintf(b, sizeof b, "DSPBUF+%d(%d),%s", off, st->dop[k].litlen, sl);
+                    asm_line("", "MVC", b, "");
+                    off += st->dop[k].litlen;
+                } else {
+                    const Sym *sy = &syms[st->dop[k].sym];
+                    need_sym_base(sy);
+                    snprintf(b, sizeof b, "DSPBUF+%d(%d),%s", off, sy->bytes, sy->label);
+                    asm_line("", "MVC", b, "");
+                    off += sy->bytes;
+                }
+                if (off > 120) die("DISPLAY line longer than 120 characters");
+            }
             snprintf(lab, sizeof lab, "PARM%04d", ++ndlit);
             snprintf(b, sizeof b, "1,%s", lab);
             asm_line("", "LA", b, "");
             asm_line("", "L", "15,VDISP", "");
             asm_line("", "BALR", "14,15", "");
+            st->litlen = off;                 /* remembered for the parm list */
             break;
+        }
         case ST_DISPLAY_ID:
-            snprintf(b, sizeof b, " DISPLAY %s", syms[st->src].name);
-            asm_comment(b);
-            snprintf(lab, sizeof lab, "PARM%04d", ++ndlit);
-            snprintf(b, sizeof b, "1,%s", lab);
-            asm_line("", "LA", b, "");
-            asm_line("", "L", "15,VDISP", "");
-            asm_line("", "BALR", "14,15", "");
             break;
         case ST_COMPUTE: {
             const Sym *d = &syms[st->dst];
@@ -2607,6 +2681,16 @@ static void generate(void)
         asm_line(f, "DS", "0H", "fall-through when not performed");
     }
 
+    {
+        int any_isam = 0;
+        for (int i = 0; i < nfile; i++) if (files[i].isam == 2) any_isam = 1;
+        if (any_isam) {
+            asm_comment(" BISAM error exit: CHECK routes a missing record here");
+            asm_line("ISYNAD", "MVI", "ISFLG,X'01'", "");
+            asm_line("", "BR", "14", "");
+            asm_line("ISFLG", "DC", "X'00'", "");
+        }
+    }
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_PERFORM && stmts[i].times_expr) {
             char lab[16]; snprintf(lab, sizeof lab, "PT%03d", i);
@@ -2655,24 +2739,12 @@ static void generate(void)
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
         if (st->op == ST_DISPLAY_LIT) {
-            char plab[24], tlab[24], llab[24];
-            snprintf(plab, sizeof plab, "PARM%04d", ++ndlit);
-            snprintf(tlab, sizeof tlab, "LIT%04d", ndlit);
-            snprintf(llab, sizeof llab, "LEN%04d", ndlit);
-            snprintf(b, sizeof b, "A(%s)", tlab);      asm_line(plab, "DC", b, "");
-            snprintf(b, sizeof b, "X'80',AL3(%s)", llab); asm_line("", "DC", b, "last parameter");
-            emit_literal(tlab, st->lit, st->litlen);
-            snprintf(b, sizeof b, "H'%d'", st->litlen); asm_line(llab, "DC", b, "");
-        } else if (st->op == ST_DISPLAY_ID) {
             char plab[24], llab[24];
             snprintf(plab, sizeof plab, "PARM%04d", ++ndlit);
             snprintf(llab, sizeof llab, "LEN%04d", ndlit);
-            snprintf(b, sizeof b, "A(%s)", syms[st->src].label); asm_line(plab, "DC", b, "");
-            snprintf(b, sizeof b, "X'80',AL3(%s)", llab);       asm_line("", "DC", b, "last parameter");
-            snprintf(b, sizeof b, "H'%d'",
-                     (syms[st->src].is_alpha || syms[st->src].edited)
-                         ? syms[st->src].bytes : syms[st->src].digits);
-            asm_line(llab, "DC", b, "");
+            asm_line(plab, "DC", "A(DSPBUF)", "");
+            snprintf(b, sizeof b, "X'80',AL3(%s)", llab); asm_line("", "DC", b, "last parameter");
+            snprintf(b, sizeof b, "H'%d'", st->litlen); asm_line(llab, "DC", b, "");
         }
     }
 
@@ -2694,6 +2766,18 @@ static void generate(void)
     for (int i = 0; i < nfile; i++) {
         File *f = &files[i];
         char first[96];
+        if (i == 0) asm_comment(" file control blocks");
+        if (f->isam) {
+            /* ISAM: RECFM, LRECL, BLKSIZE, KEYLEN and RKP all come from the
+             * dataset label at OPEN, so the DCB only has to say which access
+             * method. Random retrieval is BISAM (READ/CHECK); sequential is
+             * QISAM (GET), which is why the MACRF differs. */
+            snprintf(b, sizeof b, "DDNAME=%s,DSORG=IS,MACRF=(%s)%s",
+                     f->ddname, f->isam == 2 ? "R" : "GM",
+                     f->isam == 2 ? ",SYNAD=ISYNAD" : "");
+            asm_line(f->label, "DCB", b, "");
+            continue;
+        }
         const char *macrf = f->opened_output ? "PM" : "GM";
         const char *recfm = (f->report >= 0) ? "FBA" : "FB";
         snprintf(first, sizeof first,
@@ -2701,7 +2785,6 @@ static void generate(void)
                  f->label, f->ddname, macrf, recfm);
         char second[64];
         snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", f->reclen, f->reclen);
-        if (i == 0) asm_comment(" file control blocks");
         asm_cont(first, second);
     }
     for (int i = 0; i < nconst; i++) {
@@ -2741,6 +2824,8 @@ static void generate(void)
             asm_line(lab, "DC", b, "");
         }
     }
+    /* Must sit in the program CSECT: it is addressed off the code base. */
+    if (has_display) asm_line("DSPBUF", "DS", "CL121", "DISPLAY line");
     asm_line("SAVEAREA", "DS", "18F", "");
 
     /* ---- COBWS: WORKING-STORAGE and the file records ----

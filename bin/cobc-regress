@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="isamseq perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 pass=0; fail=0
 
@@ -38,6 +38,9 @@ for t in $TESTS; do
         printf '//ASM      EXEC ASMFCLG\n//ASM.SYSIN DD  *\n'
         cat "$CC/tests/$t.asm"
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
+        if [ "$t" = isamseq ]; then
+            printf '//GO.GLACCT DD  DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003\n'
+        fi
         if [ "$t" = rpttest ]; then printf '//GO.PROUT   DD  SYSOUT=Z\n'; fi
         if [ "$t" = filetest ]; then
             printf '//GO.OUTFILE DD  SYSOUT=Z\n//GO.INFILE  DD  *\n'

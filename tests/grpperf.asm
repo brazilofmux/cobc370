@@ -44,7 +44,8 @@ R0003    DS    0H
          MVC   D0004(16),D0000     alphanumeric move
 * MOVE SAVE-NAME -> OUT-NAME
          MVC   D0009(9),D0005      alphanumeric move
-* DISPLAY OUT-NAME
+* DISPLAY
+         MVC   DSPBUF+0(9),D0009
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -52,7 +53,8 @@ R0003    DS    0H
          ZAP   PWK1(8),D0007(4)
          UNPK  D0011(7),PWK1(8)    packed -> zoned
          OI    D0011+6,X'F0'       unsigned: force an F zone
-* DISPLAY OUT-NUM
+* DISPLAY
+         MVC   DSPBUF+0(7),D0011
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -63,7 +65,8 @@ R0003    DS    0H
          SRP   PWK1(8),2,0         align scale (left)
          UNPK  D0011(7),PWK1(8)    packed -> zoned
          OI    D0011+6,X'F0'       unsigned: force an F zone
-* DISPLAY OUT-NUM
+* DISPLAY
+         MVC   DSPBUF+0(7),D0011
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -114,7 +117,8 @@ P0003    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0010(3),D0002      alphanumeric move
-* DISPLAY OUT-CODE
+* DISPLAY
+         MVC   DSPBUF+0(3),D0010
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -126,16 +130,16 @@ X0002    DC    A(F0002)            ADD-EXIT
 X0003    DC    A(F0003)            SHOW-PARA
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
-PARM0001 DC    A(D0009)
+PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
 LEN0001  DC    H'9'
-PARM0002 DC    A(D0011)
+PARM0002 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0002)  last parameter
 LEN0002  DC    H'7'
-PARM0003 DC    A(D0011)
+PARM0003 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0003)  last parameter
 LEN0003  DC    H'7'
-PARM0004 DC    A(D0010)
+PARM0004 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0004)  last parameter
 LEN0004  DC    H'3'
 * work areas for decimal arithmetic
@@ -157,6 +161,7 @@ K0001    DC    PL8'1'              numeric constants
 K0002    DC    PL8'1050'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
+DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
