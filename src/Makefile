@@ -20,6 +20,8 @@ test: cobc370
 	./cobc370 tests/filetest.cbl -o tests/filetest.asm
 	./cobc370 tests/occtest.cbl -o tests/occtest.asm
 	./cobc370 tests/edtest.cbl  -o tests/edtest.asm
+	./cobc370 tests/perftest.cbl -o tests/perftest.asm
+	./cobc370 tests/rpttest.cbl -o tests/rpttest.asm
 	@echo "--- column 72 is the continuation flag, not spare room ---"
 	@# A statement must stop at column 71. A line reaching column 72 is only
 	@# legal when that column holds the deliberate X of a continued statement;
@@ -50,7 +52,7 @@ COB_CONFIG_DIR ?= /usr/local/share/gnucobol/config
 # newlines: ORGANIZATION SEQUENTIAL reads fixed-length records, so a trailing
 # newline per line adds a byte each and manufactures a fifth, partial record.
 oracle:
-	@for t in arith compute grpperf iftest bigws occtest occmin edtest; do \
+	@for t in arith compute grpperf iftest bigws occtest occmin edtest perftest rpttest; do \
 	  COB_CONFIG_DIR=$(COB_CONFIG_DIR) cobc -x -std=mvs -o /tmp/oracle_$$t tests/$$t.cbl 2>/dev/null; \
 	  /tmp/oracle_$$t > tests/$$t.expected; \
 	  echo "--- $$t"; cat tests/$$t.expected; \

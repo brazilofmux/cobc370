@@ -704,6 +704,49 @@ return code.
 
 Regression: 12 passed, 0 failed.
 
+## Slice 12: the rest of PERFORM
+
+`UNTIL`, `VARYING ... FROM ... BY`, and `n TIMES` — which clears the whole
+PERFORM family. Measured across the corpus: **191 PERFORM statements, 62 with
+UNTIL, 9 with VARYING (all `FROM 1 BY 1`), 2 with TIMES**, and 127 plain or
+THRU, which already worked.
+
+The exit-cell machinery from slice 4 did not change; the loop wraps it:
+
+    L0007    DS    0H
+             <condition; branch to L0008 when TRUE>
+             LA    15,R0003            return here
+             ST    15,X0002            into the range's exit cell
+             B     P0003
+    R0003    DS    0H
+             <restore fall-through, step the VARYING identifier>
+             B     L0007
+    L0008    DS    0H
+
+`UNTIL` tests **before** each iteration, so the body may run zero times. That is
+the COBOL rule rather than an implementation choice, and the test covers it
+directly.
+
+The conditions the corpus uses in `UNTIL` were already supported: level-88
+condition names, `OR`, and subscripted operands like `ENT-YEAR (WS-IDX) > 3`.
+Verified against GnuCOBOL across VARYING, a subscripted compound UNTIL, a
+level-88 UNTIL, `n TIMES`, and a zero-trip loop.
+
+### A latent bug that only became reachable now
+
+`is_numeric_literal(".")` returned **true** — it accepted a sign and a decimal
+point without requiring a single digit. It had been wrong since slice 2 and
+never mattered, because nothing asked "is this token a number?" in a position
+where the sentence terminator could turn up. `PERFORM x n TIMES` does: the
+repeat count is optional, so the parser has to peek. Two previously passing
+tests failed with `expected TIMES, found 'CLOSE'`.
+
+The fix is one line, but the interesting part is the shape: a predicate that is
+merely *too permissive* stays invisible until some caller asks it about input
+the old callers never produced.
+
+Regression: 13 passed, 0 failed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

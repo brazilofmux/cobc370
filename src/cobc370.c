@@ -304,6 +304,8 @@ typedef struct {
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
     Node *dsub, *ssub;      /* subscripts on dst and src */
+    int  vary_sym;          /* PERFORM ... VARYING identifier, -1 if none */
+    Node *vary_from, *vary_by, *times_expr;
 } Stmt;
 
 /* Files. One DCB each, emitted into the program CSECT. QSAM move mode: the
@@ -457,12 +459,13 @@ static int is_numeric_literal(const char *t)
     const char *p = t;
     if (*p == '+' || *p == '-') p++;
     if (!*p) return 0;
-    int dot = 0;
+    int dot = 0, digits = 0;
     for (; *p; p++) {
         if (*p == '.') { if (dot) return 0; dot = 1; continue; }
         if (!isdigit((unsigned char)*p)) return 0;
+        digits++;
     }
-    return 1;
+    return digits > 0;      /* "." alone is the sentence terminator, not a number */
 }
 
 /* ---- DATA DIVISION ----------------------------------------------------- */
@@ -1021,7 +1024,7 @@ static Stmt *new_stmt(int op)
     if (nstmt >= MAXSTMT) die("too many statements");
     Stmt *st = &stmts[nstmt++];
     memset(st, 0, sizeof *st);
-    st->op = op; st->dst = st->src = -1;
+    st->op = op; st->dst = st->src = -1; st->vary_sym = -1;
     return st;
 }
 
@@ -1242,8 +1245,24 @@ static void parse_one_statement(void)
         if (is("THRU") || is("THROUGH")) {
             next(); snprintf(st->thru, sizeof st->thru, "%s", tok.text); next();
         } else snprintf(st->thru, sizeof st->thru, "%s", st->para);
-        if (is("UNTIL") || is("VARYING") || is("TIMES"))
-            die("PERFORM UNTIL / VARYING / TIMES are not implemented yet");
+
+        if (is("VARYING")) {
+            next();
+            st->vary_sym = need_sym(tok.text); next();
+            if (syms[st->vary_sym].is_alpha || syms[st->vary_sym].is_group)
+                die("PERFORM VARYING needs a numeric identifier");
+            expect("FROM"); st->vary_from = parse_expr();
+            expect("BY");   st->vary_by = parse_expr();
+            if (is("AFTER")) die("PERFORM VARYING ... AFTER is not implemented yet");
+        }
+        if (is("UNTIL")) { next(); st->cond = parse_cond(); }
+        else if (st->vary_sym >= 0) die("PERFORM VARYING needs an UNTIL");
+        else if (!is(".") && (is_numeric_literal(tok.text) || lookup(tok.text) >= 0)) {
+            /* the n TIMES form; guarded so a following statement's verb is
+               never mistaken for a repeat count */
+            st->times_expr = parse_expr();
+            expect("TIMES");
+        }
         eat_period();
         return;
     }
@@ -2232,6 +2251,21 @@ static void emit_report_group(int gi)
     asm_line("", "BR", "14", "");
 }
 
+/* Set or step a PERFORM VARYING identifier from an expression. */
+static void emit_set_from_expr(const Sym *d, Node *e, int add)
+{
+    int rs = gen_expr(e, 0, d->scale);
+    gen_rescale16("WK0", rs, d->scale, 0);
+    if (add) {
+        asm_line("", "ZAP", "PWK2(8),WK0(16)", "");
+        gen_load(d, NULL, "PWK1");
+        asm_line("", "AP", "PWK1(8),PWK2(8)", "");
+    } else {
+        asm_line("", "ZAP", "PWK1(8),WK0(16)", "");
+    }
+    gen_store(d, NULL, "PWK1");
+}
+
 static void generate(void)
 {
     char b[200], lab[24];
@@ -2413,22 +2447,59 @@ static void generate(void)
             break;
         }
         case ST_PERFORM: {
-            char p1[16], x[16], f[16], r[16];
+            char p1[16], x[16], f[16], r[16], lt[16], le[16], pt[16];
             snprintf(p1, sizeof p1, "P%04d", st->dst);
             snprintf(x,  sizeof x,  "X%04d", st->src);
             snprintf(f,  sizeof f,  "F%04d", st->src);
-            snprintf(r,  sizeof r,  "R%04d", ++nret);
+            snprintf(pt, sizeof pt, "PT%03d", i);
             if (!strcmp(st->para, st->thru)) snprintf(b, sizeof b, " PERFORM %s", st->para);
             else snprintf(b, sizeof b, " PERFORM %s THRU %s", st->para, st->thru);
             asm_comment(b);
+
+            int looping = (st->cond != NULL) || (st->times_expr != NULL);
+            if (st->vary_sym >= 0)
+                emit_set_from_expr(&syms[st->vary_sym], st->vary_from, 0);
+            if (st->times_expr) {
+                gen_expr(st->times_expr, 0, 0);
+                asm_line("", "ZAP", "DWK(8),WK0(16)", "");
+                asm_line("", "CVB", "2,DWK", "repeat count");
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "STH", b, "");
+            }
+
+            int ltop = ++genlabel, lend = ++genlabel;
+            snprintf(lt, sizeof lt, "L%04d", ltop);
+            snprintf(le, sizeof le, "L%04d", lend);
+            if (looping) { asm_line(lt, "DS", "0H", ""); reset_bases(); }
+            /* UNTIL tests before each iteration, so the body may run zero
+               times -- that is the COBOL rule, not an implementation choice. */
+            if (st->cond) gen_cond(st->cond, lend, 1);
+            if (st->times_expr) {
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "LH", b, "");
+                asm_line("", "LTR", "2,2", "");
+                asm_line("", "BNP", le, "");
+            }
+
+            snprintf(r, sizeof r, "R%04d", ++nret);
             snprintf(b, sizeof b, "15,%s", r);  asm_line("", "LA", b, "return here");
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
             asm_line("", "B", p1, "");
             asm_line(r, "DS", "0H", "");
-            reset_bases();   /* the performed range left its own chunks loaded */
-            /* restore the cell so a later fall-through is not diverted */
+            reset_bases();
             snprintf(b, sizeof b, "15,%s", f);  asm_line("", "LA", b, "restore fall-through");
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
+
+            if (st->vary_sym >= 0)
+                emit_set_from_expr(&syms[st->vary_sym], st->vary_by, 1);
+            if (st->times_expr) {
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "LH", b, "");
+                asm_line("", "BCTR", "2,0", "");
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "STH", b, "");
+            }
+            if (looping) {
+                asm_line("", "B", lt, "");
+                asm_line(le, "DS", "0H", "");
+                reset_bases();
+            }
             break;
         }
         case ST_STOP:
@@ -2535,6 +2606,12 @@ static void generate(void)
         asm_line("", "BR", "15", "");
         asm_line(f, "DS", "0H", "fall-through when not performed");
     }
+
+    for (int i = 0; i < nstmt; i++)
+        if (stmts[i].op == ST_PERFORM && stmts[i].times_expr) {
+            char lab[16]; snprintf(lab, sizeof lab, "PT%03d", i);
+            asm_line(lab, "DC", "H'0'", "PERFORM n TIMES counter");
+        }
 
     /* ---- report group renderers, reached only by BAL ---- */
     for (int i = 0; i < nrgroup; i++) emit_report_group(i);
