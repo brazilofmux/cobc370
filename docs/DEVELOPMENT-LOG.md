@@ -223,13 +223,65 @@ Two details worth keeping: `STOP RUN` alone still emits no runtime at all (the
 slice-0 output is unchanged), and quote doubling is assembler-level only — the
 COBOL literal `DON''T` has length 39 and prints as `DON'T`.
 
+## Slice 2 is done: WORKING-STORAGE, MOVE, ADD, SUBTRACT, and the oracle
+
+`cobc370` (renamed from `cobc`, which collides with GnuCOBOL's) now has a data
+model and an arithmetic core.
+
+Accepted: 01/77 elementary items with numeric PICTUREs (`S`, `9`, `V`, with
+`(n)` repetition), `USAGE DISPLAY`/`COMP`/`COMP-3`, `VALUE` numeric literals;
+`MOVE`, `ADD ... TO`, `SUBTRACT ... FROM`, and `DISPLAY` of an unsigned
+DISPLAY item.
+
+**Everything computes in packed decimal**, which is what COBOL semantics want
+and what the hardware does natively — no bignum, which is the whole reason
+porting GnuCOBOL's libgmp-based runtime was never the path. Binary `COMP`
+operands convert in and out with `CVD`/`CVB`, zoned with `PACK`/`UNPK`, and
+scale alignment is `SRP`, whose shift count is the low six bits of the second
+operand address read as signed — so a right shift of 1 is encoded as 63.
+
+One semantic point worth having got right early: `ADD`/`SUBTRACT` compute at the
+**wider** of the two scales and truncate once on store. Rescaling the source
+down first is wrong — at scale 1, `0.05 + 0.05` must give `0.1`, not `0.0`.
+
+### Verified against the oracle
+
+`tests/arith.cbl` run through both implementations, output byte-identical:
+
+    000019134   packed + packed, same scale
+    000020184   packed + packed, DIFFERENT scales -- exercises SRP
+    000001250   binary COMP arithmetic through CVD/CVB
+    000002346   zoned subtraction going negative, MOVEd to unsigned
+    0000        repeated truncating adds at scale 1
+
+**The oracle must run `-std=mvs`.** GnuCOBOL's default dialect renders a decimal
+point for `PIC 9(7)V99` (`0000191.34`), which COBOL-74 does not — `V` is
+implied, not stored. Against the default dialect every line reads as a mismatch
+while the values are in fact identical. `make oracle` regenerates the reference
+with the right dialect.
+
+### Known limits, deliberately
+
+- Group items, `OCCURS`, `REDEFINES` are not implemented — the survey says 8 and
+  7 uses respectively, so this is not urgent, but groups will be.
+- `COMPUTE`, `GIVING` and `ROUNDED` are next; expression trees and ANSI
+  intermediate-result sizing are where divergence from the oracle will get
+  interesting.
+- WORKING-STORAGE is capped at one base-register displacement (~3800 bytes) and
+  says so. Base locator cells are the structural fix, and are what IKFCBL00's
+  `BL=1` cells do.
+- Decimal overflow on store is not masked; test values stay in range.
+- `DISPLAY` of signed or COMP items is rejected with a diagnostic telling you to
+  MOVE to a display item first, which keeps the oracle exact rather than
+  guessing at sign rendering.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
 
 1. ~~`STOP RUN` only → emit ASM → assemble → link → RC=0.~~ **Done.**
 2. ~~`DISPLAY` of a literal.~~ **Done — see below.**
-3. Packed-decimal arithmetic, diffed against GnuCOBOL. Proves the numeric core.
+3. ~~Packed-decimal arithmetic, diffed against GnuCOBOL.~~ **Done — see below.**
 4. Sequential `FD`/`01` read and write. Proves QSAM.
 5. The first real GL program.
 
