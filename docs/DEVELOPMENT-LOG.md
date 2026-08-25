@@ -262,8 +262,7 @@ with the right dialect.
 
 ### Known limits, deliberately
 
-- Group items, `OCCURS`, `REDEFINES` are not implemented — the survey says 8 and
-  7 uses respectively, so this is not urgent, but groups will be.
+- `OCCURS` and `REDEFINES` are not implemented (8 and 7 uses in the corpus).
 - `GIVING` on ADD/SUBTRACT, and the `MULTIPLY`/`DIVIDE` statements, are not
   implemented (2 and 4 uses in the corpus against COMPUTE's 35).
 - WORKING-STORAGE is capped at one base-register displacement (~3800 bytes) and
@@ -322,6 +321,56 @@ truncates the comment rather than the code.
 The column check had been asserting `length > 72`, which misses this by exactly
 one column. It now asserts that reaching column 72 is legal only when that
 column holds the deliberate `X` of a continued statement.
+
+## Slice 4 is done: group items and PERFORM THRU
+
+The first slice where control flow actually moves, and where the data model
+stopped being a flat list.
+
+**Group items.** Levels 01-49 and 77, nested, with sizes computed as items
+close. A group emits `DS 0CLn` so it labels its subordinates without advancing
+the location counter. `PIC X` arrives too — the most common picture in the
+corpus at 435 uses — with `VALUE 'literal'` and `VALUE SPACES`.
+
+**Alphanumeric and group MOVE** is `MVC`, left justified, space filled,
+truncated on the right. A group moves as bytes whatever its subordinates are,
+which is why `MOVE CUSTOMER-REC TO SAVE-REC` becomes one 16-byte `MVC`.
+
+**PERFORM ... THRU** uses the classic per-range exit cell rather than a stack.
+Each range's last paragraph ends by branching through a cell that normally
+holds the fall-through address:
+
+    * PERFORM ADD-PARA THRU ADD-EXIT
+             LA    15,R0001            return here
+             ST    15,X0002            into the range's exit cell
+             B     P0001
+    R0001    DS    0H
+             LA    15,F0002            restore fall-through
+             ST    15,X0002
+    ...
+    * end of a PERFORM range: return through its cell
+             L     15,X0002
+             BR    15
+    F0002    DS    0H                  fall-through when not performed
+
+Restoring the cell after the return is what keeps a later fall-through from
+being diverted into a stale return point. `EXIT` is a no-op that exists to
+terminate a range, and `STOP RUN` is now emitted where it appears rather than at
+the end, since paragraphs after it are reachable only by PERFORM.
+
+Verified against GnuCOBOL `-std=mvs`, byte-identical: a range performed three
+times accumulating in both a COMP counter and a COMP-3 balance, a group move, a
+short-to-long alphanumeric move, and a single-paragraph PERFORM after STOP RUN.
+
+### A bug worth recording
+
+The first run emitted `CUSTOMER-DSC   0CL16`. **Assembler labels are eight
+characters; COBOL names run to thirty**, so a long name overran the opcode
+field and silently corrupted the statement. Data names are now mangled to
+`D0000`-style labels with the COBOL name kept in the comment, and `asm_line`
+refuses a name field longer than eight characters so this cannot recur quietly.
+It is the same class of problem as PROGRAM-ID, which was already checked — I
+had just not carried the check to data names.
 
 ## Suggested order
 

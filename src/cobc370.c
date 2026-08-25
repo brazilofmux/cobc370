@@ -147,7 +147,11 @@ static void asm_line(const char *name, const char *op, const char *operand,
     char b[128];
     memset(b, ' ', sizeof b);
     size_t n;
-    if (name    && *name)    { n = strlen(name);    memcpy(b + 0,  name, n); }
+    if (name && *name) {
+        n = strlen(name);
+        if (n > 8) die("internal: assembler label longer than 8 characters");
+        memcpy(b + 0, name, n);
+    }
     if (op      && *op)      { n = strlen(op);      memcpy(b + 9,  op, n); }
     if (operand && *operand) { n = strlen(operand); memcpy(b + 15, operand, n); }
     int end = 15 + (operand ? (int)strlen(operand) : 0);
@@ -187,6 +191,10 @@ enum { U_DISPLAY, U_COMP, U_COMP3 };
 
 typedef struct {
     char name[31];
+    char label[9];    /* assembler labels are 8 characters; COBOL names are 30 */
+    int  level;
+    int  is_group;    /* has subordinates, so no PICTURE of its own */
+    int  is_alpha;    /* PIC X */
     int  usage;
     int  digits;      /* total digit positions */
     int  scale;       /* digits to the right of V */
@@ -230,7 +238,8 @@ static Node *node(int kind)
     return n;
 }
 
-enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE };
+enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
+       ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT };
 
 typedef struct {
     int  op;
@@ -242,7 +251,22 @@ typedef struct {
     int  immscale;
     Node *expr;             /* COMPUTE */
     int  rounded;
+    char para[31];          /* ST_PARA name, or PERFORM's first paragraph */
+    char thru[31];          /* PERFORM ... THRU */
 } Stmt;
+
+/* Paragraphs, resolved after parsing so a PERFORM may name one that has not
+ * been seen yet. */
+typedef struct { char name[31]; int is_range_end; } Para;
+#define MAXPARA 256
+static Para paras[MAXPARA];
+static int npara;
+
+static int para_index(const char *n)
+{
+    for (int i = 0; i < npara; i++) if (!strcmp(paras[i].name, n)) return i;
+    return -1;
+}
 
 #define MAXSTMT 512
 static Stmt stmts[MAXSTMT];
@@ -355,8 +379,6 @@ static int is_numeric_literal(const char *t)
 
 /* ---- DATA DIVISION ----------------------------------------------------- */
 
-static void align_to(int a) { while (wslen % a) wslen++; }
-
 static void parse_data_division(void)
 {
     if (!is("DATA")) return;
@@ -366,20 +388,43 @@ static void parse_data_division(void)
     if (!is("WORKING-STORAGE")) { while (!tok.eof && !is("PROCEDURE")) next(); return; }
     next(); expect("SECTION"); expect(".");
 
+    /* Open groups, innermost last. A group's size is not known until an item
+     * at the same or a lower level closes it. */
+    int stack[32], sp = 0;
+    int cursor = 0;
+
     while (!tok.eof && !is("PROCEDURE")) {
         if (!isdigit((unsigned char)tok.text[0]))
             die("expected a level number in WORKING-STORAGE");
         int level = atoi(tok.text);
-        if (level != 1 && level != 77)
-            die("group items (levels other than 01 and 77) are not "
-                "implemented yet");
+        if (level != 77 && (level < 1 || level > 49))
+            die("level number out of range (01-49, or 77)");
+        if (level == 66 || level == 88)
+            die("level 66 and 88 items are not implemented yet");
         next();
+
+        while (sp > 0 && syms[stack[sp-1]].level >= level) {
+            Sym *g = &syms[stack[--sp]];
+            g->bytes = cursor - g->offset;
+        }
+        if (level == 1 || level == 77) {
+            while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+            cursor = wslen;                 /* 01 items start a fresh area */
+        }
+
         if (nsym >= MAXSYM) die("too many data items");
         Sym *sy = &syms[nsym];
         memset(sy, 0, sizeof *sy);
+        snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
+        sy->level = level;
         if (strlen(tok.text) > 30) die("data name too long");
-        strcpy(sy->name, tok.text);
-        if (lookup(sy->name) >= 0) die("duplicate data name");
+        if (!strcmp(tok.text, "FILLER")) snprintf(sy->name, sizeof sy->name, "FILL%04d", nsym);
+        else {
+            strcpy(sy->name, tok.text);
+            if (lookup(sy->name) >= 0)
+                die("duplicate data name (qualification with OF/IN is not "
+                    "implemented yet)");
+        }
         next();
 
         char pic[64] = "";
@@ -389,22 +434,23 @@ static void parse_data_division(void)
                 next(); if (is("IS")) next();
                 if (strlen(tok.text) >= sizeof pic) die("PICTURE too long");
                 strcpy(pic, tok.text); next();
-            } else if (is("USAGE")) {
-                next(); if (is("IS")) next();
-            } else if (is("COMP") || is("COMPUTATIONAL")) {
-                sy->usage = U_COMP; next();
-            } else if (is("COMP-3") || is("COMPUTATIONAL-3")) {
-                sy->usage = U_COMP3; next();
-            } else if (is("DISPLAY")) {
-                sy->usage = U_DISPLAY; next();
-            } else if (is("VALUE")) {
+            } else if (is("USAGE")) { next(); if (is("IS")) next(); }
+            else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; next(); }
+            else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; next(); }
+            else if (is("DISPLAY")) { sy->usage = U_DISPLAY; next(); }
+            else if (is("VALUE")) {
                 next(); if (is("IS")) next();
                 if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(sy->value, "0"); sy->has_value = 1; next(); }
-                else if (is_numeric_literal(tok.text)) {
-                    sy->has_value = 1;
-                    strncpy(sy->value, tok.text, sizeof sy->value - 1);
+                else if (is("SPACE") || is("SPACES")) { sy->has_value = 2; next(); }
+                else if (tok.literal) {
+                    sy->has_value = 3;
+                    snprintf(sy->value, sizeof sy->value, "%s", tok.text);
                     next();
-                } else die("VALUE must be a numeric literal in this slice");
+                } else if (is_numeric_literal(tok.text)) {
+                    sy->has_value = 1;
+                    snprintf(sy->value, sizeof sy->value, "%s", tok.text);
+                    next();
+                } else die("VALUE must be a numeric or nonnumeric literal");
             } else {
                 char m[96];
                 snprintf(m, sizeof m, "clause '%s' is not implemented yet", tok.text);
@@ -412,29 +458,60 @@ static void parse_data_division(void)
             }
         }
         expect(".");
-        if (!pic[0]) die("elementary item needs a PICTURE");
-        parse_picture(pic, sy);
-        if (sy->has_value) {
-            char scaled[34];
-            scale_literal(sy->value, sy->scale, scaled, sizeof scaled);
-            strcpy(sy->value, scaled);
+
+        if (!pic[0]) {
+            /* No PICTURE: this is a group, and the items that follow are its
+             * subordinates. Its size is filled in when it closes. */
+            sy->is_group = 1;
+            sy->offset = cursor;
+            if (sy->has_value) die("a group item may not carry VALUE here");
+            if (sp >= 32) die("group nesting too deep");
+            stack[sp++] = nsym;
+            nsym++;
+            if (level == 1 || level == 77) { /* wslen advances when it closes */ }
+            continue;
         }
-        switch (sy->usage) {
-        case U_DISPLAY: sy->bytes = sy->digits; break;
-        case U_COMP3:   sy->bytes = sy->digits / 2 + 1; break;
-        case U_COMP:
-            if (sy->digits <= 4)      sy->bytes = 2;
-            else if (sy->digits <= 9) sy->bytes = 4;
-            else die("COMP wider than 9 digits needs doubleword arithmetic, "
-                     "which S/370 does not have and this slice does not "
-                     "emulate");
-            align_to(sy->bytes);
-            break;
+
+        if (pic[0] == 'X') {
+            sy->is_alpha = 1;
+            const char *p = pic + 1;
+            int rep = 1;
+            if (*p == '(') { rep = 0; p++;
+                while (isdigit((unsigned char)*p)) rep = rep * 10 + (*p++ - '0');
+                if (*p != ')') die("malformed PICTURE repetition count"); p++; }
+            while (*p == 'X') { rep++; p++; }
+            if (*p) die("mixed PICTURE characters are not implemented yet");
+            sy->bytes = rep;
+            if (sy->has_value == 1) die("a numeric VALUE on a PIC X item is not implemented yet");
+        } else {
+            parse_picture(pic, sy);
+            if (sy->has_value == 3) die("a nonnumeric VALUE on a numeric item is not implemented yet");
+            if (sy->has_value == 1) {
+                char scaled[34];
+                scale_literal(sy->value, sy->scale, scaled, sizeof scaled);
+                strcpy(sy->value, scaled);
+            }
+            switch (sy->usage) {
+            case U_DISPLAY: sy->bytes = sy->digits; break;
+            case U_COMP3:   sy->bytes = sy->digits / 2 + 1; break;
+            case U_COMP:
+                if (sy->digits <= 4)      sy->bytes = 2;
+                else if (sy->digits <= 9) sy->bytes = 4;
+                else die("COMP wider than 9 digits needs doubleword arithmetic, "
+                         "which S/370 does not have and this slice does not emulate");
+                /* Alignment inside a group would move subordinate offsets, so
+                 * COMP items are left unaligned here; S/370 decimal and RX
+                 * instructions tolerate it. */
+                break;
+            }
         }
-        sy->offset = wslen;
-        wslen += sy->bytes;
+        sy->offset = cursor;
+        cursor += sy->bytes;
+        if (level == 1 || level == 77) wslen = cursor;
         nsym++;
     }
+    while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+    if (cursor > wslen) wslen = cursor;
     if (wslen > 3800)
         die("WORKING-STORAGE exceeds one base-register displacement; "
             "base locator cells are not implemented yet");
@@ -526,10 +603,12 @@ static void parse_procedure(void)
                 if (tok.literal) die("DISPLAY of several operands is not implemented yet");
             } else {
                 int i = need_sym(tok.text);
-                if (syms[i].usage != U_DISPLAY || syms[i].is_signed)
-                    die("DISPLAY takes an unsigned USAGE DISPLAY item in this "
-                        "slice; MOVE to one first. Sign and COMP rendering are "
-                        "a later slice.");
+                if (syms[i].is_group)
+                    die("DISPLAY of a group item is not implemented yet");
+                if (!syms[i].is_alpha && (syms[i].usage != U_DISPLAY || syms[i].is_signed))
+                    die("DISPLAY takes an alphanumeric or unsigned USAGE "
+                        "DISPLAY item in this slice; MOVE to one first. Sign "
+                        "and COMP rendering are a later slice.");
                 Stmt *st = new_stmt(ST_DISPLAY_ID);
                 st->src = i;
                 next();
@@ -596,18 +675,74 @@ static void parse_procedure(void)
             if (!is("RUN")) die("STOP literal is not implemented yet");
             next();
             if (is(".")) next();
+            new_stmt(ST_STOP);
             stopped = 1;
             continue;
         }
-        {
+
+        if (is("EXIT")) {
+            next();
+            if (is("PROGRAM")) die("EXIT PROGRAM is not implemented yet");
+            if (is(".")) next();
+            new_stmt(ST_EXIT);       /* a no-op; it exists to end a range */
+            continue;
+        }
+
+        if (is("PERFORM")) {
+            next();
+            Stmt *st = new_stmt(ST_PERFORM);
+            snprintf(st->para, sizeof st->para, "%s", tok.text);
+            next();
+            if (is("THRU") || is("THROUGH")) {
+                next();
+                snprintf(st->thru, sizeof st->thru, "%s", tok.text);
+                next();
+            } else snprintf(st->thru, sizeof st->thru, "%s", st->para);
+            if (is("UNTIL") || is("VARYING") || is("TIMES"))
+                die("PERFORM UNTIL / VARYING / TIMES are not implemented yet; "
+                    "the corpus is almost entirely PERFORM ... THRU");
+            if (is(".")) next();
+            continue;
+        }
+
+        /* Anything else that is followed by a period is a paragraph name.
+         * COBOL puts these in area A, but the verb set is what actually
+         * disambiguates. */
+        if (tok.text[0] && !tok.literal) {
+            char nm[31];
+            snprintf(nm, sizeof nm, "%s", tok.text);
+            next();
+            if (is(".")) {
+                next();
+                if (para_index(nm) >= 0) die("duplicate paragraph name");
+                if (npara >= MAXPARA) die("too many paragraphs");
+                snprintf(paras[npara].name, sizeof paras[npara].name, "%s", nm);
+                paras[npara].is_range_end = 0;
+                Stmt *st = new_stmt(ST_PARA);
+                snprintf(st->para, sizeof st->para, "%s", nm);
+                st->dst = npara++;
+                continue;
+            }
             char m[160];
             snprintf(m, sizeof m,
                      "not implemented yet: '%s'. This slice supports MOVE, "
-                     "ADD, SUBTRACT, COMPUTE, DISPLAY and STOP RUN.", tok.text);
+                     "ADD, SUBTRACT, COMPUTE, DISPLAY, PERFORM, EXIT and "
+                     "STOP RUN.", nm);
             die(m);
         }
+        die("unexpected token in PROCEDURE DIVISION");
     }
     if (!stopped) die("PROCEDURE DIVISION has no STOP RUN");
+    /* Resolve PERFORM targets now that every paragraph has been seen. */
+    for (int i = 0; i < nstmt; i++) {
+        if (stmts[i].op != ST_PERFORM) continue;
+        int a = para_index(stmts[i].para), b = para_index(stmts[i].thru);
+        if (a < 0) { char m[96]; snprintf(m, sizeof m, "PERFORM names an unknown paragraph '%s'", stmts[i].para); die(m); }
+        if (b < 0) { char m[96]; snprintf(m, sizeof m, "PERFORM THRU names an unknown paragraph '%s'", stmts[i].thru); die(m); }
+        if (b < a) die("PERFORM THRU runs backwards");
+        stmts[i].dst = a; stmts[i].src = b;
+        paras[b].is_range_end = 1;
+    }
 }
 
 /* ---- code generation -------------------------------------------------- */
@@ -726,15 +861,15 @@ static void gen_load(const Sym *sy, const char *wk)
     char b[96];
     switch (sy->usage) {
     case U_DISPLAY:
-        snprintf(b, sizeof b, "%s(8),%s(%d)", wk, sy->name, sy->bytes);
+        snprintf(b, sizeof b, "%s(8),%s(%d)", wk, sy->label, sy->bytes);
         asm_line("", "PACK", b, "zoned -> packed");
         break;
     case U_COMP3:
-        snprintf(b, sizeof b, "%s(8),%s(%d)", wk, sy->name, sy->bytes);
+        snprintf(b, sizeof b, "%s(8),%s(%d)", wk, sy->label, sy->bytes);
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
-        snprintf(b, sizeof b, "2,%s", sy->name);
+        snprintf(b, sizeof b, "2,%s", sy->label);
         asm_line("", sy->bytes == 2 ? "LH" : "L", b, "");
         asm_line("", "CVD", "2,DWK", "binary -> packed");
         snprintf(b, sizeof b, "%s(8),DWK(8)", wk);
@@ -765,22 +900,22 @@ static void gen_store(const Sym *sy, const char *wk)
     char b[96];
     switch (sy->usage) {
     case U_DISPLAY:
-        snprintf(b, sizeof b, "%s(%d),%s(8)", sy->name, sy->bytes, wk);
+        snprintf(b, sizeof b, "%s(%d),%s(8)", sy->label, sy->bytes, wk);
         asm_line("", "UNPK", b, "packed -> zoned");
         if (!sy->is_signed) {
-            snprintf(b, sizeof b, "%s+%d,X'F0'", sy->name, sy->bytes - 1);
+            snprintf(b, sizeof b, "%s+%d,X'F0'", sy->label, sy->bytes - 1);
             asm_line("", "OI", b, "unsigned: force an F zone");
         }
         break;
     case U_COMP3:
-        snprintf(b, sizeof b, "%s(%d),%s(8)", sy->name, sy->bytes, wk);
+        snprintf(b, sizeof b, "%s(%d),%s(8)", sy->label, sy->bytes, wk);
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
         snprintf(b, sizeof b, "DWK(8),%s(8)", wk);
         asm_line("", "ZAP", b, "");
         asm_line("", "CVB", "2,DWK", "packed -> binary");
-        snprintf(b, sizeof b, "2,%s", sy->name);
+        snprintf(b, sizeof b, "2,%s", sy->label);
         asm_line("", sy->bytes == 2 ? "STH" : "ST", b, "");
         break;
     }
@@ -806,15 +941,15 @@ static void gen_load16(const Sym *sy, const char *wk)
     char b[96];
     switch (sy->usage) {
     case U_DISPLAY:
-        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->name, sy->bytes);
+        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->label, sy->bytes);
         asm_line("", "PACK", b, "zoned -> packed");
         break;
     case U_COMP3:
-        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->name, sy->bytes);
+        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->label, sy->bytes);
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
-        snprintf(b, sizeof b, "2,%s", sy->name);
+        snprintf(b, sizeof b, "2,%s", sy->label);
         asm_line("", sy->bytes == 2 ? "LH" : "L", b, "");
         asm_line("", "CVD", "2,DWK", "binary -> packed");
         snprintf(b, sizeof b, "%s(16),DWK(8)", wk);
@@ -917,6 +1052,29 @@ static int gen_expr(Node *n, int d, int tgtscale)
     return 0;
 }
 
+/* Alphanumeric move: left justified, space filled, truncated on the right.
+ * Groups move as bytes, which is why a group MOVE is alphanumeric whatever
+ * its subordinates are. */
+static void gen_move_alpha(const Sym *d, const Sym *sv)
+{
+    char b[128];
+    int n = d->bytes < sv->bytes ? d->bytes : sv->bytes;
+    if (n > 256) die("MVC is limited to 256 bytes; long moves need a loop, "
+                     "which is not implemented yet");
+    snprintf(b, sizeof b, "%s(%d),%s", d->label, n, sv->label);
+    asm_line("", "MVC", b, "alphanumeric move");
+    if (d->bytes > n) {
+        int rest = d->bytes - n;
+        snprintf(b, sizeof b, "%s+%d,C' '", d->label, n);
+        asm_line("", "MVI", b, "space fill the remainder");
+        if (rest > 1) {
+            if (rest - 1 > 256) die("space fill longer than 256 bytes is not implemented yet");
+            snprintf(b, sizeof b, "%s+%d(%d),%s+%d", d->label, n + 1, rest - 1, d->label, n);
+            asm_line("", "MVC", b, "");
+        }
+    }
+}
+
 static void generate(void)
 {
     char b[200], lab[24];
@@ -942,10 +1100,59 @@ static void generate(void)
     asm_line("", "ST", "11,8(13)", "forward chain from caller");
     asm_line("", "LR", "13,11", "our save area is now current");
 
-    int ndlit = 0;
+    int ndlit = 0, cur_para = -1, nret = 0;
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
+        if (st->op == ST_PARA && cur_para >= 0 && paras[cur_para].is_range_end) {
+            char x[16], f[16];
+            snprintf(x, sizeof x, "X%04d", cur_para); snprintf(f, sizeof f, "F%04d", cur_para);
+            asm_comment(" end of a PERFORM range: return through its cell");
+            snprintf(b, sizeof b, "15,%s", x);  asm_line("", "L", b, "");
+            asm_line("", "BR", "15", "");
+            asm_line(f, "DS", "0H", "fall-through when not performed");
+        }
         switch (st->op) {
+        case ST_PARA: {
+            char p[16];
+            snprintf(p, sizeof p, "P%04d", st->dst);
+            snprintf(b, sizeof b, " %s.", st->para);
+            asm_comment(b);
+            asm_line(p, "DS", "0H", "");
+            cur_para = st->dst;
+            break;
+        }
+        case ST_EXIT:
+            asm_comment(" EXIT");
+            break;
+        case ST_PERFORM: {
+            char p1[16], x[16], f[16], r[16];
+            snprintf(p1, sizeof p1, "P%04d", st->dst);
+            snprintf(x,  sizeof x,  "X%04d", st->src);
+            snprintf(f,  sizeof f,  "F%04d", st->src);
+            snprintf(r,  sizeof r,  "R%04d", ++nret);
+            if (!strcmp(st->para, st->thru)) snprintf(b, sizeof b, " PERFORM %s", st->para);
+            else snprintf(b, sizeof b, " PERFORM %s THRU %s", st->para, st->thru);
+            asm_comment(b);
+            snprintf(b, sizeof b, "15,%s", r);  asm_line("", "LA", b, "return here");
+            snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
+            asm_line("", "B", p1, "");
+            asm_line(r, "DS", "0H", "");
+            /* restore the cell so a later fall-through is not diverted */
+            snprintf(b, sizeof b, "15,%s", f);  asm_line("", "LA", b, "restore fall-through");
+            snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
+            break;
+        }
+        case ST_STOP:
+            asm_comment(" STOP RUN");
+            if (has_display) {
+                asm_line("", "L", "15,VTERM", "close anything the runtime opened");
+                asm_line("", "BALR", "14,15", "");
+            }
+            asm_line("", "L", "13,4(13)", "restore caller's save area");
+            asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
+            asm_line("", "SR", "15,15", "return code 0");
+            asm_line("", "BR", "14", "return to caller");
+            break;
         case ST_DISPLAY_LIT:
             snprintf(b, sizeof b, " DISPLAY '%s'", st->lit);
             asm_comment(b);
@@ -985,6 +1192,15 @@ static void generate(void)
             else         snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
             asm_comment(b);
             if (st->op == ST_MOVE) {
+                if (!st->imm && (d->is_alpha || d->is_group ||
+                                 syms[st->src].is_alpha || syms[st->src].is_group)) {
+                    const Sym *sv = &syms[st->src];
+                    if (!(d->is_alpha || d->is_group) || !(sv->is_alpha || sv->is_group))
+                        die("MOVE between a numeric and an alphanumeric item is "
+                            "not implemented yet");
+                    gen_move_alpha(d, sv);
+                    break;
+                }
                 if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK1"); }
                 else { gen_load(&syms[st->src], "PWK1"); gen_rescale("PWK1", syms[st->src].scale, d->scale); }
                 gen_store(d, "PWK1");
@@ -1009,15 +1225,23 @@ static void generate(void)
         }
     }
 
-    asm_comment(" STOP RUN");
-    if (has_display) {
-        asm_line("", "L", "15,VTERM", "close anything the runtime opened");
-        asm_line("", "BALR", "14,15", "");
+    if (cur_para >= 0 && paras[cur_para].is_range_end) {
+        char x[16], f[16];
+        snprintf(x, sizeof x, "X%04d", cur_para); snprintf(f, sizeof f, "F%04d", cur_para);
+        asm_comment(" end of a PERFORM range: return through its cell");
+        snprintf(b, sizeof b, "15,%s", x);  asm_line("", "L", b, "");
+        asm_line("", "BR", "15", "");
+        asm_line(f, "DS", "0H", "fall-through when not performed");
     }
-    asm_line("", "L", "13,4(13)", "restore caller's save area");
-    asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
-    asm_line("", "SR", "15,15", "return code 0");
-    asm_line("", "BR", "14", "return to caller");
+
+    /* ---- PERFORM exit cells ---- */
+    for (int i = 0; i < npara; i++) {
+        if (!paras[i].is_range_end) continue;
+        char x[16], f[16];
+        snprintf(x, sizeof x, "X%04d", i); snprintf(f, sizeof f, "F%04d", i);
+        snprintf(b, sizeof b, "A(%s)", f);
+        asm_line(x, "DC", b, paras[i].name);
+    }
 
     /* ---- constants and parameter lists ---- */
     if (has_display) {
@@ -1040,31 +1264,51 @@ static void generate(void)
             char plab[24], llab[24];
             snprintf(plab, sizeof plab, "PARM%04d", ++ndlit);
             snprintf(llab, sizeof llab, "LEN%04d", ndlit);
-            snprintf(b, sizeof b, "A(%s)", syms[st->src].name); asm_line(plab, "DC", b, "");
+            snprintf(b, sizeof b, "A(%s)", syms[st->src].label); asm_line(plab, "DC", b, "");
             snprintf(b, sizeof b, "X'80',AL3(%s)", llab);       asm_line("", "DC", b, "last parameter");
-            snprintf(b, sizeof b, "H'%d'", syms[st->src].digits); asm_line(llab, "DC", b, "");
+            snprintf(b, sizeof b, "H'%d'", syms[st->src].is_alpha ? syms[st->src].bytes
+                                                                  : syms[st->src].digits);
+            asm_line(llab, "DC", b, "");
         }
     }
 
     /* ---- WORKING-STORAGE ---- */
     if (nsym) {
         asm_comment(" WORKING-STORAGE");
-        int at = 0;
         for (int i = 0; i < nsym; i++) {
             Sym *sy = &syms[i];
-            while (at < sy->offset) { asm_line("", "DS", "XL1", "alignment"); at++; }
-            const char *v = sy->has_value ? sy->value : "0";
+            char cmt[96];
+            if (sy->is_group) {
+                snprintf(b, sizeof b, "0CL%d", sy->bytes);
+                snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
+                asm_line(sy->label, "DS", b, cmt);
+                continue;
+            }
+            if (sy->is_alpha) {
+                if (sy->has_value == 3) {
+                    char op[MAXTOK * 2 + 16]; int j = 0;
+                    j += snprintf(op + j, sizeof op - j, "CL%d'", sy->bytes);
+                    for (const char *q = sy->value; *q; q++) {
+                        if (*q == '\'' || *q == '&') op[j++] = *q;
+                        op[j++] = *q;
+                    }
+                    op[j++] = '\''; op[j] = 0;
+                    snprintf(b, sizeof b, "%s", op);
+                } else snprintf(b, sizeof b, "CL%d' '", sy->bytes);
+                snprintf(cmt, sizeof cmt, "%s PIC X(%d)", sy->name, sy->bytes);
+                asm_line(sy->label, "DC", b, cmt);
+                continue;
+            }
+            const char *v = (sy->has_value == 1) ? sy->value : "0";
             switch (sy->usage) {
             case U_DISPLAY: snprintf(b, sizeof b, "ZL%d'%s'", sy->bytes, v); break;
             case U_COMP3:   snprintf(b, sizeof b, "PL%d'%s'", sy->bytes, v); break;
             default:        snprintf(b, sizeof b, "%s'%s'", sy->bytes == 2 ? "H" : "F", v); break;
             }
-            char cmt[96];
-            snprintf(cmt, sizeof cmt, "PIC %s%d digits scale %d %s",
-                     sy->is_signed ? "S" : "", sy->digits, sy->scale,
-                     sy->usage == U_COMP ? "COMP" : sy->usage == U_COMP3 ? "COMP-3" : "DISPLAY");
-            asm_line(sy->name, "DC", b, cmt);
-            at = sy->offset + sy->bytes;
+            snprintf(cmt, sizeof cmt, "%s PIC %s9(%d)v%d %s",
+                     sy->name, sy->is_signed ? "S" : "", sy->digits, sy->scale,
+                     sy->usage == U_COMP ? "COMP" : sy->usage == U_COMP3 ? "COMP-3" : "DISP");
+            asm_line(sy->label, "DC", b, cmt);
         }
         asm_comment(" work areas for decimal arithmetic");
         asm_line("DWK", "DS", "D", "CVD/CVB doubleword");

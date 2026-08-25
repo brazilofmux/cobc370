@@ -9,6 +9,8 @@ test: cobc370
 	./cobc370 tests/stoprun.cbl -o tests/stoprun.asm
 	./cobc370 tests/hello.cbl   -o tests/hello.asm
 	./cobc370 tests/arith.cbl   -o tests/arith.asm
+	./cobc370 tests/compute.cbl -o tests/compute.asm
+	./cobc370 tests/grpperf.cbl -o tests/grpperf.asm
 	@echo "--- column 72 is the continuation flag, not spare room ---"
 	@# A statement must stop at column 71. A line reaching column 72 is only
 	@# legal when that column holds the deliberate X of a continued statement;
@@ -36,9 +38,11 @@ test: cobc370
 # values are in fact identical.
 COB_CONFIG_DIR ?= /usr/local/share/gnucobol/config
 oracle:
-	COB_CONFIG_DIR=$(COB_CONFIG_DIR) cobc -x -std=mvs -o /tmp/arith_oracle tests/arith.cbl
-	/tmp/arith_oracle > tests/arith.expected
-	@cat tests/arith.expected
+	@for t in arith compute grpperf; do \
+	  COB_CONFIG_DIR=$(COB_CONFIG_DIR) cobc -x -std=mvs -o /tmp/oracle_$$t tests/$$t.cbl 2>/dev/null; \
+	  /tmp/oracle_$$t > tests/$$t.expected; \
+	  echo "--- $$t"; cat tests/$$t.expected; \
+	done
 
 clean:
 	rm -f cobc370 tests/*.asm
