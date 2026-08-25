@@ -747,34 +747,35 @@ the old callers never produced.
 
 Regression: 13 passed, 0 failed.
 
-## Slice 13: ISAM — sequential yes, random no
+## Slice 13: ISAM, both halves
 
-Sequential ISAM works and is verified against the live `SVD001.GLACCT`. Random
-ISAM does not, and is rejected at code generation rather than emitting a program
-that abends. `cobol/ISAM-NOTES.md` records what the probes in `jcl/isam/`
-established; the short version is that OPEN succeeds, the access method's entry
-point is loaded, and the branch into it faults S0C4 anyway.
+QISAM sequential and BISAM random both work against the live `SVD001.GLACCT`.
+Random retrieval took four independent fixes, any one of which is fatal on its
+own: `CHECK` is not a BISAM macro (it loads DCB+52, which in an ISAM DCB is
+`DCBOPTCD`, and branches into it); `WAITF`, which *is* the right macro, is
+missing from TK5's `SYS1.MACLIB`, so synchronisation is a plain `WAIT` on the
+DECB's own ECB; the read area must hold a whole 4161-byte block rather than a
+57-byte record; and ISAM wants 16 bytes of working room at the front of it.
+`cobol/ISAM-NOTES.md` has the full recipe and the verified DCB offsets.
 
 Two things came along with it:
 
-**Multi-operand DISPLAY.** `DISPLAY 'FOUND ' OUT-KEY ' ' GLAC-NAME` — COBOL
-concatenates the operands into one line, which the corpus relies on.
+**Multi-operand DISPLAY.** `DISPLAY 'GOT ' OUT-KEY ' ' GLAC-NAME`.
 
 **An unsigned packed sign bug.** `PIC 9(n) COMP-3` must carry an `F` sign;
 `ZAP` leaves `C`. Invisible while packed fields were only compared
-arithmetically, and wrong the moment one is compared byte-wise — which is what
-an ISAM key is.
+arithmetically, and wrong the moment one is compared byte-wise. `GLAC-KEY` is
+`PIC 9(10) COMP-3`, so without this fix no random read can ever match.
 
-Regression: 14 passed, 0 failed.
+Regression: 15 passed, 0 failed.
 
 ### The regression earned its keep
 
-Three tests broke at once, and the cause was not in any of them: an index-based
+Three tests broke at once, and the cause was in none of them: an index-based
 edit that sliced from `case ST_DISPLAY_LIT:` to `case ST_MOVE:` silently
 deleted the `case ST_COMPUTE:` sitting between them. Every program using
 COMPUTE quietly stopped computing and displayed its initialised values instead.
-Nothing in the compiler complained, because a missing `switch` case is not an
-error.
+Nothing complained, because a missing `switch` case is not an error.
 
 ## Suggested order
 

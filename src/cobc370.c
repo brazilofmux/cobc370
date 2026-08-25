@@ -159,9 +159,15 @@ static void asm_line(const char *name, const char *op, const char *operand,
         if (n > 8) die("internal: assembler label longer than 8 characters");
         memcpy(b + 0, name, n);
     }
-    if (op      && *op)      { n = strlen(op);      memcpy(b + 9,  op, n); }
-    if (operand && *operand) { n = strlen(operand); memcpy(b + 15, operand, n); }
-    int end = 15 + (operand ? (int)strlen(operand) : 0);
+    size_t opl = 0;
+    if (op && *op) { opl = strlen(op); memcpy(b + 9, op, opl); }
+    /* Operands start in column 16, but an opcode longer than six characters
+     * (GETMAIN, FREEDBUF) would otherwise have its tail overwritten -- leave
+     * it one blank instead. */
+    int ostart = 15;
+    if (9 + (int)opl + 1 > ostart) ostart = 9 + (int)opl + 1;
+    if (operand && *operand) { n = strlen(operand); memcpy(b + ostart, operand, n); }
+    int end = ostart + (operand ? (int)strlen(operand) : 0);
     if (end < 15) end = 15;
     if (comment && *comment) {
         /* Column 72 is the continuation indicator: a statement must stop at
@@ -943,12 +949,7 @@ static void parse_environment(void)
                     }
                     if (is("ACCESS")) { next(); if (is("IS")) next();
                         if (is("SEQUENTIAL")) { next(); continue; }
-                        if (is("RANDOM")) {
-                        die("ACCESS IS RANDOM (BISAM) does not work yet. OPEN "
-                            "succeeds and the DCB's read routine address is "
-                            "loaded, but the READ macro itself faults S0C4. "
-                            "See doc in cobol/README.md; sequential ISAM works.");
-                    }
+                        if (is("RANDOM")) { next(); continue; }
                         die("only ACCESS IS SEQUENTIAL and ACCESS IS RANDOM are implemented"); }
                     if (is("ORGANIZATION")) { next(); if (is("IS")) next();
                         if (is("INDEXED")) { if (!f->isam) f->isam = 1; next(); continue; }
@@ -2394,6 +2395,19 @@ static void generate(void)
             asm_comment(b);
             snprintf(b, sizeof b, "(%s,%s)", f->label, st->src == 1 ? "INPUT" : "OUTPUT");
             asm_line("", "OPEN", b, "");
+            if (f->isam == 2) {
+                /* BISAM reads a whole BLOCK, not a record, and wants 16 bytes
+                 * of working room in front of it. BLKSIZE is only known once
+                 * OPEN has read the label, so the area is obtained here rather
+                 * than assembled -- that way a BLOCK CONTAINS clause that is
+                 * absent or wrong cannot corrupt storage. */
+                snprintf(b, sizeof b, "0,%s+62", f->label);
+                asm_line("", "LH", b, "DCBBLKSI, filled in by OPEN");
+                asm_line("", "AH", "0,=H'16'", "ISAM's working prefix");
+                asm_line("", "GETMAIN", "R,LV=(0)", "");
+                snprintf(b, sizeof b, "1,DB%03d+12", st->dst);
+                asm_line("", "ST", b, "area address into the DECB");
+            }
             break;
         }
         case ST_CLOSE: {
@@ -2412,18 +2426,47 @@ static void generate(void)
             snprintf(b, sizeof b, " READ %s", f->name);
             asm_comment(b);
             if (f->isam == 2) {
-                /* BISAM. The READ macro plants its DECB inline and branches
-                 * around it, so it is safe in the instruction stream. A record
-                 * that is not there raises an exception, which CHECK routes to
-                 * SYNAD -- that is what sets the flag INVALID KEY tests. */
+                /* BISAM, hand-built rather than via the READ macro so that the
+                 * DECB lives in the data area and its area pointer can be the
+                 * block obtained at OPEN. The two instructions below are what
+                 * the macro itself generates: R1 -> DECB, then branch through
+                 * DCBLRAN at DCB+88 ("address of read-write K module").
+                 *
+                 * Synchronisation is a plain WAIT on the DECB's own ECB. The
+                 * documented macro is WAITF, which is not in TK5's SYS1.MACLIB;
+                 * CHECK is NOT a substitute -- it loads a routine address from
+                 * DCB+52, which in an ISAM DCB is DCBOPTCD, and branches into
+                 * it (S0C1). */
                 asm_line("", "MVI", "ISFLG,X'00'", "");
-                snprintf(b, sizeof b, "DB%03d,K,%s,%s,'S',%s", i, f->label,
-                         syms[f->rec_sym].label, syms[f->nominal_sym].label);
-                asm_line("", "READ", b, "random by NOMINAL KEY");
-                snprintf(b, sizeof b, "DB%03d", i);
-                asm_line("", "CHECK", b, "");
-                asm_line("", "CLI", "ISFLG,X'00'", "record found?");
-                asm_line("", "BE", lc, "");
+                snprintf(b, sizeof b, "DB%03d(4),DB%03d", st->dst, st->dst);
+                asm_line("", "XC", b, "clear the ECB before each READ");
+                snprintf(b, sizeof b, "DB%03d+24(2),DB%03d+24", st->dst, st->dst);
+                asm_line("", "XC", b, "and the exception code");
+                need_sym_base(&syms[f->nominal_sym]);
+                snprintf(b, sizeof b, "1,%s", syms[f->nominal_sym].label);
+                asm_line("", "LA", b, "NOMINAL KEY");
+                snprintf(b, sizeof b, "1,DB%03d+20", st->dst);
+                asm_line("", "ST", b, "into the DECB");
+                snprintf(b, sizeof b, "1,DB%03d", st->dst);
+                asm_line("", "LA", b, "R1 -> DECB, as the READ macro does");
+                snprintf(b, sizeof b, "15,%s+88", f->label);
+                asm_line("", "L", b, "DCBLRAN: read-write K module");
+                asm_line("", "BALR", "14,15", "");
+                snprintf(b, sizeof b, "ECB=DB%03d", st->dst);
+                asm_line("", "WAIT", b, "not CHECK, and not WAITF");
+                snprintf(b, sizeof b, "DB%03d+24(2),=X'0000'", st->dst);
+                asm_line("", "CLC", b, "exception code set?");
+                asm_line("", "BNE", le, "");
+                asm_line("", "CLI", "ISFLG,X'00'", "or a permanent error?");
+                asm_line("", "BNE", le, "");
+                /* DECB+16 is the record pointer word: the logical record's
+                 * address inside the block just read. */
+                snprintf(b, sizeof b, "1,DB%03d+16", st->dst);
+                asm_line("", "L", b, "record pointer word");
+                need_sym_base(&syms[f->rec_sym]);
+                snprintf(b, sizeof b, "%s(%d),0(1)", syms[f->rec_sym].label, f->reclen);
+                asm_line("", "MVC", b, "block-relative record into the FD area");
+                asm_line("", "B", lc, "");
                 asm_line(le, "DS", "0H", "INVALID KEY");
                 reset_bases();
                 break;
@@ -2685,10 +2728,33 @@ static void generate(void)
         int any_isam = 0;
         for (int i = 0; i < nfile; i++) if (files[i].isam == 2) any_isam = 1;
         if (any_isam) {
-            asm_comment(" BISAM error exit: CHECK routes a missing record here");
+            asm_comment(" BISAM permanent-error exit; a missing record instead");
+            asm_comment(" shows up as a non-zero exception code in the DECB");
             asm_line("ISYNAD", "MVI", "ISFLG,X'01'", "");
             asm_line("", "BR", "14", "");
             asm_line("ISFLG", "DC", "X'00'", "");
+            /* One DECB per BISAM READ statement. Layout is exactly what the
+             * READ macro generates, confirmed against its expansion. */
+            for (int k = 0; k < nstmt; k++) {
+                if (stmts[k].op != ST_READ) continue;
+                File *rf = &files[stmts[k].dst];
+                if (rf->isam != 2) continue;
+                char lab[16]; snprintf(lab, sizeof lab, "DB%03d", stmts[k].dst);
+                static int done[MAXFILE];
+                if (done[stmts[k].dst]) continue;
+                done[stmts[k].dst] = 1;
+                asm_line(lab, "DS", "0F", "BISAM DECB");
+                asm_line("", "DC", "A(0)", "+0  ECB");
+                asm_line("", "DC", "X'0280'", "+4  type");
+                asm_line("", "DC", "AL2(0)", "+6  length");
+                char ab[64];
+                snprintf(ab, sizeof ab, "A(%s)", rf->label);
+                asm_line("", "DC", ab, "+8  DCB");
+                asm_line("", "DC", "A(0)", "+12 area, set at OPEN");
+                asm_line("", "DC", "A(0)", "+16 record pointer word");
+                asm_line("", "DC", "A(0)", "+20 key, set at READ");
+                asm_line("", "DC", "AL2(0)", "+24 exception code");
+            }
         }
     }
     for (int i = 0; i < nstmt; i++)

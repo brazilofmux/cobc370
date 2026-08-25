@@ -1,72 +1,118 @@
-# ISAM: what works, and where BISAM stopped
+# ISAM on MVS 3.8j: the working recipe
 
-Sequential ISAM works. Random ISAM does not, and this records exactly how far
-it got so the next attempt starts from evidence rather than from scratch.
+Both halves work: QISAM sequential (`GET`) and BISAM random (`READ` by key).
+This records what it took, because almost none of it is guessable and the
+documentation is famously bad.
 
-The corpus is **read-only** on ISAM — nothing adds, modifies or deletes a
-record — so `READ` is the whole requirement. The datasets were loaded in sorted
-order once, out of band.
+The corpus is **read-only** on ISAM — nothing adds, modifies or deletes a record
+— so retrieval is the whole requirement. Getting data *in and out* is a separate
+JCL problem, solved by `SVD001.HELLO.CNTL(LDGLACCT)` and `(EXGLACCT)`.
 
-## Works: QISAM sequential
+## The dataset, from its own DSCB
 
-`SELECT f ASSIGN TO DA-I-name ACCESS IS SEQUENTIAL RECORD KEY IS k`, with
-`DSORG=IS,MACRF=(GM)` and ordinary `GET`. `AT END` uses the same `DCBEODAD`
-patch as QSAM — offset 33 turns out to be right for QISAM too.
+`SVD001.GLACCT`, read straight out of `IEHLIST LISTVTOC FORMAT`:
 
-Verified against the live `SVD001.GLACCT`:
-
-    KEY 0000010202 Stephen's Coinbox
-    KEY 0000010301 Dwolla
-    KEY 0000010303 MtGox
-
-Cross-checked independently: `IEBISAM PARM=PRINTL` dumps the same dataset in
-hex, and hand-decoding the first three records from EBCDIC gives the same keys
-and names. Two routes to the same answer.
-
-## Does not work: BISAM random
-
-`ACCESS IS RANDOM ... NOMINAL KEY` is parsed and analysed but **rejected at code
-generation** rather than emitting a program that abends. What the probes in
-`jcl/isam/` establish, in order:
-
-| Probe | Result |
+| | |
 |---|---|
-| `probe-open-only` | `OPEN (dcb,INPUT)` on `DSORG=IS,MACRF=(R)` **succeeds** — DCBOFLGS open bit set |
-| `probe-read-routine-addr` | after OPEN, `DCB+88` (the read/write routine address the READ macro branches through) is **non-zero** |
-| `probe-read-no-check` | the `READ` macro itself faults **S0C4**, before any `CHECK` |
-| `probe-read-check` | same, S0C1 with CHECK present |
-| `probe-dynamic-buffering` | `MACRF=(RUS)` with `READ ...,'S','S',key` also fails |
+| DSORG / RECFM | `IS` / `FB` |
+| LRECL / BLKSIZE | 57 / 4161 — **73 records per block** |
+| KEYLEN | **6** |
+| OPTCD | `X'02'` = **L, the delete option** |
 
-So the file opens, the access method loads its entry point, and the branch into
-it faults. That rules out the obvious causes — wrong DSORG, wrong MACRF letter,
-an unopened DCB — and points at the DECB contents or a DCB field the macro
-assumes and the label did not supply.
+`OPTCD=L` is why every record carries a delete flag in byte 0, and why the key
+starts at **RKP=1**. And `KEYLEN=6` against a key that displays as ten digits
+means the key is `PIC 9(10) COMP-3`. A dump of record 1 confirms the whole
+layout at once:
 
-Untried, in rough order of promise:
+    00  000000 10202F  1C  C1  F1F0  000000 4348 ...
+    ^   ^               ^   ^   ^     ^
+    |   GLAC-KEY        |   |   SUBCL GLAC-BALANCE  S9(9)V99 COMP-3
+    |   9(10) COMP-3    |   CLASS
+    |   F sign          GLAC-CRDB S9 COMP-3, C sign
+    GLAC-DELETE
 
-- `RKP` and `KEYLEN`. The key sits at **offset 1**, after the one-byte delete
-  flag every ISAM record carries, so `RKP=1` and `KEYLEN=6` for GLACCT. OPEN
-  should take these from the DSCB, but supplying them on the DCB is cheap to
-  test.
-- `BLKSIZE`/`LRECL`/`RECFM` explicitly on the DCB rather than from the label.
-- `MSGDCB`/`SYNAD` register conventions: the SYNAD used here assumes R12 is
-  preserved on entry, which is worth confirming before trusting the flag.
-- Whether TK5's MVS 3.8j has complete BISAM support at all. QISAM demonstrably
-  works; BISAM is a separate module set.
+Note the two sign nibbles: `F` on the unsigned key, `C` on the signed `CRDB`.
+An ISAM key is compared **byte-wise**, so an unsigned packed field that carries
+`C` (what `ZAP` leaves behind) never matches. That is the bug fixed in the
+previous slice; without it random ISAM cannot work at all.
 
-**The right long-term answer is probably not to fix this.** The corpus already
-contains `SVD001.VSAMIO.*` from earlier experiments, VSAM is available on this
-system, and ISAM is the access method everyone left behind for good reason.
-Random retrieval via VSAM KSDS would replace this cleanly.
+## QISAM sequential
 
-## A sign bug found on the way
+`DSORG=IS,MACRF=(GM)` and an ordinary `GET`. `AT END` uses the same `DCBEODAD`
+patch at offset 33 as QSAM.
 
-`PIC 9(n) COMP-3` — *unsigned* packed — must carry an `F` sign nibble. `ZAP`
-leaves `C`. That never mattered while packed fields were only ever compared
-arithmetically, and matters the moment one is compared byte-wise, which is
-exactly what an ISAM key is. `gen_store` now forces it:
+## BISAM random — four separate bugs
 
-    ZAP   D0008(6),PWK1(8)
-    OI    D0008+5,X'0F'       unsigned: force an F sign
+The first attempt faulted S0C4 inside the `READ` macro. Four things were wrong;
+each one alone is fatal.
 
-Same shape as the `OI ...,X'F0'` that un-overpunches an unsigned zoned field.
+**1. `CHECK` is not a BISAM macro.** BISAM synchronises with `WAITF`. `CHECK`
+belongs to BSAM/BPAM/BDAM and expands to
+
+    L  15,52(0,14)      load "check routine addr" from the DCB
+    BALR 14,15
+
+Offset 52 in an *ISAM* DCB is `DCBOPTCD`, so this branches to `X'02……'` → S0C1.
+
+**2. `WAITF` is missing from TK5's `SYS1.MACLIB`.** It is the *only* absent ISAM
+macro — `READ`, `WRITE`, `SETL`, `ESETL`, `FREEDBUF` and `RELEX` all assemble.
+It is not needed: the DECB's first word is an ECB, so **`WAIT ECB=decb`**
+synchronises correctly, and the result is read out of the DECB directly.
+
+**3. The area must hold a BLOCK, not a record.** With blocked records BISAM
+reads the whole 4161-byte block. Passing the 57-byte FD record area let ISAM
+write 4161 bytes into it — that was the S0C4.
+
+**4. ISAM wants 16 bytes of working room at the front of that area.** The block
+lands at `area+16`, so the area must be `BLKSIZE+16`.
+
+### The DECB, from the macro's own expansion
+
+    +0   A(0)        ECB            -- clear before each READ
+    +4   X'02'       type
+    +5   X'80'       type
+    +6   AL2(0)      length
+    +8   A(dcb)
+    +12  A(area)     block area, BLKSIZE+16
+    +16  A(0)        RECORD POINTER WORD  <- the record, inside the block
+    +20  A(key)      raw key (6 packed bytes here)
+    +24  AL2(0)      exception code       <- non-zero is INVALID KEY
+
+`cobc370` builds this by hand rather than calling the macro, so the DECB lives
+in the data area and its area pointer can be the block obtained at OPEN. The
+read itself is exactly what the macro generates:
+
+    LA    1,DECB
+    L     15,dcb+88          DCBLRAN, "address of read-write K module"
+    BALR  14,15
+    WAIT  ECB=DECB
+
+BLKSIZE is only known once OPEN has read the label, so the area is `GETMAIN`ed
+at OPEN from `DCBBLKSI` (DCB+62) rather than assembled from a `BLOCK CONTAINS`
+clause that could be absent or wrong.
+
+### Proof it is genuinely random
+
+Reading the third record's key returns `PTROFFS = X'82'` = 130 = `16 + 2×57` —
+the pointer resolves to the *third* record inside the block, not to its start —
+and the bytes match a sequential read of the same record exactly. The `isamrnd`
+test then fetches keys `10303` and `10301` in that order, descending, which
+sequential access cannot produce, and takes INVALID KEY for a missing key.
+
+Verified DCB offsets (from `DCBD DSORG=IS`): `DCBOPTCD` 52, `DCBBLKSI` 62,
+`DCBLRECL` 82, `DCBLRAN` 88, `DCBLWKN` 92, `DCBRELEX` 104, `DCBFREED` 108.
+
+## Still worth moving to VSAM
+
+None of this makes ISAM a good idea. The escape hatch is the **ISAM Interface
+Program**: a VSAM KSDS with `AMP='AMORG'` on the DD, against a DCB that still
+says `DSORG=IS`, and OPEN routes the ISAM macros into VSAM. That means the ISAM
+support here is not wasted after VSAM lands — the *JCL* can redirect a program
+without recompiling it. (IIP was withdrawn from z/OS around V1R7; whether 3.8j's
+VSAM has it is untested here.)
+
+## Recovery gap
+
+`FW.ACCOUNTS`, the flat input `LDGLACCT` loads from, no longer exists — it is an
+older schema. `SVD001.GLACCT` therefore **cannot be rebuilt from source** and
+must be preserved as data. See `doc/DISASTER-RECOVERY.md`.
