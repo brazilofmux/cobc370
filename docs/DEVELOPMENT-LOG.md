@@ -565,6 +565,54 @@ a second fault: an `01`-level *group* never ran through the path that advances
 `wslen`, so the next `01` restarted at the group's own offset. Both were layout
 bugs; the addressing had been right all along.
 
+## Slice 9: PICTURE moves to Ragel
+
+The trigger was not that the hand-written scanner got ugly. It was that
+PICTURE stopped being lexing and became compiling: it has to yield digit
+count, scale, sign, field width **and the byte pattern for the S/370 `ED`
+instruction**. A small regular language with real semantic output is what a
+state machine is for.
+
+Split the way `~/tinymux/mux/lib/date_scan.rl` does it — Ragel `-G2` scanner,
+hand-written analysis on top:
+
+- `picture.rl` tokenises into `(symbol, repeat)` pairs. Nothing else.
+- `picture.c` assigns meaning, in C, where the intricate rule can have prose
+  beside it.
+
+`picture_scan.c` is generated but **committed**, so `cobc370` builds without
+ragel installed. `make ragel` regenerates it.
+
+The main token stream stays hand-written. It has one context flag
+(`lex_parens`) and the corpus contains **zero continuation lines**, which is
+the single thing that would make a hand-scanned COBOL reader miserable. No
+pressure yet.
+
+### The rule that needed the prose
+
+A floating insertion string is not broken by the insertion characters inside
+it. `----,---,--9` is **one** floating string of nine `-`, giving eight digit
+positions and one sign position — not three separate runs. Counting per-run
+loses a digit at every comma, which is exactly what the first version did.
+
+### Validated against GnuCOBOL before any codegen
+
+    PICTURE            GnuCOBOL width   ours
+    ----,---,--9.99          15          15
+    ZZZ,ZZ9.99               10          10
+    +99999                    6           6
+    ***,**9.99               10          10
+    $$$,$$9.99               10          10
+    ---,---,--9              11          11
+
+and all **54 distinct PICTUREs in the corpus** parse.
+
+Edited fields now carry their `ED` pattern; storing into one is diagnosed as
+the next step rather than silently mishandled. `PIC X` and numeric PICTUREs go
+through the same path now, so the old hand-rolled `parse_picture` is gone.
+
+Regression: 10 passed, 0 failed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

@@ -2,8 +2,13 @@
 # Named to avoid colliding with GnuCOBOL's cobc, which is the oracle.
 CFLAGS = -O2 -Wall -Wextra
 
-cobc370: cobc370.c
-	$(CC) $(CFLAGS) -o $@ $<
+# picture_scan.c is generated but committed, so the compiler builds without
+# ragel installed. Regenerate with `make ragel` after editing picture.rl.
+cobc370: cobc370.c picture.c picture_scan.c picture.h
+	$(CC) $(CFLAGS) -I. -o $@ cobc370.c picture.c picture_scan.c
+
+ragel: picture.rl
+	ragel -G2 -o picture_scan.c picture.rl
 
 test: cobc370
 	./cobc370 tests/stoprun.cbl -o tests/stoprun.asm
@@ -53,4 +58,4 @@ oracle:
 clean:
 	rm -f cobc370 tests/*.asm
 
-.PHONY: test oracle clean
+.PHONY: test oracle ragel clean

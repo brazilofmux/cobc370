@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "picture.h"
 
 #define MAXLINE 256
 #define MAXTOK  64
@@ -209,6 +210,10 @@ typedef struct {
     int  offset;
     int  has_value;
     char value[34];   /* the VALUE literal, already scaled to an integer */
+    int  edited;      /* needs an ED pattern */
+    int  floating;    /* floating insertion -> EDMK */
+    int  masklen;
+    unsigned char mask[PIC_MAXMASK];
     int  occurs;      /* OCCURS count, 0 when not a table */
     int  elem;        /* size of one element */
     int  occ_parent;  /* the table this item sits inside, -1 if none */
@@ -379,36 +384,6 @@ static void parse_program_id(void)
 /* Numeric pictures only: optional S, then 9s and one V, with (n) repetition.
  * Editing characters are a later slice and are rejected by name here. */
 
-static void parse_picture(const char *pic, Sym *sy)
-{
-    int seen_v = 0;
-    sy->digits = 0; sy->scale = 0; sy->is_signed = 0;
-    const char *p = pic;
-    if (*p == 'S') { sy->is_signed = 1; p++; }
-    while (*p) {
-        char c = *p++;
-        int rep = 1;
-        if (*p == '(') {
-            rep = 0; p++;
-            while (isdigit((unsigned char)*p)) rep = rep * 10 + (*p++ - '0');
-            if (*p != ')') die("malformed PICTURE repetition count");
-            p++;
-        }
-        if (c == '9') { sy->digits += rep; if (seen_v) sy->scale += rep; }
-        else if (c == 'V') { if (seen_v) die("more than one V in a PICTURE"); seen_v = 1; }
-        else {
-            char m[96];
-            snprintf(m, sizeof m,
-                     "PICTURE character '%c' is not implemented yet "
-                     "(numeric pictures only: S, 9, V)", c);
-            die(m);
-        }
-    }
-    if (sy->digits == 0) die("PICTURE has no digit positions");
-    if (sy->digits > 15)
-        die("more than 15 digits needs a wider packed work area than this "
-            "slice allocates");
-}
 
 /* A numeric literal, rescaled to an integer at the given scale. */
 static void scale_literal(const char *lit, int scale, char *out, size_t outsz)
@@ -620,37 +595,43 @@ static void parse_data_division(void)
             continue;
         }
 
-        if (pic[0] == 'X') {
-            sy->is_alpha = 1;
-            const char *p = pic + 1;
-            int rep = 1;
-            if (*p == '(') { rep = 0; p++;
-                while (isdigit((unsigned char)*p)) rep = rep * 10 + (*p++ - '0');
-                if (*p != ')') die("malformed PICTURE repetition count"); p++; }
-            while (*p == 'X') { rep++; p++; }
-            if (*p) die("mixed PICTURE characters are not implemented yet");
-            sy->bytes = rep;
-            if (sy->has_value == 1) die("a numeric VALUE on a PIC X item is not implemented yet");
-        } else {
-            parse_picture(pic, sy);
-            if (sy->has_value == 3) die("a nonnumeric VALUE on a numeric item is not implemented yet");
-            if (sy->has_value == 1) {
-                char scaled[34];
-                scale_literal(sy->value, sy->scale, scaled, sizeof scaled);
-                strcpy(sy->value, scaled);
-            }
-            switch (sy->usage) {
-            case U_DISPLAY: sy->bytes = sy->digits; break;
-            case U_COMP3:   sy->bytes = sy->digits / 2 + 1; break;
-            case U_COMP:
-                if (sy->digits <= 4)      sy->bytes = 2;
-                else if (sy->digits <= 9) sy->bytes = 4;
-                else die("COMP wider than 9 digits needs doubleword arithmetic, "
-                         "which S/370 does not have and this slice does not emulate");
-                /* Alignment inside a group would move subordinate offsets, so
-                 * COMP items are left unaligned here; S/370 decimal and RX
-                 * instructions tolerate it. */
-                break;
+        {
+            PicInfo pi;
+            if (pic_analyse(pic, &pi) < 0) die(pi.err);
+            sy->digits = pi.digits; sy->scale = pi.scale;
+            sy->is_signed = pi.is_signed; sy->is_alpha = pi.is_alpha;
+            sy->edited = pi.edited; sy->floating = pi.floating;
+            sy->masklen = pi.masklen;
+            memcpy(sy->mask, pi.mask, sizeof sy->mask);
+            if (pi.is_alpha) {
+                if (sy->has_value == 1)
+                    die("a numeric VALUE on a PIC X item is not implemented yet");
+                sy->bytes = pi.bytes;
+            } else {
+                if (sy->has_value == 3)
+                    die("a nonnumeric VALUE on a numeric item is not implemented yet");
+                if (sy->has_value == 1) {
+                    char scaled[34];
+                    scale_literal(sy->value, sy->scale, scaled, sizeof scaled);
+                    strcpy(sy->value, scaled);
+                }
+                if (pi.edited) {
+                    if (sy->usage != U_DISPLAY)
+                        die("an edited PICTURE must be USAGE DISPLAY");
+                    if (sy->has_value == 1)
+                        die("VALUE on an edited item is not implemented yet");
+                    sy->bytes = pi.bytes;
+                } else switch (sy->usage) {
+                case U_DISPLAY: sy->bytes = pi.digits; break;
+                case U_COMP3:   sy->bytes = pi.digits / 2 + 1; break;
+                case U_COMP:
+                    if (pi.digits <= 4)      sy->bytes = 2;
+                    else if (pi.digits <= 9) sy->bytes = 4;
+                    else die("COMP wider than 9 digits needs doubleword "
+                             "arithmetic, which S/370 does not have and this "
+                             "compiler does not emulate");
+                    break;
+                }
             }
         }
         sy->elem = sy->bytes;
@@ -735,12 +716,6 @@ static void parse_environment(void)
     }
 }
 
-static void skip_division(const char *kw)
-{
-    if (!is(kw)) return;
-    next(); expect("DIVISION"); expect(".");
-    while (!tok.eof && !is("DATA") && !is("PROCEDURE")) next();
-}
 
 /* ---- expression parser -------------------------------------------------
  * COBOL requires spaces around the arithmetic operators, which is what makes
@@ -1406,6 +1381,9 @@ static void gen_rescale(const char *wk, int from, int to)
 static void gen_store(const Sym *sy, Node *sub, const char *wk)
 {
     char b[128], f[64];
+    if (sy->edited)
+        die("storing into an edited PICTURE needs ED/EDMK, which is the next "
+            "step; the pattern is already computed");
     switch (sy->usage) {
     case U_DISPLAY:
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
