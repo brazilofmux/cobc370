@@ -1,0 +1,120 @@
+       INTRNL NAME   LVL SOURCE NAME                     BASE   DISPL   INTRNL NAME   DEFINITION   USAGE      R  O  Q  M
+       DNM=1-048     01  WS-PACKED                       BL=1     000   DNM=1-048     DS 5P        COMP-3
+       DNM=1-067     01  WS-DISP                         BL=1     008   DNM=1-067     DS 9C        DISP-NM
+       DNM=1-084     01  WS-EDIT                         BL=1     018   DNM=1-084     DS 11C       NM-EDIT
+       DNM=1-118     01  WS-BIN                          BL=1     028   DNM=1-118     DS 2C        COMP
+       DNM=1-134     01  WS-RESULT                       BL=1     030   DNM=1-134     DS 6P        COMP-3   4
+
+
+
+
+                         MEMORY MAP
+
+                    TGT                     000B8
+
+               SAVE AREA                    000B8
+               SWITCH                       00100
+               TALLY                        00104
+               SORT SAVE                    00108
+               ENTRY-SAVE                   0010C
+               SORT CORE SIZE               00110
+               RET CODE                     00114
+               SORT RET                     00116
+               WORKING CELLS                00118
+               SORT FILE SIZE               00248
+               SORT MODE SIZE               0024C
+               PGT-VN TBL                   00250
+               TGT-VN TBL                   00254
+               VCONPTR                      00258
+               LENGTH OF VN TBL             0025C
+               LABEL RET                    0025E
+               UNUSED                       0025F
+               INIT1 ADCON                  00268
+               UNUSED                       0026C
+               OVERFLOW CELLS               00274
+               BL CELLS                     00274
+               DECBADR CELLS                00278
+               TEMP STORAGE                 00278
+               TEMP STORAGE-2               00280
+               TEMP STORAGE-3               00290
+               TEMP STORAGE-4               00298
+               BLL CELLS                    00298
+               VLC CELLS                    002A0
+               SBL CELLS                    002A0
+               INDEX CELLS                  002A0
+               SUBADR CELLS                 002A0
+               ONCTL CELLS                  002A0
+               PFMCTL CELLS                 002A0
+               PFMSAV CELLS                 002A0
+               VN CELLS                     002A0
+               SAVE AREA =2                 002A0
+               SAVE AREA =3                 002A0
+               XSASW CELLS                  002A0
+               XSA CELLS                    002A0
+               PARAM CELLS                  002A0
+               RPTSAV AREA                  002A0
+               CHECKPT CTR                  002A0
+               VCON TBL                     002A0   5
+
+
+
+ LITERAL POOL (HEX)
+
+ 002B8 (LIT+0)     40202020  206B2021  204B2020  60
+
+
+                    PGT                     002A8
+
+               OVERFLOW CELLS               002A8
+               VIRTUAL CELLS                002A8
+               PROCEDURE NAME CELLS         002B4
+               GENERATED NAME CELLS         002B4
+               DCB ADDRESS CELLS            002B4
+               VNI CELLS                    002B4
+               LITERALS                     002B8
+               DISPLAY LITERALS             002C5
+
+
+  REGISTER ASSIGNMENT
+
+   REG 6   BL =1
+
+ 12     *MAIN-PARA
+ 13      MOVE       0002C6                     START    EQU   *
+                    0002C6  F8 74 D 1C0 6 000           ZAP   1C0(8,13),000(5,6)    TS=01           DNM=1-48
+                    0002CC  D7 02 D 1C0 D 1C0           XC    1C0(3,13),1C0(13)     TS=01           TS=01
+                    0002D2  94 0F D 1C3                 NI    1C3(13),X'0F'         TS=01+3
+                    0002D6  D2 0C D 1C8 C 010           MVC   1C8(13,13),010(12)    TS2=1           LIT+0
+                    0002DC  DE 0C D 1C8 D 1C3           ED    1C8(13,13),1C3(13)    TS2=1           TS=04
+                    0002E2  05 30                       BALR  3,0
+                    0002E4  47 40 3 008                 BC    4,008(0,3)
+                    0002E8  92 40 D 1D4                 MVI   1D4(13),X'40'         TS2=13
+                    0002EC  D2 0A 6 018 D 1CA           MVC   018(11,6),1CA(13)     DNM=1-84        TS2=3
+ 14      COMPUTE    0002F2  D2 01 D 1D8 6 028           MVC   1D8(2,13),028(6)      TS3=1           DNM=1-118
+                    0002F8  48 30 D 1D8                 LH    3,1D8(0,13)           TS3=1
+                    0002FC  4E 30 D 1C0                 CVD   3,1C0(0,13)           TS=01
+                    000300  FC 74 D 1C0 6 000           MP    1C0(8,13),000(5,6)    TS=01           DNM=1-48
+                    000306  F8 55 6 030 D 1C2           ZAP   030(6,6),1C2(6,13)    DNM=1-134       TS=02+1
+ 15      MOVE       00030C  F3 84 6 008 6 000           UNPK  008(9,6),000(5,6)     DNM=1-67        DNM=1-48
+ 16      DISPLAY    000312  58 F0 C 004                 L     15,004(0,12)          V(ILBODSP0)
+                    000316  05 1F                       BALR  1,15
+                    000318  0001                        DC    X'0001'
+                    00031A  0F                          DC    X'0F'
+                    00031B  00000B                      DC    X'00000B'
+                    00031E  0D0001BC                    DC    X'0D0001BC'           BL =1
+                    000322  0018                        DC    X'0018'
+                    000324  FFFF                        DC    X'FFFF'
+ 17      STOP       000326  58 F0 C 008                 L     15,008(0,12)          V(ILBOSTP1)
+                    00032A  07 FF                       BCR   15,15
+                    00032C  50 D0 5 008        INIT2    ST    13,008(0,5)
+                    000330  50 50 D 004                 ST    5,004(0,13)
+                    000334  50 E0 D 054                 ST    14,054(0,13)
+                    000338  94 EF D 048                 NI    048(13),X'EF'         SWT+0
+                    00033C  58 F0 C 000                 L     15,000(0,12)          VIR=1
+                    000340  05 EF                       BALR  14,15
+                    000342  50 10 D 1B8                 ST    1,1B8(0,13)
+                    000346  12 00                       LTR   0,0   6
+
+
+                    000348  07 89                       BCR   8,9
+                    00034A  96 10 D 048                 OI    048(13),X'10'         SWT+0

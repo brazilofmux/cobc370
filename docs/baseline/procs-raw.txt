@@ -1,0 +1,289 @@
+                                                J E S 2   J O B   L O G
+
+
+18.07.33 JOB 3156  $HASP373 CBLBASE  STARTED - INIT  1 - CLASS A - SYS TK5R
+18.07.33 JOB 3156  IEF403I CBLBASE - STARTED - TIME=18.07.33
+18.07.33 JOB 3156  IEFACTRT - Stepname  Procstep  Program   Retcode
+18.07.33 JOB 3156  CBLBASE    S1                  IEBPTPCH  RC= 0000
+18.07.33 JOB 3156  CBLBASE    S2                  IEHLIST   RC= 0000
+18.07.33 JOB 3156  IEF404I CBLBASE - ENDED - TIME=18.07.33
+18.07.33 JOB 3156  $HASP395 CBLBASE  ENDED
+
+
+------ JES2 JOB STATISTICS ------
+
+
+ 25 AUG 26 JOB EXECUTION DATE
+
+
+        25 CARDS READ
+
+
+       240 SYSOUT PRINT RECORDS
+
+
+         0 SYSOUT PUNCH RECORDS
+
+
+      0.00 MINUTES EXECUTION TIME
+    1     //CBLBASE  JOB (5161A020,1A11),'COBOL BASELINE',                        JOB 3156
+          //             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+          //             USER=HERC01,PASSWORD=
+          ***
+          *** Baseline for the COBOL replacement project: what compiler is actually
+          *** installed, what its cataloged procedures do, and what runtime modules
+          *** SYS1.COBLIB provides.
+          ***
+    2     //S1       EXEC PGM=IEBPTPCH
+    3     //SYSPRINT DD  SYSOUT=Z
+    4     //SYSUT1   DD  DSN=SYS2.PROCLIB,DISP=SHR
+    5     //SYSUT2   DD  SYSOUT=Z
+    6     //SYSIN    DD  *
+    7     //S2       EXEC PGM=IEHLIST
+    8     //SYSPRINT DD  SYSOUT=Z
+    9     //D1       DD  UNIT=3390,VOL=SER=TK5RES,DISP=OLD
+   10     //SYSIN    DD  *
+IEF236I ALLOC. FOR CBLBASE S1
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I 390  ALLOCATED TO SYSUT1
+IEF237I JES2 ALLOCATED TO SYSUT2
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF142I CBLBASE S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   JES2.JOB03156.SO0103                         SYSOUT
+IEF285I   SYS2.PROCLIB                                 KEPT          *-------12
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   JES2.JOB03156.SO0104                         SYSOUT
+IEF285I   JES2.JOB03156.SI0101                         SYSIN
+IEF373I STEP /S1      / START 26237.1807
+IEF374I STEP /S1      / STOP  26237.1807 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT    56K SYS   196K
+************************************************************************************************************************************
+*     1. Jobstep of job: CBLBASE     Stepname: S1          Program name: IEBPTPCH   Executed on 25.08.26 from 18.07.33 to 18.07.33 *
+*         elapsed time  00:00:00,01                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:     56K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      5                                                                           *
+*     DMY.......0 390......12 DMY.......0 DMY.......0                                                                              *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR CBLBASE S2
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I 390  ALLOCATED TO D1
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF237I 390  ALLOCATED TO SYS00001
+IEF285I   SYS1.COBLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF142I CBLBASE S2 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   JES2.JOB03156.SO0105                         SYSOUT
+IEF285I   SYS26237.T180733.RA000.CBLBASE.R0000001      KEPT          *-------31
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   JES2.JOB03156.SI0102                         SYSIN
+IEF373I STEP /S2      / START 26237.1807
+IEF374I STEP /S2      / STOP  26237.1807 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT    36K SYS   216K
+************************************************************************************************************************************
+*     2. Jobstep of job: CBLBASE     Stepname: S2          Program name: IEHLIST    Executed on 25.08.26 from 18.07.33 to 18.07.33 *
+*         elapsed time  00:00:00,01                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:     36K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      1                                                                           *
+*     DMY.......0 390......31 DMY.......0                                                                                          *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF375I  JOB /CBLBASE / START 26237.1807
+IEF376I  JOB /CBLBASE / STOP  26237.1807 CPU    0MIN 00.02SEC SRB    0MIN 00.00SEC
+
+
+
+PRINT/PUNCH DATA SET UTILITY                                                                      PAGE 0001
+ PRINT TYPORG=PO,MAXNAME=4
+ MEMBER NAME=COBUC
+ MEMBER NAME=COBUCL
+ MEMBER NAME=COBUCLG
+ MEMBER NAME=COBUPC
+ EOF ON SYSIN
+ END OF DATA FOR SDS OR MEMBER
+ END OF DATA FOR SDS OR MEMBER
+ END OF DATA FOR SDS OR MEMBER
+ END OF DATA FOR SDS OR MEMBER                                                                                                              PAGE 0001
+MEMBER NAME  COBUC
+//COBUC   PROC SOU  T='*'                                                                 00000100*
+//COB  E  XEC  PGM  =IKFCBL0  0,                                                          00000200*
+//             PAR  M='DECK,  NOLOAD,S  UPMAP,SI  ZE=2048K  ,BUF=102  4K'                 00000300*
+//SYSPRI  NT  DD S  YSOUT=&S  OUT                                                         00000400*
+//SYSPUN  CH DD SY  SOUT=B                                                                00000500*
+//SYSUT1   DD  UNI  T=SYSDA,  SPACE=(4  60,(700,  100))                                   00000600*
+//SYSUT2   DD  UNI  T=SYSDA,  SPACE=(4  60,(700,  100))                                   00000700*
+//SYSUT3   DD  UNI  T=SYSDA,  SPACE=(4  60,(700,  100))                                   00000800*
+//SYSUT4   DD  UNI  T=SYSDA,  SPACE=(4  60,(700,  100))                                   00000900**                                                                                                              PAGE 0002
+MEMBER NAME  COBUCL
+//COBUCL   PROC SO  UT='*'                                                                00000100*
+//COB  E  XEC  PGM  =IKFCBL0  0,                                                          00000200*
+//             PAR  M='LOAD,  SUPMAP,S  IZE=2048  K,BUF=10  24K'                          00000300*
+//SYSPRI  NT  DD S  YSOUT=&S  OUT                                                         00000400*
+//SYSUT1   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000500*
+//SYSUT2   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000600*
+//SYSUT3   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000700*
+//SYSUT4   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000800*
+//SYSLIN   DD DSNA  ME=&LOAD  SET,DISP  =(MOD,PA  SS),UNIT  =SYSDA,                       00000900*
+//               S  PACE=(80  ,(500,10  0))                                               00001000*
+//LKED E  XEC PGM=  IEWL,PAR  M='LIST,  XREF,LET  ',COND=(  5,LT,COB  )                   00001100*
+//SYSLIN    DD DSN  AME=&LOA  DSET,DIS  P=(OLD,D  ELETE)                                  00001200*
+//  DD    DDNAME=S  YSIN                                                                  00001300*
+//SYSLIB   DD   DS  NAME=SYS  1.COBLIB  ,DISP=SH  R                                       00001400*
+//SYSLMO  D DD DSN  AME=&GOD  ATA(RUN)  ,DISP=(N  EW,PASS)  ,UNIT=SY  SDA,                00001500*
+//               S  PACE=(10  24,(50,2  0,1))                                             00001600*
+//SYSUT1   DD UNIT  =(SYSDA,  SEP=(SYS  LIN,SYSL  MOD)),SP  ACE=(102  4,(50,20  ))        00001700*
+//SYSPRI  NT DD SY  SOUT=&SO  UT                                                          00001800**                                                                                                              PAGE 0003
+MEMBER NAME  COBUCLG
+//COBUCL  G PROC S  OUT='*'                                                               00000100*
+//COB  E  XEC  PGM  =IKFCBL0  0,                                                          00000200*
+//             PAR  M='LOAD,  SUPMAP,S  IZE=2048  K,BUF=10  24K'                          00000300*
+//SYSPRI  NT  DD S  YSOUT=&S  OUT                                                         00000400*
+//SYSUT1   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000500*
+//SYSUT2   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000600*
+//SYSUT3   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000700*
+//SYSUT4   DD UNIT  =SYSDA,S  PACE=(46  0,(700,1  00))                                    00000800*
+//SYSLIN   DD DSNA  ME=&LOAD  SET,DISP  =(MOD,PA  SS),UNIT  =SYSDA,                       00000900*
+//               S  PACE=(80  ,(500,10  0))                                               00001000*
+//LKED E  XEC PGM=  IEWL,PAR  M='LIST,  XREF,LET  ',COND=(  5,LT,COB  )                   00001100*
+//SYSLIN    DD DSN  AME=&LOA  DSET,DIS  P=(OLD,D  ELETE)                                  00001200*
+//  DD    DDNAME=S  YSIN                                                                  00001300*
+//SYSLMO  D DD DSN  AME=&GOD  ATA(RUN)  ,DISP=(N  EW,PASS)  ,UNIT=SY  SDA,                00001400*
+//               S  PACE=(10  24,(50,2  0,1))                                             00001500*
+//SYSLIB   DD   DS  NAME=SYS  1.COBLIB  ,DISP=SH  R                                       00001600*
+//SYSUT1   DD UNIT  =(SYSDA,  SEP=(SYS  LIN,SYSL  MOD)),SP  ACE=(102  4,(50,20  ))        00001700*
+//SYSPRI  NT DD SY  SOUT=&SO  UT                                                          00001800*
+//GO  EX  EC PGM=*  .LKED.SY  SLMOD,CO  ND=((5,L  T,COB),(  5,LT,LKE  D))                 00001900**                                                                                                              PAGE 0004
+MEMBER NAME  COBUPC
+//COBUPC   PROC  N  AME=INVA  LIDNAME,  P=INT,Q=  XYZ,U=US  R    REL   9.0 10/  82  YK    00000100*
+//COB      EXEC  P  GM=IKFCB  L00,REGI  ON=130K,  PARM=(CL  IST,SUPM  AP,NOTRU  NC,LIB,   00000200*
+// DMAP,  NOPMAP,S  XREF,VER  B,OPT,'B  UF=35000  ','SIZE=  129000',  'LINECNT  =60')     00000300*
+//SYSLIB     DD  D  SN=&P..S  YM&Q,DIS  P=SHR                                             00000400*
+//           DD  D  SN=&P..S  YM&U,DIS  P=SHR                                             00000500*
+//           DD  D  SN=&P..S  YMLIB,DI  SP=SHR                                            00000600*
+//           DD  D  SN=&P..S  YMREL,DI  SP=SHR                                            00000700*
+//SYSUT1     DD  U  NIT=SYSD  A,SPACE=  (7280,(5  00,100))  ,DSN=&&S  YSUT1               00000800*
+//SYSUT2     DD  U  NIT=SYSD  A,SPACE=  (7280,(5  00,100))  ,DSN=&&S  YSUT2               00000900*
+//SYSUT3     DD  U  NIT=SYSD  A,SPACE=  (7280,(5  00,100))  ,DSN=&&S  YSUT3               00001000*
+//SYSUT4     DD  U  NIT=SYSD  A,SPACE=  (7280,(5  00,100))  ,DSN=&&S  YSUT4               00001100*
+//SYSPRI  NT DD  S  YSOUT=A                                                               00001200*
+//SYSLIN     DD  D  SN=&&LOA  DSET,DIS  P=(MOD,P  ASS),UNI  T=SYSDA,                      00001300*
+//               S  PACE=(80  ,(500,10  0))                                               00001400*
+//SYSIN      DD  D  SN=&P..S  YM&Q.(&N  AME),DIS  P=SHR                                   00001500**                              SYSTEMS SUPPORT UTILITIES---IEHLIST                               PAGE    1
+
+
+ DIRECTORY INFO FOR SPECIFIED PDS ON VOL TK5RES
+SYS1.COBLIB
+
+           MEMBERS     TTRC     VARIABLE USER DATA ---(USER DATA AND TTRC ARE IN HEX)
+          ILBOACP0  0000202C  0000250000 0000000262 0001E801E8 0000008800 00010000
+          ILBOANE0  0000282C  00002C0000 0000000372 0001380138 0000008800 00010000
+          ILBOANF0  00002E2C  0000320000 0000000372 0000600060 0000008800 00010000
+          ILBOATB0  0000342C  0000380000 0000000372 0001000100 0000008800 00010000
+          ILBOBID0  0001022C  0001060000 0000000372 0000680068 0000008800 00010000
+          ILBOBID1  000102B1  0001060000 0000000352 0000680068 0000208800 00000000C9 D3C2D6C2C9 C4F00100
+          ILBOBID2  000102B1  0001060000 0000000352 0000680068 00000C8800 00000000C9 D3C2D6C2C9 C4F00100
+          ILBOBIE0  0001082C  00010C0000 0000000372 0000680068 0000008800 00010000
+          ILBOBIE1  000108B1  00010C0000 0000000352 0000680068 0000208800 00000000C9 D3C2D6C2C9 C5F00100
+          ILBOBIE2  000108B1  00010C0000 0000000352 0000680068 00000C8800 00000000C9 D3C2D6C2C9 C5F00100
+          ILBOBII0  00010E2C  0001120000 0000000262 0001C001C0 0000008800 00010000
+          ILBOBII1  00010EB1  0001120000 0000000242 0001C001C0 0000148800 00000000C9 D3C2D6C2C9 C9F00100
+          ILBOBII2  00010EB1  0001120000 0000000242 0001C001C0 0000308800 00000000C9 D3C2D6C2C9 C9F00100
+          ILBOCKP0  0001152C  0001190000 0000000372 0000780078 0000008800 00010000
+          ILBOCLS0  00011B2C  0001200000 0000000372 0000880088 0000008800 00010000
+          ILBODCI0  0001222C  0001260000 0000000262 0002D000A8 0000008800 00010000
+          ILBODCI1  000122B1  0001260000 0000000242 0002D000A8 0000148800 00000000C9 D3C2D6C4C3 C9F00100
+          ILBODSP0  00012C2C  0001310000 0000000262 0007000400 0000008800 00010000
+          ILBODTE0  0001362C  00013A0000 0000000372 0001300130 0000008800 00010000
+          ILBODTE1  000136B1  00013A0000 0000000352 0001300130 00000A8800 00000000C9 D3C2D6C4E3 C5F00100
+          ILBOEFL0  00013C2C  0001400000 0000000262 0004280200 0000008800 00010000
+          ILBOEFL1  00013CB1  0001400000 0000000242 0004280200 0000548800 00000000C9 D3C2D6C5C6 D3F00100
+          ILBOEFL2  00013CB1  0001400000 0000000242 0004280200 0000788800 00000000C9 D3C2D6C5C6 D3F00100
+          ILBOERR0  0001462C  0002010000 0000000262 0002300230 0000008800 00010000
+          ILBOERR1  000146B1  0002010000 0000000262 0002300230 0000008800 00000000C9 D3C2D6C5D9 D9F00100
+          ILBOERR2  000146B1  0002010000 0000000242 0002300230 0000428800 00000000C9 D3C2D6C5D9 D9F00100
+          ILBOERR3  000146B1  0002010000 0000000242 0002300230 0000968800 00000000C9 D3C2D6C5D9 D9F00100
+          ILBOERR4  000146B1  0002010000 0000000242 0002300230 0000708800 00000000C9 D3C2D6C5D9 D9F00100
+          ILBOERR5  000146B1  0002010000 0000000242 0002300230 0000FE8800 00000000C9 D3C2D6C5D9 D9F00100
+          ILBOERR6  000146B1  0002010000 0000000242 0002300230 00012A8800 00000000C9 D3C2D6C5D9 D9F00100
+          ILBOETB0  0002042C  0002080000 0000000372 0001000100 0000008800 00010000
+          ILBOFPW0  00020A2C  00020E0000 0000000372 0003180318 0000008800 00010000
+          ILBOGPW0  0002102C  0002140000 0000000372 0000480048 0000008800 00010000
+          ILBOIDB0  0002162C  00021A0000 0000000372 0000680068 0000008800 00010000
+          ILBOIDB1  000216B1  00021A0000 0000000352 0000680068 00001C8800 00000000C9 D3C2D6C9C4 C2F00100
+          ILBOIDR0  00021C2C  0002200000 0000000272 0006780400 0000008800 00010000
+          ILBOIDT0  0002242C  0002280000 0000000372 0002A802A8 0000008800 00010000
+          ILBOIFB0  00022A2C  00022E0000 0000000372 0001200120 0000008800 00010000
+          ILBOIFB1  00022AB1  00022E0000 0000000352 0001200120 0000088800 00000000C9 D3C2D6C9C6 C2F00100
+          ILBOIFB2  00022AB1  00022E0000 0000000352 0001200120 0000188800 00000000C9 D3C2D6C9C6 C2F00100
+          ILBOIFD0  0002302C  0002340000 0000000262 0002180090 0000008800 00010000
+          ILBOIFD1  000230B1  0002340000 0000000242 0002180090 00000E8800 00000000C9 D3C2D6C9C6 C4F00100
+          ILBOITB0  00023A2C  00023E0000 0000000372 0001000100 0000008800 00010000
+          ILBOIVL0  0002402C  0002440000 0000000372 0000400040 0000008800 00010000
+          ILBOMVL0  0002462C  0003010000 0000000372 0000680068 0000008800 00010000
+          ILBOPTV0  0003032C  0003070000 0000000372 0000780078 0000008800 00010000
+          ILBOPTV1  000303B1  0003070000 0000000372 0000780078 0000008800 00000000C9 D3C2D6D7E3 E5F00100
+          ILBOPTV2  000303B1  0003070000 0000000352 0000780078 0000188800 00000000C9 D3C2D6D7E3 E5F00100
+          ILBOSAMR  0003092C  00030D0000 0000000372 0001480148 0000008800 00010000
+          ILBOSAM0  00030F2C  0003140000 0000000262 0004F00400 0000008800 00010000
+          ILBOSCH0  0003192C  00031D0000 0000000372 0002E002E0 0000008800 00010000                              SYSTEMS SUPPORT UTILITIES---IEHLIST                               PAGE    2
+
+
+          ILBOSGM0  00031F2C  0003240000 0000000372 0001300130 0000008800 00010000
+          ILBOSGM1  00031FB1  0003240000 0000000352 0001300130 0000048800 00000000C9 D3C2D6E2C7 D4F00100
+          ILBOSGM2  00031FB1  0003240000 0000000352 0001300130 0000088800 00000000C9 D3C2D6E2C7 D4F00100
+          ILBOSPA0  0003262C  00032A0000 0000000372 0002D802D8 0000008800 00010000
+          ILBOSRT0  00032C2C  0003300000 0000000262 0003D803D8 0000008800 00010000
+          ILBOSTI0  0003332C  0003370000 0000000372 0002480248 0000008800 00010000
+          ILBOSTP0  0003392C  00033D0000 0000000372 0000380038 0000008800 00010000
+          ILBOSTP1  000339B1  00033D0000 0000000352 0000380038 0000168800 00000000C9 D3C2D6E2E3 D7F00100
+          ILBOTEF0  00033F2C  0003430000 0000000262 0003D00248 0000008800 00010000
+          ILBOTEF1  00033FB1  0003430000 0000000242 0003D00248 00000E8800 00000000C9 D3C2D6E3C5 C6F00100
+          ILBOTEF2  00033FB1  0003430000 0000000242 0003D00248 0000488800 00000000C9 D3C2D6E3C5 C6F00100
+          ILBOTEF3  00033FB1  0003430000 0000000242 0003D00248 0000C08800 00000000C9 D3C2D6E3C5 C6F00100
+          ILBOTRN0  0004012C  0004050000 0000000372 0001000100 0000008800 00010000
+          ILBOUTB0  0004072C  00040B0000 0000000372 0001000100 0000008800 00010000
+          ILBOVCO0  00040D2C  0004110000 0000000372 0001F801F8 0000008800 00010000
+          ILBOVMO0  0004132C  0004180000 0000000372 0002100210 0000008800 00010000
+          ILBOVMO1  000413B1  0004180000 0000000352 0002100210 00000C8800 00000000C9 D3C2D6E5D4 D6F00100
+          ILBOVTR0  00041A2C  00041E0000 0000000372 0000800080 0000008800 00010000
+          ILBOWTB0  0004202C  0004240000 0000000372 0001000100 0000008800 00010000
+          ILBOXDI0  0004262C  00042A0000 0000000372 0001080108 0000008800 00010000
+          ILBOXMU0  00042C2C  0004300000 0000000372 0000B000B0 0000008800 00010000
+          ILBOXPR0  0004322C  0004360000 0000000262 0002580258 0000008800 00010000
+
+OF THE 00030 DIRECTORY BLOCKS ALLOCATED TO THIS PDS, 00017 ARE(IS) COMPLETELY UNUSED                         CCCCCCCCCC   BBBBBBBBBBB   LL            BBBBBBBBBBB    AAAAAAAAAA    SSSSSSSSSS   EEEEEEEEEEEE
+                       CCCCCCCCCCCC  BBBBBBBBBBBB  LL            BBBBBBBBBBBB  AAAAAAAAAAAA  SSSSSSSSSSSS  EEEEEEEEEEEE
+                      CC        CC  BB        BB  LL            BB        BB  AA        AA  SS        SS  EE
+                     CC            BB        BB  LL            BB        BB  AA        AA  SS            EE
+                    CC            BB       BB   LL            BB       BB   AA        AA  SSS           EE
+                   CC            BBBBBBBBBB    LL            BBBBBBBBBB    AAAAAAAAAAAA   SSSSSSSSS    EEEEEEEE
+                  CC            BBBBBBBBBB    LL            BBBBBBBBBB    AAAAAAAAAAAA    SSSSSSSSS   EEEEEEEE
+                 CC            BB       BB   LL            BB       BB   AA        AA           SSS  EE
+                CC            BB        BB  LL            BB        BB  AA        AA            SS  EE
+               CC        CC  BB        BB  LL            BB        BB  AA        AA  SS        SS  EE
+              CCCCCCCCCCCC  BBBBBBBBBBBB  LLLLLLLLLLLL  BBBBBBBBBBBB  AA        AA  SSSSSSSSSSSS  EEEEEEEEEEEE
+              CCCCCCCCCC   BBBBBBBBBBB   LLLLLLLLLLLL  BBBBBBBBBBB   AA        AA   SSSSSSSSSS   EEEEEEEEEEEE
+
+
+
+                    JJJJJJJJJJ   3333333333        11       555555555555   6666666666                 ZZZZZZZZZZZZ
+                    JJJJJJJJJJ  333333333333      111       555555555555  666666666666                ZZZZZZZZZZZZ
+                        JJ      33        33     1111       55            66        66                         ZZ
+                        JJ                33       11       55            66                                  ZZ
+                        JJ                33       11       55            66                                 ZZ
+                        JJ             3333        11       555555555     66666666666                    ZZZZZZZ
+                        JJ             3333        11       5555555555    666666666666                   ZZZZZZZ
+                        JJ                33       11                55   66        66                    ZZ
+                  JJ    JJ                33       11                 55  66        66                   ZZ
+                  JJ    JJ      33        33       11                 55  66        66                  ZZ
+                  JJJJJJJJ      333333333333   1111111111   555555555555  666666666666                 ZZZZZZZZZZZ
+                   JJJJJJ        3333333333    1111111111   55555555555    6666666666                 ZZZZZZZZZZZZ
+
+
+

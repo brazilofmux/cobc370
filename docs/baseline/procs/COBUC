@@ -1,0 +1,10 @@
+//COBUC PROC SOUT='*'                                                   00000100
+//COB  EXEC  PGM=IKFCBL00,                                              00000200
+//           PARM='DECK,NOLOAD,SUPMAP,SIZE=2048K,BUF=1024K'             00000300
+//SYSPRINT  DD SYSOUT=&SOUT                                             00000400
+//SYSPUNCH DD SYSOUT=B                                                  00000500
+//SYSUT1 DD  UNIT=SYSDA,SPACE=(460,(700,100))                           00000600
+//SYSUT2 DD  UNIT=SYSDA,SPACE=(460,(700,100))                           00000700
+//SYSUT3 DD  UNIT=SYSDA,SPACE=(460,(700,100))                           00000800
+//SYSUT4 DD  UNIT=SYSDA,SPACE=(460,(700,100))                           00000900
+                                                                                        PAGE 000
