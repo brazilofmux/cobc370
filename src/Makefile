@@ -13,11 +13,17 @@ test: cobc370
 	@! awk 'length($$0)>72' tests/*.asm | grep . || (echo "COLUMN VIOLATION"; exit 1)
 	@echo "--- STOP RUN alone must not drag in the runtime ---"
 	@! grep -q 'COBRT' tests/stoprun.asm || (echo "runtime emitted needlessly"; exit 1)
-	@echo "--- unimplemented constructs must be diagnosed ---"
-	@./cobc370 tests/bad.cbl -o /dev/null 2>&1 | grep -q 'not implemented' \
-	   && echo "  MOVE          diagnosed" || (echo "MOVE not diagnosed"; exit 1)
-	@./cobc370 tests/baddisp.cbl -o /dev/null 2>&1 | grep -q 'not implemented' \
-	   && echo "  DISPLAY ident diagnosed" || (echo "DISPLAY ident not diagnosed"; exit 1)
+	@echo "--- bad input must be rejected, not silently accepted ---"
+	@# Assert a nonzero exit rather than matching wording, and use fixtures
+	@# that cannot become valid as coverage grows: an undeclared name and a
+	@# duplicate name are errors forever, and ALTER has zero uses in the
+	@# corpus and is not going to be implemented. Twice now a fixture went
+	@# stale because the next slice implemented the very thing it tested.
+	@for t in bad-undeclared bad-verb bad-duplicate; do \
+	   if ./cobc370 tests/$$t.cbl -o /dev/null >/dev/null 2>&1; then \
+	     echo "  $$t ACCEPTED -- it should have been rejected"; exit 1; \
+	   else echo "  $$t rejected"; fi; \
+	 done
 
 # The oracle. -std=mvs is not optional: GnuCOBOL's default dialect renders a
 # decimal point for PIC 9(7)V99, which COBOL-74 does not -- V is implied, not

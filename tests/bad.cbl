@@ -1,6 +1,0 @@
-000100 IDENTIFICATION DIVISION.
-000200 PROGRAM-ID. BADPROG.
-000300 PROCEDURE DIVISION.
-000400*    MOVE is not implemented yet; this must be diagnosed, not ignored.
-000500     MOVE WS-A TO WS-B.
-000600     STOP RUN.
