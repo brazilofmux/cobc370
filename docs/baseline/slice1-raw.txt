@@ -1,0 +1,490 @@
+                                                J E S 2   J O B   L O G
+
+
+19.20.37 JOB 3172  IEF677I WARNING MESSAGE(S) FOR JOB HELLO    ISSUED
+19.20.37 JOB 3172  $HASP373 HELLO    STARTED - INIT  1 - CLASS A - SYS TK5R
+19.20.37 JOB 3172  IEF403I HELLO - STARTED - TIME=19.20.37
+19.20.37 JOB 3172  IEFACTRT - Stepname  Procstep  Program   Retcode
+19.20.37 JOB 3172  HELLO      ASM       ASM       IFOX00    RC= 0000
+19.20.37 JOB 3172  HELLO      ASM       LKED      IEWL      RC= 0000
+19.20.37 JOB 3172  HELLO      ASM       GO        PGM=*.DD  RC= 0000
+19.20.37 JOB 3172  IEF404I HELLO - ENDED - TIME=19.20.37
+19.20.37 JOB 3172  $HASP395 HELLO    ENDED
+
+
+------ JES2 JOB STATISTICS ------
+
+
+ 25 AUG 26 JOB EXECUTION DATE
+
+
+       120 CARDS READ
+
+
+       418 SYSOUT PRINT RECORDS
+
+
+        15 SYSOUT PUNCH RECORDS
+
+
+      0.00 MINUTES EXECUTION TIME
+    1     //HELLO    JOB (5161A020,1A11),'SLICE 1 DISPLAY',                       JOB 3172
+          //             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+          //             USER=HERC01,PASSWORD=
+          ***
+          *** Slice 1: DISPLAY served by our own COBRT runtime reaching QSAM
+          *** directly. Nothing from SYS1.COBLIB is linked -- LKED runs with NCAL,
+          *** so an unresolved ILBO reference would show up as an error, not be
+          *** quietly satisfied from a library.
+          ***
+    2     //ASM      EXEC ASMFCLG
+    3     XXASMFCLG  PROC MAC='SYS1.MACLIB',MAC1='SYS1.MACLIB',                   00000100
+          XX         MAC2='SYS1.MACLIB',MAC3='SYS1.MACLIB',SOUT='*'               00000200
+    4     XXASM      EXEC PGM=IFOX00,PARM=OBJ,REGION=128K                         00000300
+    5     XXSYSLIB   DD   DSN=&MAC,DISP=SHR                                       00000400
+    6     XX         DD   DSN=&MAC1,DISP=SHR                                      00000500
+    7     XX         DD   DSN=&MAC2,DISP=SHR                                      00000600
+    8     XX         DD   DSN=&MAC3,DISP=SHR                                      00000700
+    9     XXSYSUT1   DD   DSN=&&SYSUT1,UNIT=SYSSQ,SPACE=(1700,(600,100)),         00000800
+          XX             SEP=(SYSLIB)                                             00000900
+   10     XXSYSUT2   DD   DSN=&&SYSUT2,UNIT=SYSSQ,SPACE=(1700,(300,50)),          00001000
+          XX             SEP=(SYSLIB,SYSUT1)                                      00001100
+   11     XXSYSUT3   DD   DSN=&&SYSUT3,UNIT=SYSSQ,SPACE=(1700,(300,50))           00001200
+   12     XXSYSPRINT DD   SYSOUT=&SOUT,DCB=BLKSIZE=1089                           00001300
+   13     XXSYSPUNCH DD   SYSOUT=B                                                00001400
+   14     XXSYSGO    DD   DSN=&&OBJSET,UNIT=SYSSQ,SPACE=(80,(200,50)),            00001500
+          XX             DISP=(MOD,PASS)                                          00001600
+   15     //ASM.SYSIN DD  *
+   16     XXLKED     EXEC PGM=IEWL,PARM=(XREF,LET,LIST,NCAL),REGION=128K,         00001700
+          XX             COND=(8,LT,ASM)                                          00001800
+   17     XXSYSLIN   DD   DSN=&&OBJSET,DISP=(OLD,DELETE)                          00001900
+   18     XX         DD   DDNAME=SYSIN                                            00002000
+   19     XXSYSLMOD  DD   DSN=&&GOSET(GO),UNIT=SYSDA,SPACE=(1024,(50,20,1)),      00002100
+          XX             DISP=(MOD,PASS)                                          00002200
+   20     XXSYSUT1   DD   DSN=&&SYSUT1,UNIT=(SYSDA,SEP=(SYSLIN,SYSLMOD)),         00002300
+          XX             SPACE=(1024,(50,20))                                     00002400
+   21     XXSYSPRINT DD   SYSOUT=&SOUT                                            00002500
+   22     XXGO       EXEC PGM=*.LKED.SYSLMOD,COND=((8,LT,ASM),(4,LT,LKED))        00002600
+   23     //GO.SYSOUT DD  SYSOUT=Z
+ STMT NO. MESSAGE
+-
+    5     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    6     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    7     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    8     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+   12     IEF653I SUBSTITUTION JCL - SYSOUT=*,DCB=BLKSIZE=1089
+   21     IEF653I SUBSTITUTION JCL - SYSOUT=*
+   22     IEF686I DDNAME REFERRED TO ON DDNAME KEYWORD IN PRIOR STEP WAS NOT RESOLVED
+IEF236I ALLOC. FOR HELLO ASM ASM
+IEF237I 390  ALLOCATED TO SYSLIB
+IEF237I 390  ALLOCATED TO
+IEF237I 390  ALLOCATED TO
+IEF237I 390  ALLOCATED TO
+IEF237I 292  ALLOCATED TO SYSUT1
+IEF237I 290  ALLOCATED TO SYSUT2
+IEF237I 291  ALLOCATED TO SYSUT3
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I JES2 ALLOCATED TO SYSPUNCH
+IEF237I 293  ALLOCATED TO SYSGO
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF142I HELLO ASM ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS1.MACLIB                                  KEPT          *-------23
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS26237.T192037.RA000.HELLO.SYSUT1          DELETED       *------167
+IEF285I   VOL SER NOS= WORK03.
+IEF285I   SYS26237.T192037.RA000.HELLO.SYSUT2          DELETED       *-------33
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   SYS26237.T192037.RA000.HELLO.SYSUT3          DELETED       *--------8
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   JES2.JOB03172.SO0102                         SYSOUT
+IEF285I   JES2.JOB03172.SO0103                         SYSOUT
+IEF285I   SYS26237.T192037.RA000.HELLO.OBJSET          PASSED        *-------15
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   JES2.JOB03172.SI0101                         SYSIN
+IEF373I STEP /ASM     / START 26237.1920
+IEF374I STEP /ASM     / STOP  26237.1920 CPU    0MIN 00.05SEC SRB    0MIN 00.01SEC VIRT   128K SYS   200K
+************************************************************************************************************************************
+*     1. Jobstep of job: HELLO       Stepname: ASM         Program name: IFOX00     Executed on 25.08.26 from 19.20.37 to 19.20.37 *
+*         elapsed time  00:00:00,08                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,06               Virtual Storage used:    128K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,06   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:    107                                                                           *
+*     390......23 390.......0 390.......0 390.......0 292.....167 290......33 291.......8 DMY.......0 DMY.......0 293......15      *
+*     DMY.......0                                                                                                                  *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,10                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR HELLO LKED ASM
+IEF237I 293  ALLOCATED TO SYSLIN
+IEF237I DMY  ALLOCATED TO
+IEF237I 291  ALLOCATED TO SYSLMOD
+IEF237I 290  ALLOCATED TO SYSUT1
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF142I HELLO LKED ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26237.T192037.RA000.HELLO.OBJSET          DELETED       *-------16
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   SYS26237.T192037.RA000.HELLO.GOSET           PASSED        *-------10
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26237.T192037.RA000.HELLO.SYSUT1          DELETED       *--------0
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   JES2.JOB03172.SO0104                         SYSOUT
+IEF373I STEP /LKED    / START 26237.1920
+IEF374I STEP /LKED    / STOP  26237.1920 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT   128K SYS   200K
+************************************************************************************************************************************
+*     2. Jobstep of job: HELLO       Stepname: LKED        Program name: IEWL       Executed on 25.08.26 from 19.20.37 to 19.20.37 *
+*         elapsed time  00:00:00,02                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:    128K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      0                                                                           *
+*     293......16 DMY.......0 291......10 290.......0 DMY.......0                                                                  *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR HELLO GO ASM
+IEF237I 291  ALLOCATED TO PGM=*.DD
+IEF237I JES2 ALLOCATED TO SYSOUT
+IEF142I HELLO GO ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26237.T192037.RA000.HELLO.GOSET           KEPT          *--------0
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   JES2.JOB03172.SO0105                         SYSOUT
+IEF373I STEP /GO      / START 26237.1920
+IEF374I STEP /GO      / STOP  26237.1920 CPU    0MIN 00.00SEC SRB    0MIN 00.00SEC VIRT     8K SYS   192K
+IEF237I 291  ALLOCATED TO SYS00001
+IEF285I   SYS26237.T192037.RA000.HELLO.R0000001        KEPT          *--------0
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26237.T192037.RA000.HELLO.GOSET           DELETED
+IEF285I   VOL SER NOS= WORK02.
+IEF375I  JOB /HELLO   / START 26237.1920
+IEF376I  JOB /HELLO   / STOP  26237.1920 CPU    0MIN 00.06SEC SRB    0MIN 00.01SEC
+                                               EXTERNAL SYMBOL DICTIONARY                                      PAGE    1
+
+
+SYMBOL   TYPE  ID   ADDR  LENGTH LDID                                                            ASM 0201 19.20 08/25/26
+
+HELLO     SD  0001 000000 0000F0
+COBDISP   ER  0002
+COBTERM   ER  0003
+COBRT     SD  0004 0000F0 00021C
+COBDISP   LD       0000F0        0004
+COBTERM   LD       000168        0004                                                                                                               PAGE    2
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 19.20 08/25/26
+
+                                      1 *---------------------------------------------------------------
+                                      2 * Generated by cobc from tests/hello.cbl
+                                      3 * Standard OS/360 entry linkage. SYS1.COBLIB is never referenced.
+                                      4 * DISPLAY is served by our own COBRT runtime, below.
+                                      5 *---------------------------------------------------------------
+000000                                6 HELLO    CSECT
+000000 90EC D00C      0000C           7          STM   14,12,12(13)        save caller's registers
+000004 05C0                           8          BALR  12,0                establish addressability
+                            00006     9          USING *,12
+000006 50D0 C0A6      000AC          10          ST    13,SAVEAREA+4       backward chain to caller
+00000A 41B0 C0A2      000A8          11          LA    11,SAVEAREA
+00000E 50BD 0008      00008          12          ST    11,8(13)            forward chain from caller
+000012 18DB                          13          LR    13,11               our save area is now current
+                                     14 * DISPLAY 'HELLO FROM COBC. NO SYS1.COBLIB HERE.'
+000014 4110 C03E      00044          15          LA    1,PARM0001
+000018 58F0 C036      0003C          16          L     15,VDISP
+00001C 05EF                          17          BALR  14,15
+                                     18 * DISPLAY 'SECOND LINE, WITH A QUOTE: DON'T PANIC.'
+00001E 4110 C06E      00074          19          LA    1,PARM0002
+000022 58F0 C036      0003C          20          L     15,VDISP
+000026 05EF                          21          BALR  14,15
+                                     22 * STOP RUN
+000028 58F0 C03A      00040          23          L     15,VTERM            close anything the runtime opened
+00002C 05EF                          24          BALR  14,15
+00002E 58DD 0004      00004          25          L     13,4(13)            restore caller's save area
+000032 98EC D00C      0000C          26          LM    14,12,12(13)        restore caller's registers
+000036 1BFF                          27          SR    15,15               return code 0
+000038 07FE                          28          BR    14                  return to caller
+00003A 0000
+00003C 00000000                      29 VDISP    DC    V(COBDISP)
+000040 00000000                      30 VTERM    DC    V(COBTERM)
+000044 0000004C                      31 PARM0001 DC    A(LIT0001)
+000048 80000072                      32          DC    X'80',AL3(LEN0001)  last parameter
+00004C C8C5D3D3D640C6D9              33 LIT0001  DC    C'HELLO FROM COBC. NO SYS1.COBLIB HERE.'
+000071 00
+000072 0025                          34 LEN0001  DC    H'37'
+000074 0000007C                      35 PARM0002 DC    A(LIT0002)
+000078 800000A4                      36          DC    X'80',AL3(LEN0002)  last parameter
+00007C E2C5C3D6D5C440D3              37 LIT0002  DC    C'SECOND LINE, WITH A QUOTE: DON''T PANIC.'
+0000A3 00
+0000A4 0027                          38 LEN0002  DC    H'39'
+0000A8                               39 SAVEAREA DS    18F
+                                     40 *---------------------------------------------------------------
+                                     41 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
+                                     42 * DISPLAY reaches SYSOUT through QSAM directly, which is the
+                                     43 * same access-method path IKFCBL00 uses for its own file I/O.
+                                     44 * Not reentrant: MVS 3.8j batch does not require it.
+                                     45 *---------------------------------------------------------------
+0000F0                               46 COBRT    CSECT
+                                     47          ENTRY COBDISP,COBTERM
+                                     48 *
+                                     49 * COBDISP -- write one line to SYSOUT.
+                                     50 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
+                                     51 *
+0000F0 90EC D00C      0000C          52 COBDISP  STM   14,12,12(13)                                                                                                               PAGE    3
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 19.20 08/25/26
+
+0000F4 05C0                          53          BALR  12,0
+                            000F6    54          USING *,12
+0000F6 50D0 C12A      00220          55          ST    13,RTSAVE1+4
+0000FA 41B0 C126      0021C          56          LA    11,RTSAVE1
+0000FE 50BD 0008      00008          57          ST    11,8(13)
+000102 18DB                          58          LR    13,11
+000104 5820 1000      00000          59          L     2,0(0,1)            A(text)
+000108 5830 1004      00004          60          L     3,4(0,1)            A(length)
+00010C 4840 3000      00000          61          LH    4,0(0,3)            length
+000110 9501 C0A8      0019E          62          CLI   RTOPEN,X'01'        already open?
+000114 4780 C030      00126          63          BE    COBD010
+                                     64          OPEN  (RTDCB,OUTPUT)
+000118                               65+         CNOP  0,4                               ALIGN LIST TO FULLWORD 01740001
+000118 4510 C02A      00120          66+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR. 01780000
+00011C 8F                            67+         DC    AL1(143)                          OPTION BYTE            01900000
+00011D 0002AC                        68+         DC    AL3(RTDCB)                        DCB ADDRESS            01920000
+000120 0A13                          69+         SVC   19                                ISSUE OPEN SVC         04000000
+000122 9201 C0A8      0019E          70          MVI   RTOPEN,X'01'
+000126 9240 C0AC      001A2          71 COBD010  MVI   RTLINE,C' '         ASA: single space
+00012A D277 C0AD C0AC 001A3 001A2    72          MVC   RTLINE+1(120),RTLINE  blank the text area
+000130 1244                          73          LTR   4,4
+000132 47D0 C052      00148          74          BNP   COBD020             empty: emit a blank line
+000136 4940 C0AA      001A0          75          CH    4,RTMAX
+00013A 47D0 C04C      00142          76          BNH   COBD015
+00013E 4840 C0AA      001A0          77          LH    4,RTMAX             truncate at the line width
+000142 0640                          78 COBD015  BCTR  4,0                 EX wants length-1
+000144 4440 C06C      00162          79          EX    4,COBDMVC
+                                     80 COBD020  PUT   RTDCB,RTLINE
+000148 4110 C1B6      002AC          81+COBD020  LA    1,RTDCB                           LOAD PARAMETER REG 1   01900002
+00014C 4100 C0AC      001A2          82+         LA    0,RTLINE                          LOAD PARAMETER REG 0   02500002
+000150 58F0 1030      00030          83+         L     15,48(0,1)               LOAD PUT ROUTINE ADDR           00550000
+000154 05EF                          84+         BALR  14,15                    LINK TO PUT ROUTINE             00600000
+000156 58DD 0004      00004          85          L     13,4(13)
+00015A 98EC D00C      0000C          86          LM    14,12,12(13)
+00015E 1BFF                          87          SR    15,15
+000160 07FE                          88          BR    14
+000162 D200 C0AD 2000 001A3 00000    89 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
+                                     90 *
+                                     91 * COBTERM -- close SYSOUT if COBDISP ever opened it.
+                                     92 *
+000168 90EC D00C      0000C          93 COBTERM  STM   14,12,12(13)
+00016C 05C0                          94          BALR  12,0
+                            0016E    95          USING *,12
+00016E 50D0 C0FA      00268          96          ST    13,RTSAVE2+4
+000172 41B0 C0F6      00264          97          LA    11,RTSAVE2
+000176 50BD 0008      00008          98          ST    11,8(13)
+00017A 18DB                          99          LR    13,11
+00017C 9501 C030      0019E         100          CLI   RTOPEN,X'01'
+000180 4770 C024      00192         101          BNE   COBT010
+                                    102          CLOSE (RTDCB)
+000184                              103+         CNOP  0,4                               ALIGN LIST TO FULLWORD 02420002
+000184 4510 C01E      0018C         104+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR  02460002
+000188 80                           105+         DC    AL1(128)                          OPTION BYTE            02580000
+000189 0002AC                       106+         DC    AL3(RTDCB)                        DCB ADDRESS            02600000
+00018C 0A14                         107+         SVC   20                                ISSUE CLOSE SVC        01640000                                                                                                               PAGE    4
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 19.20 08/25/26
+
+00018E 9200 C030      0019E         108          MVI   RTOPEN,X'00'
+000192 58DD 0004      00004         109 COBT010  L     13,4(13)
+000196 98EC D00C      0000C         110          LM    14,12,12(13)
+00019A 1BFF                         111          SR    15,15
+00019C 07FE                         112          BR    14
+                                    113 *
+00019E 00                           114 RTOPEN   DC    X'00'
+00019F 00
+0001A0 0078                         115 RTMAX    DC    H'120'
+0001A2 4040404040404040             116 RTLINE   DC    CL121' '            ASA byte + 120 columns
+00021C                              117 RTSAVE1  DS    18F
+000264                              118 RTSAVE2  DS    18F
+                                    119 RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,            X
+                                                       LRECL=121,BLKSIZE=121
+
+
+                                    121+*                       DATA CONTROL BLOCK                              22770000
+                                    122+*                                                                       22860000
+0002AC                              123+RTDCB    DC    0F'0'                   ORIGIN ON WORD BOUNDARY          22914000
+
+                                    125+*                       DIRECT ACCESS DEVICE INTERFACE                  27360000
+
+0002AC 0000000000000000             127+         DC    BL16'0'                  FDAD,DVTBL                      27540000
+0002BC 00000000                     128+         DC    A(0)                     KEYLE,DEVT,TRBAL                27720000
+
+                                    130+*                       COMMON ACCESS METHOD INTERFACE                  48690000
+
+0002C0 00                           132+         DC    AL1(0)                  BUFNO                            49050000
+0002C1 000001                       133+         DC    AL3(1)                  BUFCB                            54720000
+0002C4 0000                         134+         DC    AL2(0)             BUFL                                  55170000
+0002C6 4000                         135+         DC    BL2'0100000000000000'                                   *55800000
+                                       +                                                 DSORG                  55890000
+0002C8 00000001                     136+         DC    A(1)                     IOBAD                           56340000
+
+                                    138+*                       FOUNDATION EXTENSION                            56610000
+
+0002CC 00                           140+         DC    BL1'00000000'                  BFTEK,BFLN,HIARCHY        59850000
+0002CD 000001                       141+         DC    AL3(1)                  EODAD                            65970000
+0002D0 94                           142+         DC    BL1'10010100'                                           *66150000
+                                       +                                       RECFM                            66240000
+0002D1 000000                       143+         DC    AL3(0)                  EXLST                            66330000
+
+                                    145+*                       FOUNDATION BLOCK                                66690000
+
+0002D4 E2E8E2D6E4E34040             147+         DC    CL8'SYSOUT'             DDNAME                           66870000
+0002DC 02                           148+         DC    BL1'00000010'           OFLGS                            68220000
+0002DD 00                           149+         DC    BL1'00000000'                          IFLG              68310000
+0002DE 0050                         150+         DC    BL2'0000000001010000'                                   *68400000
+                                       +                                                                       *68490000
+                                       +                                       MACR                             68580000
+
+                                    152+*                       BSAM-BPAM-QSAM INTERFACE                        74430000
+
+0002E0 00                           154+         DC    BL1'00000000'                                           *74610000
+                                       +                                                                   RER1 74700000                                                                                                               PAGE    5
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 19.20 08/25/26
+
+0002E1 000001                       155+         DC    AL3(1)                  CHECK, GERR, PERR                74790000
+0002E4 00000001                     156+         DC    A(1)                    SYNAD                            74880000
+0002E8 0000                         157+         DC    H'0'                    CIND1, CIND2                     74970000
+0002EA 0079                         158+         DC    AL2(121)                BLKSIZE                          75240000
+0002EC 00000000                     159+         DC    F'0'                    WCPO, WCPL, OFFSR, OFFSW         75870000
+0002F0 00000001                     160+         DC    A(1)                    IOBA                             75960000
+0002F4 00                           161+         DC    AL1(0)                  NCP                              76050000
+0002F5 000001                       162+         DC    AL3(1)                  EOBR, EOBAD                      76140000
+
+                                    164+*                            QSAM INTERFACE                             81450000
+
+0002F8 00000001                     166+         DC    A(1)                     RECAD                           81630000
+0002FC 0000                         167+         DC    H'0'                    QSWS                             81810000
+0002FE 0079                         168+         DC    AL2(121)       LRECL                                     80730000
+000300 00                           169+         DC    BL1'00000000'           EROPT                            82530000
+000301 000001                       170+         DC    AL3(1)                  CNTRL                            82620000
+000304 00000000                     171+         DC    F'0'                    PRECL                            82710000
+000308 00000001                     172+         DC    A(1)                    EOB                              82800000
+                                    173          END                                                  RELOCATION DICTIONARY                                        PAGE    6
+
+
+POS.ID   REL.ID   FLAGS   ADDRESS                                                                ASM 0201 19.20 08/25/26
+
+ 0001     0001      0C     000044
+ 0001     0001      08     000049
+ 0001     0001      0C     000074
+ 0001     0001      08     000079
+ 0001     0002      1C     00003C
+ 0001     0003      1C     000040
+ 0004     0004      08     00011D
+ 0004     0004      08     000189
+                                                  CROSS-REFERENCE                                              PAGE    7
+
+
+SYMBOL    LEN   VALUE   DEFN    REFERENCES                                                       ASM 0201 19.20 08/25/26
+
+COBDISP  00004 000000F0 00052  00047
+COBDMVC  00006 00000162 00089  00079
+COBD010  00004 00000126 00071  00063
+COBD015  00002 00000142 00078  00076
+COBD020  00004 00000148 00081  00074
+COBTERM  00004 00000168 00093  00047
+COBT010  00004 00000192 00109  00101
+LEN0001  00002 00000072 00034  00032
+LEN0002  00002 000000A4 00038  00036
+LIT0001  00037 0000004C 00033  00031
+LIT0002  00039 0000007C 00037  00035
+PARM0001 00004 00000044 00031  00015
+PARM0002 00004 00000074 00035  00019
+RTDCB    00004 000002AC 00123  00068 00081 00106
+RTLINE   00121 000001A2 00116  00071 00072 00072 00082 00089
+RTMAX    00002 000001A0 00115  00075 00077
+RTOPEN   00001 0000019E 00114  00062 00070 00100 00108
+RTSAVE1  00004 0000021C 00117  00055 00056
+RTSAVE2  00004 00000264 00118  00096 00097
+SAVEAREA 00004 000000A8 00039  00010 00011
+VDISP    00004 0000003C 00029  00016 00020
+VTERM    00004 00000040 00030  00023                                                  ASSEMBLER DIAGNOSTICS AND STATISTICS                         PAGE    8
+
+
+                                                                                                 ASM 0201 19.20 08/25/26
+
+NO STATEMENTS FLAGGED IN THIS ASSEMBLY
+HIGHEST SEVERITY WAS    0
+OPTIONS FOR THIS ASSEMBLY
+  ALIGN, ALOGIC, BUFSIZE(STD), DECK, ESD, FLAG(0), LINECOUNT(55), LIST, NOMCALL, YFLAG, WORKSIZE(2097152)
+  NOMLOGIC, NONUMBER, OBJECT, NORENT, RLD, NOSTMT, NOLIBMAC, NOTERMINAL, NOTEST, XREF(SHORT)
+  SYSPARM()
+WORK FILE BUFFER SIZE/NUMBER = 7678/ 1
+TOTAL RECORDS READ FROM SYSTEM INPUT        107
+TOTAL RECORDS READ FROM SYSTEM LIBRARY     3150
+TOTAL RECORDS PUNCHED                        15
+TOTAL RECORDS PRINTED                       247
+ F64-LEVEL LINKAGE EDITOR OPTIONS SPECIFIED XREF,LET,LIST,NCAL
+          DEFAULT OPTION(S) USED -  SIZE=(98304,55296)
+
+
+
+                                                CROSS REFERENCE TABLE
+
+
+  CONTROL SECTION                       ENTRY
+
+    NAME    ORIGIN  LENGTH                NAME   LOCATION     NAME   LOCATION     NAME   LOCATION     NAME   LOCATION
+  HELLO         00      F0
+  COBRT         F0     21C
+                                        COBDISP       F0    COBTERM      168
+
+
+
+  LOCATION  REFERS TO SYMBOL  IN CONTROL SECTION             LOCATION  REFERS TO SYMBOL  IN CONTROL SECTION
+       3C            COBDISP         COBRT                         40            COBTERM         COBRT
+
+ ENTRY ADDRESS       00
+
+ TOTAL LENGTH       310
+****GO        DOES NOT EXIST BUT HAS BEEN ADDED TO DATA SET
+AUTHORIZATION CODE IS         0.
+
+HELLO FROM COBC. NO SYS1.COBLIB HERE.
+SECOND LINE, WITH A QUOTE: DON'T PANIC.                                      HH        HH  EEEEEEEEEEEE  LL            LL            OOOOOOOOOOOO
+                                     HH        HH  EEEEEEEEEEEE  LL            LL            OOOOOOOOOOOO
+                                    HH        HH  EE            LL            LL            OO        OO
+                                   HH        HH  EE            LL            LL            OO        OO
+                                  HH        HH  EE            LL            LL            OO        OO
+                                 HHHHHHHHHHHH  EEEEEEEE      LL            LL            OO        OO
+                                HHHHHHHHHHHH  EEEEEEEE      LL            LL            OO        OO
+                               HH        HH  EE            LL            LL            OO        OO
+                              HH        HH  EE            LL            LL            OO        OO
+                             HH        HH  EE            LL            LL            OO        OO
+                            HH        HH  EEEEEEEEEEEE  LLLLLLLLLLLL  LLLLLLLLLLLL  OOOOOOOOOOOO
+                           HH        HH  EEEEEEEEEEEE  LLLLLLLLLLLL  LLLLLLLLLLLL  OOOOOOOOOOOO
+
+
+
+                    JJJJJJJJJJ   3333333333        11       777777777777   2222222222                 ZZZZZZZZZZZZ
+                    JJJJJJJJJJ  333333333333      111       77777777777   222222222222                ZZZZZZZZZZZZ
+                        JJ      33        33     1111       77      77    22        22                         ZZ
+                        JJ                33       11              77               22                        ZZ
+                        JJ                33       11             77                22                       ZZ
+                        JJ             3333        11            77                22                    ZZZZZZZ
+                        JJ             3333        11            77              22                      ZZZZZZZ
+                        JJ                33       11            77            22                         ZZ
+                  JJ    JJ                33       11            77          22                          ZZ
+                  JJ    JJ      33        33       11            77        22                           ZZ
+                  JJJJJJJJ      333333333333   1111111111        77       222222222222                 ZZZZZZZZZZZ
+                   JJJJJJ        3333333333    1111111111        77       222222222222                ZZZZZZZZZZZZ
+
+
+

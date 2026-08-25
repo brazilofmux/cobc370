@@ -3,14 +3,21 @@
  * Reads fixed-format COBOL on the Mac and emits S/370 assembler source, which
  * is assembled and link-edited on the guest. The compiler never runs on MVS.
  *
- * Slice 0 accepts exactly one program shape: the divisions, and a PROCEDURE
- * DIVISION whose only statement is STOP RUN. Anything else is a diagnostic
- * rather than silence -- the point of a first slice is to prove the toolchain
- * end to end, not to pretend at coverage.
+ * Accepts, so far: the divisions, and a PROCEDURE DIVISION containing
+ * DISPLAY of a nonnumeric literal and STOP RUN. Anything else is a diagnostic
+ * naming the limit rather than silence.
  *
- * Emitted code is the standard OS/360 entry linkage. It deliberately does NOT
- * call ILBOSTP1 or anything else in SYS1.COBLIB: this compiler brings its own
- * runtime, and for STOP RUN the runtime is nothing at all.
+ * Nothing in SYS1.COBLIB is ever referenced. The runtime is ours: COBDISP and
+ * COBTERM are emitted as a COBRT CSECT alongside the program, and they reach
+ * the operating system directly through the QSAM macros (OPEN/PUT/CLOSE), the
+ * same access-method path IKFCBL00 itself uses for file I/O. SYS1.MACLIB is
+ * used for those macros, which is the OS interface, not IBM's COBOL runtime.
+ *
+ * Runtime calling convention -- ours, but deliberately the OS one, so that
+ * COBOL CALL can use it unchanged later:
+ *   R1  -> parameter list, high-order bit set on the last entry
+ *   R13 -> caller's save area;  R14 return;  R15 entry / return code
+ *   COBDISP parameter list:  A(text), A(halfword length)
  *
  *   cc -O2 -o cobc cobc.c
  *   ./cobc prog.cbl -o prog.asm
@@ -58,6 +65,8 @@ static int src_fill(Src *s)
 
 typedef struct {
     char text[MAXTOK];
+    int  len;           /* significant for literals */
+    int  literal;       /* nonzero if this token was a quoted literal */
     int  line;
     int  eof;
 } Tok;
@@ -80,13 +89,30 @@ static void next(void)
         if (*src.p) break;
     }
     tok.line = src.line;
-    if (*src.p == '.') { src.p++; strcpy(tok.text, "."); return; }
+    tok.literal = 0;
+    if (*src.p == '.') { src.p++; strcpy(tok.text, "."); tok.len = 1; return; }
+    if (*src.p == '\'' || *src.p == '"') {
+        /* Nonnumeric literal. A doubled quote is one quote character; a period
+           inside a literal does not end the sentence. */
+        char q = *src.p++;
+        int i = 0;
+        for (;;) {
+            if (!*src.p) die("unterminated literal (literals may not span lines)");
+            if (*src.p == q) {
+                if (*(src.p + 1) == q) { src.p += 2; }
+                else { src.p++; break; }
+            } else { src.p++; }
+            if (i < MAXTOK - 1) tok.text[i++] = *(src.p - 1);
+        }
+        tok.text[i] = 0; tok.len = i; tok.literal = 1;
+        return;
+    }
     int i = 0;
     while (*src.p && !isspace((unsigned char)*src.p) && *src.p != '.') {
         if (i < MAXTOK-1) tok.text[i++] = (char)toupper((unsigned char)*src.p);
         src.p++;
     }
-    tok.text[i] = 0;
+    tok.text[i] = 0; tok.len = i;
 }
 
 static int is(const char *w) { return strcmp(tok.text, w) == 0; }
@@ -133,6 +159,10 @@ static void asm_comment(const char *text) { fprintf(out, "*%s\n", text); }
 
 static char progid[9];
 
+#define MAXDISP 256
+static struct { char text[MAXTOK]; int len; } disp[MAXDISP];
+static int ndisp;
+
 static void parse_program_id(void)
 {
     expect("IDENTIFICATION"); expect("DIVISION"); expect(".");
@@ -165,6 +195,21 @@ static void parse_procedure(void)
     expect("PROCEDURE"); expect("DIVISION"); expect(".");
     int stopped = 0;
     while (!tok.eof) {
+        if (is("DISPLAY")) {
+            next();
+            if (!tok.literal)
+                die("DISPLAY of an identifier is not implemented yet; "
+                    "this slice takes a nonnumeric literal");
+            if (ndisp >= MAXDISP) die("too many DISPLAY statements");
+            memcpy(disp[ndisp].text, tok.text, (size_t)tok.len + 1);
+            disp[ndisp].len = tok.len;
+            ndisp++;
+            next();
+            if (tok.literal)
+                die("DISPLAY of several operands is not implemented yet");
+            if (is(".")) next();
+            continue;
+        }
         if (is("STOP")) {
             next();
             if (!is("RUN")) die("slice 0 supports STOP RUN only "
@@ -178,8 +223,8 @@ static void parse_procedure(void)
         {
             char m[160];
             snprintf(m, sizeof m,
-                     "slice 0 supports only STOP RUN; found '%s'. "
-                     "This is a real limit, not a parse failure.", tok.text);
+                     "not implemented yet: '%s'. This slice supports "
+                     "DISPLAY of a literal and STOP RUN.", tok.text);
             die(m);
         }
     }
@@ -188,14 +233,116 @@ static void parse_procedure(void)
 
 /* ---- code generation -------------------------------------------------- */
 
+/* A continued statement: text padded so the continuation flag lands in
+   column 72, and the continuation itself starting in column 16. */
+static void asm_cont(const char *first, const char *second)
+{
+    char b[80];
+    if (strlen(first) > 71) die("internal: continuation line too long");
+    memset(b, ' ', sizeof b);
+    memcpy(b, first, strlen(first));
+    b[71] = 'X'; b[72] = 0;
+    fprintf(out, "%s\n", b);
+    fprintf(out, "               %s\n", second);
+}
+
+/* Assembler C'...' needs both quotes and ampersands doubled. */
+static void emit_literal(const char *label, const char *text, int len)
+{
+    char op[MAXTOK * 2 + 8];
+    int j = 0;
+    op[j++] = 'C'; op[j++] = '\'';
+    for (int i = 0; i < len; i++) {
+        if (text[i] == '\'' || text[i] == '&') op[j++] = text[i];
+        op[j++] = text[i];
+    }
+    op[j++] = '\''; op[j] = 0;
+    if (15 + (int)strlen(op) > 71)
+        die("literal too long for one assembler statement "
+            "(continuation of literals is not implemented yet)");
+    asm_line(label, "DC", op, "");
+}
+
+static void emit_runtime(void)
+{
+    asm_comment("---------------------------------------------------------------");
+    asm_comment(" COBRT -- our runtime. Nothing here is from SYS1.COBLIB.");
+    asm_comment(" DISPLAY reaches SYSOUT through QSAM directly, which is the");
+    asm_comment(" same access-method path IKFCBL00 uses for its own file I/O.");
+    asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
+    asm_comment("---------------------------------------------------------------");
+    asm_line("COBRT", "CSECT", "", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM", "");
+    asm_comment("");
+    asm_comment(" COBDISP -- write one line to SYSOUT.");
+    asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
+    asm_comment("");
+    asm_line("COBDISP", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE1+4", "");
+    asm_line("", "LA", "11,RTSAVE1", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(text)");
+    asm_line("", "L", "3,4(0,1)", "A(length)");
+    asm_line("", "LH", "4,0(0,3)", "length");
+    asm_line("", "CLI", "RTOPEN,X'01'", "already open?");
+    asm_line("", "BE", "COBD010", "");
+    asm_line("", "OPEN", "(RTDCB,OUTPUT)", "");
+    asm_line("", "MVI", "RTOPEN,X'01'", "");
+    asm_line("COBD010", "MVI", "RTLINE,C' '", "ASA: single space");
+    asm_line("", "MVC", "RTLINE+1(120),RTLINE", "blank the text area");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BNP", "COBD020", "empty: emit a blank line");
+    asm_line("", "CH", "4,RTMAX", "");
+    asm_line("", "BNH", "COBD015", "");
+    asm_line("", "LH", "4,RTMAX", "truncate at the line width");
+    asm_line("COBD015", "BCTR", "4,0", "EX wants length-1");
+    asm_line("", "EX", "4,COBDMVC", "");
+    asm_line("COBD020", "PUT", "RTDCB,RTLINE", "");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("COBDMVC", "MVC", "RTLINE+1(0),0(2)", "executed, never fallen into");
+    asm_comment("");
+    asm_comment(" COBTERM -- close SYSOUT if COBDISP ever opened it.");
+    asm_comment("");
+    asm_line("COBTERM", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE2+4", "");
+    asm_line("", "LA", "11,RTSAVE2", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "CLI", "RTOPEN,X'01'", "");
+    asm_line("", "BNE", "COBT010", "");
+    asm_line("", "CLOSE", "(RTDCB)", "");
+    asm_line("", "MVI", "RTOPEN,X'00'", "");
+    asm_line("COBT010", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_comment("");
+    asm_line("RTOPEN", "DC", "X'00'", "");
+    asm_line("RTMAX", "DC", "H'120'", "");
+    asm_line("RTLINE", "DC", "CL121' '", "ASA byte + 120 columns");
+    asm_line("RTSAVE1", "DS", "18F", "");
+    asm_line("RTSAVE2", "DS", "18F", "");
+    asm_cont("RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,",
+             "LRECL=121,BLKSIZE=121");
+}
+
 static void generate(void)
 {
-    char b[128];
+    char b[160], lab[16];
     asm_comment("---------------------------------------------------------------");
-    snprintf(b, sizeof b, " Generated by cobc slice 0 from %s", src.name);
+    snprintf(b, sizeof b, " Generated by cobc from %s", src.name);
     asm_comment(b);
-    asm_comment(" Standard OS/360 entry linkage. No SYS1.COBLIB reference:");
-    asm_comment(" this compiler brings its own runtime, and STOP RUN needs none.");
+    asm_comment(" Standard OS/360 entry linkage. SYS1.COBLIB is never referenced.");
+    if (ndisp)
+        asm_comment(" DISPLAY is served by our own COBRT runtime, below.");
     asm_comment("---------------------------------------------------------------");
 
     asm_line(progid, "CSECT", "", "");
@@ -206,13 +353,47 @@ static void generate(void)
     asm_line("", "LA", "11,SAVEAREA", "");
     asm_line("", "ST", "11,8(13)", "forward chain from caller");
     asm_line("", "LR", "13,11", "our save area is now current");
-    asm_comment(" PROCEDURE DIVISION");
+
+    for (int i = 0; i < ndisp; i++) {
+        snprintf(b, sizeof b, " DISPLAY '%s'", disp[i].text);
+        asm_comment(b);
+        snprintf(lab, sizeof lab, "PARM%04d", i + 1);
+        snprintf(b, sizeof b, "1,%s", lab);
+        asm_line("", "LA", b, "");
+        asm_line("", "L", "15,VDISP", "");
+        asm_line("", "BALR", "14,15", "");
+    }
+
     asm_comment(" STOP RUN");
+    if (ndisp) {
+        asm_line("", "L", "15,VTERM", "close anything the runtime opened");
+        asm_line("", "BALR", "14,15", "");
+    }
     asm_line("", "L", "13,4(13)", "restore caller's save area");
     asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
     asm_line("", "SR", "15,15", "return code 0");
     asm_line("", "BR", "14", "return to caller");
+
+    if (ndisp) {
+        asm_line("VDISP", "DC", "V(COBDISP)", "");
+        asm_line("VTERM", "DC", "V(COBTERM)", "");
+        for (int i = 0; i < ndisp; i++) {
+            char plab[16], tlab[16], llab[16];
+            snprintf(plab, sizeof plab, "PARM%04d", i + 1);
+            snprintf(tlab, sizeof tlab, "LIT%04d",  i + 1);
+            snprintf(llab, sizeof llab, "LEN%04d",  i + 1);
+            snprintf(b, sizeof b, "A(%s)", tlab);
+            asm_line(plab, "DC", b, "");
+            snprintf(b, sizeof b, "X'80',AL3(%s)", llab);
+            asm_line("", "DC", b, "last parameter");
+            emit_literal(tlab, disp[i].text, disp[i].len);
+            snprintf(b, sizeof b, "H'%d'", disp[i].len);
+            asm_line(llab, "DC", b, "");
+        }
+    }
     asm_line("SAVEAREA", "DS", "18F", "");
+
+    if (ndisp) emit_runtime();
     asm_line("", "END", "", "");
 }
 

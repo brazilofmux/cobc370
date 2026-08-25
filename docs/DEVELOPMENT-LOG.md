@@ -174,12 +174,61 @@ have abended rather than returning cleanly.
 The path from COBOL on the Mac to a running load module on MVS 3.8j is proven,
 with `SYS1.COBLIB` never referenced. That was the point of the slice.
 
+## Slice 1 is done: DISPLAY, with our own runtime
+
+The decision was to write our own rather than call `ILBODSP0`, so the compiler
+never acquires a `SYS1.COBLIB` dependency it would later have to remove.
+
+`cobc` now emits a second CSECT, **`COBRT`**, with two entry points. It reaches
+SYSOUT through the QSAM macros directly — `OPEN`/`PUT`/`CLOSE`, the same
+access-method path IKFCBL00 uses for its own file I/O. SYS1.MACLIB supplies the
+macros, which is the OS interface, not IBM's COBOL runtime.
+
+    COBDISP   write one line to SYSOUT; opens it on demand
+    COBTERM   close it, if COBDISP ever opened it
+
+The runtime calling convention is deliberately the OS one, so COBOL `CALL` can
+use it unchanged later: `R1` → parameter list with the high-order bit set on the
+last entry, `R13` → save area, `R14`/`R15` return and entry.
+
+    LA    1,PARM0001
+    L     15,VDISP
+    BALR  14,15
+    ...
+    PARM0001 DC    A(LIT0001)
+             DC    X'80',AL3(LEN0001)   last parameter
+    LIT0001  DC    C'HELLO FROM COBC. NO SYS1.COBLIB HERE.'
+    LEN0001  DC    H'37'
+
+Output line is `CL121` — ASA carriage control byte plus 120 columns, blank
+filled, with a variable-length `MVC` done by `EX` and truncation at the line
+width.
+
+Result (`jcl/cobol/slice1.jcl`):
+
+    HELLO  ASM   IFOX00    RC= 0000
+    HELLO  LKED  IEWL      RC= 0000
+    HELLO  GO    PGM=*.DD  RC= 0000
+
+    HELLO FROM COBC. NO SYS1.COBLIB HERE.
+    SECOND LINE, WITH A QUOTE: DON'T PANIC.
+
+**The link is the proof.** `ASMFCLG` runs LKED with `PARM=NCAL` — no automatic
+library call — so an unresolved external reference fails the link rather than
+being quietly satisfied from a library. RC=0000 with NCAL, and a module map
+containing exactly `HELLO` and `COBRT`, means nothing from `SYS1.COBLIB` was
+needed or used.
+
+Two details worth keeping: `STOP RUN` alone still emits no runtime at all (the
+slice-0 output is unchanged), and quote doubling is assembler-level only — the
+COBOL literal `DON''T` has length 39 and prints as `DON'T`.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
 
 1. ~~`STOP RUN` only → emit ASM → assemble → link → RC=0.~~ **Done.**
-2. `DISPLAY` of a literal. Proves the output path and the runtime decision.
+2. ~~`DISPLAY` of a literal.~~ **Done — see below.**
 3. Packed-decimal arithmetic, diffed against GnuCOBOL. Proves the numeric core.
 4. Sequential `FD`/`01` read and write. Proves QSAM.
 5. The first real GL program.
