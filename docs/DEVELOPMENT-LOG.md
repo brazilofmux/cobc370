@@ -372,6 +372,50 @@ refuses a name field longer than eight characters so this cannot recur quietly.
 It is the same class of problem as PROGRAM-ID, which was already checked — I
 had just not carried the check to data names.
 
+## Slice 5 is done: IF, ELSE, and conditions
+
+Scoped from the corpus rather than the standard. What the 30 programs actually
+use: `=`, `<`, `>` with their `NOT` forms and the word spellings (`EQUAL TO`,
+`GREATER THAN`, `NOT GREATER THAN`), `OR` far more than `AND` (66 against 4),
+`ELSE` 36 times, **no `END-IF`** — COBOL-74 confirmed — and level-88 condition
+names. No `IS NUMERIC`, no `IS ALPHABETIC`, no `NEXT SENTENCE`.
+
+- Relations on numeric operands compare in packed decimal: both sides through
+  `gen_expr`, scales aligned, then `CP`.
+- Alphanumeric comparison is `CLC`, with the shorter operand space padded to
+  the longer, which is what COBOL specifies. A literal is interned already
+  padded to the field width.
+- `AND` and `OR` **short-circuit**, emitted with the standard two-polarity
+  scheme: `gen_cond(c, label, jump_if_true)` recurses with the sense inverted
+  for `NOT`, and `AND`/`OR` introduce a skip label in whichever polarity needs
+  one.
+- **Level 88 condition names** are stored against their parent and expand to a
+  comparison at the point of use. They occupy no storage.
+- Figurative constants `ZERO` and `SPACES` are accepted in conditions and
+  moves.
+
+**COBOL-74 period scoping.** There is no `END-IF`: a period ends the whole
+sentence and unwinds every open `IF`. The statement list parser carries that up
+through an `at_period` flag, which also gives correct dangling-`ELSE` binding —
+`ELSE` attaches to the nearest unmatched `IF`. The test covers this explicitly:
+a nested `IF` where the first `ELSE` binds inward and the second outward.
+
+Byte-identical to GnuCOBOL `-std=mvs` across relational, `AND`, short-circuit
+`OR`, alphanumeric compare, a level-88 name tested before and after its flag
+changes, `NOT = ZERO`, and the nested dangling-`ELSE`.
+
+### Two bugs, one caught by reading and one by the assembler
+
+The first version emitted **no conditional code at all** — the statement types
+existed and the parser built them, but `generate` had no cases for them, so both
+arms of every `IF` ran unconditionally. Reading the generated assembler before
+running it is what caught that; the program would have run and produced
+plausible-looking wrong answers.
+
+The second: level-88 items were being emitted into WORKING-STORAGE as
+`DC ZL0'0'`, and the assembler rejected it with `IFO199 INVALID LENGTH
+MODIFIER`. A condition name has no storage.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

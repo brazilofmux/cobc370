@@ -214,7 +214,7 @@ COBD010  MVI   RTLINE,C' '         ASA: single space
          BNP   COBD020             empty: emit a blank line
          CH    4,RTMAX
          BNH   COBD015
-         LH    4,RTMAX             truncate at the line width
+         LH    4,RTMAX             truncate at line width
 COBD015  BCTR  4,0                 EX wants length-1
          EX    4,COBDMVC
 COBD020  PUT   RTDCB,RTLINE
@@ -241,7 +241,6 @@ COBT010  L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
-*
 RTOPEN   DC    X'00'
 RTMAX    DC    H'120'
 RTLINE   DC    CL121' '            ASA byte + 120 columns

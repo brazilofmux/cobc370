@@ -203,6 +203,10 @@ typedef struct {
     int  offset;
     int  has_value;
     char value[34];   /* the VALUE literal, already scaled to an integer */
+    int  is_88;       /* condition name: no storage, tests its parent */
+    int  parent;
+    char cvalue[MAXTOK];
+    int  cvalue_len, cvalue_str;
 } Sym;
 
 #define MAXSYM 256
@@ -215,15 +219,39 @@ static int nsym, wslen;
  * which are where this will diverge from GnuCOBOL's unbounded intermediates
  * if it diverges anywhere.
  */
-enum { N_SYM, N_LIT, N_ADD, N_SUB, N_MUL, N_DIV, N_NEG };
+enum { N_SYM, N_LIT, N_STR, N_ADD, N_SUB, N_MUL, N_DIV, N_NEG };
 
 typedef struct Node {
     int kind;
     int sym;
-    char lit[34];
+    char lit[MAXTOK];   /* N_LIT: scaled digits.  N_STR: the text */
     int litscale;
+    int litlen;         /* N_STR */
     struct Node *l, *r;
 } Node;
+
+/* Conditions. Relations compare two expressions; AND/OR short-circuit. */
+enum { REL_EQ, REL_LT, REL_GT, REL_NE, REL_NGT, REL_NLT };
+enum { C_REL, C_AND, C_OR, C_NOT };
+
+typedef struct Cond {
+    int kind, op;
+    Node *l, *r;
+    struct Cond *cl, *cr;
+} Cond;
+
+#define MAXCOND 256
+static Cond conds[MAXCOND];
+static int ncond;
+
+static Cond *cnode(int kind)
+{
+    if (ncond >= MAXCOND) die("condition too complex");
+    Cond *c = &conds[ncond++];
+    memset(c, 0, sizeof *c);
+    c->kind = kind;
+    return c;
+}
 
 #define MAXNODE 512
 static Node nodes[MAXNODE];
@@ -239,7 +267,8 @@ static Node *node(int kind)
 }
 
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
-       ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT };
+       ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT,
+       ST_LABEL, ST_BRANCH, ST_IFTEST };
 
 typedef struct {
     int  op;
@@ -253,6 +282,7 @@ typedef struct {
     int  rounded;
     char para[31];          /* ST_PARA name, or PERFORM's first paragraph */
     char thru[31];          /* PERFORM ... THRU */
+    Cond *cond;             /* ST_IFTEST */
 } Stmt;
 
 /* Paragraphs, resolved after parsing so a PERFORM may name one that has not
@@ -397,11 +427,36 @@ static void parse_data_division(void)
         if (!isdigit((unsigned char)tok.text[0]))
             die("expected a level number in WORKING-STORAGE");
         int level = atoi(tok.text);
-        if (level != 77 && (level < 1 || level > 49))
-            die("level number out of range (01-49, or 77)");
-        if (level == 66 || level == 88)
-            die("level 66 and 88 items are not implemented yet");
+        if (level != 77 && level != 88 && (level < 1 || level > 49))
+            die("level number out of range (01-49, 77, or 88)");
+        if (level == 66) die("level 66 RENAMES is not implemented yet");
         next();
+
+        if (level == 88) {
+            /* A condition name: no storage, it tests the item it follows. */
+            if (nsym == 0) die("level 88 must follow a data item");
+            if (nsym >= MAXSYM) die("too many data items");
+            Sym *cn = &syms[nsym];
+            memset(cn, 0, sizeof *cn);
+            cn->level = 88; cn->is_88 = 1;
+            snprintf(cn->label, sizeof cn->label, "C%04d", nsym);
+            snprintf(cn->name, sizeof cn->name, "%s", tok.text);
+            if (lookup(cn->name) >= 0) die("duplicate data name");
+            int p = nsym - 1;
+            while (p >= 0 && (syms[p].is_88 || syms[p].is_group)) p--;
+            if (p < 0) die("level 88 must follow an elementary item");
+            cn->parent = p;
+            next();
+            expect("VALUE"); if (is("IS")) next();
+            if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(cn->cvalue, "0"); next(); }
+            else if (is("SPACE") || is("SPACES")) { cn->cvalue_str = 1; strcpy(cn->cvalue, " "); cn->cvalue_len = 1; next(); }
+            else if (tok.literal) { cn->cvalue_str = 1; memcpy(cn->cvalue, tok.text, (size_t)tok.len + 1); cn->cvalue_len = tok.len; next(); }
+            else if (is_numeric_literal(tok.text)) { snprintf(cn->cvalue, sizeof cn->cvalue, "%s", tok.text); next(); }
+            else die("level 88 VALUE must be a literal");
+            expect(".");
+            nsym++;
+            continue;
+        }
 
         while (sp > 0 && syms[stack[sp-1]].level >= level) {
             Sym *g = &syms[stack[--sp]];
@@ -542,6 +597,19 @@ static Node *parse_primary(void)
         next();
         return n;
     }
+    if (tok.literal) {
+        Node *n = node(N_STR);
+        memcpy(n->lit, tok.text, (size_t)tok.len + 1);
+        n->litlen = tok.len;
+        next();
+        return n;
+    }
+    if (is("ZERO") || is("ZEROS") || is("ZEROES")) {
+        Node *n = node(N_LIT); strcpy(n->lit, "0"); n->litscale = 0; next(); return n;
+    }
+    if (is("SPACE") || is("SPACES")) {
+        Node *n = node(N_STR); strcpy(n->lit, " "); n->litlen = 1; next(); return n;
+    }
     if (!tok.text[0]) die("expression ended unexpectedly");
     Node *n = node(N_SYM);
     n->sym = need_sym(tok.text);
@@ -586,154 +654,267 @@ static Stmt *new_stmt(int op)
     return st;
 }
 
+/* COBOL-74 has no END-IF: a period ends the whole sentence, unwinding every
+ * open IF. at_period carries that up through the nested statement lists. */
+static int at_period;
+static int nlabel;
+
+static void parse_stmt_list(int allow_else);
+
+/* ---- conditions -------------------------------------------------------- */
+
+static Cond *parse_cond(void);
+
+static int relop(int *op)
+{
+    int neg = 0;
+    if (is("IS")) next();
+    if (is("NOT")) { neg = 1; next(); }
+    if (is("=") || is("EQUAL") || is("EQUALS")) {
+        next(); if (is("TO")) next();
+        *op = neg ? REL_NE : REL_EQ; return 1;
+    }
+    if (is(">") || is("GREATER")) {
+        next(); if (is("THAN")) next();
+        *op = neg ? REL_NGT : REL_GT; return 1;
+    }
+    if (is("<") || is("LESS")) {
+        next(); if (is("THAN")) next();
+        *op = neg ? REL_NLT : REL_LT; return 1;
+    }
+    if (neg) die("NOT must be followed by a relational operator");
+    return 0;
+}
+
+static Cond *parse_relation(void)
+{
+    if (is("(")) { next(); Cond *c = parse_cond(); expect(")"); return c; }
+    Node *l = parse_expr();
+    int op;
+    if (!relop(&op)) {
+        /* No operator: this must be a level 88 condition name. */
+        if (l->kind != N_SYM || !syms[l->sym].is_88)
+            die("expected a relational operator, or a level 88 condition name");
+        const Sym *cn = &syms[l->sym];
+        Cond *c = cnode(C_REL);
+        c->op = REL_EQ;
+        Node *p = node(N_SYM); p->sym = cn->parent;
+        Node *v;
+        if (cn->cvalue_str) {
+            v = node(N_STR);
+            memcpy(v->lit, cn->cvalue, (size_t)cn->cvalue_len + 1);
+            v->litlen = cn->cvalue_len;
+        } else {
+            v = node(N_LIT);
+            const char *dot = strchr(cn->cvalue, '.');
+            v->litscale = dot ? (int)strlen(dot + 1) : 0;
+            scale_literal(cn->cvalue, syms[cn->parent].scale, v->lit, sizeof v->lit);
+            v->litscale = syms[cn->parent].scale;
+        }
+        c->l = p; c->r = v;
+        return c;
+    }
+    Cond *c = cnode(C_REL);
+    c->op = op; c->l = l; c->r = parse_expr();
+    return c;
+}
+
+static Cond *parse_not(void)
+{
+    if (is("NOT")) { next(); Cond *c = cnode(C_NOT); c->cl = parse_not(); return c; }
+    return parse_relation();
+}
+
+static Cond *parse_and(void)
+{
+    Cond *l = parse_not();
+    while (is("AND")) { next(); Cond *c = cnode(C_AND); c->cl = l; c->cr = parse_not(); l = c; }
+    return l;
+}
+
+static Cond *parse_cond(void)
+{
+    Cond *l = parse_and();
+    while (is("OR")) { next(); Cond *c = cnode(C_OR); c->cl = l; c->cr = parse_and(); l = c; }
+    return l;
+}
+
+/* ---- statements -------------------------------------------------------- */
+
+static void eat_period(void) { if (is(".")) { next(); at_period = 1; } }
+
+static void parse_one_statement(void)
+{
+    if (is("DISPLAY")) {
+        next();
+        if (tok.literal) {
+            Stmt *st = new_stmt(ST_DISPLAY_LIT);
+            memcpy(st->lit, tok.text, (size_t)tok.len + 1);
+            st->litlen = tok.len;
+            next();
+            if (tok.literal) die("DISPLAY of several operands is not implemented yet");
+        } else {
+            int i = need_sym(tok.text);
+            if (syms[i].is_group) die("DISPLAY of a group item is not implemented yet");
+            if (syms[i].is_88) die("DISPLAY of a condition name is meaningless");
+            if (!syms[i].is_alpha && (syms[i].usage != U_DISPLAY || syms[i].is_signed))
+                die("DISPLAY takes an alphanumeric or unsigned USAGE DISPLAY "
+                    "item in this slice; MOVE to one first.");
+            Stmt *st = new_stmt(ST_DISPLAY_ID);
+            st->src = i;
+            next();
+        }
+        eat_period();
+        return;
+    }
+
+    if (is("IF")) {
+        next();
+        Cond *c = parse_cond();
+        if (is("THEN")) next();
+        int lelse = ++nlabel;
+        Stmt *t = new_stmt(ST_IFTEST); t->cond = c; t->dst = lelse;
+        parse_stmt_list(1);
+        if (is("ELSE")) {
+            next();
+            int lend = ++nlabel;
+            new_stmt(ST_BRANCH)->dst = lend;
+            new_stmt(ST_LABEL)->dst = lelse;
+            parse_stmt_list(1);
+            new_stmt(ST_LABEL)->dst = lend;
+        } else {
+            new_stmt(ST_LABEL)->dst = lelse;
+        }
+        return;
+    }
+
+    if (is("MOVE")) {
+        next();
+        Stmt *st = new_stmt(ST_MOVE);
+        char save[MAXTOK]; int savelit = tok.literal, savelen = tok.len;
+        memcpy(save, tok.text, (size_t)tok.len + 1);
+        next();
+        expect("TO");
+        st->dst = need_sym(tok.text);
+        next();
+        if (savelit) {
+            st->imm = 2;                       /* nonnumeric literal */
+            memcpy(st->immdigits, save, (size_t)savelen + 1);
+            st->immscale = savelen;
+        } else if (is_numeric_literal(save)) {
+            st->imm = 1; st->immscale = syms[st->dst].scale;
+            scale_literal(save, syms[st->dst].scale, st->immdigits, sizeof st->immdigits);
+        } else st->src = need_sym(save);
+        eat_period();
+        return;
+    }
+
+    if (is("ADD") || is("SUBTRACT")) {
+        int sub = is("SUBTRACT");
+        next();
+        Stmt *st = new_stmt(sub ? ST_SUB : ST_ADD);
+        char save[MAXTOK];
+        memcpy(save, tok.text, (size_t)tok.len + 1);
+        next();
+        expect(sub ? "FROM" : "TO");
+        st->dst = need_sym(tok.text);
+        next();
+        if (is("GIVING")) die("GIVING is not implemented yet");
+        if (is_numeric_literal(save)) {
+            const char *dot = strchr(save, '.');
+            st->imm = 1;
+            st->immscale = dot ? (int)strlen(dot + 1) : 0;
+            scale_literal(save, st->immscale, st->immdigits, sizeof st->immdigits);
+        } else st->src = need_sym(save);
+        eat_period();
+        return;
+    }
+
+    if (is("COMPUTE")) {
+        next();
+        Stmt *st = new_stmt(ST_COMPUTE);
+        st->dst = need_sym(tok.text);
+        next();
+        if (is("ROUNDED")) { st->rounded = 1; next(); }
+        if (is("EQUAL")) { next(); if (is("TO")) next(); } else expect("=");
+        st->expr = parse_expr();
+        eat_period();
+        return;
+    }
+
+    if (is("PERFORM")) {
+        next();
+        Stmt *st = new_stmt(ST_PERFORM);
+        snprintf(st->para, sizeof st->para, "%s", tok.text);
+        next();
+        if (is("THRU") || is("THROUGH")) {
+            next(); snprintf(st->thru, sizeof st->thru, "%s", tok.text); next();
+        } else snprintf(st->thru, sizeof st->thru, "%s", st->para);
+        if (is("UNTIL") || is("VARYING") || is("TIMES"))
+            die("PERFORM UNTIL / VARYING / TIMES are not implemented yet");
+        eat_period();
+        return;
+    }
+
+    if (is("STOP")) {
+        next();
+        if (!is("RUN")) die("STOP literal is not implemented yet");
+        next();
+        new_stmt(ST_STOP);
+        eat_period();
+        return;
+    }
+
+    if (is("EXIT")) {
+        next();
+        if (is("PROGRAM")) die("EXIT PROGRAM is not implemented yet");
+        new_stmt(ST_EXIT);
+        eat_period();
+        return;
+    }
+
+    if (tok.text[0] && !tok.literal) {
+        char nm[31];
+        snprintf(nm, sizeof nm, "%s", tok.text);
+        next();
+        if (is(".")) {
+            next(); at_period = 1;
+            if (para_index(nm) >= 0) die("duplicate paragraph name");
+            if (npara >= MAXPARA) die("too many paragraphs");
+            snprintf(paras[npara].name, sizeof paras[npara].name, "%s", nm);
+            paras[npara].is_range_end = 0;
+            Stmt *st = new_stmt(ST_PARA);
+            snprintf(st->para, sizeof st->para, "%s", nm);
+            st->dst = npara++;
+            return;
+        }
+        char m[160];
+        snprintf(m, sizeof m,
+                 "not implemented yet: '%s'. This slice supports MOVE, ADD, "
+                 "SUBTRACT, COMPUTE, IF, DISPLAY, PERFORM, EXIT and STOP RUN.", nm);
+        die(m);
+    }
+    die("unexpected token in PROCEDURE DIVISION");
+}
+
+static void parse_stmt_list(int allow_else)
+{
+    while (!tok.eof && !at_period) {
+        if (allow_else && is("ELSE")) return;
+        parse_one_statement();
+    }
+}
+
 static void parse_procedure(void)
 {
     expect("PROCEDURE"); expect("DIVISION"); expect(".");
     int stopped = 0;
     while (!tok.eof) {
-        if (is(".")) { next(); continue; }
-
-        if (is("DISPLAY")) {
-            next();
-            if (tok.literal) {
-                Stmt *st = new_stmt(ST_DISPLAY_LIT);
-                memcpy(st->lit, tok.text, (size_t)tok.len + 1);
-                st->litlen = tok.len;
-                next();
-                if (tok.literal) die("DISPLAY of several operands is not implemented yet");
-            } else {
-                int i = need_sym(tok.text);
-                if (syms[i].is_group)
-                    die("DISPLAY of a group item is not implemented yet");
-                if (!syms[i].is_alpha && (syms[i].usage != U_DISPLAY || syms[i].is_signed))
-                    die("DISPLAY takes an alphanumeric or unsigned USAGE "
-                        "DISPLAY item in this slice; MOVE to one first. Sign "
-                        "and COMP rendering are a later slice.");
-                Stmt *st = new_stmt(ST_DISPLAY_ID);
-                st->src = i;
-                next();
-            }
-            if (is(".")) next();
-            continue;
-        }
-
-        if (is("MOVE")) {
-            next();
-            Stmt *st = new_stmt(ST_MOVE);
-            char save[MAXTOK]; int sl = tok.len, slit = tok.literal;
-            memcpy(save, tok.text, (size_t)tok.len + 1);
-            (void)sl; (void)slit;
-            next();
-            expect("TO");
-            st->dst = need_sym(tok.text);
-            next();
-            /* re-read the source now that the destination's scale is known */
-            if (is_numeric_literal(save)) {
-                st->imm = 1; st->immscale = syms[st->dst].scale;
-                scale_literal(save, syms[st->dst].scale, st->immdigits, sizeof st->immdigits);
-            } else st->src = need_sym(save);
-            if (is(".")) next();
-            continue;
-        }
-
-        if (is("ADD") || is("SUBTRACT")) {
-            int sub = is("SUBTRACT");
-            next();
-            Stmt *st = new_stmt(sub ? ST_SUB : ST_ADD);
-            char save[MAXTOK];
-            memcpy(save, tok.text, (size_t)tok.len + 1);
-            next();
-            expect(sub ? "FROM" : "TO");
-            st->dst = need_sym(tok.text);
-            next();
-            if (is("GIVING")) die("GIVING is not implemented yet");
-            if (is_numeric_literal(save)) {
-                const char *dot = strchr(save, '.');
-                st->imm = 1;
-                st->immscale = dot ? (int)strlen(dot + 1) : 0;
-                scale_literal(save, st->immscale, st->immdigits, sizeof st->immdigits);
-            } else st->src = need_sym(save);
-            if (is(".")) next();
-            continue;
-        }
-
-        if (is("COMPUTE")) {
-            next();
-            Stmt *st = new_stmt(ST_COMPUTE);
-            st->dst = need_sym(tok.text);
-            next();
-            if (is("ROUNDED")) { st->rounded = 1; next(); }
-            if (is("EQUAL")) { next(); if (is("TO")) next(); }
-            else expect("=");
-            st->expr = parse_expr();
-            if (is(".")) next();
-            continue;
-        }
-
-        if (is("STOP")) {
-            next();
-            if (!is("RUN")) die("STOP literal is not implemented yet");
-            next();
-            if (is(".")) next();
-            new_stmt(ST_STOP);
-            stopped = 1;
-            continue;
-        }
-
-        if (is("EXIT")) {
-            next();
-            if (is("PROGRAM")) die("EXIT PROGRAM is not implemented yet");
-            if (is(".")) next();
-            new_stmt(ST_EXIT);       /* a no-op; it exists to end a range */
-            continue;
-        }
-
-        if (is("PERFORM")) {
-            next();
-            Stmt *st = new_stmt(ST_PERFORM);
-            snprintf(st->para, sizeof st->para, "%s", tok.text);
-            next();
-            if (is("THRU") || is("THROUGH")) {
-                next();
-                snprintf(st->thru, sizeof st->thru, "%s", tok.text);
-                next();
-            } else snprintf(st->thru, sizeof st->thru, "%s", st->para);
-            if (is("UNTIL") || is("VARYING") || is("TIMES"))
-                die("PERFORM UNTIL / VARYING / TIMES are not implemented yet; "
-                    "the corpus is almost entirely PERFORM ... THRU");
-            if (is(".")) next();
-            continue;
-        }
-
-        /* Anything else that is followed by a period is a paragraph name.
-         * COBOL puts these in area A, but the verb set is what actually
-         * disambiguates. */
-        if (tok.text[0] && !tok.literal) {
-            char nm[31];
-            snprintf(nm, sizeof nm, "%s", tok.text);
-            next();
-            if (is(".")) {
-                next();
-                if (para_index(nm) >= 0) die("duplicate paragraph name");
-                if (npara >= MAXPARA) die("too many paragraphs");
-                snprintf(paras[npara].name, sizeof paras[npara].name, "%s", nm);
-                paras[npara].is_range_end = 0;
-                Stmt *st = new_stmt(ST_PARA);
-                snprintf(st->para, sizeof st->para, "%s", nm);
-                st->dst = npara++;
-                continue;
-            }
-            char m[160];
-            snprintf(m, sizeof m,
-                     "not implemented yet: '%s'. This slice supports MOVE, "
-                     "ADD, SUBTRACT, COMPUTE, DISPLAY, PERFORM, EXIT and "
-                     "STOP RUN.", nm);
-            die(m);
-        }
-        die("unexpected token in PROCEDURE DIVISION");
+        at_period = 0;
+        parse_stmt_list(0);
     }
+    for (int i = 0; i < nstmt; i++) if (stmts[i].op == ST_STOP) stopped = 1;
     if (!stopped) die("PROCEDURE DIVISION has no STOP RUN");
-    /* Resolve PERFORM targets now that every paragraph has been seen. */
     for (int i = 0; i < nstmt; i++) {
         if (stmts[i].op != ST_PERFORM) continue;
         int a = para_index(stmts[i].para), b = para_index(stmts[i].thru);
@@ -743,109 +924,6 @@ static void parse_procedure(void)
         stmts[i].dst = a; stmts[i].src = b;
         paras[b].is_range_end = 1;
     }
-}
-
-/* ---- code generation -------------------------------------------------- */
-
-/* A continued statement: text padded so the continuation flag lands in
-   column 72, and the continuation itself starting in column 16. */
-static void asm_cont(const char *first, const char *second)
-{
-    char b[80];
-    if (strlen(first) > 71) die("internal: continuation line too long");
-    memset(b, ' ', sizeof b);
-    memcpy(b, first, strlen(first));
-    b[71] = 'X'; b[72] = 0;
-    fprintf(out, "%s\n", b);
-    fprintf(out, "               %s\n", second);
-}
-
-/* Assembler C'...' needs both quotes and ampersands doubled. */
-static void emit_literal(const char *label, const char *text, int len)
-{
-    char op[MAXTOK * 2 + 8];
-    int j = 0;
-    op[j++] = 'C'; op[j++] = '\'';
-    for (int i = 0; i < len; i++) {
-        if (text[i] == '\'' || text[i] == '&') op[j++] = text[i];
-        op[j++] = text[i];
-    }
-    op[j++] = '\''; op[j] = 0;
-    if (15 + (int)strlen(op) > 71)
-        die("literal too long for one assembler statement "
-            "(continuation of literals is not implemented yet)");
-    asm_line(label, "DC", op, "");
-}
-
-static void emit_runtime(void)
-{
-    asm_comment("---------------------------------------------------------------");
-    asm_comment(" COBRT -- our runtime. Nothing here is from SYS1.COBLIB.");
-    asm_comment(" DISPLAY reaches SYSOUT through QSAM directly, which is the");
-    asm_comment(" same access-method path IKFCBL00 uses for its own file I/O.");
-    asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
-    asm_comment("---------------------------------------------------------------");
-    asm_line("COBRT", "CSECT", "", "");
-    asm_line("", "ENTRY", "COBDISP,COBTERM", "");
-    asm_comment("");
-    asm_comment(" COBDISP -- write one line to SYSOUT.");
-    asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
-    asm_comment("");
-    asm_line("COBDISP", "STM", "14,12,12(13)", "");
-    asm_line("", "BALR", "12,0", "");
-    asm_line("", "USING", "*,12", "");
-    asm_line("", "ST", "13,RTSAVE1+4", "");
-    asm_line("", "LA", "11,RTSAVE1", "");
-    asm_line("", "ST", "11,8(13)", "");
-    asm_line("", "LR", "13,11", "");
-    asm_line("", "L", "2,0(0,1)", "A(text)");
-    asm_line("", "L", "3,4(0,1)", "A(length)");
-    asm_line("", "LH", "4,0(0,3)", "length");
-    asm_line("", "CLI", "RTOPEN,X'01'", "already open?");
-    asm_line("", "BE", "COBD010", "");
-    asm_line("", "OPEN", "(RTDCB,OUTPUT)", "");
-    asm_line("", "MVI", "RTOPEN,X'01'", "");
-    asm_line("COBD010", "MVI", "RTLINE,C' '", "ASA: single space");
-    asm_line("", "MVC", "RTLINE+1(120),RTLINE", "blank the text area");
-    asm_line("", "LTR", "4,4", "");
-    asm_line("", "BNP", "COBD020", "empty: emit a blank line");
-    asm_line("", "CH", "4,RTMAX", "");
-    asm_line("", "BNH", "COBD015", "");
-    asm_line("", "LH", "4,RTMAX", "truncate at the line width");
-    asm_line("COBD015", "BCTR", "4,0", "EX wants length-1");
-    asm_line("", "EX", "4,COBDMVC", "");
-    asm_line("COBD020", "PUT", "RTDCB,RTLINE", "");
-    asm_line("", "L", "13,4(13)", "");
-    asm_line("", "LM", "14,12,12(13)", "");
-    asm_line("", "SR", "15,15", "");
-    asm_line("", "BR", "14", "");
-    asm_line("COBDMVC", "MVC", "RTLINE+1(0),0(2)", "executed, never fallen into");
-    asm_comment("");
-    asm_comment(" COBTERM -- close SYSOUT if COBDISP ever opened it.");
-    asm_comment("");
-    asm_line("COBTERM", "STM", "14,12,12(13)", "");
-    asm_line("", "BALR", "12,0", "");
-    asm_line("", "USING", "*,12", "");
-    asm_line("", "ST", "13,RTSAVE2+4", "");
-    asm_line("", "LA", "11,RTSAVE2", "");
-    asm_line("", "ST", "11,8(13)", "");
-    asm_line("", "LR", "13,11", "");
-    asm_line("", "CLI", "RTOPEN,X'01'", "");
-    asm_line("", "BNE", "COBT010", "");
-    asm_line("", "CLOSE", "(RTDCB)", "");
-    asm_line("", "MVI", "RTOPEN,X'00'", "");
-    asm_line("COBT010", "L", "13,4(13)", "");
-    asm_line("", "LM", "14,12,12(13)", "");
-    asm_line("", "SR", "15,15", "");
-    asm_line("", "BR", "14", "");
-    asm_comment("");
-    asm_line("RTOPEN", "DC", "X'00'", "");
-    asm_line("RTMAX", "DC", "H'120'", "");
-    asm_line("RTLINE", "DC", "CL121' '", "ASA byte + 120 columns");
-    asm_line("RTSAVE1", "DS", "18F", "");
-    asm_line("RTSAVE2", "DS", "18F", "");
-    asm_cont("RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,",
-             "LRECL=121,BLKSIZE=121");
 }
 
 /* ---- arithmetic ---------------------------------------------------------
@@ -890,7 +968,6 @@ static void gen_rescale(const char *wk, int from, int to)
     if (from == to) return;
     char b[96];
     int d = to - from;
-    /* SRP truncates here: a plain MOVE or ADD has no ROUNDED. */
     snprintf(b, sizeof b, "%s(8),%d,0", wk, d > 0 ? d : 64 + d);
     asm_line("", "SRP", b, d > 0 ? "align scale (left)" : "align scale (right)");
 }
@@ -933,6 +1010,27 @@ static const char *intern_const(const char *digits)
     snprintf(consts[nconst].label, sizeof consts[nconst].label, "K%04d", nconst + 1);
     snprintf(consts[nconst].digits, sizeof consts[nconst].digits, "%s", digits);
     return consts[nconst++].label;
+}
+
+/* Nonnumeric constants, padded to the length the comparison or move needs. */
+static struct { char label[16]; char text[MAXTOK]; int len; } sconsts[256];
+static int nsconst;
+
+static const char *intern_str(const char *text, int len, int pad)
+{
+    char buf[MAXTOK];
+    int n = len > pad ? len : pad;
+    if (n >= MAXTOK) die("literal too long");
+    for (int i = 0; i < n; i++) buf[i] = i < len ? text[i] : ' ';
+    buf[n] = 0;
+    for (int i = 0; i < nsconst; i++)
+        if (sconsts[i].len == n && !memcmp(sconsts[i].text, buf, (size_t)n))
+            return sconsts[i].label;
+    if (nsconst >= 256) die("too many nonnumeric constants");
+    snprintf(sconsts[nsconst].label, sizeof sconsts[nsconst].label, "S%04d", nsconst + 1);
+    memcpy(sconsts[nsconst].text, buf, (size_t)n + 1);
+    sconsts[nsconst].len = n;
+    return sconsts[nsconst++].label;
 }
 
 /* Load a field into a 16-byte work area. */
@@ -1075,6 +1173,180 @@ static void gen_move_alpha(const Sym *d, const Sym *sv)
     }
 }
 
+/* A continued statement: text padded so the continuation flag lands in
+   column 72, and the continuation itself starting in column 16. */
+static void asm_cont(const char *first, const char *second)
+{
+    char b[80];
+    if (strlen(first) > 71) die("internal: continuation line too long");
+    memset(b, ' ', sizeof b);
+    memcpy(b, first, strlen(first));
+    b[71] = 'X'; b[72] = 0;
+    fprintf(out, "%s\n", b);
+    fprintf(out, "               %s\n", second);
+}
+
+/* Assembler C'...' needs both quotes and ampersands doubled. */
+static void emit_literal(const char *label, const char *text, int len)
+{
+    char op[MAXTOK * 2 + 8];
+    int j = 0;
+    op[j++] = 'C'; op[j++] = '\'';
+    for (int i = 0; i < len; i++) {
+        if (text[i] == '\'' || text[i] == '&') op[j++] = text[i];
+        op[j++] = text[i];
+    }
+    op[j++] = '\''; op[j] = 0;
+    if (15 + (int)strlen(op) > 71)
+        die("literal too long for one assembler statement");
+    asm_line(label, "DC", op, "");
+}
+
+static void emit_runtime(void)
+{
+    asm_comment("---------------------------------------------------------------");
+    asm_comment(" COBRT -- our runtime. Nothing here is from SYS1.COBLIB.");
+    asm_comment(" DISPLAY reaches SYSOUT through QSAM directly, which is the");
+    asm_comment(" same access-method path IKFCBL00 uses for its own file I/O.");
+    asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
+    asm_comment("---------------------------------------------------------------");
+    asm_line("COBRT", "CSECT", "", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM", "");
+    asm_comment("");
+    asm_comment(" COBDISP -- write one line to SYSOUT.");
+    asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
+    asm_comment("");
+    asm_line("COBDISP", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE1+4", "");
+    asm_line("", "LA", "11,RTSAVE1", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(text)");
+    asm_line("", "L", "3,4(0,1)", "A(length)");
+    asm_line("", "LH", "4,0(0,3)", "length");
+    asm_line("", "CLI", "RTOPEN,X'01'", "already open?");
+    asm_line("", "BE", "COBD010", "");
+    asm_line("", "OPEN", "(RTDCB,OUTPUT)", "");
+    asm_line("", "MVI", "RTOPEN,X'01'", "");
+    asm_line("COBD010", "MVI", "RTLINE,C' '", "ASA: single space");
+    asm_line("", "MVC", "RTLINE+1(120),RTLINE", "blank the text area");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BNP", "COBD020", "empty: emit a blank line");
+    asm_line("", "CH", "4,RTMAX", "");
+    asm_line("", "BNH", "COBD015", "");
+    asm_line("", "LH", "4,RTMAX", "truncate at line width");
+    asm_line("COBD015", "BCTR", "4,0", "EX wants length-1");
+    asm_line("", "EX", "4,COBDMVC", "");
+    asm_line("COBD020", "PUT", "RTDCB,RTLINE", "");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("COBDMVC", "MVC", "RTLINE+1(0),0(2)", "executed, never fallen into");
+    asm_comment("");
+    asm_comment(" COBTERM -- close SYSOUT if COBDISP ever opened it.");
+    asm_comment("");
+    asm_line("COBTERM", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE2+4", "");
+    asm_line("", "LA", "11,RTSAVE2", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "CLI", "RTOPEN,X'01'", "");
+    asm_line("", "BNE", "COBT010", "");
+    asm_line("", "CLOSE", "(RTDCB)", "");
+    asm_line("", "MVI", "RTOPEN,X'00'", "");
+    asm_line("COBT010", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("RTOPEN", "DC", "X'00'", "");
+    asm_line("RTMAX", "DC", "H'120'", "");
+    asm_line("RTLINE", "DC", "CL121' '", "ASA byte + 120 columns");
+    asm_line("RTSAVE1", "DS", "18F", "");
+    asm_line("RTSAVE2", "DS", "18F", "");
+    asm_cont("RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,",
+             "LRECL=121,BLKSIZE=121");
+}
+
+/* Branch mnemonics after CP or CLC, by relation and by sense. */
+static const char *br_true[]  = { "BE", "BL", "BH", "BNE", "BNH", "BNL" };
+static const char *br_false[] = { "BNE", "BNL", "BNH", "BE", "BH", "BL" };
+
+static int genlabel;
+
+static int node_alpha(const Node *n)
+{
+    if (n->kind == N_STR) return 1;
+    if (n->kind == N_SYM) return syms[n->sym].is_alpha || syms[n->sym].is_group;
+    return 0;
+}
+
+static void gen_cond(Cond *c, int label, int jump_if_true)
+{
+    char b[128], l[16];
+    switch (c->kind) {
+    case C_NOT:
+        gen_cond(c->cl, label, !jump_if_true);
+        return;
+    case C_AND:
+        if (!jump_if_true) { gen_cond(c->cl, label, 0); gen_cond(c->cr, label, 0); }
+        else {
+            int skip = ++genlabel;
+            gen_cond(c->cl, skip, 0);
+            gen_cond(c->cr, label, 1);
+            snprintf(l, sizeof l, "L%04d", skip); asm_line(l, "DS", "0H", "");
+        }
+        return;
+    case C_OR:
+        if (jump_if_true) { gen_cond(c->cl, label, 1); gen_cond(c->cr, label, 1); }
+        else {
+            int skip = ++genlabel;
+            gen_cond(c->cl, skip, 1);
+            gen_cond(c->cr, label, 0);
+            snprintf(l, sizeof l, "L%04d", skip); asm_line(l, "DS", "0H", "");
+        }
+        return;
+    case C_REL: {
+        if (node_alpha(c->l) || node_alpha(c->r)) {
+            /* Alphanumeric: compare over the longer operand, the shorter one
+               space padded, which is what COBOL specifies. */
+            const Node *L = c->l, *R = c->r;
+            if (L->kind != N_SYM || node_alpha(L) == 0)
+                { const Node *t = L; L = R; R = t; }
+            if (L->kind != N_SYM || !node_alpha(L))
+                die("alphanumeric comparison needs an identifier on one side");
+            const Sym *ls = &syms[L->sym];
+            int n = ls->bytes;
+            if (R->kind == N_STR) {
+                const char *sl = intern_str(R->lit, R->litlen, n);
+                snprintf(b, sizeof b, "%s(%d),%s", ls->label, n, sl);
+            } else if (R->kind == N_SYM && node_alpha(R)) {
+                if (syms[R->sym].bytes != n)
+                    die("comparing alphanumeric items of different lengths is "
+                        "not implemented yet");
+                snprintf(b, sizeof b, "%s(%d),%s", ls->label, n, syms[R->sym].label);
+            } else die("mixed alphanumeric and numeric comparison is not implemented yet");
+            if (n > 256) die("CLC is limited to 256 bytes");
+            asm_line("", "CLC", b, "alphanumeric compare");
+        } else {
+            int sl = gen_expr(c->l, 0, 0);
+            int sr = gen_expr(c->r, 1, 0);
+            int ws = sl > sr ? sl : sr;
+            gen_rescale16("WK0", sl, ws, 0);
+            gen_rescale16("WK1", sr, ws, 0);
+            asm_line("", "CP", "WK0(16),WK1(16)", "numeric compare");
+        }
+        snprintf(l, sizeof l, "L%04d", label);
+        asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
+        return;
+    }
+    }
+}
+
 static void generate(void)
 {
     char b[200], lab[24];
@@ -1101,6 +1373,7 @@ static void generate(void)
     asm_line("", "LR", "13,11", "our save area is now current");
 
     int ndlit = 0, cur_para = -1, nret = 0;
+    genlabel = nlabel;
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
         if (st->op == ST_PARA && cur_para >= 0 && paras[cur_para].is_range_end) {
@@ -1123,6 +1396,20 @@ static void generate(void)
         }
         case ST_EXIT:
             asm_comment(" EXIT");
+            break;
+        case ST_LABEL: {
+            char l[16]; snprintf(l, sizeof l, "L%04d", st->dst);
+            asm_line(l, "DS", "0H", "");
+            break;
+        }
+        case ST_BRANCH: {
+            char l[16]; snprintf(l, sizeof l, "L%04d", st->dst);
+            asm_line("", "B", l, "");
+            break;
+        }
+        case ST_IFTEST:
+            asm_comment(" IF");
+            gen_cond(st->cond, st->dst, 0);
             break;
         case ST_PERFORM: {
             char p1[16], x[16], f[16], r[16];
@@ -1192,6 +1479,16 @@ static void generate(void)
             else         snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
             asm_comment(b);
             if (st->op == ST_MOVE) {
+                if (st->imm == 2) {
+                    if (!(d->is_alpha || d->is_group))
+                        die("MOVE of a nonnumeric literal to a numeric item is "
+                            "not implemented yet");
+                    const char *sl = intern_str(st->immdigits, st->immscale, d->bytes);
+                    if (d->bytes > 256) die("MVC is limited to 256 bytes");
+                    snprintf(b, sizeof b, "%s(%d),%s", d->label, d->bytes, sl);
+                    asm_line("", "MVC", b, "literal move, space padded");
+                    break;
+                }
                 if (!st->imm && (d->is_alpha || d->is_group ||
                                  syms[st->src].is_alpha || syms[st->src].is_group)) {
                     const Sym *sv = &syms[st->src];
@@ -1278,6 +1575,7 @@ static void generate(void)
         for (int i = 0; i < nsym; i++) {
             Sym *sy = &syms[i];
             char cmt[96];
+            if (sy->is_88) continue;      /* a condition name has no storage */
             if (sy->is_group) {
                 snprintf(b, sizeof b, "0CL%d", sy->bytes);
                 snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
@@ -1325,6 +1623,16 @@ static void generate(void)
     for (int i = 0; i < nconst; i++) {
         snprintf(b, sizeof b, "PL8'%s'", consts[i].digits);
         asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");
+    }
+    for (int i = 0; i < nsconst; i++) {
+        char op[MAXTOK * 2 + 16]; int j = 0;
+        j += snprintf(op + j, sizeof op - j, "CL%d'", sconsts[i].len);
+        for (const char *q = sconsts[i].text; *q; q++) {
+            if (*q == '\'' || *q == '&') op[j++] = *q;
+            op[j++] = *q;
+        }
+        op[j++] = '\''; op[j] = 0;
+        asm_line(sconsts[i].label, "DC", op, i ? "" : "nonnumeric constants");
     }
     asm_line("SAVEAREA", "DS", "18F", "");
 
