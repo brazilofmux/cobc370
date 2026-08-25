@@ -12,7 +12,9 @@ test: cobc
 	@! grep -q 'COBRT' tests/stoprun.asm || (echo "runtime emitted needlessly"; exit 1)
 	@echo "--- unimplemented statements must be diagnosed ---"
 	@./cobc tests/bad.cbl -o /dev/null 2>&1 | grep -q 'not implemented' \
-	   && echo "ok" || (echo "diagnostic missing"; exit 1)
+	   && echo "  MOVE          diagnosed" || (echo "MOVE not diagnosed"; exit 1)
+	@./cobc tests/baddisp.cbl -o /dev/null 2>&1 | grep -q 'not implemented' \
+	   && echo "  DISPLAY ident diagnosed" || (echo "DISPLAY ident not diagnosed"; exit 1)
 
 clean:
 	rm -f cobc tests/stoprun.asm tests/hello.asm
