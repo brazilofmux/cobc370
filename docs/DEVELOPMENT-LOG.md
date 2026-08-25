@@ -138,8 +138,68 @@ Narrowest end-to-end slice first, each verifiable:
 4. Sequential `FD`/`01` read and write. Proves QSAM.
 5. The first real GL program.
 
-## Still to characterise
+## File I/O — and the most useful finding so far
 
-- A probe with `FD`/file I/O, to capture the QSAM/DCB interface
-- A probe with `CALL` (static and via `DYNALOAD`), to capture the linkage
-- `SYS1.COBLIB` member list — the full `ILBO*` runtime surface
+`jcl/cobol/probe2.jcl`, listing in `baseline/probe2-listing.txt`.
+
+**The compiler already bypasses its own runtime for file I/O.** `OPEN` builds an
+open parameter list in the TGT, sets the option bytes, and issues **`SVC 19`**
+directly:
+
+    L     1,020(0,12)          DCB=1
+    MVC   032(2,1),028(12)     option bytes from the literal pool
+    ST    1,200(0,13)          SAV3
+    MVI   200(13),X'00'
+    ...
+    LA    1,200(0,13)
+    SVC   19                   <- OPEN, no ILBO involved
+
+`READ` and `WRITE` go straight to QSAM through the routine address at
+**`DCB+x'30'`**, in **locate mode** — the record address comes back in R1 and
+becomes the record's base register:
+
+    L     1,020(0,12)          DCB=1
+    LR    2,1
+    MVC   021(3,2),011(12)     patch DCBEODAD to the AT END branch
+    L     15,030(0,1)          QSAM GET
+    BALR  14,15
+    ST    1,1BC(0,13)          BL=1  <- record address
+    L     7,1BC(0,13)
+
+Note `AT END` is implemented by **patching `DCBEODAD` before each GET**. `CLOSE`
+adjusts DEB fields, then builds a close list the same way `OPEN` did.
+
+This matters more than it looks. The `ILBO*` runtime is only reached for things
+like `DISPLAY` (`ILBODSP0`) and `STOP RUN` (`ILBOSTP1`) — file I/O is the
+compiler emitting OS access-method calls inline. A replacement can do exactly
+the same and never link `SYS1.COBLIB` at all. **And VSAM is the same shape of
+work** — build an ACB/RPL, issue the macro-equivalent calls — so the feature ANS
+COBOL lacks is not a different kind of problem, just more of what it already
+does for QSAM.
+
+## CALL linkage
+
+Both forms are plain OS linkage, which is why the existing assembler routines
+work and will keep working:
+
+    LA    1,010(0,6)           address of arg 1
+    ST    1,20C(0,13)          PRM=1 in the TGT
+    LA    1,008(0,6)           address of arg 2
+    ST    1,210(0,13)          PRM=2
+    OI    210(13),X'80'        high-order bit marks the last argument
+    LA    1,20C(0,13)          R1 -> parameter list
+    L     15,008(0,12)         V(DYNALOAD)   resolved by the linkage editor
+    BALR  14,15
+    STH   15,05C(0,13)         RETURN-CODE
+
+R1 → address list, high bit on the final entry, R15 entry / R14 return, return
+code out of R15. `CALL 'SUBPROG'` and `CALL 'DYNALOAD'` differ only in argument
+count. A replacement must emit exactly this and nothing more.
+
+## The runtime surface is small
+
+`SYS1.COBLIB` holds **73 `ILBO*` modules** — `ILBODSP0` (DISPLAY), `ILBOSTP0/1`
+(STOP RUN), `ILBOERR0-6`, the `ILBOBI*` / `ILBOIF*` conversion families, and so
+on. Full list in `../inventory/catalog-raw.txt`. That is the entire surface you
+would have to replace if you chose to replace it — and for file I/O you don't,
+because the compiler never used it there.
