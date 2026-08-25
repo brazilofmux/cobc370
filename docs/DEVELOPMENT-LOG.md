@@ -262,7 +262,7 @@ with the right dialect.
 
 ### Known limits, deliberately
 
-- `OCCURS` and `REDEFINES` are not implemented (8 and 7 uses in the corpus).
+- `REDEFINES` is not implemented (7 uses in the corpus).
 - `GIVING` on ADD/SUBTRACT, and the `MULTIPLY`/`DIVIDE` statements, are not
   implemented (2 and 4 uses in the corpus against COMPUTE's 35).
 - ~~WORKING-STORAGE is capped at one base-register displacement.~~ **Fixed in
@@ -521,6 +521,49 @@ Not by staring at the generator.
 each program's output against its recorded oracle. Every slice so far was
 verified this way by hand; base locators touched every emit site at once, which
 is what made a scripted full-suite run worth the twenty minutes.
+
+## Slice 8 is done: OCCURS and subscripting
+
+Scoped from the corpus again, and it scoped well: every table there is
+**one-dimensional and fixed size**, with no `OCCURS DEPENDING ON`. `INDEXED BY`,
+`SEARCH` and `ASCENDING KEY` do appear (4, 5 and 4 uses) but are a separate
+feature and are diagnosed rather than half-implemented.
+
+`OCCURS n TIMES` on both elementary items and groups, subscripted by a literal
+or an integer data item. A subscripted reference cannot use an index register,
+because SS format has none, so the element address is computed:
+
+    LH    6,D0006             subscript
+    BCTR  6,0                 subscript-1
+    MH    6,H0001             times element size
+    LA    6,D0002(6)          element address
+    ZAP   0(5,6),PWK1(8)
+
+The tokenizer needed a mode for this: parentheses are separators in the
+PROCEDURE DIVISION but part of the word in a PICTURE, since `S9(7)V99` has to
+survive as one token.
+
+### Three bugs, and what each one teaches
+
+**`MVC D0003(5),D0000(5)`.** MVC and CLC are SS-**a** format with one length;
+`ZAP`, `PACK`, `AP` and friends are SS-**b** with two. Writing a length on MVC's
+second operand means *base register 5*, not *length 5* — so it assembles
+perfectly and then branches into hyperspace. `field_ref` now takes an explicit
+operand mode.
+
+**`H0001 IS AN UNDEFINED SYMBOL`.** Element sizes were interned but never
+emitted. The regression script had been reporting this as an abend, because it
+only checked the GO step; it now checks the assembler's return code first, so an
+assembly error is reported as the diagnostic it is rather than as a bewildering
+S0C1 later.
+
+**A table reserved one element.** A group emits `DS 0CLn` — which occupies
+**zero** bytes, being only a label — so a five-element table laid down ten bytes
+and the next item sat on top of elements two onward. Storage is now emitted one
+element at a time with a gap filler reserving the remainder. Underneath that was
+a second fault: an `01`-level *group* never ran through the path that advances
+`wslen`, so the next `01` restarted at the group's own offset. Both were layout
+bugs; the addressing had been right all along.
 
 ## Suggested order
 

@@ -74,6 +74,11 @@ typedef struct {
 static Src src;
 static Tok tok;
 
+/* Parentheses are separators in the PROCEDURE DIVISION, but part of the word
+ * in a PICTURE -- S9(7)V99 has to survive as one token. So the word scanner
+ * only breaks on them once the procedure division has started. */
+static int lex_parens;
+
 static void die(const char *msg)
 {
     fprintf(stderr, "%s:%d: %s\n", src.name, tok.line ? tok.line : src.line, msg);
@@ -112,6 +117,7 @@ static void next(void)
     }
     int i = 0;
     while (*src.p && !isspace((unsigned char)*src.p)) {
+        if (lex_parens && (*src.p == '(' || *src.p == ')')) break;
         if (*src.p == '.') {
             /* A period is a decimal point only when it sits between digits;
                otherwise it ends the sentence. */
@@ -203,6 +209,9 @@ typedef struct {
     int  offset;
     int  has_value;
     char value[34];   /* the VALUE literal, already scaled to an integer */
+    int  occurs;      /* OCCURS count, 0 when not a table */
+    int  elem;        /* size of one element */
+    int  occ_parent;  /* the table this item sits inside, -1 if none */
     int  is_88;       /* condition name: no storage, tests its parent */
     int  parent;
     char cvalue[MAXTOK];
@@ -227,6 +236,7 @@ typedef struct Node {
     char lit[MAXTOK];   /* N_LIT: scaled digits.  N_STR: the text */
     int litscale;
     int litlen;         /* N_STR */
+    struct Node *sub;   /* subscript on an N_SYM reference */
     struct Node *l, *r;
 } Node;
 
@@ -285,6 +295,7 @@ typedef struct {
     char thru[31];          /* PERFORM ... THRU */
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
+    Node *dsub, *ssub;      /* subscripts on dst and src */
 } Stmt;
 
 /* Files. One DCB each, emitted into the program CSECT. QSAM move mode: the
@@ -450,14 +461,24 @@ static void parse_data_division(void)
     while (!tok.eof && !is("PROCEDURE")) {
         if (is("WORKING-STORAGE")) {
             next(); expect("SECTION"); expect(".");
-            while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+            while (sp > 0) {
+                Sym *g = &syms[stack[--sp]];
+                g->elem = cursor - g->offset;
+                if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
+                else g->bytes = g->elem;
+            }
             if (cursor > wslen) wslen = cursor;
             cur_file = -1;
             continue;
         }
         if (is("FD")) {
             next();
-            while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+            while (sp > 0) {
+                Sym *g = &syms[stack[--sp]];
+                g->elem = cursor - g->offset;
+                if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
+                else g->bytes = g->elem;
+            }
             if (cursor > wslen) wslen = cursor;
             cur_file = file_index(tok.text);
             if (cur_file < 0) die("FD names a file that was not named in a SELECT");
@@ -504,10 +525,21 @@ static void parse_data_division(void)
 
         while (sp > 0 && syms[stack[sp-1]].level >= level) {
             Sym *g = &syms[stack[--sp]];
-            g->bytes = cursor - g->offset;
+            g->elem = cursor - g->offset;
+            if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
+            else g->bytes = g->elem;
         }
         if (level == 1 || level == 77) {
-            while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+            while (sp > 0) {
+                Sym *g = &syms[stack[--sp]];
+                g->elem = cursor - g->offset;
+                if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
+                else g->bytes = g->elem;
+            }
+            /* A group at 01 never ran through the elementary path that
+               advances wslen, so record its extent before starting the next
+               01 -- otherwise the next item is laid down on top of it. */
+            if (cursor > wslen) wslen = cursor;
             cursor = wslen;                 /* 01 items start a fresh area */
         }
 
@@ -515,6 +547,9 @@ static void parse_data_division(void)
         Sym *sy = &syms[nsym];
         memset(sy, 0, sizeof *sy);
         snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
+        sy->occ_parent = -1;
+        for (int k = sp - 1; k >= 0; k--)
+            if (syms[stack[k]].occurs > 0) { sy->occ_parent = stack[k]; break; }
         sy->level = level;
         if (strlen(tok.text) > 30) die("data name too long");
         if (!strcmp(tok.text, "FILLER")) snprintf(sy->name, sizeof sy->name, "FILL%04d", nsym);
@@ -533,6 +568,18 @@ static void parse_data_division(void)
                 next(); if (is("IS")) next();
                 if (strlen(tok.text) >= sizeof pic) die("PICTURE too long");
                 strcpy(pic, tok.text); next();
+            } else if (is("OCCURS")) {
+                next();
+                if (!is_numeric_literal(tok.text) || strchr(tok.text, '.'))
+                    die("OCCURS needs a whole-number literal");
+                sy->occurs = atoi(tok.text);
+                if (sy->occurs < 1) die("OCCURS count must be positive");
+                next();
+                if (is("TIMES")) next();
+                if (is("DEPENDING")) die("OCCURS DEPENDING ON is not implemented yet");
+                if (is("INDEXED") || is("ASCENDING") || is("DESCENDING"))
+                    die("INDEXED BY, ASCENDING/DESCENDING KEY and SEARCH are "
+                        "not implemented yet");
             } else if (is("USAGE")) { next(); if (is("IS")) next(); }
             else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; next(); }
             else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; next(); }
@@ -606,6 +653,11 @@ static void parse_data_division(void)
                 break;
             }
         }
+        sy->elem = sy->bytes;
+        if (sy->occurs > 0) {
+            sy->occ_parent = nsym;          /* an elementary table is its own */
+            sy->bytes = sy->elem * sy->occurs;
+        }
         sy->offset = cursor;
         cursor += sy->bytes;
         if (level == 1 || level == 77) wslen = cursor;
@@ -615,7 +667,12 @@ static void parse_data_division(void)
         }
         nsym++;
     }
-    while (sp > 0) { Sym *g = &syms[stack[--sp]]; g->bytes = cursor - g->offset; }
+    while (sp > 0) {
+        Sym *g = &syms[stack[--sp]];
+        g->elem = cursor - g->offset;
+        if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
+        else g->bytes = g->elem;
+    }
     if (cursor > wslen) wslen = cursor;
     for (int i = 0; i < nfile; i++) {
         if (files[i].rec_sym < 0) die("an FD has no record description");
@@ -720,6 +777,12 @@ static Node *parse_primary(void)
     Node *n = node(N_SYM);
     n->sym = need_sym(tok.text);
     next();
+    if (is("(")) {                       /* a subscript, not a grouping paren */
+        next();
+        n->sub = parse_expr();
+        if (is(",")) die("only one-dimensional tables are implemented");
+        expect(")");
+    }
     return n;
 }
 
@@ -849,6 +912,17 @@ static Cond *parse_cond(void)
 
 static void eat_period(void) { if (is(".")) { next(); at_period = 1; } }
 
+/* A subscript directly after an identifier, or NULL. */
+static Node *opt_subscript(void)
+{
+    if (!is("(")) return NULL;
+    next();
+    Node *n = parse_expr();
+    if (is(",")) die("only one-dimensional tables are implemented");
+    expect(")");
+    return n;
+}
+
 static void parse_one_statement(void)
 {
     if (is("DISPLAY")) {
@@ -869,6 +943,8 @@ static void parse_one_statement(void)
             Stmt *st = new_stmt(ST_DISPLAY_ID);
             st->src = i;
             next();
+            st->ssub = opt_subscript();
+            if (st->ssub) die("DISPLAY of a subscripted item is not implemented yet");
         }
         eat_period();
         return;
@@ -900,9 +976,12 @@ static void parse_one_statement(void)
         char save[MAXTOK]; int savelit = tok.literal, savelen = tok.len;
         memcpy(save, tok.text, (size_t)tok.len + 1);
         next();
+        Node *ssub = opt_subscript();
         expect("TO");
         st->dst = need_sym(tok.text);
         next();
+        st->dsub = opt_subscript();
+        st->ssub = ssub;
         if (savelit) {
             st->imm = 2;                       /* nonnumeric literal */
             memcpy(st->immdigits, save, (size_t)savelen + 1);
@@ -922,9 +1001,12 @@ static void parse_one_statement(void)
         char save[MAXTOK];
         memcpy(save, tok.text, (size_t)tok.len + 1);
         next();
+        Node *ssub2 = opt_subscript();
         expect(sub ? "FROM" : "TO");
         st->dst = need_sym(tok.text);
         next();
+        st->dsub = opt_subscript();
+        st->ssub = ssub2;
         if (is("GIVING")) die("GIVING is not implemented yet");
         if (is_numeric_literal(save)) {
             const char *dot = strchr(save, '.');
@@ -941,6 +1023,7 @@ static void parse_one_statement(void)
         Stmt *st = new_stmt(ST_COMPUTE);
         st->dst = need_sym(tok.text);
         next();
+        st->dsub = opt_subscript();
         if (is("ROUNDED")) { st->rounded = 1; next(); }
         if (is("EQUAL")) { next(); if (is("TO")) next(); } else expect("=");
         st->expr = parse_expr();
@@ -1091,6 +1174,7 @@ static void parse_stmt_list(int allow_else)
 
 static void parse_procedure(void)
 {
+    lex_parens = 1;
     expect("PROCEDURE"); expect("DIVISION"); expect(".");
     int stopped = 0;
     while (!tok.eof) {
@@ -1170,6 +1254,106 @@ static void need_base(int chunk)
 
 static void need_sym_base(const Sym *sy) { need_base(sy->offset / CHUNK); }
 
+/* Halfword constants, for the element-size multiply. */
+static struct { char label[16]; int v; } hconsts[64];
+static int nhconst;
+
+static const char *intern_half(int v)
+{
+    for (int i = 0; i < nhconst; i++) if (hconsts[i].v == v) return hconsts[i].label;
+    if (nhconst >= 64) die("too many halfword constants");
+    snprintf(hconsts[nhconst].label, sizeof hconsts[nhconst].label, "H%04d", nhconst + 1);
+    hconsts[nhconst].v = v;
+    return hconsts[nhconst++].label;
+}
+
+/* Leave (subscript - 1) in reg, as a binary integer. */
+static void gen_subscript(Node *sub, int reg)
+{
+    char b[96];
+    if (sub->sub) die("a subscript may not itself be subscripted");
+    if (sub->kind == N_LIT) {
+        long v = atol(sub->lit);
+        if (v < 1) die("a subscript literal must be 1 or more");
+        snprintf(b, sizeof b, "%d,%ld", reg, v - 1);
+        asm_line("", "LA", b, "subscript-1");
+        return;
+    }
+    if (sub->kind != N_SYM) die("a subscript must be a literal or a data name");
+    const Sym *sy = &syms[sub->sym];
+    if (sy->scale != 0 || sy->is_alpha || sy->is_group)
+        die("a subscript must be an integer data item");
+    need_sym_base(sy);
+    switch (sy->usage) {
+    case U_COMP:
+        snprintf(b, sizeof b, "%d,%s", reg, sy->label);
+        asm_line("", sy->bytes == 2 ? "LH" : "L", b, "subscript");
+        break;
+    case U_DISPLAY:
+        snprintf(b, sizeof b, "DWK(8),%s(%d)", sy->label, sy->bytes);
+        asm_line("", "PACK", b, "subscript");
+        snprintf(b, sizeof b, "%d,DWK", reg);
+        asm_line("", "CVB", b, "");
+        break;
+    default:
+        snprintf(b, sizeof b, "DWK(8),%s(%d)", sy->label, sy->bytes);
+        asm_line("", "ZAP", b, "subscript");
+        snprintf(b, sizeof b, "%d,DWK", reg);
+        asm_line("", "CVB", b, "");
+        break;
+    }
+    snprintf(b, sizeof b, "%d,0", reg);
+    asm_line("", "BCTR", b, "subscript-1");
+}
+
+/* Operand text for a field.
+ *
+ * The form depends on the instruction, which is the part that bites:
+ *   FR_SS_LEN    SS operand carrying a length -- both operands of ZAP, PACK,
+ *                UNPK, AP, CP; the FIRST operand of MVC and CLC
+ *   FR_SS_NOLEN  the SECOND operand of MVC and CLC. SS-a format has one
+ *                length only, and writing D(5) there means "base register 5",
+ *                not "length 5" -- which assembles cleanly and then branches
+ *                into hyperspace.
+ *   FR_RX        RX operand: L, LH, ST, STH
+ *
+ * A subscripted reference cannot use an index register, because SS format has
+ * none, so the element address is computed into reg instead. */
+enum { FR_SS_LEN, FR_SS_NOLEN, FR_RX };
+
+static void field_ref_m(const Sym *sy, Node *sub, int mode, int len, int reg,
+                        char *out, size_t outn)
+{
+    char b[96];
+    if (!sub) {
+        need_sym_base(sy);
+        if (mode == FR_SS_LEN) snprintf(out, outn, "%s(%d)", sy->label, len);
+        else                   snprintf(out, outn, "%s", sy->label);
+        return;
+    }
+    int t = sy->occ_parent;
+    if (t < 0) die("subscript on an item that is not inside an OCCURS table");
+    gen_subscript(sub, reg);
+    int elem = syms[t].elem;
+    if (elem != 1) {
+        snprintf(b, sizeof b, "%d,%s", reg, intern_half(elem));
+        asm_line("", "MH", b, "times element size");
+    }
+    need_sym_base(sy);
+    snprintf(b, sizeof b, "%d,%s(%d)", reg, sy->label, reg);
+    asm_line("", "LA", b, "element address");
+    switch (mode) {
+    case FR_SS_LEN:   snprintf(out, outn, "0(%d,%d)", len, reg); break;
+    case FR_SS_NOLEN: snprintf(out, outn, "0(%d)", reg);         break;
+    default:          snprintf(out, outn, "0(,%d)", reg);        break;
+    }
+}
+
+static void field_ref(const Sym *sy, Node *sub, int len, int reg, char *out, size_t outn)
+{
+    field_ref_m(sy, sub, len ? FR_SS_LEN : FR_RX, len, reg, out, outn);
+}
+
 /* ---- arithmetic ---------------------------------------------------------
  * Everything is computed in packed decimal, which is what COBOL semantics
  * want and what S/370 does in hardware. Binary (COMP) operands are converted
@@ -1178,22 +1362,24 @@ static void need_sym_base(const Sym *sy) { need_base(sy->offset / CHUNK); }
  * read as a signed value, so a right shift of k is encoded as 64-k.
  */
 
-static void gen_load(const Sym *sy, const char *wk)
+static void gen_load(const Sym *sy, Node *sub, const char *wk)
 {
-    char b[96];
-    need_sym_base(sy);
+    char b[128], f[64];
     switch (sy->usage) {
     case U_DISPLAY:
-        snprintf(b, sizeof b, "%s(8),%s(%d)", wk, sy->label, sy->bytes);
+        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
+        snprintf(b, sizeof b, "%s(8),%s", wk, f);
         asm_line("", "PACK", b, "zoned -> packed");
         break;
     case U_COMP3:
-        snprintf(b, sizeof b, "%s(8),%s(%d)", wk, sy->label, sy->bytes);
+        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
+        snprintf(b, sizeof b, "%s(8),%s", wk, f);
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
-        snprintf(b, sizeof b, "2,%s", sy->label);
-        asm_line("", sy->bytes == 2 ? "LH" : "L", b, "");
+        field_ref(sy, sub, 0, 7, f, sizeof f);
+        snprintf(b, sizeof b, "2,%s", f);
+        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
         asm_line("", "CVD", "2,DWK", "binary -> packed");
         snprintf(b, sizeof b, "%s(8),DWK(8)", wk);
         asm_line("", "ZAP", b, "");
@@ -1217,29 +1403,32 @@ static void gen_rescale(const char *wk, int from, int to)
     asm_line("", "SRP", b, d > 0 ? "align scale (left)" : "align scale (right)");
 }
 
-static void gen_store(const Sym *sy, const char *wk)
+static void gen_store(const Sym *sy, Node *sub, const char *wk)
 {
-    char b[96];
-    need_sym_base(sy);
+    char b[128], f[64];
     switch (sy->usage) {
     case U_DISPLAY:
-        snprintf(b, sizeof b, "%s(%d),%s(8)", sy->label, sy->bytes, wk);
+        field_ref(sy, sub, sy->elem, 6, f, sizeof f);
+        snprintf(b, sizeof b, "%s,%s(8)", f, wk);
         asm_line("", "UNPK", b, "packed -> zoned");
         if (!sy->is_signed) {
-            snprintf(b, sizeof b, "%s+%d,X'F0'", sy->label, sy->bytes - 1);
+            if (sub) snprintf(b, sizeof b, "%d(6),X'F0'", sy->elem - 1);
+            else     snprintf(b, sizeof b, "%s+%d,X'F0'", sy->label, sy->elem - 1);
             asm_line("", "OI", b, "unsigned: force an F zone");
         }
         break;
     case U_COMP3:
-        snprintf(b, sizeof b, "%s(%d),%s(8)", sy->label, sy->bytes, wk);
+        field_ref(sy, sub, sy->elem, 6, f, sizeof f);
+        snprintf(b, sizeof b, "%s,%s(8)", f, wk);
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
         snprintf(b, sizeof b, "DWK(8),%s(8)", wk);
         asm_line("", "ZAP", b, "");
         asm_line("", "CVB", "2,DWK", "packed -> binary");
-        snprintf(b, sizeof b, "2,%s", sy->label);
-        asm_line("", sy->bytes == 2 ? "STH" : "ST", b, "");
+        field_ref(sy, sub, 0, 6, f, sizeof f);
+        snprintf(b, sizeof b, "2,%s", f);
+        asm_line("", sy->elem == 2 ? "STH" : "ST", b, "");
         break;
     }
 }
@@ -1280,22 +1469,24 @@ static const char *intern_str(const char *text, int len, int pad)
 }
 
 /* Load a field into a 16-byte work area. */
-static void gen_load16(const Sym *sy, const char *wk)
+static void gen_load16(const Sym *sy, Node *sub, const char *wk)
 {
-    char b[96];
-    need_sym_base(sy);
+    char b[128], f[64];
     switch (sy->usage) {
     case U_DISPLAY:
-        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->label, sy->bytes);
+        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
+        snprintf(b, sizeof b, "%s(16),%s", wk, f);
         asm_line("", "PACK", b, "zoned -> packed");
         break;
     case U_COMP3:
-        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->label, sy->bytes);
+        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
+        snprintf(b, sizeof b, "%s(16),%s", wk, f);
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
-        snprintf(b, sizeof b, "2,%s", sy->label);
-        asm_line("", sy->bytes == 2 ? "LH" : "L", b, "");
+        field_ref(sy, sub, 0, 7, f, sizeof f);
+        snprintf(b, sizeof b, "2,%s", f);
+        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
         asm_line("", "CVD", "2,DWK", "binary -> packed");
         snprintf(b, sizeof b, "%s(16),DWK(8)", wk);
         asm_line("", "ZAP", b, "");
@@ -1335,7 +1526,7 @@ static int gen_expr(Node *n, int d, int tgtscale)
 
     switch (n->kind) {
     case N_SYM:
-        gen_load16(&syms[n->sym], wk);
+        gen_load16(&syms[n->sym], n->sub, wk);
         return syms[n->sym].scale;
 
     case N_LIT: {
@@ -1400,22 +1591,27 @@ static int gen_expr(Node *n, int d, int tgtscale)
 /* Alphanumeric move: left justified, space filled, truncated on the right.
  * Groups move as bytes, which is why a group MOVE is alphanumeric whatever
  * its subordinates are. */
-static void gen_move_alpha(const Sym *d, const Sym *sv)
+static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
 {
-    char b[128];
-    need_sym_base(d); need_sym_base(sv);
-    int n = d->bytes < sv->bytes ? d->bytes : sv->bytes;
+    char b[160], fd[64], fs[64];
+    int dn = dsub ? d->elem : d->bytes;
+    int sn = ssub ? sv->elem : sv->bytes;
+    int n = dn < sn ? dn : sn;
     if (n > 256) die("MVC is limited to 256 bytes; long moves need a loop, "
                      "which is not implemented yet");
-    snprintf(b, sizeof b, "%s(%d),%s", d->label, n, sv->label);
+    field_ref_m(sv, ssub, FR_SS_NOLEN, n, 7, fs, sizeof fs);
+    field_ref(d, dsub, n, 6, fd, sizeof fd);
+    snprintf(b, sizeof b, "%s,%s", fd, fs);
     asm_line("", "MVC", b, "alphanumeric move");
-    if (d->bytes > n) {
-        int rest = d->bytes - n;
-        snprintf(b, sizeof b, "%s+%d,C' '", d->label, n);
+    if (dn > n) {
+        int rest = dn - n;
+        if (rest - 1 > 256) die("space fill longer than 256 bytes is not implemented yet");
+        if (dsub) snprintf(b, sizeof b, "%d(6),C' '", n);
+        else      snprintf(b, sizeof b, "%s+%d,C' '", d->label, n);
         asm_line("", "MVI", b, "space fill the remainder");
         if (rest > 1) {
-            if (rest - 1 > 256) die("space fill longer than 256 bytes is not implemented yet");
-            snprintf(b, sizeof b, "%s+%d(%d),%s+%d", d->label, n + 1, rest - 1, d->label, n);
+            if (dsub) snprintf(b, sizeof b, "%d(%d,6),%d(6)", n + 1, rest - 1, n);
+            else snprintf(b, sizeof b, "%s+%d(%d),%s+%d", d->label, n + 1, rest - 1, d->label, n);
             asm_line("", "MVC", b, "");
         }
     }
@@ -1568,17 +1764,21 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             if (L->kind != N_SYM || !node_alpha(L))
                 die("alphanumeric comparison needs an identifier on one side");
             const Sym *ls = &syms[L->sym];
-            int n = ls->bytes;
-            need_sym_base(ls);
-            if (R->kind == N_SYM && node_alpha(R)) need_sym_base(&syms[R->sym]);
+            int n = L->sub ? ls->elem : ls->bytes;
+            char fl[64], fr[64];
             if (R->kind == N_STR) {
                 const char *sl = intern_str(R->lit, R->litlen, n);
-                snprintf(b, sizeof b, "%s(%d),%s", ls->label, n, sl);
+                field_ref(ls, L->sub, n, 6, fl, sizeof fl);
+                snprintf(b, sizeof b, "%s,%s", fl, sl);
             } else if (R->kind == N_SYM && node_alpha(R)) {
-                if (syms[R->sym].bytes != n)
+                const Sym *rs = &syms[R->sym];
+                int rn = R->sub ? rs->elem : rs->bytes;
+                if (rn != n)
                     die("comparing alphanumeric items of different lengths is "
                         "not implemented yet");
-                snprintf(b, sizeof b, "%s(%d),%s", ls->label, n, syms[R->sym].label);
+                field_ref_m(rs, R->sub, FR_SS_NOLEN, n, 7, fr, sizeof fr);
+                field_ref(ls, L->sub, n, 6, fl, sizeof fl);
+                snprintf(b, sizeof b, "%s,%s", fl, fr);
             } else die("mixed alphanumeric and numeric comparison is not implemented yet");
             if (n > 256) die("CLC is limited to 256 bytes");
             asm_line("", "CLC", b, "alphanumeric compare");
@@ -1781,7 +1981,7 @@ static void generate(void)
             int rs = gen_expr(st->expr, 0, d->scale);
             gen_rescale16("WK0", rs, d->scale, st->rounded);
             asm_line("", "ZAP", "PWK1(8),WK0(16)", "");
-            gen_store(d, "PWK1");
+            gen_store(d, st->dsub, "PWK1");
             break;
         }
         case ST_MOVE:
@@ -1798,10 +1998,12 @@ static void generate(void)
                     if (!(d->is_alpha || d->is_group))
                         die("MOVE of a nonnumeric literal to a numeric item is "
                             "not implemented yet");
-                    need_sym_base(d);
-                    const char *sl = intern_str(st->immdigits, st->immscale, d->bytes);
-                    if (d->bytes > 256) die("MVC is limited to 256 bytes");
-                    snprintf(b, sizeof b, "%s(%d),%s", d->label, d->bytes, sl);
+                    int dn = st->dsub ? d->elem : d->bytes;
+                    if (dn > 256) die("MVC is limited to 256 bytes");
+                    const char *sl = intern_str(st->immdigits, st->immscale, dn);
+                    char fd[64];
+                    field_ref(d, st->dsub, dn, 6, fd, sizeof fd);
+                    snprintf(b, sizeof b, "%s,%s", fd, sl);
                     asm_line("", "MVC", b, "literal move, space padded");
                     break;
                 }
@@ -1811,12 +2013,12 @@ static void generate(void)
                     if (!(d->is_alpha || d->is_group) || !(sv->is_alpha || sv->is_group))
                         die("MOVE between a numeric and an alphanumeric item is "
                             "not implemented yet");
-                    gen_move_alpha(d, sv);
+                    gen_move_alpha(d, st->dsub, sv, st->ssub);
                     break;
                 }
                 if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK1"); }
-                else { gen_load(&syms[st->src], "PWK1"); gen_rescale("PWK1", syms[st->src].scale, d->scale); }
-                gen_store(d, "PWK1");
+                else { gen_load(&syms[st->src], st->ssub, "PWK1"); gen_rescale("PWK1", syms[st->src].scale, d->scale); }
+                gen_store(d, st->dsub, "PWK1");
             } else {
                 /* Compute at the wider of the two scales, then truncate once on
                    store. Rescaling the source down first would lose digits that
@@ -1824,14 +2026,14 @@ static void generate(void)
                    0.1, not 0.0. */
                 int ss = st->imm ? st->immscale : syms[st->src].scale;
                 int ws = d->scale > ss ? d->scale : ss;
-                gen_load(d, "PWK1");
+                gen_load(d, st->dsub, "PWK1");
                 gen_rescale("PWK1", d->scale, ws);
                 if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK2"); }
-                else { gen_load(&syms[st->src], "PWK2"); }
+                else { gen_load(&syms[st->src], st->ssub, "PWK2"); }
                 gen_rescale("PWK2", ss, ws);
                 asm_line("", st->op == ST_ADD ? "AP" : "SP", "PWK1(8),PWK2(8)", "");
                 gen_rescale("PWK1", ws, d->scale);
-                gen_store(d, "PWK1");
+                gen_store(d, st->dsub, "PWK1");
             }
             break;
         }
@@ -1914,6 +2116,10 @@ static void generate(void)
         snprintf(b, sizeof b, "PL8'%s'", consts[i].digits);
         asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");
     }
+    for (int i = 0; i < nhconst; i++) {
+        snprintf(b, sizeof b, "H'%d'", hconsts[i].v);
+        asm_line(hconsts[i].label, "DC", b, i ? "" : "element sizes");
+    }
     for (int i = 0; i < nsconst; i++) {
         char op[MAXTOK * 2 + 16]; int j = 0;
         j += snprintf(op + j, sizeof op - j, "CL%d'", sconsts[i].len);
@@ -1954,53 +2160,72 @@ static void generate(void)
             asm_line(lab, "EQU", b, i ? "" : "chunk origins");
         }
         asm_comment(" WORKING-STORAGE");
+        /* Emit one element's worth of definition per item and let the gap
+         * filler reserve the rest of a table. A group's DS 0CLn occupies no
+         * storage at all -- it is only a label -- so without this a table
+         * reserves a single element and everything after it lands on top of
+         * elements two onward. */
+        int at = 0;
         for (int i = 0; i < nsym; i++) {
             Sym *sy = &syms[i];
             char cmt[96];
-            if (sy->is_88) continue;      /* a condition name has no storage */
-            if (sy->is_group) {
-                /* The C-type length modifier maxes at 256; a group only needs
-                   a label at the right offset, so drop the length when big. */
-                if (sy->bytes <= 256) snprintf(b, sizeof b, "0CL%d", sy->bytes);
-                else                  snprintf(b, sizeof b, "0C");
-                snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
-                asm_line(sy->label, "DS", b, cmt);
-                continue;
+            if (sy->is_88) continue;
+            if (sy->offset > at) {
+                snprintf(b, sizeof b, "XL%d", sy->offset - at);
+                asm_line("", "DS", b, "reserve the rest of a table");
+                at = sy->offset;
             }
+            if (sy->is_group) {
+                if (sy->elem <= 256) snprintf(b, sizeof b, "0CL%d", sy->elem);
+                else                 snprintf(b, sizeof b, "0C");
+                if (sy->occurs) snprintf(cmt, sizeof cmt, "%s (%02d group, OCCURS %d)",
+                                         sy->name, sy->level, sy->occurs);
+                else            snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
+                asm_line(sy->label, "DS", b, cmt);
+                continue;                      /* a label only: no storage */
+            }
+            char dup[12] = "";
+            if (sy->occurs > 1) snprintf(dup, sizeof dup, "%d", sy->occurs);
             if (sy->is_alpha) {
-                if (sy->has_value == 3 && sy->bytes > 256)
+                if (sy->has_value == 3 && sy->elem > 256)
                     die("a VALUE literal on an item longer than 256 bytes is "
                         "not implemented yet");
                 if (sy->has_value == 3) {
-                    char op[MAXTOK * 2 + 16]; int j = 0;
-                    j += snprintf(op + j, sizeof op - j, "CL%d'", sy->bytes);
+                    char op[MAXTOK * 2 + 24]; int j = 0;
+                    j += snprintf(op + j, sizeof op - j, "%sCL%d'", dup, sy->elem);
                     for (const char *q = sy->value; *q; q++) {
                         if (*q == '\'' || *q == '&') op[j++] = *q;
                         op[j++] = *q;
                     }
                     op[j++] = '\''; op[j] = 0;
                     snprintf(b, sizeof b, "%s", op);
-                } else if (sy->bytes <= 256) {
-                    snprintf(b, sizeof b, "CL%d' '", sy->bytes);
+                } else if (sy->elem <= 256) {
+                    snprintf(b, sizeof b, "%sCL%d' '", dup, sy->elem);
                 } else {
-                    /* Past 256 the length modifier is illegal, but a
-                       duplication factor is not. */
-                    snprintf(b, sizeof b, "%dC' '", sy->bytes);
+                    snprintf(b, sizeof b, "%dC' '", sy->elem * (sy->occurs ? sy->occurs : 1));
                 }
-                snprintf(cmt, sizeof cmt, "%s PIC X(%d)", sy->name, sy->bytes);
+                snprintf(cmt, sizeof cmt, "%s PIC X(%d)%s", sy->name, sy->elem,
+                         sy->occurs ? " table" : "");
                 asm_line(sy->label, "DC", b, cmt);
+                at = sy->offset + sy->bytes;
                 continue;
             }
             const char *v = (sy->has_value == 1) ? sy->value : "0";
             switch (sy->usage) {
-            case U_DISPLAY: snprintf(b, sizeof b, "ZL%d'%s'", sy->bytes, v); break;
-            case U_COMP3:   snprintf(b, sizeof b, "PL%d'%s'", sy->bytes, v); break;
-            default:        snprintf(b, sizeof b, "%s'%s'", sy->bytes == 2 ? "H" : "F", v); break;
+            case U_DISPLAY: snprintf(b, sizeof b, "%sZL%d'%s'", dup, sy->elem, v); break;
+            case U_COMP3:   snprintf(b, sizeof b, "%sPL%d'%s'", dup, sy->elem, v); break;
+            default:        snprintf(b, sizeof b, "%s%s'%s'", dup, sy->elem == 2 ? "H" : "F", v); break;
             }
-            snprintf(cmt, sizeof cmt, "%s PIC %s9(%d)v%d %s",
+            snprintf(cmt, sizeof cmt, "%s PIC %s9(%d)v%d %s%s",
                      sy->name, sy->is_signed ? "S" : "", sy->digits, sy->scale,
-                     sy->usage == U_COMP ? "COMP" : sy->usage == U_COMP3 ? "COMP-3" : "DISP");
+                     sy->usage == U_COMP ? "COMP" : sy->usage == U_COMP3 ? "COMP-3" : "DISP",
+                     sy->occurs ? " table" : "");
             asm_line(sy->label, "DC", b, cmt);
+            at = sy->offset + sy->bytes;
+        }
+        if (wslen > at) {
+            snprintf(b, sizeof b, "XL%d", wslen - at);
+            asm_line("", "DS", b, "reserve the rest of the last table");
         }
     }
 

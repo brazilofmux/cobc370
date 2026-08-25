@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="stoprun hello arith compute grpperf iftest bigws filetest"
+ALL="occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 pass=0; fail=0
 
@@ -48,10 +48,24 @@ for t in $TESTS; do
     } > "$WORK/$t.jcl.new" && mv "$WORK/$t.jcl.new" "$WORK/$t.jcl"
 
     "$(dirname "$0")/tk5-run" "$WORK/$t.jcl" "$WORK/$t.out" >/dev/null 2>&1
-    rc=$(grep -oE 'PGM=\*\.DD  RC= [0-9]+' "$WORK/$t.out" | tail -1 | grep -oE '[0-9]+$')
-    ab=$(grep -oE 'AB S[0-9A-F]+' "$WORK/$t.out" | tail -1)
-    if [ -n "$ab" ]; then say "  $t: $ab"; fail=$((fail+1)); continue; fi
-    if [ "${rc:-x}" != "0000" ]; then say "  $t: GO step RC=${rc:-none}"; fail=$((fail+1)); continue; fi
+    # check the assembler first: an assembly error otherwise surfaces later as
+    # a bewildering abend rather than as the diagnostic it is
+    arc=$(grep -oE 'IFOX00    RC= [0-9]+' "$WORK/$t.out" | tail -1 | grep -oE '[0-9]+$')
+    if [ "${arc:-x}" != "0000" ]; then
+        say "  $t: ASSEMBLY RC=${arc:-none}"
+        grep -oE 'IFO[0-9]+ +.*' "$WORK/$t.out" | sort -u | head -3 | sed 's/^/      /'
+        fail=$((fail+1)); continue
+    fi
+    # Take the LAST GO-step result line, whatever it says. JES2 prints spool
+    # asynchronously, so a previous job's output can land after the offset mark
+    # for this one -- grepping for any abend anywhere then reports a stale
+    # failure against a job that actually succeeded.
+    res=$(grep -oE 'PGM=\*\.DD +(RC= [0-9]+|AB S[0-9A-F]+)' "$WORK/$t.out" | tail -1)
+    case "$res" in
+        *"RC= 0000") ;;
+        "")          say "  $t: no GO step"; fail=$((fail+1)); continue ;;
+        *)           say "  $t: ${res##*DD }"; fail=$((fail+1)); continue ;;
+    esac
 
     if [ -f "$CC/tests/$t.expected" ]; then
         # The expected lines must appear consecutively; JES2 separator pages
