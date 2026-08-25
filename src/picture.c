@@ -144,27 +144,54 @@ int pic_analyse(const char *s, PicInfo *info)
      * The significance starter goes at the first '9'. If every digit position
      * suppresses, there is none, and a zero value prints entirely blank --
      * which is what COBOL specifies. */
-    int first9 = -1;
-    for (int i = 0; i < nf; i++) if (f[i] == '9') { first9 = i; break; }
+    /* Where the significance starter goes.
+     *
+     * X'21' stores its digit using the significance state as it was BEFORE
+     * setting it, so putting the starter on the first '9' makes a leading zero
+     * there come out as fill -- +99999 would print '+ 0042'. The starter
+     * belongs on the digit selector immediately PRECEDING the first '9', so
+     * significance is already on when that '9' is examined.
+     *
+     * If the first '9' is itself the first digit position there is no
+     * preceding selector, and every digit must print. That is what the spare
+     * leading selector is for, and it is why IKFCBL00 always carried two extra
+     * pattern bytes rather than computing the parity spare exactly. */
+    int first9 = -1, nprev = -1, seen = 0;
+    for (int i = 0; i < nf; i++) {
+        int is_digit_pos = (f[i] == '9' || f[i] == 'Z' || f[i] == '*' ||
+                            (fl && f[i] == fl && i != fl_first));
+        if (f[i] == '9') { first9 = i; nprev = seen - 1; break; }
+        if (is_digit_pos) seen++;
+    }
+    info->need_lead_start = (first9 >= 0 && nprev < 0);
+    int start_at = -1;                  /* which digit position gets X'21' */
+    if (first9 >= 0 && nprev >= 0) start_at = nprev;
 
     if (info->bytes + 1 > PIC_MAXMASK)
         return fail(info, "PICTURE too wide for an ED pattern");
     info->mask[0] = ebcdic(fillch);
     info->masklen = 1;
+    info->sign_pos = -1;
+    info->first_sel = -1;
+    info->sign_char = fl ? fl : 0;
 
+    int dseen = 0;
     for (int i = 0; i < nf; i++) {
         char c = f[i];
         if (fl && c == fl) {
             /* The first symbol is the sign position: a fill byte, which EDMK
                will overwrite if the sign has to go there. */
-            info->mask[info->masklen++] =
-                (i == fl_first) ? ebcdic(fillch)
-                                : ((i == first9) ? ED_START : ED_DIGIT);
+            if (i == fl_first) info->mask[info->masklen++] = ebcdic(fillch);
+            else {
+                if (info->first_sel < 0) info->first_sel = info->masklen;
+                info->mask[info->masklen++] = (dseen++ == start_at) ? ED_START : ED_DIGIT;
+            }
             continue;
         }
         switch (c) {
         case '9': case 'Z': case '*':
-            info->mask[info->masklen++] = (i == first9) ? ED_START : ED_DIGIT;
+            if (info->first_sel < 0) info->first_sel = info->masklen;
+            info->mask[info->masklen++] = (dseen++ == start_at) ? ED_START : ED_DIGIT;
             break;
         case 'V': case 'S': break;
         case '.': info->mask[info->masklen++] = ebcdic('.'); break;
@@ -172,7 +199,14 @@ int pic_analyse(const char *s, PicInfo *info)
         case 'B': info->mask[info->masklen++] = ebcdic(' '); break;
         case '0': info->mask[info->masklen++] = ebcdic('0'); break;
         case '/': info->mask[info->masklen++] = ebcdic('/'); break;
-        case '+': case '-': case '$':
+        case '+': case '-':
+            /* A fixed sign is NOT a pattern message byte. It sits left of the
+               significance starter, so ED would replace it with fill. Leave a
+               fill byte and let the code generator store the sign afterwards,
+               where the condition code says which one it is. */
+            info->sign_char = c; info->sign_pos = info->masklen;
+            info->mask[info->masklen++] = ebcdic(fillch); break;
+        case '$':
             info->mask[info->masklen++] = ebcdic(c); break;
         case 'C': info->mask[info->masklen++] = ebcdic('C');
                   info->mask[info->masklen++] = ebcdic('R'); break;

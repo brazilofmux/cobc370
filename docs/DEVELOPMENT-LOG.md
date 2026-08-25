@@ -607,11 +607,59 @@ loses a digit at every comma, which is exactly what the first version did.
 
 and all **54 distinct PICTUREs in the corpus** parse.
 
-Edited fields now carry their `ED` pattern; storing into one is diagnosed as
-the next step rather than silently mishandled. `PIC X` and numeric PICTUREs go
+Edited fields carry their `ED` pattern, and slice 10 uses it. `PIC X` and numeric PICTUREs go
 through the same path now, so the old hand-rolled `parse_picture` is gone.
 
 Regression: 10 passed, 0 failed.
+
+## Slice 10: ED and EDMK
+
+Edited output works. All five forms byte-identical to GnuCOBOL:
+
+    MOVE -1234567.89   TO PIC ----,---,--9.99   ->   "  -1,234,567.89"
+    MOVE 1234.56       TO PIC ZZZ,ZZ9.99        ->   "  1,234.56"
+    MOVE 42            TO PIC +99999            ->   "+00042"
+    MOVE 1234.56       TO PIC ***,**9.99        ->   "**1,234.56"
+    MOVE -98765        TO PIC ---,---,--9       ->   "    -98,765"
+
+**Floating signs use `EDMK`**, which reports where the first significant digit
+landed so the sign can go one byte to its left:
+
+    LA    1,EDWK+2             default sign position
+    EDMK  EDWK(16),EDSRC
+    BCTR  1,0                  one left of the first significant digit
+    BNM   G0001                not negative?
+    MVI   0(1),C'-'
+
+R1 is preloaded because `EDMK` leaves it alone when significance was already on
+at the start.
+
+### Two things about the significance starter
+
+**It goes before the first `9`, not on it.** `X'21'` stores its digit using the
+significance state as it was *before* setting it, so a leading zero at that
+position comes out as fill. Putting the starter on the `9` made `+99999` print
+`+ 0042`. It belongs on the digit selector immediately *preceding* the first
+`9`, so significance is already on when that `9` is examined.
+
+**And when the first `9` is the first digit position**, there is no preceding
+selector and every digit must print. That is what the spare leading selector is
+for. Which finally explains IKFCBL00's mask being *two* bytes longer than the
+field rather than one: fill byte, plus a spare selector that swallows a leading
+zero and turns significance on. Computing the parity spare exactly — 0 or 1 —
+was the right optimisation and the wrong one, because it removed the byte that
+case needs. The generator now takes `max(parity spare, 1 when a leading starter
+is required)`.
+
+### Sizing the source
+
+A packed field of *n* bytes holds 2*n*−1 digits, so an even digit count leaves
+one spare leading nibble — a zero that would eat a selector and shift the whole
+result right. The source is ZAPped into an exactly-sized temp and the pattern
+gets that many extra leading selectors, with the field taking the tail of the
+result.
+
+Regression: 11 passed, 0 failed.
 
 ## Suggested order
 

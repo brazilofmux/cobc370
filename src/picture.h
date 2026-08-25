@@ -16,6 +16,12 @@ typedef struct {
     int  edited;      /* needs an ED pattern rather than a plain move */
     int  bytes;       /* character positions in the field */
     int  floating;    /* a floating insertion string is present -> EDMK */
+    char sign_char;   /* '+' or '-' if the picture carries a sign symbol */
+    int  sign_pos;    /* mask index of a FIXED sign position */
+    int  first_sel;   /* mask index of the first digit selector */
+    int  need_lead_start; /* the first digit position always prints, so
+                             significance must be on before it: the starter
+                             has to go on a spare leading selector */
     unsigned char mask[PIC_MAXMASK];
     int  masklen;
     char err[96];     /* set when the picture cannot be handled */

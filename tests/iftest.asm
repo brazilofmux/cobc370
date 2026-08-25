@@ -269,6 +269,8 @@ LEN0008  DC    H'6'
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL8
 PWK2     DS    PL8
+EDSRC    DS    PL8                 ED source, exactly sized
+EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
 QTMP     DS    PL8                 DP quotient

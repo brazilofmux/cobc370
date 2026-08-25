@@ -213,6 +213,8 @@ typedef struct {
     int  edited;      /* needs an ED pattern */
     int  floating;    /* floating insertion -> EDMK */
     int  masklen;
+    char sign_char;
+    int  sign_pos, first_sel, need_lead_start;
     unsigned char mask[PIC_MAXMASK];
     int  occurs;      /* OCCURS count, 0 when not a table */
     int  elem;        /* size of one element */
@@ -602,6 +604,10 @@ static void parse_data_division(void)
             sy->is_signed = pi.is_signed; sy->is_alpha = pi.is_alpha;
             sy->edited = pi.edited; sy->floating = pi.floating;
             sy->masklen = pi.masklen;
+            sy->sign_char = pi.sign_char;
+            sy->sign_pos = pi.sign_pos;
+            sy->first_sel = pi.first_sel;
+            sy->need_lead_start = pi.need_lead_start;
             memcpy(sy->mask, pi.mask, sizeof sy->mask);
             if (pi.is_alpha) {
                 if (sy->has_value == 1)
@@ -912,8 +918,9 @@ static void parse_one_statement(void)
             int i = need_sym(tok.text);
             if (syms[i].is_group) die("DISPLAY of a group item is not implemented yet");
             if (syms[i].is_88) die("DISPLAY of a condition name is meaningless");
-            if (!syms[i].is_alpha && (syms[i].usage != U_DISPLAY || syms[i].is_signed))
-                die("DISPLAY takes an alphanumeric or unsigned USAGE DISPLAY "
+            if (!syms[i].is_alpha && !syms[i].edited &&
+                (syms[i].usage != U_DISPLAY || syms[i].is_signed))
+                die("DISPLAY takes an alphanumeric, edited, or unsigned DISPLAY "
                     "item in this slice; MOVE to one first.");
             Stmt *st = new_stmt(ST_DISPLAY_ID);
             st->src = i;
@@ -1229,6 +1236,22 @@ static void need_base(int chunk)
 
 static void need_sym_base(const Sym *sy) { need_base(sy->offset / CHUNK); }
 
+/* ED patterns, emitted as hex constants. */
+static struct { char label[16]; unsigned char b[PIC_MAXMASK]; int len; } mconsts[64];
+static int nmconst;
+
+static const char *intern_mask(const unsigned char *pat, int len)
+{
+    for (int i = 0; i < nmconst; i++)
+        if (mconsts[i].len == len && !memcmp(mconsts[i].b, pat, (size_t)len))
+            return mconsts[i].label;
+    if (nmconst >= 64) die("too many ED patterns");
+    snprintf(mconsts[nmconst].label, sizeof mconsts[nmconst].label, "M%04d", nmconst + 1);
+    memcpy(mconsts[nmconst].b, pat, (size_t)len);
+    mconsts[nmconst].len = len;
+    return mconsts[nmconst++].label;
+}
+
 /* Halfword constants, for the element-size multiply. */
 static struct { char label[16]; int v; } hconsts[64];
 static int nhconst;
@@ -1378,12 +1401,91 @@ static void gen_rescale(const char *wk, int from, int to)
     asm_line("", "SRP", b, d > 0 ? "align scale (left)" : "align scale (right)");
 }
 
+/* Store into an edited field.
+ *
+ * The pattern's digit selectors consume nibbles from the packed source, so the
+ * selector count has to match the digits available. A packed field of n bytes
+ * holds 2n-1 digits, so an even digit count leaves exactly one spare leading
+ * nibble -- a zero that would eat a selector and shift the result right. One
+ * extra selector is inserted for it, and the field takes the tail of the
+ * result. IKFCBL00 always allowed two extra; computing it exactly is 0 or 1.
+ */
+static int gen_edited_labels;
+
+static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
+{
+    char b[160], f[64];
+    int n = sy->digits / 2 + 1;
+    int spare = (2 * n - 1) - sy->digits;          /* 0 or 1 from parity */
+    if (sy->need_lead_start && spare == 0) { n++; spare = (2 * n - 1) - sy->digits; }
+    int patlen = 1 + spare + sy->bytes;
+    if (patlen > PIC_MAXMASK) die("edited field too wide for the ED work area");
+
+    unsigned char pat[PIC_MAXMASK];
+    pat[0] = sy->mask[0];
+    for (int i = 0; i < spare; i++) pat[1 + i] = 0x20;
+    /* The last spare selector turns significance on when the field's own first
+       digit position must always print. */
+    if (sy->need_lead_start) pat[spare] = 0x21;
+    memcpy(pat + 1 + spare, sy->mask + 1, (size_t)sy->bytes);
+
+    snprintf(b, sizeof b, "EDSRC(%d),%s(8)", n, wk);
+    asm_line("", "ZAP", b, "source, sized to the selector count");
+    snprintf(b, sizeof b, "EDWK(%d),%s", patlen, intern_mask(pat, patlen));
+    asm_line("", "MVC", b, "load the ED pattern");
+
+    if (sy->floating) {
+        /* EDMK reports where the first significant digit landed; the floating
+           sign goes one byte to its left. R1 is preloaded in case significance
+           was already on, in which case EDMK leaves it alone. */
+        snprintf(b, sizeof b, "1,EDWK+%d", sy->first_sel + spare);
+        asm_line("", "LA", b, "default sign position");
+        snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
+        asm_line("", "EDMK", b, "");
+        asm_line("", "BCTR", "1,0", "one left of the first significant digit");
+        int l1 = ++gen_edited_labels, l2 = ++gen_edited_labels;
+        char la[16], lb[16];
+        snprintf(la, sizeof la, "G%04d", l1);
+        snprintf(lb, sizeof lb, "G%04d", l2);
+        asm_line("", "BNM", la, "not negative?");
+        asm_line("", "MVI", "0(1),C'-'", "");
+        if (sy->sign_char == '+') {
+            asm_line("", "B", lb, "");
+            asm_line(la, "MVI", "0(1),C'+'", "");
+            asm_line(lb, "DS", "0H", "");
+        } else {
+            asm_line(la, "DS", "0H", "");
+        }
+    } else {
+        snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
+        asm_line("", "ED", b, "");
+        if (sy->sign_pos >= 0) {
+            int l1 = ++gen_edited_labels, l2 = ++gen_edited_labels;
+            char la[16], lb[16], pos[24];
+            snprintf(la, sizeof la, "G%04d", l1);
+            snprintf(lb, sizeof lb, "G%04d", l2);
+            snprintf(pos, sizeof pos, "EDWK+%d", sy->sign_pos + spare);
+            asm_line("", "BNM", la, "not negative?");
+            snprintf(b, sizeof b, "%s,C'-'", pos); asm_line("", "MVI", b, "");
+            if (sy->sign_char == '+') {
+                asm_line("", "B", lb, "");
+                snprintf(b, sizeof b, "%s,C'+'", pos); asm_line(la, "MVI", b, "");
+                asm_line(lb, "DS", "0H", "");
+            } else {
+                asm_line(la, "DS", "0H", "");
+            }
+        }
+    }
+
+    field_ref_m(sy, sub, FR_SS_LEN, sy->bytes, 6, f, sizeof f);
+    snprintf(b, sizeof b, "%s,EDWK+%d", f, 1 + spare);
+    asm_line("", "MVC", b, "the edited result");
+}
+
 static void gen_store(const Sym *sy, Node *sub, const char *wk)
 {
     char b[128], f[64];
-    if (sy->edited)
-        die("storing into an edited PICTURE needs ED/EDMK, which is the next "
-            "step; the pattern is already computed");
+    if (sy->edited) { gen_store_edited(sy, sub, wk); return; }
     switch (sy->usage) {
     case U_DISPLAY:
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
@@ -2059,8 +2161,9 @@ static void generate(void)
             snprintf(llab, sizeof llab, "LEN%04d", ndlit);
             snprintf(b, sizeof b, "A(%s)", syms[st->src].label); asm_line(plab, "DC", b, "");
             snprintf(b, sizeof b, "X'80',AL3(%s)", llab);       asm_line("", "DC", b, "last parameter");
-            snprintf(b, sizeof b, "H'%d'", syms[st->src].is_alpha ? syms[st->src].bytes
-                                                                  : syms[st->src].digits);
+            snprintf(b, sizeof b, "H'%d'",
+                     (syms[st->src].is_alpha || syms[st->src].edited)
+                         ? syms[st->src].bytes : syms[st->src].digits);
             asm_line(llab, "DC", b, "");
         }
     }
@@ -2070,6 +2173,8 @@ static void generate(void)
         asm_line("DWK", "DS", "D", "CVD/CVB doubleword");
         asm_line("PWK1", "DS", "PL8", "");
         asm_line("PWK2", "DS", "PL8", "");
+        asm_line("EDSRC", "DS", "PL8", "ED source, exactly sized");
+        asm_line("EDWK", "DS", "CL64", "ED pattern and result");
         asm_line("MULT8", "DS", "PL8", "MP right operand");
         asm_line("DIVR8", "DS", "PL8", "DP divisor");
         asm_line("QTMP", "DS", "PL8", "DP quotient");
@@ -2093,6 +2198,13 @@ static void generate(void)
     for (int i = 0; i < nconst; i++) {
         snprintf(b, sizeof b, "PL8'%s'", consts[i].digits);
         asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");
+    }
+    for (int i = 0; i < nmconst; i++) {
+        char hex[PIC_MAXMASK * 2 + 8]; int j = 0;
+        for (int k = 0; k < mconsts[i].len; k++)
+            j += snprintf(hex + j, sizeof hex - j, "%02X", mconsts[i].b[k]);
+        snprintf(b, sizeof b, "XL%d'%s'", mconsts[i].len, hex);
+        asm_line(mconsts[i].label, "DC", b, i ? "" : "ED patterns");
     }
     for (int i = 0; i < nhconst; i++) {
         snprintf(b, sizeof b, "H'%d'", hconsts[i].v);
