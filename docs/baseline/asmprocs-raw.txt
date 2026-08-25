@@ -1,0 +1,154 @@
+                                                J E S 2   J O B   L O G
+
+
+19.07.01 JOB 3169  $HASP373 ASMPROCS STARTED - INIT  1 - CLASS A - SYS TK5R
+19.07.01 JOB 3169  IEF403I ASMPROCS - STARTED - TIME=19.07.01
+19.07.01 JOB 3169  IEFACTRT - Stepname  Procstep  Program   Retcode
+19.07.01 JOB 3169  ASMPROCS   S1                  IEBPTPCH  RC= 0000
+19.07.01 JOB 3169  IEF404I ASMPROCS - ENDED - TIME=19.07.01
+19.07.01 JOB 3169  $HASP395 ASMPROCS ENDED
+
+
+------ JES2 JOB STATISTICS ------
+
+
+ 25 AUG 26 JOB EXECUTION DATE
+
+
+        12 CARDS READ
+
+
+       106 SYSOUT PRINT RECORDS
+
+
+         0 SYSOUT PUNCH RECORDS
+
+
+      0.00 MINUTES EXECUTION TIME
+    1     //ASMPROCS JOB (5161A020,1A11),'ASM PROCS',                             JOB 3169
+          //             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+          //             USER=HERC01,PASSWORD=
+    2     //S1       EXEC PGM=IEBPTPCH
+    3     //SYSPRINT DD  SYSOUT=Z
+    4     //SYSUT1   DD  DSN=SYS1.PROCLIB,DISP=SHR
+    5     //SYSUT2   DD  SYSOUT=Z
+    6     //SYSIN    DD  *
+IEF236I ALLOC. FOR ASMPROCS S1
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I 390  ALLOCATED TO SYSUT1
+IEF237I JES2 ALLOCATED TO SYSUT2
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF142I ASMPROCS S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   JES2.JOB03169.SO0102                         SYSOUT
+IEF285I   SYS1.PROCLIB                                 KEPT          *--------6
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   JES2.JOB03169.SO0103                         SYSOUT
+IEF285I   JES2.JOB03169.SI0101                         SYSIN
+IEF373I STEP /S1      / START 26237.1907
+IEF374I STEP /S1      / STOP  26237.1907 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT    56K SYS   192K
+************************************************************************************************************************************
+*     1. Jobstep of job: ASMPROCS    Stepname: S1          Program name: IEBPTPCH   Executed on 25.08.26 from 19.07.01 to 19.07.01 *
+*         elapsed time  00:00:00,01                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:     56K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      3                                                                           *
+*     DMY.......0 390.......6 DMY.......0 DMY.......0                                                                              *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF375I  JOB /ASMPROCS/ START 26237.1907
+IEF376I  JOB /ASMPROCS/ STOP  26237.1907 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC
+
+
+
+PRINT/PUNCH DATA SET UTILITY                                                                      PAGE 0001
+ PRINT TYPORG=PO,MAXNAME=2
+ MEMBER NAME=ASMFCLG
+ MEMBER NAME=ASMFCL
+ EOF ON SYSIN
+ END OF DATA FOR SDS OR MEMBER
+ END OF DATA FOR SDS OR MEMBER                                                                                                              PAGE 0001
+MEMBER NAME  ASMFCLG
+//ASMFCL  G  PROC   MAC='SYS  1.MACLIB  ',MAC1='  SYS1.MAC  LIB',                         00000100*
+//           MAC2=  'SYS1.MA  CLIB',MA  C3='SYS1  .MACLIB'  ,SOUT='*  '                   00000200*
+//ASM        EXEC   PGM=IFOX  00,PARM=  OBJ,REGI  ON=128K                                 00000300*
+//SYSLIB     DD     DSN=&MAC  ,DISP=SH  R                                                 00000400*
+//           DD     DSN=&MAC  1,DISP=S  HR                                                00000500*
+//           DD     DSN=&MAC  2,DISP=S  HR                                                00000600*
+//           DD     DSN=&MAC  3,DISP=S  HR                                                00000700*
+//SYSUT1     DD     DSN=&&SY  SUT1,UNI  T=SYSSQ,  SPACE=(1  700,(600  ,100)),             00000800*
+//               S  EP=(SYSL  IB)                                                         00000900*
+//SYSUT2     DD     DSN=&&SY  SUT2,UNI  T=SYSSQ,  SPACE=(1  700,(300  ,50)),              00001000*
+//               S  EP=(SYSL  IB,SYSUT  1)                                                00001100*
+//SYSUT3     DD     DSN=&&SY  SUT3,UNI  T=SYSSQ,  SPACE=(1  700,(300  ,50))               00001200*
+//SYSPRI  NT DD     SYSOUT=&  SOUT,DCB  =BLKSIZE  =1089                                   00001300*
+//SYSPUN  CH DD     SYSOUT=B                                                              00001400*
+//SYSGO      DD     DSN=&&OB  JSET,UNI  T=SYSSQ,  SPACE=(8  0,(200,5  0)),                00001500*
+//               D  ISP=(MOD  ,PASS)                                                      00001600*
+//LKED       EXEC   PGM=IEWL  ,PARM=(X  REF,LET,  LIST,NCA  L),REGIO  N=128K,             00001700*
+//               C  OND=(8,L  T,ASM)                                                      00001800*
+//SYSLIN     DD     DSN=&&OB  JSET,DIS  P=(OLD,D  ELETE)                                  00001900*
+//           DD     DDNAME=S  YSIN                                                        00002000*
+//SYSLMO  D  DD     DSN=&&GO  SET(GO),  UNIT=SYS  DA,SPACE  =(1024,(  50,20,1)  ),        00002100*
+//               D  ISP=(MOD  ,PASS)                                                      00002200*
+//SYSUT1     DD     DSN=&&SY  SUT1,UNI  T=(SYSDA  ,SEP=(SY  SLIN,SYS  LMOD)),             00002300*
+//               S  PACE=(10  24,(50,2  0))                                               00002400*
+//SYSPRI  NT DD     SYSOUT=&  SOUT                                                        00002500*
+//GO         EXEC   PGM=*.LK  ED.SYSLM  OD,COND=  ((8,LT,A  SM),(4,L  T,LKED))            00002600**                                                                                                              PAGE 0002
+MEMBER NAME  ASMFCL
+//ASMFCL     PROC   MAC='SYS  1.MACLIB  ',MAC1='  SYS1.MAC  LIB',                         00000100*
+//           MAC2=  'SYS1.MA  CLIB',MA  C3='SYS1  .MACLIB'  ,SOUT='*  '                   00000200*
+//ASM        EXEC   PGM=IFOX  00,PARM=  OBJ,REGI  ON=128K                                 00000300*
+//SYSLIB     DD     DSN=&MAC  ,DISP=SH  R                                                 00000400*
+//           DD     DSN=&MAC  1,DISP=S  HR                                                00000500*
+//           DD     DSN=&MAC  2,DISP=S  HR                                                00000600*
+//           DD     DSN=&MAC  3,DISP=S  HR                                                00000700*
+//SYSUT1     DD     DSN=&&SY  SUT1,UNI  T=SYSSQ,  SPACE=(1  700,(600  ,100)),             00000800*
+//               S  EP=(SYSL  IB)                                                         00000900*
+//SYSUT2     DD     DSN=&&SY  SUT2,UNI  T=SYSSQ,  SPACE=(1  700,(300  ,50)),              00001000*
+//               S  EP=(SYSL  IB,SYSUT  1)                                                00001100*
+//SYSUT3     DD     DSN=&&SY  SUT3,UNI  T=SYSSQ,  SPACE=(1  700,(300  ,50))               00001200*
+//SYSPRI  NT DD     SYSOUT=&  SOUT,DCB  =BLKSIZE  =1089                                   00001300*
+//SYSPUN  CH DD     SYSOUT=B                                                              00001400*
+//SYSGO      DD     DSN=&&OB  JSET,UNI  T=SYSSQ,  SPACE=(8  0,(200,5  0)),                00001500*
+//               D  ISP=(MOD  ,PASS)                                                      00001600*
+//LKED       EXEC   PGM=IEWL  ,PARM=(X  REF,LET,  LIST,NCA  L),REGIO  N=128K,             00001700*
+//               C  OND=(8,L  T,ASM)                                                      00001800*
+//SYSLIN     DD     DSN=&&OB  JSET,DIS  P=(OLD,D  ELETE)                                  00001900*
+//           DD     DDNAME=S  YSIN                                                        00002000*
+//SYSLMO  D  DD     DSN=&&GO  SET(GO),  UNIT=SYS  DA,SPACE  =(1024,(  50,20,1)  ),        00002100*
+//               D  ISP=(MOD  ,PASS)                                                      00002200*
+//SYSUT1     DD     DSN=&&SY  SUT1,UNI  T=(SYSDA  ,SEP=(SY  SLIN,SYS  LMOD)),             00002300*
+//               S  PACE=(10  24,(50,2  0))                                               00002400*
+//SYSPRI  NT DD     SYSOUT=&  SOUT                                                        00002500**                  AAAAAAAAAA    SSSSSSSSSS   MM        MM  PPPPPPPPPPP   RRRRRRRRRRR   OOOOOOOOOOOO   CCCCCCCCCC    SSSSSSSSSS
+                AAAAAAAAAAAA  SSSSSSSSSSSS  MMM      MMM  PPPPPPPPPPPP  RRRRRRRRRRRR  OOOOOOOOOOOO  CCCCCCCCCCCC  SSSSSSSSSSSS
+               AA        AA  SS        SS  MMMM    MMMM  PP        PP  RR        RR  OO        OO  CC        CC  SS        SS
+              AA        AA  SS            MM MM  MM MM  PP        PP  RR        RR  OO        OO  CC            SS
+             AA        AA  SSS           MM  MMMM  MM  PP        PP  RR        RR  OO        OO  CC            SSS
+            AAAAAAAAAAAA   SSSSSSSSS    MM   MM   MM  PPPPPPPPPPPP  RRRRRRRRRRRR  OO        OO  CC             SSSSSSSSS
+           AAAAAAAAAAAA    SSSSSSSSS   MM        MM  PPPPPPPPPPP   RRRRRRRRRRR   OO        OO  CC              SSSSSSSSS
+          AA        AA           SSS  MM        MM  PP            RR    RR      OO        OO  CC                     SSS
+         AA        AA            SS  MM        MM  PP            RR     RR     OO        OO  CC                      SS
+        AA        AA  SS        SS  MM        MM  PP            RR      RR    OO        OO  CC        CC  SS        SS
+       AA        AA  SSSSSSSSSSSS  MM        MM  PP            RR       RR   OOOOOOOOOOOO  CCCCCCCCCCCC  SSSSSSSSSSSS
+      AA        AA   SSSSSSSSSS   MM        MM  PP            RR        RR  OOOOOOOOOOOO   CCCCCCCCCC    SSSSSSSSSS
+
+
+
+                    JJJJJJJJJJ   3333333333        11        6666666666    9999999999                 ZZZZZZZZZZZZ
+                    JJJJJJJJJJ  333333333333      111       666666666666  999999999999                ZZZZZZZZZZZZ
+                        JJ      33        33     1111       66        66  99        99                         ZZ
+                        JJ                33       11       66            99        99                        ZZ
+                        JJ                33       11       66            99        99                       ZZ
+                        JJ             3333        11       66666666666   999999999999                   ZZZZZZZ
+                        JJ             3333        11       666666666666  999999999999                   ZZZZZZZ
+                        JJ                33       11       66        66            99                    ZZ
+                  JJ    JJ                33       11       66        66            99                   ZZ
+                  JJ    JJ      33        33       11       66        66  99        99                  ZZ
+                  JJJJJJJJ      333333333333   1111111111   666666666666  999999999999                 ZZZZZZZZZZZ
+                   JJJJJJ        3333333333    1111111111    6666666666    9999999999                 ZZZZZZZZZZZZ
+
+
+

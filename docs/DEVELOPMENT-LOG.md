@@ -128,11 +128,57 @@ differential test early rather than discovering it inside a report.
 end, and why native packed decimal is the right call: the hardware does what GMP
 is emulating.)
 
+## Slice 0 is done (2026-08-25)
+
+`cc/cobc.c` — a small C program that reads fixed-format COBOL and emits S/370
+assembler. It accepts exactly one program shape: the divisions, and a PROCEDURE
+DIVISION whose only statement is `STOP RUN`. Anything else is a diagnostic
+naming the limit, not a silent success.
+
+    cd cobol/cc && make && ./cobc tests/stoprun.cbl -o tests/stoprun.asm
+
+What it emits is standard OS/360 entry linkage and nothing else — no
+`ILBOSTP1`, no `SYS1.COBLIB`:
+
+    STOPRUN  CSECT
+             STM   14,12,12(13)        save caller's registers
+             BALR  12,0                establish addressability
+             USING *,12
+             ST    13,SAVEAREA+4       backward chain to caller
+             LA    11,SAVEAREA
+             ST    11,8(13)            forward chain from caller
+             LR    13,11               our save area is now current
+             L     13,4(13)            restore caller's save area
+             LM    14,12,12(13)        restore caller's registers
+             SR    15,15               return code 0
+             BR    14                  return to caller
+    SAVEAREA DS    18F
+             END
+
+`jcl/cobol/slice0.jcl` runs it through `ASMFCLG` (assembler is **IFOX00**;
+steps ASM / LKED / GO). Result:
+
+    STOPRUN  ASM   IFOX00    RC= 0000
+    STOPRUN  LKED  IEWL      RC= 0000
+    STOPRUN  GO    PGM=*.DD  RC= 0000
+
+**And a control test, because RC=0 proves little on its own.** The same source
+with `SR 15,15` replaced by `LA 15,7` returned:
+
+    RCPROOF  GO    PGM=*.DD  RC= 0007
+
+So the generated code genuinely executes and determines the return code. The
+savearea chaining and register restore are correct too — a broken return would
+have abended rather than returning cleanly.
+
+The path from COBOL on the Mac to a running load module on MVS 3.8j is proven,
+with `SYS1.COBLIB` never referenced. That was the point of the slice.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
 
-1. `STOP RUN` only → emit ASM → assemble → link → RC=0. Proves the toolchain.
+1. ~~`STOP RUN` only → emit ASM → assemble → link → RC=0.~~ **Done.**
 2. `DISPLAY` of a literal. Proves the output path and the runtime decision.
 3. Packed-decimal arithmetic, diffed against GnuCOBOL. Proves the numeric core.
 4. Sequential `FD`/`01` read and write. Proves QSAM.
