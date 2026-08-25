@@ -661,6 +661,49 @@ result.
 
 Regression: 11 passed, 0 failed.
 
+## Slice 11: Report Writer
+
+The last remaining feature rather than gap-filling, and the reason six of the
+thirty programs would not compile.
+
+`FD ... REPORT IS`, `REPORT SECTION` with `RD` (PAGE LIMIT, HEADING, FIRST
+DETAIL, LAST DETAIL), `TYPE PAGE HEADING` and `TYPE DETAIL` groups, `LINE n` /
+`LINE PLUS n`, `COLUMN n` with `SOURCE` or `VALUE`, driven by `INITIATE` /
+`GENERATE` / `TERMINATE`. `GOBACK` came along with it, since that is how these
+programs end.
+
+**Each `COLUMN` entry becomes an ordinary hidden data item with its own
+PICTURE.** `SOURCE` placement is then just a `MOVE` into it followed by an
+`MVC` into the print buffer at the column — which means report fields get the
+whole editing path, `ED` and `EDMK` included, for nothing.
+
+Groups compile to internal renderers reached by `BAL`; page geometry is
+compile-time, so the only runtime state is the current line. `COBWRL` in the
+runtime advances the paper — writing blank lines until the target — and writes.
+Carriage control is ASA, with the report file's DCB switched to `RECFM=FBA`.
+
+Verified against GnuCOBOL: two pages, page break after the seventh detail at
+`LAST DETAIL 10`, heading repeated, and `LINE PLUS 2` leaving line 2 blank.
+
+### The bug: R0 is not a register
+
+    LH    0,RL000
+    LA    0,2(0)        intended: current line + 2
+
+`LA 0,2(0)` loads **2**, not `R0+2`. Register 0 as a base or index contributes
+nothing — that is what "0 means no register" costs you. So `LINE PLUS n`
+computed an absolute *n*, every line landed on top of the last, and the page
+counter never advanced far enough to break. Two visible symptoms, one cause.
+Everything moved to R2.
+
+Also: the runtime CSECT was only emitted when a program used `DISPLAY`, so a
+report program with no `DISPLAY` anywhere left `COBWRL` unresolved. `NCAL`
+turned that into a link **warning** and an S0C1 at run time rather than an
+error, which is the argument for reading the module map and not just the
+return code.
+
+Regression: 12 passed, 0 failed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

@@ -286,7 +286,8 @@ static Node *node(int kind)
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
-       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO };
+       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
+       ST_INITIATE, ST_GENERATE, ST_TERMINATE };
 
 typedef struct {
     int  op;
@@ -315,6 +316,7 @@ typedef struct {
     int  reclen;
     int  opened_input; /* which OPEN modes appear, so MACRF can be set */
     int  opened_output;
+    int  report;       /* the RD this FD carries, or -1 */
 } File;
 
 #define MAXFILE 16
@@ -324,6 +326,50 @@ static int nfile;
 static int file_index(const char *n)
 {
     for (int i = 0; i < nfile; i++) if (!strcmp(files[i].name, n)) return i;
+    return -1;
+}
+
+/* ---- Report Writer -----------------------------------------------------
+ * The subset the corpus actually uses: page-heading and detail groups, LINE
+ * and LINE PLUS, COLUMN with SOURCE or VALUE, driven by INITIATE / GENERATE /
+ * TERMINATE. No CONTROL clauses, no control heading or footing groups, no SUM
+ * counters -- control breaks are done by hand in the procedure division, so
+ * none of that machinery is needed.
+ *
+ * Each COLUMN entry becomes an ordinary hidden data item with its own
+ * PICTURE, so SOURCE placement reuses the whole existing MOVE path, editing
+ * included. Building a line is then: move the sources, then MVC each field
+ * into the print buffer at its column.
+ */
+enum { RG_PAGE_HEADING, RG_DETAIL };
+
+typedef struct { int column, sym, src; char lit[MAXTOK]; int litlen; } RField;
+typedef struct { int absolute, n, first_fld, nfld; } RLine;
+typedef struct { char name[31]; int report, type, first_line, nline; } RGroup;
+typedef struct {
+    char name[31];
+    int  file;
+    int  page_limit, heading, first_detail, last_detail;
+    char lbl_line[9], lbl_page[9];
+} Report;
+
+#define MAXREPORT 4
+#define MAXRGROUP 32
+#define MAXRLINE  128
+#define MAXRFIELD 512
+static Report reports[MAXREPORT]; static int nreport;
+static RGroup rgroups[MAXRGROUP]; static int nrgroup;
+static RLine  rlines[MAXRLINE];   static int nrline;
+static RField rfields[MAXRFIELD]; static int nrfield;
+
+static int report_index(const char *n)
+{
+    for (int i = 0; i < nreport; i++) if (!strcmp(reports[i].name, n)) return i;
+    return -1;
+}
+static int rgroup_index(const char *n)
+{
+    for (int i = 0; i < nrgroup; i++) if (!strcmp(rgroups[i].name, n)) return i;
     return -1;
 }
 
@@ -421,6 +467,138 @@ static int is_numeric_literal(const char *t)
 
 /* ---- DATA DIVISION ----------------------------------------------------- */
 
+/* REPORT SECTION. Structure is recognised by the clauses rather than by fixed
+ * level numbers, which is what the standard actually means. */
+static void parse_report_section(void)
+{
+    int cur_report = -1, cur_group = -1, cur_line = -1;
+
+    while (!tok.eof && !is("PROCEDURE") && !is("WORKING-STORAGE")) {
+        if (is("RD")) {
+            next();
+            cur_report = report_index(tok.text);
+            if (cur_report < 0)
+                die("RD names a report that no FD declared with REPORT IS");
+            cur_group = cur_line = -1;
+            next();
+            Report *rp = &reports[cur_report];
+            while (!tok.eof && !is(".")) {
+                if (is("PAGE")) {
+                    next(); if (is("LIMIT")) next(); if (is("IS")) next();
+                    rp->page_limit = atoi(tok.text); next();
+                    if (is("LINE") || is("LINES")) next();
+                } else if (is("HEADING")) { next(); rp->heading = atoi(tok.text); next(); }
+                else if (is("FIRST")) { next(); expect("DETAIL"); rp->first_detail = atoi(tok.text); next(); }
+                else if (is("LAST"))  { next(); expect("DETAIL"); rp->last_detail  = atoi(tok.text); next(); }
+                else if (is("CONTROL") || is("CONTROLS"))
+                    die("CONTROL clauses and control break groups are not "
+                        "implemented; the corpus does its control breaks by hand");
+                else die("this RD clause is not implemented yet");
+            }
+            expect(".");
+            continue;
+        }
+
+        if (!isdigit((unsigned char)tok.text[0]))
+            die("expected a level number or RD in the REPORT SECTION");
+        next();                                   /* the level number itself */
+
+        char nm[31] = "";
+        if (!is("LINE") && !is("COLUMN") && !is("TYPE")) {
+            snprintf(nm, sizeof nm, "%s", tok.text);
+            next();
+        }
+
+        if (is("TYPE")) {
+            next(); if (is("IS")) next();
+            int ty;
+            if (is("DETAIL") || is("DE")) { ty = RG_DETAIL; next(); }
+            else if (is("PAGE")) { next(); expect("HEADING"); ty = RG_PAGE_HEADING; }
+            else die("only TYPE DETAIL and TYPE PAGE HEADING are implemented");
+            if (cur_report < 0) die("a report group outside any RD");
+            if (nrgroup >= MAXRGROUP) die("too many report groups");
+            RGroup *g = &rgroups[nrgroup];
+            memset(g, 0, sizeof *g);
+            snprintf(g->name, sizeof g->name, "%s", nm);
+            g->report = cur_report; g->type = ty;
+            g->first_line = nrline;
+            cur_group = nrgroup++; cur_line = -1;
+            expect(".");
+            continue;
+        }
+
+        if (is("LINE")) {
+            next(); if (is("NUMBER")) next(); if (is("IS")) next();
+            if (cur_group < 0) die("a LINE outside any report group");
+            if (nrline >= MAXRLINE) die("too many report lines");
+            RLine *l = &rlines[nrline];
+            memset(l, 0, sizeof *l);
+            if (is("PLUS")) { next(); l->absolute = 0; }
+            else l->absolute = 1;
+            l->n = atoi(tok.text); next();
+            l->first_fld = nrfield;
+            cur_line = nrline++;
+            rgroups[cur_group].nline++;
+            expect(".");
+            continue;
+        }
+
+        if (is("COLUMN")) {
+            next(); if (is("NUMBER")) next(); if (is("IS")) next();
+            if (cur_line < 0) die("a COLUMN outside any LINE");
+            if (nrfield >= MAXRFIELD) die("too many report fields");
+            RField *fl = &rfields[nrfield];
+            memset(fl, 0, sizeof *fl);
+            fl->column = atoi(tok.text); fl->src = -1;
+            next();
+            char pic[64] = "";
+            while (!tok.eof && !is(".")) {
+                if (is("PIC") || is("PICTURE")) {
+                    next(); if (is("IS")) next();
+                    snprintf(pic, sizeof pic, "%s", tok.text); next();
+                } else if (is("SOURCE")) {
+                    next(); if (is("IS")) next();
+                    fl->src = need_sym(tok.text); next();
+                } else if (is("VALUE")) {
+                    next(); if (is("IS")) next();
+                    if (!tok.literal) die("a report VALUE must be a nonnumeric literal");
+                    memcpy(fl->lit, tok.text, (size_t)tok.len + 1);
+                    fl->litlen = tok.len; next();
+                } else if (is("GROUP") || is("BLANK") || is("JUSTIFIED"))
+                    die("this COLUMN clause is not implemented yet");
+                else die("this COLUMN clause is not implemented yet");
+            }
+            expect(".");
+            if (!pic[0]) die("a COLUMN entry needs a PICTURE");
+            /* The field becomes an ordinary hidden item, so SOURCE placement
+               reuses the existing MOVE path, editing and all. */
+            if (nsym >= MAXSYM) die("too many data items");
+            Sym *sy = &syms[nsym];
+            memset(sy, 0, sizeof *sy);
+            snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
+            snprintf(sy->name, sizeof sy->name, "RPT%d", nrfield);
+            sy->level = 49; sy->occ_parent = -1;
+            PicInfo pi;
+            if (pic_analyse(pic, &pi) < 0) die(pi.err);
+            sy->digits = pi.digits; sy->scale = pi.scale;
+            sy->is_signed = pi.is_signed; sy->is_alpha = pi.is_alpha;
+            sy->edited = pi.edited; sy->floating = pi.floating;
+            sy->masklen = pi.masklen; sy->sign_char = pi.sign_char;
+            sy->sign_pos = pi.sign_pos; sy->first_sel = pi.first_sel;
+            sy->need_lead_start = pi.need_lead_start;
+            memcpy(sy->mask, pi.mask, sizeof sy->mask);
+            sy->bytes = pi.is_alpha || pi.edited ? pi.bytes : pi.digits;
+            sy->elem = sy->bytes;
+            sy->offset = wslen; wslen += sy->bytes;
+            fl->sym = nsym++;
+            rlines[cur_line].nfld++;
+            nrfield++;
+            continue;
+        }
+        die("unexpected entry in the REPORT SECTION");
+    }
+}
+
 static void parse_data_division(void)
 {
     if (!is("DATA")) return;
@@ -448,6 +626,20 @@ static void parse_data_division(void)
             cur_file = -1;
             continue;
         }
+        if (is("REPORT")) {
+            next(); expect("SECTION"); expect(".");
+            while (sp > 0) {
+                Sym *g = &syms[stack[--sp]];
+                g->elem = cursor - g->offset;
+                if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
+                else g->bytes = g->elem;
+            }
+            if (cursor > wslen) wslen = cursor;
+            parse_report_section();
+            cursor = wslen;
+            cur_file = -1;
+            continue;
+        }
         if (is("FD")) {
             next();
             while (sp > 0) {
@@ -461,8 +653,29 @@ static void parse_data_division(void)
             if (cur_file < 0) die("FD names a file that was not named in a SELECT");
             next();
             /* The FD clauses describe what the DD statement and the label
-             * already carry, so accept and ignore them. */
-            while (!tok.eof && !is(".")) next();
+             * already carry, so accept and ignore them -- except REPORT IS,
+             * which says this file carries a report and therefore has no
+             * record description of its own. */
+            while (!tok.eof && !is(".")) {
+                if (is("REPORT")) {
+                    next(); if (is("IS")) next();
+                    snprintf(files[cur_file].name + 0, 0, "%s", "");   /* no-op */
+                    if (nreport >= MAXREPORT) die("too many reports");
+                    Report *rp = &reports[nreport];
+                    memset(rp, 0, sizeof *rp);
+                    snprintf(rp->name, sizeof rp->name, "%s", tok.text);
+                    snprintf(rp->lbl_line, sizeof rp->lbl_line, "RL%03d", nreport);
+                    snprintf(rp->lbl_page, sizeof rp->lbl_page, "RP%03d", nreport);
+                    rp->file = cur_file;
+                    rp->page_limit = 66; rp->heading = 1;
+                    rp->first_detail = 1; rp->last_detail = 66;
+                    files[cur_file].report = nreport;
+                    nreport++;
+                    next();
+                    continue;
+                }
+                next();
+            }
             expect(".");
             continue;
         }
@@ -662,6 +875,7 @@ static void parse_data_division(void)
     }
     if (cursor > wslen) wslen = cursor;
     for (int i = 0; i < nfile; i++) {
+        if (files[i].report >= 0) { files[i].reclen = 133; continue; }
         if (files[i].rec_sym < 0) die("an FD has no record description");
         files[i].reclen = syms[files[i].rec_sym].bytes;
     }
@@ -694,6 +908,7 @@ static void parse_environment(void)
                 if (file_index(f->name) >= 0) die("duplicate file name");
                 snprintf(f->label, sizeof f->label, "FD%03d", nfile);
                 f->rec_sym = -1;
+                f->report = -1;
                 next();
                 if (is("OPTIONAL")) die("SELECT OPTIONAL is not implemented yet");
                 expect("ASSIGN"); if (is("TO")) next();
@@ -705,6 +920,12 @@ static void parse_environment(void)
                 }
                 next();
                 while (!tok.eof && !is(".")) {
+                    if (is("RESERVE")) {     /* buffering advice; nothing to do */
+                        next();
+                        while (!tok.eof && !is(".") && !is("ACCESS") &&
+                               !is("ORGANIZATION")) next();
+                        continue;
+                    }
                     if (is("ACCESS")) { next(); if (is("IS")) next();
                         if (!is("SEQUENTIAL")) die("only ACCESS IS SEQUENTIAL is implemented");
                         next(); continue; }
@@ -1101,6 +1322,36 @@ static void parse_one_statement(void)
         next();
         if (is("FROM")) die("WRITE FROM is not implemented yet");
         new_stmt(ST_WRITE)->dst = fi;
+        eat_period();
+        return;
+    }
+
+    if (is("INITIATE") || is("TERMINATE")) {
+        int init = is("INITIATE");
+        next();
+        int r = report_index(tok.text);
+        if (r < 0) die("INITIATE/TERMINATE names something that is not a report");
+        new_stmt(init ? ST_INITIATE : ST_TERMINATE)->dst = r;
+        next();
+        eat_period();
+        return;
+    }
+
+    if (is("GENERATE")) {
+        next();
+        int g = rgroup_index(tok.text);
+        if (g < 0) die("GENERATE names something that is not a report group");
+        if (rgroups[g].type != RG_DETAIL)
+            die("GENERATE of a non-detail group is not implemented");
+        new_stmt(ST_GENERATE)->dst = g;
+        next();
+        eat_period();
+        return;
+    }
+
+    if (is("GOBACK")) {                 /* what the corpus uses, not STOP RUN */
+        next();
+        new_stmt(ST_STOP);
         eat_period();
         return;
     }
@@ -1735,7 +1986,7 @@ static void emit_runtime(void)
     asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
-    asm_line("", "ENTRY", "COBDISP,COBTERM", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -1787,6 +2038,37 @@ static void emit_runtime(void)
     asm_line("", "LM", "14,12,12(13)", "");
     asm_line("", "SR", "15,15", "");
     asm_line("", "BR", "14", "");
+    asm_comment("");
+    asm_comment(" COBWRL -- advance the paper and write one report line.");
+    asm_comment("   R1 -> A(dcb), A(current line), A(target line), A(buffer)");
+    asm_comment("");
+    asm_line("COBWRL", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE3+4", "");
+    asm_line("", "LA", "11,RTSAVE3", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(dcb)");
+    asm_line("", "L", "3,4(0,1)", "A(current line)");
+    asm_line("", "L", "4,8(0,1)", "A(target line)");
+    asm_line("", "L", "5,12(0,1)", "A(buffer)");
+    asm_line("", "LH", "6,0(0,3)", "");
+    asm_line("", "LH", "7,0(0,4)", "");
+    asm_line("COBW010", "LA", "8,1(0,6)", "");
+    asm_line("", "CR", "8,7", "already at the line before the target?");
+    asm_line("", "BNL", "COBW020", "");
+    asm_line("", "PUT", "(2),RTBLNK", "skip a line");
+    asm_line("", "LA", "6,1(0,6)", "");
+    asm_line("", "B", "COBW010", "");
+    asm_line("COBW020", "PUT", "(2),(5)", "");
+    asm_line("", "STH", "7,0(0,3)", "current line = target");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("RTBLNK", "DC", "CL133' '", "a blank line, ASA single space");
+    asm_line("RTSAVE3", "DS", "18F", "");
     asm_line("RTOPEN", "DC", "X'00'", "");
     asm_line("RTMAX", "DC", "H'120'", "");
     asm_line("RTLINE", "DC", "CL121' '", "ASA byte + 120 columns");
@@ -1877,6 +2159,79 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
     }
 }
 
+/* One data item to another, numeric or alphanumeric. Factored out so report
+ * SOURCE placement reuses it, editing included. */
+static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
+{
+    if ((d->is_alpha || d->is_group) && (sv->is_alpha || sv->is_group)) {
+        gen_move_alpha(d, dsub, sv, ssub);
+        return;
+    }
+    if (d->is_alpha || d->is_group || sv->is_alpha || sv->is_group)
+        die("MOVE between a numeric and an alphanumeric item is not "
+            "implemented yet");
+    gen_load(sv, ssub, "PWK1");
+    gen_rescale("PWK1", sv->scale, d->scale);
+    gen_store(d, dsub, "PWK1");
+}
+
+/* Render one report group: for each LINE, build the print buffer and hand it
+ * to COBWRL, which advances the paper and writes. */
+static void emit_report_group(int gi)
+{
+    char b[160], lab[16];
+    RGroup *g = &rgroups[gi];
+    Report *rp = &reports[g->report];
+    snprintf(lab, sizeof lab, "RG%03d", gi);
+    snprintf(b, sizeof b, " report group %s", g->name);
+    asm_comment(b);
+    asm_line(lab, "ST", "14,RGS", "save the return, COBWRL clobbers R14");
+
+    for (int li = g->first_line; li < g->first_line + g->nline; li++) {
+        RLine *l = &rlines[li];
+        reset_bases();
+        /* target line */
+        if (l->absolute) {
+            snprintf(b, sizeof b, "2,%d", l->n);
+            asm_line("", "LA", b, "LINE n");
+        } else {
+            snprintf(b, sizeof b, "2,%s", rp->lbl_line);
+            asm_line("", "LH", b, "");
+            /* R2, not R0: register 0 as a base or index contributes nothing,
+               so LA 0,n(0) loads n rather than adding to it. */
+            snprintf(b, sizeof b, "2,%d(2)", l->n);
+            asm_line("", "LA", b, "LINE PLUS n");
+        }
+        asm_line("", "STH", "2,RTGT", "");
+        /* blank the buffer, carrying the pending carriage control */
+        asm_line("", "MVC", "RBUF(1),RCTL", "carriage control");
+        asm_line("", "MVI", "RCTL,C' '", "one eject only");
+        asm_line("", "MVI", "RBUF+1,C' '", "");
+        asm_line("", "MVC", "RBUF+2(131),RBUF+1", "blank the line");
+        for (int fi = l->first_fld; fi < l->first_fld + l->nfld; fi++) {
+            RField *f = &rfields[fi];
+            const Sym *fs = &syms[f->sym];
+            if (f->src >= 0) {
+                emit_move(fs, NULL, &syms[f->src], NULL);
+                reset_bases();
+                need_sym_base(fs);
+                snprintf(b, sizeof b, "RBUF+%d(%d),%s", f->column, fs->bytes, fs->label);
+                asm_line("", "MVC", b, "COLUMN placement");
+            } else {
+                const char *sl = intern_str(f->lit, f->litlen, fs->bytes);
+                snprintf(b, sizeof b, "RBUF+%d(%d),%s", f->column, fs->bytes, sl);
+                asm_line("", "MVC", b, "COLUMN literal");
+            }
+        }
+        snprintf(b, sizeof b, "1,RGP%03d", gi);
+        asm_line("", "LA", b, "");
+        asm_line("", "L", "15,VWRL", "");
+        asm_line("", "BALR", "14,15", "");
+    }
+    asm_line("", "L", "14,RGS", "");
+    asm_line("", "BR", "14", "");
+}
+
 static void generate(void)
 {
     char b[200], lab[24];
@@ -1889,8 +2244,8 @@ static void generate(void)
     snprintf(b, sizeof b, " Generated by cobc370 from %s", src.name);
     asm_comment(b);
     asm_comment(" Standard OS/360 entry linkage. SYS1.COBLIB is never referenced.");
-    if (has_display)
-        asm_comment(" DISPLAY is served by our own COBRT runtime, below.");
+    if (has_display || nreport)
+        asm_comment(" DISPLAY and report output are served by our own COBRT runtime.");
     asm_comment("---------------------------------------------------------------");
 
     asm_line(progid, "CSECT", "", "");
@@ -1986,6 +2341,58 @@ static void generate(void)
             asm_line("", "GET", b, "QSAM move mode");
             asm_line("", "B", lc, "");
             asm_line(le, "DS", "0H", "AT END");
+            reset_bases();
+            break;
+        }
+        case ST_INITIATE: {
+            Report *rp = &reports[st->dst];
+            snprintf(b, sizeof b, " INITIATE %s", rp->name);
+            asm_comment(b);
+            asm_line("", "SR", "2,2", "");
+            snprintf(b, sizeof b, "2,%s", rp->lbl_line); asm_line("", "STH", b, "");
+            asm_line("", "MVI", "RCTL,C'1'", "eject before the first page");
+            break;
+        }
+        case ST_TERMINATE:
+            snprintf(b, sizeof b, " TERMINATE %s (no report footing in this subset)",
+                     reports[st->dst].name);
+            asm_comment(b);
+            break;
+        case ST_GENERATE: {
+            RGroup *g = &rgroups[st->dst];
+            Report *rp = &reports[g->report];
+            int ph = -1;
+            for (int k = 0; k < nrgroup; k++)
+                if (rgroups[k].report == g->report && rgroups[k].type == RG_PAGE_HEADING) ph = k;
+            snprintf(b, sizeof b, " GENERATE %s", g->name);
+            asm_comment(b);
+            reset_bases();
+            RLine *l0 = &rlines[g->first_line];
+            if (l0->absolute) { snprintf(b, sizeof b, "2,%d", l0->n); asm_line("", "LA", b, "first line"); }
+            else {
+                snprintf(b, sizeof b, "2,%s", rp->lbl_line); asm_line("", "LH", b, "");
+                snprintf(b, sizeof b, "2,%d(2)", l0->n); asm_line("", "LA", b, "first line");
+            }
+            int lnew = ++genlabel, lok = ++genlabel;
+            char ln[16], lo[16];
+            snprintf(ln, sizeof ln, "L%04d", lnew);
+            snprintf(lo, sizeof lo, "L%04d", lok);
+            snprintf(b, sizeof b, "3,%s", rp->lbl_line); asm_line("", "LH", b, "");
+            asm_line("", "LTR", "3,3", "no page yet?");
+            asm_line("", "BZ", ln, "");
+            snprintf(b, sizeof b, "2,%s", intern_half(rp->last_detail));
+            asm_line("", "CH", b, "past LAST DETAIL?");
+            asm_line("", "BNH", lo, "");
+            asm_line(ln, "MVI", "RCTL,C'1'", "new page");
+            asm_line("", "SR", "2,2", "");
+            snprintf(b, sizeof b, "2,%s", rp->lbl_line); asm_line("", "STH", b, "");
+            if (ph >= 0) { snprintf(b, sizeof b, "14,RG%03d", ph); asm_line("", "BAL", b, "page heading"); }
+            snprintf(b, sizeof b, "2,%d", rp->first_detail - 1);
+            asm_line("", "LA", b, "details start at FIRST DETAIL");
+            snprintf(b, sizeof b, "2,%s", rp->lbl_line); asm_line("", "STH", b, "");
+            asm_line(lo, "DS", "0H", "");
+            snprintf(b, sizeof b, "14,RG%03d", st->dst);
+            asm_line("", "BAL", b, "");
             reset_bases();
             break;
         }
@@ -2129,6 +2536,30 @@ static void generate(void)
         asm_line(f, "DS", "0H", "fall-through when not performed");
     }
 
+    /* ---- report group renderers, reached only by BAL ---- */
+    for (int i = 0; i < nrgroup; i++) emit_report_group(i);
+    if (nreport) {
+        asm_line("VWRL", "DC", "V(COBWRL)", "");
+        for (int i = 0; i < nrgroup; i++) {
+            char lab[16];
+            snprintf(lab, sizeof lab, "RGP%03d", i);
+            Report *rp = &reports[rgroups[i].report];
+            snprintf(b, sizeof b, "A(%s)", files[rp->file].label);
+            asm_line(lab, "DC", b, rgroups[i].name);
+            snprintf(b, sizeof b, "A(%s)", rp->lbl_line); asm_line("", "DC", b, "");
+            asm_line("", "DC", "A(RTGT)", "");
+            asm_line("", "DC", "X'80',AL3(RBUF)", "last parameter");
+        }
+        for (int i = 0; i < nreport; i++) {
+            asm_line(reports[i].lbl_line, "DC", "H'0'", reports[i].name);
+            asm_line(reports[i].lbl_page, "DC", "H'0'", "");
+        }
+        asm_line("RTGT", "DS", "H", "target line");
+        asm_line("RGS", "DS", "F", "renderer return address");
+        asm_line("RCTL", "DC", "C' '", "pending carriage control");
+        asm_line("RBUF", "DC", "CL133' '", "ASA byte + 132 columns");
+    }
+
     /* ---- PERFORM exit cells ---- */
     for (int i = 0; i < npara; i++) {
         if (!paras[i].is_range_end) continue;
@@ -2187,9 +2618,10 @@ static void generate(void)
         File *f = &files[i];
         char first[96];
         const char *macrf = f->opened_output ? "PM" : "GM";
+        const char *recfm = (f->report >= 0) ? "FBA" : "FB";
         snprintf(first, sizeof first,
-                 "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(%s),RECFM=FB,",
-                 f->label, f->ddname, macrf);
+                 "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(%s),RECFM=%s,",
+                 f->label, f->ddname, macrf, recfm);
         char second[64];
         snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", f->reclen, f->reclen);
         if (i == 0) asm_comment(" file control blocks");
@@ -2300,6 +2732,13 @@ static void generate(void)
                 at = sy->offset + sy->bytes;
                 continue;
             }
+            if (sy->edited) {           /* an edited field holds characters */
+                snprintf(b, sizeof b, "%sCL%d' '", dup, sy->elem);
+                snprintf(cmt, sizeof cmt, "%s edited, %d chars", sy->name, sy->elem);
+                asm_line(sy->label, "DC", b, cmt);
+                at = sy->offset + sy->bytes;
+                continue;
+            }
             const char *v = (sy->has_value == 1) ? sy->value : "0";
             switch (sy->usage) {
             case U_DISPLAY: snprintf(b, sizeof b, "%sZL%d'%s'", dup, sy->elem, v); break;
@@ -2319,7 +2758,9 @@ static void generate(void)
         }
     }
 
-    if (has_display) emit_runtime();
+    /* The runtime carries COBWRL as well as COBDISP, so a report program
+       needs it even with no DISPLAY anywhere. */
+    if (has_display || nreport) emit_runtime();
     asm_line("", "END", "", "");
 }
 

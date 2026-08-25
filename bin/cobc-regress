@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 pass=0; fail=0
 
@@ -38,6 +38,7 @@ for t in $TESTS; do
         printf '//ASM      EXEC ASMFCLG\n//ASM.SYSIN DD  *\n'
         cat "$CC/tests/$t.asm"
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
+        if [ "$t" = rpttest ]; then printf '//GO.PROUT   DD  SYSOUT=Z\n'; fi
         if [ "$t" = filetest ]; then
             printf '//GO.OUTFILE DD  SYSOUT=Z\n//GO.INFILE  DD  *\n'
             for r in "RECORD ONE" "RECORD TWO" "RECORD THREE" "RECORD FOUR"; do
@@ -72,8 +73,10 @@ for t in $TESTS; do
         # are full of block letters that match almost any loose pattern.
         if python3 - "$CC/tests/$t.expected" "$WORK/$t.out" <<'PY'
 import sys
+# Blank lines are carriage control, not content: a report pads to its page
+# boundary on one side and ejects on the other. Compare the content.
 exp = [l.rstrip() for l in open(sys.argv[1], errors="replace").read().splitlines() if l.strip()]
-got = [l.rstrip() for l in open(sys.argv[2], errors="replace").read().splitlines()]
+got = [l.rstrip() for l in open(sys.argv[2], errors="replace").read().splitlines() if l.strip()]
 sys.exit(0 if any(got[i:i+len(exp)] == exp for i in range(len(got)-len(exp)+1)) else 1)
 PY
         then say "  $t: ok (matches oracle)"; pass=$((pass+1))

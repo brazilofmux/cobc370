@@ -25,7 +25,17 @@ by external JCL steps, not in-program), `STRING`, `UNSTRING`, `INSPECT`,
 `SEEK`, `SET`, `CANCEL`, `ACCEPT`, `DELETE`, `USE`, `ENTER`.
 
 `PERFORM` is the classic 1970s paragraph style: **113 `PERFORM ... THRU`**, 90
-plain, exactly one `UNTIL`, and no `VARYING` or `TIMES`. The 128 `EXIT`
+plain, and no `VARYING` or `TIMES`.
+
+**Correction (found during the Report Writer slice):** this originally reported
+"exactly one `UNTIL`". That was a classifier bug, not a fact — the counter
+tested `THRU` first and returned, so every `PERFORM ... THRU ... UNTIL` was
+filed under THRU. **`UNTIL` appears 62 times.** `PERFORM range THRU exit UNTIL
+condition` is the corpus's normal loop, and implementing it is now a
+prerequisite for compiling any real program, not an optional extra.
+
+Likewise `GOBACK` appears **21** times against 19 `STOP RUN`, so it is the more
+common way these programs end. The 128 `EXIT`
 statements are the paragraph terminators that style requires. So the control
 flow the code generator must handle is paragraph ranges and `GO TO`, not
 structured loops.
