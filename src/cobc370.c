@@ -91,6 +91,9 @@ static void next(void)
     tok.line = src.line;
     tok.literal = 0;
     if (*src.p == '.') { src.p++; strcpy(tok.text, "."); tok.len = 1; return; }
+    if (*src.p == '(' || *src.p == ')') {
+        tok.text[0] = *src.p++; tok.text[1] = 0; tok.len = 1; return;
+    }
     if (*src.p == '\'' || *src.p == '"') {
         /* Nonnumeric literal. A doubled quote is one quote character; a period
            inside a literal does not end the sentence. */
@@ -150,10 +153,19 @@ static void asm_line(const char *name, const char *op, const char *operand,
     int end = 15 + (operand ? (int)strlen(operand) : 0);
     if (end < 15) end = 15;
     if (comment && *comment) {
+        /* Column 72 is the continuation indicator: a statement must stop at
+           column 71 or the assembler reads the next line as a continuation
+           and reports IFO026. Truncate the comment rather than the code. */
         int c = end + 2; if (c < 35) c = 35;
-        memcpy(b + c, comment, strlen(comment));
-        end = c + (int)strlen(comment);
+        int room = 71 - c;
+        if (room > 0) {
+            int n2 = (int)strlen(comment);
+            if (n2 > room) n2 = room;
+            memcpy(b + c, comment, (size_t)n2);
+            end = c + n2;
+        }
     }
+    if (end > 71) end = 71;
     b[end] = 0;
     for (int i = end - 1; i >= 0 && b[i] == ' '; i--) b[i] = 0;
     fprintf(out, "%s\n", b);
@@ -189,7 +201,36 @@ typedef struct {
 static Sym syms[MAXSYM];
 static int nsym, wslen;
 
-enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB };
+/* ---- expressions ------------------------------------------------------
+ * A small AST, evaluated onto a stack of packed work areas. Scales are
+ * tracked at compile time; see gen_expr for the intermediate-result rules,
+ * which are where this will diverge from GnuCOBOL's unbounded intermediates
+ * if it diverges anywhere.
+ */
+enum { N_SYM, N_LIT, N_ADD, N_SUB, N_MUL, N_DIV, N_NEG };
+
+typedef struct Node {
+    int kind;
+    int sym;
+    char lit[34];
+    int litscale;
+    struct Node *l, *r;
+} Node;
+
+#define MAXNODE 512
+static Node nodes[MAXNODE];
+static int nnode;
+
+static Node *node(int kind)
+{
+    if (nnode >= MAXNODE) die("expression too complex");
+    Node *n = &nodes[nnode++];
+    memset(n, 0, sizeof *n);
+    n->kind = kind;
+    return n;
+}
+
+enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE };
 
 typedef struct {
     int  op;
@@ -199,6 +240,8 @@ typedef struct {
     int  imm;               /* source is a numeric literal */
     char immdigits[34];     /* that literal, scaled to an integer */
     int  immscale;
+    Node *expr;             /* COMPUTE */
+    int  rounded;
 } Stmt;
 
 #define MAXSTMT 512
@@ -404,6 +447,59 @@ static void skip_division(const char *kw)
     while (!tok.eof && !is("DATA") && !is("PROCEDURE")) next();
 }
 
+/* ---- expression parser -------------------------------------------------
+ * COBOL requires spaces around the arithmetic operators, which is what makes
+ * WS-TOTAL one word and A - B three. Parentheses are separators and tokenize
+ * on their own.
+ */
+static Node *parse_expr(void);
+
+static Node *parse_primary(void)
+{
+    if (is("(")) { next(); Node *n = parse_expr(); expect(")"); return n; }
+    if (is_numeric_literal(tok.text)) {
+        Node *n = node(N_LIT);
+        const char *dot = strchr(tok.text, '.');
+        n->litscale = dot ? (int)strlen(dot + 1) : 0;
+        scale_literal(tok.text, n->litscale, n->lit, sizeof n->lit);
+        next();
+        return n;
+    }
+    if (!tok.text[0]) die("expression ended unexpectedly");
+    Node *n = node(N_SYM);
+    n->sym = need_sym(tok.text);
+    next();
+    return n;
+}
+
+static Node *parse_unary(void)
+{
+    if (is("-")) { next(); Node *n = node(N_NEG); n->l = parse_unary(); return n; }
+    if (is("+")) { next(); return parse_unary(); }
+    return parse_primary();
+}
+
+static Node *parse_term(void)
+{
+    Node *l = parse_unary();
+    for (;;) {
+        if (is("**")) die("exponentiation is not implemented yet");
+        if (is("*")) { next(); Node *n = node(N_MUL); n->l = l; n->r = parse_unary(); l = n; }
+        else if (is("/")) { next(); Node *n = node(N_DIV); n->l = l; n->r = parse_unary(); l = n; }
+        else return l;
+    }
+}
+
+static Node *parse_expr(void)
+{
+    Node *l = parse_term();
+    for (;;) {
+        if (is("+")) { next(); Node *n = node(N_ADD); n->l = l; n->r = parse_term(); l = n; }
+        else if (is("-")) { next(); Node *n = node(N_SUB); n->l = l; n->r = parse_term(); l = n; }
+        else return l;
+    }
+}
+
 static Stmt *new_stmt(int op)
 {
     if (nstmt >= MAXSTMT) die("too many statements");
@@ -482,6 +578,19 @@ static void parse_procedure(void)
             continue;
         }
 
+        if (is("COMPUTE")) {
+            next();
+            Stmt *st = new_stmt(ST_COMPUTE);
+            st->dst = need_sym(tok.text);
+            next();
+            if (is("ROUNDED")) { st->rounded = 1; next(); }
+            if (is("EQUAL")) { next(); if (is("TO")) next(); }
+            else expect("=");
+            st->expr = parse_expr();
+            if (is(".")) next();
+            continue;
+        }
+
         if (is("STOP")) {
             next();
             if (!is("RUN")) die("STOP literal is not implemented yet");
@@ -494,7 +603,7 @@ static void parse_procedure(void)
             char m[160];
             snprintf(m, sizeof m,
                      "not implemented yet: '%s'. This slice supports MOVE, "
-                     "ADD, SUBTRACT, DISPLAY and STOP RUN.", tok.text);
+                     "ADD, SUBTRACT, COMPUTE, DISPLAY and STOP RUN.", tok.text);
             die(m);
         }
     }
@@ -677,16 +786,147 @@ static void gen_store(const Sym *sy, const char *wk)
     }
 }
 
+/* Packed constants, interned so a value used twice is emitted once. */
+static struct { char label[16]; char digits[34]; } consts[256];
+static int nconst;
+
+static const char *intern_const(const char *digits)
+{
+    for (int i = 0; i < nconst; i++)
+        if (!strcmp(consts[i].digits, digits)) return consts[i].label;
+    if (nconst >= 256) die("too many numeric constants");
+    snprintf(consts[nconst].label, sizeof consts[nconst].label, "K%04d", nconst + 1);
+    snprintf(consts[nconst].digits, sizeof consts[nconst].digits, "%s", digits);
+    return consts[nconst++].label;
+}
+
+/* Load a field into a 16-byte work area. */
+static void gen_load16(const Sym *sy, const char *wk)
+{
+    char b[96];
+    switch (sy->usage) {
+    case U_DISPLAY:
+        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->name, sy->bytes);
+        asm_line("", "PACK", b, "zoned -> packed");
+        break;
+    case U_COMP3:
+        snprintf(b, sizeof b, "%s(16),%s(%d)", wk, sy->name, sy->bytes);
+        asm_line("", "ZAP", b, "");
+        break;
+    case U_COMP:
+        snprintf(b, sizeof b, "2,%s", sy->name);
+        asm_line("", sy->bytes == 2 ? "LH" : "L", b, "");
+        asm_line("", "CVD", "2,DWK", "binary -> packed");
+        snprintf(b, sizeof b, "%s(16),DWK(8)", wk);
+        asm_line("", "ZAP", b, "");
+        break;
+    }
+}
+
+static void gen_rescale16(const char *wk, int from, int to, int round)
+{
+    if (from == to) return;
+    char b[96];
+    int d = to - from;
+    snprintf(b, sizeof b, "%s(16),%d,%d", wk, d > 0 ? d : 64 + d,
+             (d < 0 && round) ? 5 : 0);
+    asm_line("", "SRP", b,
+             d > 0 ? "align scale (left)"
+                   : (round ? "align scale (right, ROUNDED)" : "align scale (right)"));
+}
+
+/* Evaluate n into WK<d>; returns the scale of the value left there.
+ *
+ * Intermediate-result rules. Addition and subtraction carry the wider scale;
+ * multiplication carries the sum of the scales, exactly. Division is the one
+ * the standard leaves to the implementation, and the one where GnuCOBOL's
+ * unbounded intermediates can disagree with fixed-point: we carry the
+ * destination's scale plus four guard digits, capped at twelve.
+ */
+#define DIVGUARD 4
+#define DIVSCALEMAX 12
+
+static int gen_expr(Node *n, int d, int tgtscale)
+{
+    char b[128], wk[8], wk2[8];
+    if (d >= 5) die("expression nests too deeply for the work-area stack");
+    snprintf(wk,  sizeof wk,  "WK%d", d);
+    snprintf(wk2, sizeof wk2, "WK%d", d + 1);
+
+    switch (n->kind) {
+    case N_SYM:
+        gen_load16(&syms[n->sym], wk);
+        return syms[n->sym].scale;
+
+    case N_LIT: {
+        const char *lab = intern_const(n->lit);
+        snprintf(b, sizeof b, "%s(16),%s(8)", wk, lab);
+        asm_line("", "ZAP", b, "literal");
+        return n->litscale;
+    }
+
+    case N_NEG: {
+        int s = gen_expr(n->l, d + 1, tgtscale);
+        snprintf(b, sizeof b, "%s(16),%s(8)", wk, intern_const("0"));
+        asm_line("", "ZAP", b, "unary minus");
+        snprintf(b, sizeof b, "%s(16),%s(16)", wk, wk2);
+        asm_line("", "SP", b, "");
+        return s;
+    }
+
+    case N_ADD: case N_SUB: {
+        int sl = gen_expr(n->l, d, tgtscale);
+        int sr = gen_expr(n->r, d + 1, tgtscale);
+        int ws = sl > sr ? sl : sr;
+        gen_rescale16(wk,  sl, ws, 0);
+        gen_rescale16(wk2, sr, ws, 0);
+        snprintf(b, sizeof b, "%s(16),%s(16)", wk, wk2);
+        asm_line("", n->kind == N_ADD ? "AP" : "SP", b, "");
+        return ws;
+    }
+
+    case N_MUL: {
+        int sl = gen_expr(n->l, d, tgtscale);
+        int sr = gen_expr(n->r, d + 1, tgtscale);
+        snprintf(b, sizeof b, "MULT8(8),%s(16)", wk2);
+        asm_line("", "ZAP", b, "MP takes at most 8 bytes on the right");
+        snprintf(b, sizeof b, "%s(16),MULT8(8)", wk);
+        asm_line("", "MP", b, "scale becomes the sum of the scales");
+        return sl + sr;
+    }
+
+    case N_DIV: {
+        int sl = gen_expr(n->l, d, tgtscale);
+        int sr = gen_expr(n->r, d + 1, tgtscale);
+        int sq = tgtscale + DIVGUARD;
+        if (sq > DIVSCALEMAX) sq = DIVSCALEMAX;
+        /* Quotient at scale sq needs the dividend pre-shifted by sq+sr-sl. */
+        gen_rescale16(wk, sl, sq + sr, 0);
+        snprintf(b, sizeof b, "DIVR8(8),%s(16)", wk2);
+        asm_line("", "ZAP", b, "DP takes at most 8 bytes on the right");
+        snprintf(b, sizeof b, "%s(16),DIVR8(8)", wk);
+        asm_line("", "DP", b, "quotient in the leading 8 bytes");
+        snprintf(b, sizeof b, "QTMP(8),%s(8)", wk);
+        asm_line("", "ZAP", b, "");
+        snprintf(b, sizeof b, "%s(16),QTMP(8)", wk);
+        asm_line("", "ZAP", b, "drop the remainder");
+        return sq;
+    }
+    }
+    die("internal: bad expression node");
+    return 0;
+}
+
 static void generate(void)
 {
     char b[200], lab[24];
-    int has_display = 0, nimm = 0;
+    int has_display = 0;
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_DISPLAY_LIT || stmts[i].op == ST_DISPLAY_ID)
             has_display = 1;
 
     asm_comment("---------------------------------------------------------------");
-    snprintf(b, sizeof b, " Generated by cobc from %s", src.name);
+    snprintf(b, sizeof b, " Generated by cobc370 from %s", src.name);
     asm_comment(b);
     asm_comment(" Standard OS/360 entry linkage. SYS1.COBLIB is never referenced.");
     if (has_display)
@@ -724,6 +964,17 @@ static void generate(void)
             asm_line("", "L", "15,VDISP", "");
             asm_line("", "BALR", "14,15", "");
             break;
+        case ST_COMPUTE: {
+            const Sym *d = &syms[st->dst];
+            snprintf(b, sizeof b, " COMPUTE %s%s = ...", d->name,
+                     st->rounded ? " ROUNDED" : "");
+            asm_comment(b);
+            int rs = gen_expr(st->expr, 0, d->scale);
+            gen_rescale16("WK0", rs, d->scale, st->rounded);
+            asm_line("", "ZAP", "PWK1(8),WK0(16)", "");
+            gen_store(d, "PWK1");
+            break;
+        }
         case ST_MOVE:
         case ST_ADD:
         case ST_SUB: {
@@ -734,7 +985,7 @@ static void generate(void)
             else         snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
             asm_comment(b);
             if (st->op == ST_MOVE) {
-                if (st->imm) { snprintf(lab, sizeof lab, "IMM%04d", ++nimm); gen_load_imm(lab, "PWK1"); }
+                if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK1"); }
                 else { gen_load(&syms[st->src], "PWK1"); gen_rescale("PWK1", syms[st->src].scale, d->scale); }
                 gen_store(d, "PWK1");
             } else {
@@ -746,7 +997,7 @@ static void generate(void)
                 int ws = d->scale > ss ? d->scale : ss;
                 gen_load(d, "PWK1");
                 gen_rescale("PWK1", d->scale, ws);
-                if (st->imm) { snprintf(lab, sizeof lab, "IMM%04d", ++nimm); gen_load_imm(lab, "PWK2"); }
+                if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK2"); }
                 else { gen_load(&syms[st->src], "PWK2"); }
                 gen_rescale("PWK2", ss, ws);
                 asm_line("", st->op == ST_ADD ? "AP" : "SP", "PWK1(8),PWK2(8)", "");
@@ -773,7 +1024,7 @@ static void generate(void)
         asm_line("VDISP", "DC", "V(COBDISP)", "");
         asm_line("VTERM", "DC", "V(COBTERM)", "");
     }
-    ndlit = 0; nimm = 0;
+    ndlit = 0;
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
         if (st->op == ST_DISPLAY_LIT) {
@@ -792,10 +1043,6 @@ static void generate(void)
             snprintf(b, sizeof b, "A(%s)", syms[st->src].name); asm_line(plab, "DC", b, "");
             snprintf(b, sizeof b, "X'80',AL3(%s)", llab);       asm_line("", "DC", b, "last parameter");
             snprintf(b, sizeof b, "H'%d'", syms[st->src].digits); asm_line(llab, "DC", b, "");
-        } else if (st->imm) {
-            snprintf(lab, sizeof lab, "IMM%04d", ++nimm);
-            snprintf(b, sizeof b, "PL8'%s'", st->immdigits);
-            asm_line(lab, "DC", b, "");
         }
     }
 
@@ -823,6 +1070,17 @@ static void generate(void)
         asm_line("DWK", "DS", "D", "CVD/CVB doubleword");
         asm_line("PWK1", "DS", "PL8", "");
         asm_line("PWK2", "DS", "PL8", "");
+        asm_line("MULT8", "DS", "PL8", "MP right operand");
+        asm_line("DIVR8", "DS", "PL8", "DP divisor");
+        asm_line("QTMP", "DS", "PL8", "DP quotient");
+        for (int i = 0; i < 6; i++) {
+            char w[8]; snprintf(w, sizeof w, "WK%d", i);
+            asm_line(w, "DS", "PL16", i == 0 ? "expression stack" : "");
+        }
+    }
+    for (int i = 0; i < nconst; i++) {
+        snprintf(b, sizeof b, "PL8'%s'", consts[i].digits);
+        asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");
     }
     asm_line("SAVEAREA", "DS", "18F", "");
 

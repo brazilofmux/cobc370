@@ -264,9 +264,8 @@ with the right dialect.
 
 - Group items, `OCCURS`, `REDEFINES` are not implemented — the survey says 8 and
   7 uses respectively, so this is not urgent, but groups will be.
-- `COMPUTE`, `GIVING` and `ROUNDED` are next; expression trees and ANSI
-  intermediate-result sizing are where divergence from the oracle will get
-  interesting.
+- `GIVING` on ADD/SUBTRACT, and the `MULTIPLY`/`DIVIDE` statements, are not
+  implemented (2 and 4 uses in the corpus against COMPUTE's 35).
 - WORKING-STORAGE is capped at one base-register displacement (~3800 bytes) and
   says so. Base locator cells are the structural fix, and are what IKFCBL00's
   `BL=1` cells do.
@@ -274,6 +273,55 @@ with the right dialect.
 - `DISPLAY` of signed or COMP items is rejected with a diagnostic telling you to
   MOVE to a display item first, which keeps the oracle exact rather than
   guessing at sign rendering.
+
+## Slice 3 is done: COMPUTE, and the oracle still agrees
+
+Recursive-descent expression parser onto a small AST, evaluated on a stack of
+six 16-byte packed work areas. Precedence, parentheses, unary minus, and
+`ROUNDED`.
+
+    COMPUTE R1 = A + B * C          142.00
+    COMPUTE R2 = ( A + B ) * C      742.00
+    COMPUTE R3 = A / B               16.66   truncated
+    COMPUTE R4 ROUNDED = A / B       16.67   rounded
+    COMPUTE R5 = - B + A             94.00
+    COMPUTE R6 = A / C               14.28
+    COMPUTE R7 ROUNDED = ( A + B ) / C  15.14
+
+All seven byte-identical to GnuCOBOL `-std=mvs`.
+
+Multiply is `MP`, which takes at most eight bytes on the right, so the operand
+is staged through an 8-byte area. Divide is `DP`: the dividend is pre-shifted
+left so the quotient lands at the wanted scale, and the remainder in the
+trailing bytes is dropped. `ROUNDED` is `SRP` with rounding digit 5 on the
+final right shift; truncation is the same shift with digit 0.
+
+### Intermediate-result rules
+
+This is the part the standard leaves open, and where fixed-point can disagree
+with GnuCOBOL's unbounded intermediates:
+
+- add and subtract carry the **wider** of the two scales
+- multiply carries the **sum** of the scales, exactly
+- **divide carries the destination's scale plus four guard digits, capped at
+  twelve** — a choice, not a derivation, and the first thing to suspect if a
+  real program ever disagrees
+
+The seven cases above agree, including two divisions that do not terminate.
+That is evidence, not proof: division is where to look first when something
+diverges.
+
+### A bug the tests did not catch, and now do
+
+The assembler reported `IFO026 CHARACTERS APPEAR BETWEEN THE BEGIN AND CONTINUE
+COLUMNS`. Long comments were pushing statements to exactly 72 columns, and
+**column 72 is the continuation indicator**, so the assembler read the next line
+as a continuation. The generator now stops every statement at column 71 and
+truncates the comment rather than the code.
+
+The column check had been asserting `length > 72`, which misses this by exactly
+one column. It now asserts that reaching column 72 is legal only when that
+column holds the deliberate `X` of a continued statement.
 
 ## Suggested order
 

@@ -1,0 +1,700 @@
+                                                J E S 2   J O B   L O G
+
+
+20.59.19 JOB 3175  IEF677I WARNING MESSAGE(S) FOR JOB COMPUTE  ISSUED
+20.59.19 JOB 3175  $HASP373 COMPUTE  STARTED - INIT  1 - CLASS A - SYS TK5R
+20.59.19 JOB 3175  IEF403I COMPUTE - STARTED - TIME=20.59.19
+20.59.19 JOB 3175  IEFACTRT - Stepname  Procstep  Program   Retcode
+20.59.19 JOB 3175  COMPUTE    ASM       ASM       IFOX00    RC= 0000
+20.59.19 JOB 3175  COMPUTE    ASM       LKED      IEWL      RC= 0000
+20.59.19 JOB 3175  COMPUTE    ASM       GO        PGM=*.DD  RC= 0000
+20.59.19 JOB 3175  IEF404I COMPUTE - ENDED - TIME=20.59.19
+20.59.19 JOB 3175  $HASP395 COMPUTE  ENDED
+
+
+------ JES2 JOB STATISTICS ------
+
+
+ 25 AUG 26 JOB EXECUTION DATE
+
+
+       268 CARDS READ
+
+
+       622 SYSOUT PRINT RECORDS
+
+
+        27 SYSOUT PUNCH RECORDS
+
+
+      0.00 MINUTES EXECUTION TIME
+    1     //COMPUTE  JOB (5161A020,1A11),'SLICE 3 COMPUTE',                       JOB 3175
+          //             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+          //             USER=HERC01,PASSWORD=
+          ***
+          *** Slice 3: COMPUTE with an expression tree, precedence, parentheses,
+          *** unary minus and ROUNDED. Multiply is MP, divide is DP with the
+          *** dividend pre-shifted to carry guard digits.
+          *** Expected, from GnuCOBOL -std=mvs:
+          ***  142.00 742.00 16.66 16.67 94.00 14.28 15.14
+          ***
+    2     //ASM      EXEC ASMFCLG
+    3     XXASMFCLG  PROC MAC='SYS1.MACLIB',MAC1='SYS1.MACLIB',                   00000100
+          XX         MAC2='SYS1.MACLIB',MAC3='SYS1.MACLIB',SOUT='*'               00000200
+    4     XXASM      EXEC PGM=IFOX00,PARM=OBJ,REGION=128K                         00000300
+    5     XXSYSLIB   DD   DSN=&MAC,DISP=SHR                                       00000400
+    6     XX         DD   DSN=&MAC1,DISP=SHR                                      00000500
+    7     XX         DD   DSN=&MAC2,DISP=SHR                                      00000600
+    8     XX         DD   DSN=&MAC3,DISP=SHR                                      00000700
+    9     XXSYSUT1   DD   DSN=&&SYSUT1,UNIT=SYSSQ,SPACE=(1700,(600,100)),         00000800
+          XX             SEP=(SYSLIB)                                             00000900
+   10     XXSYSUT2   DD   DSN=&&SYSUT2,UNIT=SYSSQ,SPACE=(1700,(300,50)),          00001000
+          XX             SEP=(SYSLIB,SYSUT1)                                      00001100
+   11     XXSYSUT3   DD   DSN=&&SYSUT3,UNIT=SYSSQ,SPACE=(1700,(300,50))           00001200
+   12     XXSYSPRINT DD   SYSOUT=&SOUT,DCB=BLKSIZE=1089                           00001300
+   13     XXSYSPUNCH DD   SYSOUT=B                                                00001400
+   14     XXSYSGO    DD   DSN=&&OBJSET,UNIT=SYSSQ,SPACE=(80,(200,50)),            00001500
+          XX             DISP=(MOD,PASS)                                          00001600
+   15     //ASM.SYSIN DD  *
+   16     XXLKED     EXEC PGM=IEWL,PARM=(XREF,LET,LIST,NCAL),REGION=128K,         00001700
+          XX             COND=(8,LT,ASM)                                          00001800
+   17     XXSYSLIN   DD   DSN=&&OBJSET,DISP=(OLD,DELETE)                          00001900
+   18     XX         DD   DDNAME=SYSIN                                            00002000
+   19     XXSYSLMOD  DD   DSN=&&GOSET(GO),UNIT=SYSDA,SPACE=(1024,(50,20,1)),      00002100
+          XX             DISP=(MOD,PASS)                                          00002200
+   20     XXSYSUT1   DD   DSN=&&SYSUT1,UNIT=(SYSDA,SEP=(SYSLIN,SYSLMOD)),         00002300
+          XX             SPACE=(1024,(50,20))                                     00002400
+   21     XXSYSPRINT DD   SYSOUT=&SOUT                                            00002500
+   22     XXGO       EXEC PGM=*.LKED.SYSLMOD,COND=((8,LT,ASM),(4,LT,LKED))        00002600
+   23     //GO.SYSOUT DD  SYSOUT=Z
+ STMT NO. MESSAGE
+-
+    5     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    6     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    7     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+    8     IEF653I SUBSTITUTION JCL - DSN=SYS1.MACLIB,DISP=SHR
+   12     IEF653I SUBSTITUTION JCL - SYSOUT=*,DCB=BLKSIZE=1089
+   21     IEF653I SUBSTITUTION JCL - SYSOUT=*
+   22     IEF686I DDNAME REFERRED TO ON DDNAME KEYWORD IN PRIOR STEP WAS NOT RESOLVED
+IEF236I ALLOC. FOR COMPUTE ASM ASM
+IEF237I 390  ALLOCATED TO SYSLIB
+IEF237I 390  ALLOCATED TO
+IEF237I 390  ALLOCATED TO
+IEF237I 390  ALLOCATED TO
+IEF237I 292  ALLOCATED TO SYSUT1
+IEF237I 293  ALLOCATED TO SYSUT2
+IEF237I 290  ALLOCATED TO SYSUT3
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I JES2 ALLOCATED TO SYSPUNCH
+IEF237I 291  ALLOCATED TO SYSGO
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF142I COMPUTE ASM ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS1.MACLIB                                  KEPT          *-------23
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS1.MACLIB                                  KEPT          *--------0
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   SYS26237.T205919.RA000.COMPUTE.SYSUT1        DELETED       *------170
+IEF285I   VOL SER NOS= WORK03.
+IEF285I   SYS26237.T205919.RA000.COMPUTE.SYSUT2        DELETED       *-------35
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   SYS26237.T205919.RA000.COMPUTE.SYSUT3        DELETED       *--------8
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   JES2.JOB03175.SO0102                         SYSOUT
+IEF285I   JES2.JOB03175.SO0103                         SYSOUT
+IEF285I   SYS26237.T205919.RA000.COMPUTE.OBJSET        PASSED        *-------27
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   JES2.JOB03175.SI0101                         SYSIN
+IEF373I STEP /ASM     / START 26237.2059
+IEF374I STEP /ASM     / STOP  26237.2059 CPU    0MIN 00.06SEC SRB    0MIN 00.01SEC VIRT   128K SYS   204K
+************************************************************************************************************************************
+*     1. Jobstep of job: COMPUTE     Stepname: ASM         Program name: IFOX00     Executed on 25.08.26 from 20.59.19 to 20.59.19 *
+*         elapsed time  00:00:00,08                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,07               Virtual Storage used:    128K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,07   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:    254                                                                           *
+*     390......23 390.......0 390.......0 390.......0 292.....170 293......35 290.......8 DMY.......0 DMY.......0 291......27      *
+*     DMY.......0                                                                                                                  *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,11                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR COMPUTE LKED ASM
+IEF237I 291  ALLOCATED TO SYSLIN
+IEF237I DMY  ALLOCATED TO
+IEF237I 293  ALLOCATED TO SYSLMOD
+IEF237I 290  ALLOCATED TO SYSUT1
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF142I COMPUTE LKED ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26237.T205919.RA000.COMPUTE.OBJSET        DELETED       *-------28
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26237.T205919.RA000.COMPUTE.GOSET         PASSED        *-------10
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   SYS26237.T205919.RA000.COMPUTE.SYSUT1        DELETED       *--------0
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   JES2.JOB03175.SO0104                         SYSOUT
+IEF373I STEP /LKED    / START 26237.2059
+IEF374I STEP /LKED    / STOP  26237.2059 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT   128K SYS   204K
+************************************************************************************************************************************
+*     2. Jobstep of job: COMPUTE     Stepname: LKED        Program name: IEWL       Executed on 25.08.26 from 20.59.19 to 20.59.19 *
+*         elapsed time  00:00:00,02                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:    128K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      0                                                                           *
+*     291......28 DMY.......0 293......10 290.......0 DMY.......0                                                                  *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR COMPUTE GO ASM
+IEF237I 293  ALLOCATED TO PGM=*.DD
+IEF237I JES2 ALLOCATED TO SYSOUT
+IEF142I COMPUTE GO ASM - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26237.T205919.RA000.COMPUTE.GOSET         KEPT          *--------0
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   JES2.JOB03175.SO0105                         SYSOUT
+IEF373I STEP /GO      / START 26237.2059
+IEF374I STEP /GO      / STOP  26237.2059 CPU    0MIN 00.00SEC SRB    0MIN 00.00SEC VIRT     8K SYS   200K
+IEF237I 293  ALLOCATED TO SYS00001
+IEF285I   SYS26237.T205919.RA000.COMPUTE.R0000001      KEPT          *--------0
+IEF285I   VOL SER NOS= WORK04.
+IEF285I   SYS26237.T205919.RA000.COMPUTE.GOSET         DELETED
+IEF285I   VOL SER NOS= WORK04.
+IEF375I  JOB /COMPUTE / START 26237.2059
+IEF376I  JOB /COMPUTE / STOP  26237.2059 CPU    0MIN 00.07SEC SRB    0MIN 00.01SEC
+                                               EXTERNAL SYMBOL DICTIONARY                                      PAGE    1
+
+
+SYMBOL   TYPE  ID   ADDR  LENGTH LDID                                                            ASM 0201 20.59 08/25/26
+
+COMPTEST  SD  0001 000000 0003B8
+COBDISP   ER  0002
+COBTERM   ER  0003
+COBRT     SD  0004 0003B8 00021C
+COBDISP   LD       0003B8        0004
+COBTERM   LD       000430        0004                                                                                                               PAGE    2
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 20.59 08/25/26
+
+                                      1 *---------------------------------------------------------------
+                                      2 * Generated by cobc from tests/compute.cbl
+                                      3 *---------------------------------------------------------------
+                                      4 * Generated by cobc from tests/compute.cbl
+                                      5 * Standard OS/360 entry linkage. SYS1.COBLIB is never referenced.
+                                      6 * DISPLAY is served by our own COBRT runtime, below.
+                                      7 *---------------------------------------------------------------
+000000                                8 COMPTEST CSECT
+000000 90EC D00C      0000C           9          STM   14,12,12(13)        save caller's registers
+000004 05C0                          10          BALR  12,0                establish addressability
+                            00006    11          USING *,12
+000006 50D0 C36E      00374          12          ST    13,SAVEAREA+4       backward chain to caller
+00000A 41B0 C36A      00370          13          LA    11,SAVEAREA
+00000E 50BD 0008      00008          14          ST    11,8(13)            forward chain from caller
+000012 18DB                          15          LR    13,11               our save area is now current
+                                     16 * COMPUTE R1 = ...
+000014 F8F3 C302 C284 00308 0028A    17          ZAP   WK0(16),A(4)
+00001A F8F3 C312 C288 00318 0028E    18          ZAP   WK1(16),B(4)
+000020 5820 C28E      00294          19          L     2,C
+000024 4E20 C2D2      002D8          20          CVD   2,DWK               binary -> packed
+000028 F8F7 C322 C2D2 00328 002D8    21          ZAP   WK2(16),DWK(8)
+00002E F87F C2EA C322 002F0 00328    22          ZAP   MULT8(8),WK2(16)    MP takes at most 8 bytes on the righ
+000034 FCF7 C312 C2EA 00318 002F0    23          MP    WK1(16),MULT8(8)    scale becomes the sum of the scales
+00003A FAFF C302 C312 00308 00318    24          AP    WK0(16),WK1(16)
+000040 F87F C2DA C302 002E0 00308    25          ZAP   PWK1(8),WK0(16)
+000046 F387 C292 C2DA 00298 002E0    26          UNPK  R1(9),PWK1(8)       packed -> zoned
+00004C 96F0 C29A      002A0          27          OI    R1+8,X'F0'          unsigned: force an F zone
+                                     28 * COMPUTE R2 = ...
+000050 F8F3 C302 C284 00308 0028A    29          ZAP   WK0(16),A(4)
+000056 F8F3 C312 C288 00318 0028E    30          ZAP   WK1(16),B(4)
+00005C FAFF C302 C312 00308 00318    31          AP    WK0(16),WK1(16)
+000062 5820 C28E      00294          32          L     2,C
+000066 4E20 C2D2      002D8          33          CVD   2,DWK               binary -> packed
+00006A F8F7 C312 C2D2 00318 002D8    34          ZAP   WK1(16),DWK(8)
+000070 F87F C2EA C312 002F0 00318    35          ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
+000076 FCF7 C302 C2EA 00308 002F0    36          MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
+00007C F87F C2DA C302 002E0 00308    37          ZAP   PWK1(8),WK0(16)
+000082 F387 C29B C2DA 002A1 002E0    38          UNPK  R2(9),PWK1(8)       packed -> zoned
+000088 96F0 C2A3      002A9          39          OI    R2+8,X'F0'          unsigned: force an F zone
+                                     40 * COMPUTE R3 = ...
+00008C F8F3 C302 C284 00308 0028A    41          ZAP   WK0(16),A(4)
+000092 F8F3 C312 C288 00318 0028E    42          ZAP   WK1(16),B(4)
+000098 F0F0 C302 0006 00308 00006    43          SRP   WK0(16),6,0         align scale (left)
+00009E F87F C2F2 C312 002F8 00318    44          ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
+0000A4 FDF7 C302 C2F2 00308 002F8    45          DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
+0000AA F877 C2FA C302 00300 00308    46          ZAP   QTMP(8),WK0(8)
+0000B0 F8F7 C302 C2FA 00308 00300    47          ZAP   WK0(16),QTMP(8)     drop the remainder
+0000B6 F0F0 C302 003C 00308 0003C    48          SRP   WK0(16),60,0        align scale (right)
+0000BC F87F C2DA C302 002E0 00308    49          ZAP   PWK1(8),WK0(16)
+0000C2 F387 C2A4 C2DA 002AA 002E0    50          UNPK  R3(9),PWK1(8)       packed -> zoned
+0000C8 96F0 C2AC      002B2          51          OI    R3+8,X'F0'          unsigned: force an F zone
+                                     52 * COMPUTE R4 ROUNDED = ...
+0000CC F8F3 C302 C284 00308 0028A    53          ZAP   WK0(16),A(4)
+0000D2 F8F3 C312 C288 00318 0028E    54          ZAP   WK1(16),B(4)
+0000D8 F0F0 C302 0006 00308 00006    55          SRP   WK0(16),6,0         align scale (left)                                                                                                               PAGE    3
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 20.59 08/25/26
+
+0000DE F87F C2F2 C312 002F8 00318    56          ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
+0000E4 FDF7 C302 C2F2 00308 002F8    57          DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
+0000EA F877 C2FA C302 00300 00308    58          ZAP   QTMP(8),WK0(8)
+0000F0 F8F7 C302 C2FA 00308 00300    59          ZAP   WK0(16),QTMP(8)     drop the remainder
+0000F6 F0F5 C302 003C 00308 0003C    60          SRP   WK0(16),60,5        align scale (right, ROUNDED)
+0000FC F87F C2DA C302 002E0 00308    61          ZAP   PWK1(8),WK0(16)
+000102 F387 C2AD C2DA 002B3 002E0    62          UNPK  R4(9),PWK1(8)       packed -> zoned
+000108 96F0 C2B5      002BB          63          OI    R4+8,X'F0'          unsigned: force an F zone
+                                     64 * COMPUTE R5 = ...
+00010C F8F3 C312 C288 00318 0028E    65          ZAP   WK1(16),B(4)
+000112 F8F7 C302 C362 00308 00368    66          ZAP   WK0(16),K0001(8)    unary minus
+000118 FBFF C302 C312 00308 00318    67          SP    WK0(16),WK1(16)
+00011E F8F3 C312 C284 00318 0028A    68          ZAP   WK1(16),A(4)
+000124 FAFF C302 C312 00308 00318    69          AP    WK0(16),WK1(16)
+00012A F87F C2DA C302 002E0 00308    70          ZAP   PWK1(8),WK0(16)
+000130 F387 C2B6 C2DA 002BC 002E0    71          UNPK  R5(9),PWK1(8)       packed -> zoned
+000136 96F0 C2BE      002C4          72          OI    R5+8,X'F0'          unsigned: force an F zone
+                                     73 * COMPUTE R6 = ...
+00013A F8F3 C302 C284 00308 0028A    74          ZAP   WK0(16),A(4)
+000140 5820 C28E      00294          75          L     2,C
+000144 4E20 C2D2      002D8          76          CVD   2,DWK               binary -> packed
+000148 F8F7 C312 C2D2 00318 002D8    77          ZAP   WK1(16),DWK(8)
+00014E F0F0 C302 0004 00308 00004    78          SRP   WK0(16),4,0         align scale (left)
+000154 F87F C2F2 C312 002F8 00318    79          ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
+00015A FDF7 C302 C2F2 00308 002F8    80          DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
+000160 F877 C2FA C302 00300 00308    81          ZAP   QTMP(8),WK0(8)
+000166 F8F7 C302 C2FA 00308 00300    82          ZAP   WK0(16),QTMP(8)     drop the remainder
+00016C F0F0 C302 003C 00308 0003C    83          SRP   WK0(16),60,0        align scale (right)
+000172 F87F C2DA C302 002E0 00308    84          ZAP   PWK1(8),WK0(16)
+000178 F387 C2BF C2DA 002C5 002E0    85          UNPK  R6(9),PWK1(8)       packed -> zoned
+00017E 96F0 C2C7      002CD          86          OI    R6+8,X'F0'          unsigned: force an F zone
+                                     87 * COMPUTE R7 ROUNDED = ...
+000182 F8F3 C302 C284 00308 0028A    88          ZAP   WK0(16),A(4)
+000188 F8F3 C312 C288 00318 0028E    89          ZAP   WK1(16),B(4)
+00018E FAFF C302 C312 00308 00318    90          AP    WK0(16),WK1(16)
+000194 5820 C28E      00294          91          L     2,C
+000198 4E20 C2D2      002D8          92          CVD   2,DWK               binary -> packed
+00019C F8F7 C312 C2D2 00318 002D8    93          ZAP   WK1(16),DWK(8)
+0001A2 F0F0 C302 0004 00308 00004    94          SRP   WK0(16),4,0         align scale (left)
+0001A8 F87F C2F2 C312 002F8 00318    95          ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
+0001AE FDF7 C302 C2F2 00308 002F8    96          DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
+0001B4 F877 C2FA C302 00300 00308    97          ZAP   QTMP(8),WK0(8)
+0001BA F8F7 C302 C2FA 00308 00300    98          ZAP   WK0(16),QTMP(8)     drop the remainder
+0001C0 F0F5 C302 003C 00308 0003C    99          SRP   WK0(16),60,5        align scale (right, ROUNDED)
+0001C6 F87F C2DA C302 002E0 00308   100          ZAP   PWK1(8),WK0(16)
+0001CC F387 C2C8 C2DA 002CE 002E0   101          UNPK  R7(9),PWK1(8)       packed -> zoned
+0001D2 96F0 C2D0      002D6         102          OI    R7+8,X'F0'          unsigned: force an F zone
+                                    103 * DISPLAY R1
+0001D6 4110 C232      00238         104          LA    1,PARM0001
+0001DA 58F0 C22A      00230         105          L     15,VDISP
+0001DE 05EF                         106          BALR  14,15
+                                    107 * DISPLAY R2
+0001E0 4110 C23E      00244         108          LA    1,PARM0002
+0001E4 58F0 C22A      00230         109          L     15,VDISP
+0001E8 05EF                         110          BALR  14,15                                                                                                               PAGE    4
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 20.59 08/25/26
+
+                                    111 * DISPLAY R3
+0001EA 4110 C24A      00250         112          LA    1,PARM0003
+0001EE 58F0 C22A      00230         113          L     15,VDISP
+0001F2 05EF                         114          BALR  14,15
+                                    115 * DISPLAY R4
+0001F4 4110 C256      0025C         116          LA    1,PARM0004
+0001F8 58F0 C22A      00230         117          L     15,VDISP
+0001FC 05EF                         118          BALR  14,15
+                                    119 * DISPLAY R5
+0001FE 4110 C262      00268         120          LA    1,PARM0005
+000202 58F0 C22A      00230         121          L     15,VDISP
+000206 05EF                         122          BALR  14,15
+                                    123 * DISPLAY R6
+000208 4110 C26E      00274         124          LA    1,PARM0006
+00020C 58F0 C22A      00230         125          L     15,VDISP
+000210 05EF                         126          BALR  14,15
+                                    127 * DISPLAY R7
+000212 4110 C27A      00280         128          LA    1,PARM0007
+000216 58F0 C22A      00230         129          L     15,VDISP
+00021A 05EF                         130          BALR  14,15
+                                    131 * STOP RUN
+00021C 58F0 C22E      00234         132          L     15,VTERM            close anything the runtime opened
+000220 05EF                         133          BALR  14,15
+000222 58DD 0004      00004         134          L     13,4(13)            restore caller's save area
+000226 98EC D00C      0000C         135          LM    14,12,12(13)        restore caller's registers
+00022A 1BFF                         136          SR    15,15               return code 0
+00022C 07FE                         137          BR    14                  return to caller
+00022E 0000
+000230 00000000                     138 VDISP    DC    V(COBDISP)
+000234 00000000                     139 VTERM    DC    V(COBTERM)
+000238 00000298                     140 PARM0001 DC    A(R1)
+00023C 80000240                     141          DC    X'80',AL3(LEN0001)  last parameter
+000240 0009                         142 LEN0001  DC    H'9'
+000242 0000
+000244 000002A1                     143 PARM0002 DC    A(R2)
+000248 8000024C                     144          DC    X'80',AL3(LEN0002)  last parameter
+00024C 0009                         145 LEN0002  DC    H'9'
+00024E 0000
+000250 000002AA                     146 PARM0003 DC    A(R3)
+000254 80000258                     147          DC    X'80',AL3(LEN0003)  last parameter
+000258 0009                         148 LEN0003  DC    H'9'
+00025A 0000
+00025C 000002B3                     149 PARM0004 DC    A(R4)
+000260 80000264                     150          DC    X'80',AL3(LEN0004)  last parameter
+000264 0009                         151 LEN0004  DC    H'9'
+000266 0000
+000268 000002BC                     152 PARM0005 DC    A(R5)
+00026C 80000270                     153          DC    X'80',AL3(LEN0005)  last parameter
+000270 0009                         154 LEN0005  DC    H'9'
+000272 0000
+000274 000002C5                     155 PARM0006 DC    A(R6)
+000278 8000027C                     156          DC    X'80',AL3(LEN0006)  last parameter
+00027C 0009                         157 LEN0006  DC    H'9'
+00027E 0000
+000280 000002CE                     158 PARM0007 DC    A(R7)                                                                                                               PAGE    5
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 20.59 08/25/26
+
+000284 80000288                     159          DC    X'80',AL3(LEN0007)  last parameter
+000288 0009                         160 LEN0007  DC    H'9'
+                                    161 * WORKING-STORAGE
+00028A 0010000C                     162 A        DC    PL4'10000'          PIC S7 digits scale 2 COMP-3
+00028E 0000600C                     163 B        DC    PL4'600'            PIC S7 digits scale 2 COMP-3
+000292 0000
+000294 00000007                     164 C        DC    F'7'                PIC S5 digits scale 0 COMP
+000298 F0F0F0F0F0F0F0F0             165 R1       DC    ZL9'000'            PIC 9 digits scale 2 DISPLAY
+0002A1 F0F0F0F0F0F0F0F0             166 R2       DC    ZL9'000'            PIC 9 digits scale 2 DISPLAY
+0002AA F0F0F0F0F0F0F0F0             167 R3       DC    ZL9'000'            PIC 9 digits scale 2 DISPLAY
+0002B3 F0F0F0F0F0F0F0F0             168 R4       DC    ZL9'000'            PIC 9 digits scale 2 DISPLAY
+0002BC F0F0F0F0F0F0F0F0             169 R5       DC    ZL9'000'            PIC 9 digits scale 2 DISPLAY
+0002C5 F0F0F0F0F0F0F0F0             170 R6       DC    ZL9'000'            PIC 9 digits scale 2 DISPLAY
+0002CE F0F0F0F0F0F0F0F0             171 R7       DC    ZL9'000'            PIC 9 digits scale 2 DISPLAY
+                                    172 * work areas for decimal arithmetic
+0002D8                              173 DWK      DS    D                   CVD/CVB doubleword
+0002E0                              174 PWK1     DS    PL8
+0002E8                              175 PWK2     DS    PL8
+0002F0                              176 MULT8    DS    PL8                 MP right operand
+0002F8                              177 DIVR8    DS    PL8                 DP divisor
+000300                              178 QTMP     DS    PL8                 DP quotient
+000308                              179 WK0      DS    PL16                expression stack
+000318                              180 WK1      DS    PL16
+000328                              181 WK2      DS    PL16
+000338                              182 WK3      DS    PL16
+000348                              183 WK4      DS    PL16
+000358                              184 WK5      DS    PL16
+000368 000000000000000C             185 K0001    DC    PL8'0'              numeric constants
+000370                              186 SAVEAREA DS    18F
+                                    187 *---------------------------------------------------------------
+                                    188 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
+                                    189 * DISPLAY reaches SYSOUT through QSAM directly, which is the
+                                    190 * same access-method path IKFCBL00 uses for its own file I/O.
+                                    191 * Not reentrant: MVS 3.8j batch does not require it.
+                                    192 *---------------------------------------------------------------
+0003B8                              193 COBRT    CSECT
+                                    194          ENTRY COBDISP,COBTERM
+                                    195 *
+                                    196 * COBDISP -- write one line to SYSOUT.
+                                    197 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
+                                    198 *
+0003B8 90EC D00C      0000C         199 COBDISP  STM   14,12,12(13)
+0003BC 05C0                         200          BALR  12,0
+                            003BE   201          USING *,12
+0003BE 50D0 C12A      004E8         202          ST    13,RTSAVE1+4
+0003C2 41B0 C126      004E4         203          LA    11,RTSAVE1
+0003C6 50BD 0008      00008         204          ST    11,8(13)
+0003CA 18DB                         205          LR    13,11
+0003CC 5820 1000      00000         206          L     2,0(0,1)            A(text)
+0003D0 5830 1004      00004         207          L     3,4(0,1)            A(length)
+0003D4 4840 3000      00000         208          LH    4,0(0,3)            length
+0003D8 9501 C0A8      00466         209          CLI   RTOPEN,X'01'        already open?
+0003DC 4780 C030      003EE         210          BE    COBD010
+                                    211          OPEN  (RTDCB,OUTPUT)
+0003E0                              212+         CNOP  0,4                               ALIGN LIST TO FULLWORD 01740001                                                                                                               PAGE    6
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 20.59 08/25/26
+
+0003E0 4510 C02A      003E8         213+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR. 01780000
+0003E4 8F                           214+         DC    AL1(143)                          OPTION BYTE            01900000
+0003E5 000574                       215+         DC    AL3(RTDCB)                        DCB ADDRESS            01920000
+0003E8 0A13                         216+         SVC   19                                ISSUE OPEN SVC         04000000
+0003EA 9201 C0A8      00466         217          MVI   RTOPEN,X'01'
+0003EE 9240 C0AC      0046A         218 COBD010  MVI   RTLINE,C' '         ASA: single space
+0003F2 D277 C0AD C0AC 0046B 0046A   219          MVC   RTLINE+1(120),RTLINE  blank the text area
+0003F8 1244                         220          LTR   4,4
+0003FA 47D0 C052      00410         221          BNP   COBD020             empty: emit a blank line
+0003FE 4940 C0AA      00468         222          CH    4,RTMAX
+000402 47D0 C04C      0040A         223          BNH   COBD015
+000406 4840 C0AA      00468         224          LH    4,RTMAX             truncate at the line width
+00040A 0640                         225 COBD015  BCTR  4,0                 EX wants length-1
+00040C 4440 C06C      0042A         226          EX    4,COBDMVC
+                                    227 COBD020  PUT   RTDCB,RTLINE
+000410 4110 C1B6      00574         228+COBD020  LA    1,RTDCB                           LOAD PARAMETER REG 1   01900002
+000414 4100 C0AC      0046A         229+         LA    0,RTLINE                          LOAD PARAMETER REG 0   02500002
+000418 58F0 1030      00030         230+         L     15,48(0,1)               LOAD PUT ROUTINE ADDR           00550000
+00041C 05EF                         231+         BALR  14,15                    LINK TO PUT ROUTINE             00600000
+00041E 58DD 0004      00004         232          L     13,4(13)
+000422 98EC D00C      0000C         233          LM    14,12,12(13)
+000426 1BFF                         234          SR    15,15
+000428 07FE                         235          BR    14
+00042A D200 C0AD 2000 0046B 00000   236 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
+                                    237 *
+                                    238 * COBTERM -- close SYSOUT if COBDISP ever opened it.
+                                    239 *
+000430 90EC D00C      0000C         240 COBTERM  STM   14,12,12(13)
+000434 05C0                         241          BALR  12,0
+                            00436   242          USING *,12
+000436 50D0 C0FA      00530         243          ST    13,RTSAVE2+4
+00043A 41B0 C0F6      0052C         244          LA    11,RTSAVE2
+00043E 50BD 0008      00008         245          ST    11,8(13)
+000442 18DB                         246          LR    13,11
+000444 9501 C030      00466         247          CLI   RTOPEN,X'01'
+000448 4770 C024      0045A         248          BNE   COBT010
+                                    249          CLOSE (RTDCB)
+00044C                              250+         CNOP  0,4                               ALIGN LIST TO FULLWORD 02420002
+00044C 4510 C01E      00454         251+         BAL   1,*+8                             LOAD REG1 W/LIST ADDR  02460002
+000450 80                           252+         DC    AL1(128)                          OPTION BYTE            02580000
+000451 000574                       253+         DC    AL3(RTDCB)                        DCB ADDRESS            02600000
+000454 0A14                         254+         SVC   20                                ISSUE CLOSE SVC        01640000
+000456 9200 C030      00466         255          MVI   RTOPEN,X'00'
+00045A 58DD 0004      00004         256 COBT010  L     13,4(13)
+00045E 98EC D00C      0000C         257          LM    14,12,12(13)
+000462 1BFF                         258          SR    15,15
+000464 07FE                         259          BR    14
+                                    260 *
+000466 00                           261 RTOPEN   DC    X'00'
+000467 00
+000468 0078                         262 RTMAX    DC    H'120'
+00046A 4040404040404040             263 RTLINE   DC    CL121' '            ASA byte + 120 columns
+0004E4                              264 RTSAVE1  DS    18F
+00052C                              265 RTSAVE2  DS    18F
+                                    266 RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,            X                                                                                                               PAGE    7
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 20.59 08/25/26
+
+                                                       LRECL=121,BLKSIZE=121
+
+
+                                    268+*                       DATA CONTROL BLOCK                              22770000
+                                    269+*                                                                       22860000
+000574                              270+RTDCB    DC    0F'0'                   ORIGIN ON WORD BOUNDARY          22914000
+
+                                    272+*                       DIRECT ACCESS DEVICE INTERFACE                  27360000
+
+000574 0000000000000000             274+         DC    BL16'0'                  FDAD,DVTBL                      27540000
+000584 00000000                     275+         DC    A(0)                     KEYLE,DEVT,TRBAL                27720000
+
+                                    277+*                       COMMON ACCESS METHOD INTERFACE                  48690000
+
+000588 00                           279+         DC    AL1(0)                  BUFNO                            49050000
+000589 000001                       280+         DC    AL3(1)                  BUFCB                            54720000
+00058C 0000                         281+         DC    AL2(0)             BUFL                                  55170000
+00058E 4000                         282+         DC    BL2'0100000000000000'                                   *55800000
+                                       +                                                 DSORG                  55890000
+000590 00000001                     283+         DC    A(1)                     IOBAD                           56340000
+
+                                    285+*                       FOUNDATION EXTENSION                            56610000
+
+000594 00                           287+         DC    BL1'00000000'                  BFTEK,BFLN,HIARCHY        59850000
+000595 000001                       288+         DC    AL3(1)                  EODAD                            65970000
+000598 94                           289+         DC    BL1'10010100'                                           *66150000
+                                       +                                       RECFM                            66240000
+000599 000000                       290+         DC    AL3(0)                  EXLST                            66330000
+
+                                    292+*                       FOUNDATION BLOCK                                66690000
+
+00059C E2E8E2D6E4E34040             294+         DC    CL8'SYSOUT'             DDNAME                           66870000
+0005A4 02                           295+         DC    BL1'00000010'           OFLGS                            68220000
+0005A5 00                           296+         DC    BL1'00000000'                          IFLG              68310000
+0005A6 0050                         297+         DC    BL2'0000000001010000'                                   *68400000
+                                       +                                                                       *68490000
+                                       +                                       MACR                             68580000
+
+                                    299+*                       BSAM-BPAM-QSAM INTERFACE                        74430000
+
+0005A8 00                           301+         DC    BL1'00000000'                                           *74610000
+                                       +                                                                   RER1 74700000
+0005A9 000001                       302+         DC    AL3(1)                  CHECK, GERR, PERR                74790000
+0005AC 00000001                     303+         DC    A(1)                    SYNAD                            74880000
+0005B0 0000                         304+         DC    H'0'                    CIND1, CIND2                     74970000
+0005B2 0079                         305+         DC    AL2(121)                BLKSIZE                          75240000
+0005B4 00000000                     306+         DC    F'0'                    WCPO, WCPL, OFFSR, OFFSW         75870000
+0005B8 00000001                     307+         DC    A(1)                    IOBA                             75960000
+0005BC 00                           308+         DC    AL1(0)                  NCP                              76050000
+0005BD 000001                       309+         DC    AL3(1)                  EOBR, EOBAD                      76140000
+
+                                    311+*                            QSAM INTERFACE                             81450000
+
+0005C0 00000001                     313+         DC    A(1)                     RECAD                           81630000
+0005C4 0000                         314+         DC    H'0'                    QSWS                             81810000                                                                                                               PAGE    8
+
+
+  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT                                       ASM 0201 20.59 08/25/26
+
+0005C6 0079                         315+         DC    AL2(121)       LRECL                                     80730000
+0005C8 00                           316+         DC    BL1'00000000'           EROPT                            82530000
+0005C9 000001                       317+         DC    AL3(1)                  CNTRL                            82620000
+0005CC 00000000                     318+         DC    F'0'                    PRECL                            82710000
+0005D0 00000001                     319+         DC    A(1)                    EOB                              82800000
+                                    320          END                                                  RELOCATION DICTIONARY                                        PAGE    9
+
+
+POS.ID   REL.ID   FLAGS   ADDRESS                                                                ASM 0201 20.59 08/25/26
+
+ 0001     0001      0C     000238
+ 0001     0001      08     00023D
+ 0001     0001      0C     000244
+ 0001     0001      08     000249
+ 0001     0001      0C     000250
+ 0001     0001      08     000255
+ 0001     0001      0C     00025C
+ 0001     0001      08     000261
+ 0001     0001      0C     000268
+ 0001     0001      08     00026D
+ 0001     0001      0C     000274
+ 0001     0001      08     000279
+ 0001     0001      0C     000280
+ 0001     0001      08     000285
+ 0001     0002      1C     000230
+ 0001     0003      1C     000234
+ 0004     0004      08     0003E5
+ 0004     0004      08     000451
+                                                  CROSS-REFERENCE                                              PAGE   10
+
+
+SYMBOL    LEN   VALUE   DEFN    REFERENCES                                                       ASM 0201 20.59 08/25/26
+
+A        00004 0000028A 00162  00017 00029 00041 00053 00068 00074 00088
+B        00004 0000028E 00163  00018 00030 00042 00054 00065 00089
+C        00004 00000294 00164  00019 00032 00075 00091
+COBDISP  00004 000003B8 00199  00194
+COBDMVC  00006 0000042A 00236  00226
+COBD010  00004 000003EE 00218  00210
+COBD015  00002 0000040A 00225  00223
+COBD020  00004 00000410 00228  00221
+COBTERM  00004 00000430 00240  00194
+COBT010  00004 0000045A 00256  00248
+DIVR8    00008 000002F8 00177  00044 00045 00056 00057 00079 00080 00095 00096
+DWK      00008 000002D8 00173  00020 00021 00033 00034 00076 00077 00092 00093
+K0001    00008 00000368 00185  00066
+LEN0001  00002 00000240 00142  00141
+LEN0002  00002 0000024C 00145  00144
+LEN0003  00002 00000258 00148  00147
+LEN0004  00002 00000264 00151  00150
+LEN0005  00002 00000270 00154  00153
+LEN0006  00002 0000027C 00157  00156
+LEN0007  00002 00000288 00160  00159
+MULT8    00008 000002F0 00176  00022 00023 00035 00036
+PARM0001 00004 00000238 00140  00104
+PARM0002 00004 00000244 00143  00108
+PARM0003 00004 00000250 00146  00112
+PARM0004 00004 0000025C 00149  00116
+PARM0005 00004 00000268 00152  00120
+PARM0006 00004 00000274 00155  00124
+PARM0007 00004 00000280 00158  00128
+PWK1     00008 000002E0 00174  00025 00026 00037 00038 00049 00050 00061 00062 00070 00071 00084 00085 00100 00101
+QTMP     00008 00000300 00178  00046 00047 00058 00059 00081 00082 00097 00098
+RTDCB    00004 00000574 00270  00215 00228 00253
+RTLINE   00121 0000046A 00263  00218 00219 00219 00229 00236
+RTMAX    00002 00000468 00262  00222 00224
+RTOPEN   00001 00000466 00261  00209 00217 00247 00255
+RTSAVE1  00004 000004E4 00264  00202 00203
+RTSAVE2  00004 0000052C 00265  00243 00244
+R1       00009 00000298 00165  00026 00027 00140
+R2       00009 000002A1 00166  00038 00039 00143
+R3       00009 000002AA 00167  00050 00051 00146
+R4       00009 000002B3 00168  00062 00063 00149
+R5       00009 000002BC 00169  00071 00072 00152
+R6       00009 000002C5 00170  00085 00086 00155
+R7       00009 000002CE 00171  00101 00102 00158
+SAVEAREA 00004 00000370 00186  00012 00013
+VDISP    00004 00000230 00138  00105 00109 00113 00117 00121 00125 00129
+VTERM    00004 00000234 00139  00132
+WK0      00016 00000308 00179  00017 00024 00025 00029 00031 00036 00037 00041 00043 00045 00046 00047 00048 00049 00053
+                               00055 00057 00058 00059 00060 00061 00066 00067 00069 00070 00074 00078 00080 00081 00082
+                               00083 00084 00088 00090 00094 00096 00097 00098 00099 00100
+WK1      00016 00000318 00180  00018 00023 00024 00030 00031 00034 00035 00042 00044 00054 00056 00065 00067 00068 00069
+                               00077 00079 00089 00090 00093 00095
+WK2      00016 00000328 00181  00021 00022                                                  ASSEMBLER DIAGNOSTICS AND STATISTICS                         PAGE   11
+
+
+                                                                                                 ASM 0201 20.59 08/25/26
+
+NO STATEMENTS FLAGGED IN THIS ASSEMBLY
+HIGHEST SEVERITY WAS    0
+OPTIONS FOR THIS ASSEMBLY
+  ALIGN, ALOGIC, BUFSIZE(STD), DECK, ESD, FLAG(0), LINECOUNT(55), LIST, NOMCALL, YFLAG, WORKSIZE(2097152)
+  NOMLOGIC, NONUMBER, OBJECT, NORENT, RLD, NOSTMT, NOLIBMAC, NOTERMINAL, NOTEST, XREF(SHORT)
+  SYSPARM()
+WORK FILE BUFFER SIZE/NUMBER = 7678/ 1
+TOTAL RECORDS READ FROM SYSTEM INPUT        254
+TOTAL RECORDS READ FROM SYSTEM LIBRARY     3150
+TOTAL RECORDS PUNCHED                        27
+TOTAL RECORDS PRINTED                       445
+ F64-LEVEL LINKAGE EDITOR OPTIONS SPECIFIED XREF,LET,LIST,NCAL
+          DEFAULT OPTION(S) USED -  SIZE=(98304,55296)
+
+
+
+                                                CROSS REFERENCE TABLE
+
+
+  CONTROL SECTION                       ENTRY
+
+    NAME    ORIGIN  LENGTH                NAME   LOCATION     NAME   LOCATION     NAME   LOCATION     NAME   LOCATION
+  COMPTEST      00     3B8
+  COBRT        3B8     21C
+                                        COBDISP      3B8    COBTERM      430
+
+
+
+  LOCATION  REFERS TO SYMBOL  IN CONTROL SECTION             LOCATION  REFERS TO SYMBOL  IN CONTROL SECTION
+      230            COBDISP         COBRT                        234            COBTERM         COBRT
+
+ ENTRY ADDRESS       00
+
+ TOTAL LENGTH       5D8
+****GO        DOES NOT EXIST BUT HAS BEEN ADDED TO DATA SET
+AUTHORIZATION CODE IS         0.
+
+000014200
+000074200
+000001666
+000001667
+000009400
+000001428
+000001514                         CCCCCCCCCC   OOOOOOOOOOOO  MM        MM  PPPPPPPPPPP   UU        UU  TTTTTTTTTTTT  EEEEEEEEEEEE
+                       CCCCCCCCCCCC  OOOOOOOOOOOO  MMM      MMM  PPPPPPPPPPPP  UU        UU  TTTTTTTTTTTT  EEEEEEEEEEEE
+                      CC        CC  OO        OO  MMMM    MMMM  PP        PP  UU        UU       TT       EE
+                     CC            OO        OO  MM MM  MM MM  PP        PP  UU        UU       TT       EE
+                    CC            OO        OO  MM  MMMM  MM  PP        PP  UU        UU       TT       EE
+                   CC            OO        OO  MM   MM   MM  PPPPPPPPPPPP  UU        UU       TT       EEEEEEEE
+                  CC            OO        OO  MM        MM  PPPPPPPPPPP   UU        UU       TT       EEEEEEEE
+                 CC            OO        OO  MM        MM  PP            UU        UU       TT       EE
+                CC            OO        OO  MM        MM  PP            UU        UU       TT       EE
+               CC        CC  OO        OO  MM        MM  PP            UU        UU       TT       EE
+              CCCCCCCCCCCC  OOOOOOOOOOOO  MM        MM  PP            UUUUUUUUUUUU       TT       EEEEEEEEEEEE
+              CCCCCCCCCC   OOOOOOOOOOOO  MM        MM  PP             UUUUUUUUUU        TT       EEEEEEEEEEEE
+
+
+
+                    JJJJJJJJJJ   3333333333        11       777777777777  555555555555                ZZZZZZZZZZZZ
+                    JJJJJJJJJJ  333333333333      111       77777777777   555555555555                ZZZZZZZZZZZZ
+                        JJ      33        33     1111       77      77    55                                   ZZ
+                        JJ                33       11              77     55                                  ZZ
+                        JJ                33       11             77      55                                 ZZ
+                        JJ             3333        11            77       555555555                      ZZZZZZZ
+                        JJ             3333        11            77       5555555555                     ZZZZZZZ
+                        JJ                33       11            77                55                     ZZ
+                  JJ    JJ                33       11            77                 55                   ZZ
+                  JJ    JJ      33        33       11            77                 55                  ZZ
+                  JJJJJJJJ      333333333333   1111111111        77       555555555555                 ZZZZZZZZZZZ
+                   JJJJJJ        3333333333    1111111111        77       55555555555                 ZZZZZZZZZZZZ
+
+
+

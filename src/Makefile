@@ -9,8 +9,13 @@ test: cobc370
 	./cobc370 tests/stoprun.cbl -o tests/stoprun.asm
 	./cobc370 tests/hello.cbl   -o tests/hello.asm
 	./cobc370 tests/arith.cbl   -o tests/arith.asm
-	@echo "--- no line may exceed 72 columns ---"
-	@! awk 'length($$0)>72' tests/*.asm | grep . || (echo "COLUMN VIOLATION"; exit 1)
+	@echo "--- column 72 is the continuation flag, not spare room ---"
+	@# A statement must stop at column 71. A line reaching column 72 is only
+	@# legal when that column holds the deliberate X of a continued statement;
+	@# anything else makes the assembler read the next line as a continuation
+	@# and report IFO026. Checking >72 misses this by exactly one column.
+	@! awk 'length($$0)>72 || (length($$0)==72 && substr($$0,72,1)!="X")' \
+	    tests/*.asm | grep . || (echo "COLUMN 72 VIOLATION"; exit 1)
 	@echo "--- STOP RUN alone must not drag in the runtime ---"
 	@! grep -q 'COBRT' tests/stoprun.asm || (echo "runtime emitted needlessly"; exit 1)
 	@echo "--- bad input must be rejected, not silently accepted ---"
