@@ -40,10 +40,42 @@ Every module is smaller. Two are dramatically so — GL030 at 0.18x and GL036 at
 0.20x, both around 34K under ANS COBOL against roughly 6K here — while the
 closest, GL040, is still 0.86x.
 
-A likely explanation is that ANS COBOL link-edits substantial runtime from
-`SYS1.COBLIB` into every module, where cobc370 emits only its own COBRT and
-touches SYS1.COBLIB not at all. **That is unverified** — confirming it means
-reading a module map with AMBLIST, which has not been done.
+### Why — settled with AMBLIST, and my first guess was wrong
+
+I predicted the difference was ANS COBOL link-editing bulky `SYS1.COBLIB`
+runtime into every module. `AMBLIST LISTLOAD ... OUTPUT=MAP` on both libraries
+says otherwise. ANS's library routines are small; the difference is **generated
+code**.
+
+Comparing like with like — ANS folds WORKING-STORAGE into its single CSECT, so
+ours is `program + COBWS`:
+
+| | ANS code+data | cobc370 code+data | ratio | ANS runtime | cobc370 runtime |
+|---|---|---|---|---|---|
+| GL025 | 2,426 | 1,249 | 0.51x | 53 | 0 |
+| GL040 | 10,744 | 9,920 | 0.92x | 1,845 | 848 |
+| GL042 | 12,666 | 11,042 | 0.87x | 3,305 | 848 |
+| GL030 | 30,342 | 5,088 | **0.17x** | 3,129 | 848 |
+| GL036 | 30,764 | 5,658 | **0.18x** | 3,129 | 848 |
+
+ANS's runtime is 53 to 3,305 bytes — `ILBODSP0` (DISPLAY), `ILBOSTP0` (STOP RUN),
+`ILBOSPA0`, `ILBOSCH0` (SEARCH), `ILBOERR0`. Against our 848-byte COBRT that is
+a couple of KB either way, nowhere near the 87K total gap.
+
+Most programs are modestly smaller here (0.87–0.92x) or half. **GL030 and GL036
+are the outliers**: IKFCBL00 generates about 30K where cobc370 generates about
+5K for the same source. Why those two specifically is not established.
+
+### The one genuine gap
+
+`ILBOERR0` — 556 bytes of runtime error handling — is link-edited into ANS's
+GL030 and GL036 and called from the program. **cobc370 has no equivalent.**
+
+That is a real behavioural difference, not a size trick. Where a runtime fault
+occurs — invalid data in a numeric field, say — ANS COBOL routes to a diagnostic
+routine, while generated cobc370 code would most likely take an S0C7 with no
+explanation. On clean data there is no difference. On dirty data ANS tells you
+what happened and this compiler does not.
 
 Smaller modules *and* slightly more CPU is not a contradiction: the generated
 code does more work per operation, particularly round-tripping through packed
