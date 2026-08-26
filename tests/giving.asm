@@ -284,9 +284,12 @@ SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    F'100'              A PIC S9(8)v0 COMP
-D0001    DC    F'7'                B PIC S9(8)v0 COMP
-D0002    DC    F'0'                C PIC S9(8)v0 COMP
+D0000    DC    FL4'100'            A PIC S9(8)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0001    DC    FL4'7'              B PIC S9(8)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0002    DC    FL4'0'              C PIC S9(8)v0 COMP
+         DS    XL4                 reserve the rest of a table
 D0003    DC    CL8'00000000'       S PIC 9(8)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

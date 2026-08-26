@@ -233,9 +233,12 @@ D0006    EQU   COBWS+0             CLASS-TABLE REDEFINES
 D0007    EQU   COBWS+0             CLASS-ENTRY REDEFINES
 D0008    EQU   COBWS+0             CLASS-LETTER REDEFINES
 D0009    EQU   COBWS+1             CLASS-NAME REDEFINES
+         DS    XL2                 reserve the rest of a table
 D0010    DC    CL1' '              WS-WANT PIC X(1)
+         DS    XL7                 reserve the rest of a table
 D0011    DC    CL13' '             WS-NAME PIC X(13)
-D0012    DC    H'0'                CL PIC S9(4)v0 COMP
+         DS    XL3                 reserve the rest of a table
+D0012    DC    HL2'0'              CL PIC S9(4)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

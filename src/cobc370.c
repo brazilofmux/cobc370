@@ -893,9 +893,14 @@ static void parse_data_division(void)
             } else {
                 /* A group at 01 never ran through the elementary path that
                    advances wslen, so record its extent before starting the next
-                   01 -- otherwise the next item is laid down on top of it. */
+                   01 -- otherwise the next item is laid down on top of it.
+                   01 items start on a doubleword, exactly as IKFCBL00 places
+                   them: interiors stay tight, so a control block handed to an
+                   assembler routine has the layout that routine was written
+                   for, and COMP items land aligned in the common case. */
                 if (cursor > wslen) wslen = cursor;
-                cursor = wslen;             /* 01 items start a fresh area */
+                wslen = (wslen + 7) & ~7;
+                cursor = wslen;
             }
         }
 
@@ -1155,6 +1160,7 @@ static void parse_data_division(void)
         if (lookup(ix->name) >= 0) die("INDEXED BY name is already declared");
         ix->usage = U_COMP; ix->digits = 4; ix->is_signed = 1;
         ix->bytes = ix->elem = 2;
+        wslen = (wslen + 7) & ~7;
         ix->offset = wslen; wslen += 2;
         ix->has_value = 1; strcpy(ix->value, "0");
         syms[pend_idx[k].table].index_sym = nsym;
@@ -3911,7 +3917,21 @@ static void generate(void)
                     snprintf(b, sizeof b, "%sXL%d'%s'", dup, sy->elem, hex);
                 }
                 break;
-            default:        snprintf(b, sizeof b, "%s%s'%s'", dup, sy->elem == 2 ? "H" : "F", v); break;
+            default:
+                /* The length modifier is not decoration: a bare DC F or DC H is
+                 * ALIGNED by the assembler, which slides in slack bytes this
+                 * compiler's no-padding layout knows nothing about. Label-based
+                 * addressing hides that -- every internal access stays
+                 * self-consistent -- until a GROUP address crosses a boundary
+                 * the layout did not predict: CALL 'DYNALOAD' USING MB-FTL-IN
+                 * handed FTL an address three slack bytes short of where
+                 * FTL-YEAR had really been placed, FTL read a garbage date, and
+                 * GL024 selected 0 of 24525 transactions with RC=0000. FL4/HL2
+                 * are byte-aligned, which S/370's byte-oriented operands allow.
+                 */
+                snprintf(b, sizeof b, "%s%sL%d'%s'", dup,
+                         sy->elem == 2 ? "H" : "F", sy->elem, v);
+                break;
             }
             snprintf(cmt, sizeof cmt, "%s PIC %s9(%d)v%d %s%s",
                      sy->name, sy->is_signed ? "S" : "", sy->digits, sy->scale,

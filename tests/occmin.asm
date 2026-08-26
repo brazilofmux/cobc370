@@ -79,8 +79,9 @@ D0000    DS    0CL50               T (01 group)
 D0001    DS    0CL10               TE (05 group, OCCURS 5)
 D0002    DC    PL5'0'              TA PIC S9(9)v2 COMP-3
 D0003    DC    PL5'0'              TB PIC S9(9)v2 COMP-3
-         DS    XL40                reserve the rest of a table
-D0004    DC    H'3'                IDX PIC S9(4)v0 COMP
+         DS    XL46                reserve the rest of a table
+D0004    DC    HL2'3'              IDX PIC S9(4)v0 COMP
+         DS    XL6                 reserve the rest of a table
 D0005    DC    CL9'000000000'      OUT-NUM PIC 9(9)v2 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

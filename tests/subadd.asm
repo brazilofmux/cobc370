@@ -83,7 +83,7 @@ SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    F'0'                WS-T PIC S9(8)v0 COMP
+D0000    DC    FL4'0'              WS-T PIC S9(8)v0 COMP
          DS    XL4                 reserve the rest of the last table
 LS0000   DSECT                     LS-IN (caller's storage)
 D0001    DS    0CL4                LS-IN (01 group)

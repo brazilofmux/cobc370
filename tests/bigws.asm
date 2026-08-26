@@ -89,10 +89,15 @@ WSC0000  EQU   COBWS               chunk origins
 WSC0001  EQU   COBWS+4096
 * WORKING-STORAGE
 D0000    DC    CL5'ALPHA'          MSG1 PIC X(5)
+         DS    XL3                 reserve the rest of a table
 D0001    DC    2100C' '            PAD1 PIC X(2100)
+         DS    XL4                 reserve the rest of a table
 D0002    DC    2100C' '            PAD2 PIC X(2100)
+         DS    XL4                 reserve the rest of a table
 D0003    DC    CL5' '              MSG2 PIC X(5)
-D0004    DC    F'42'               ACC PIC S9(5)v0 COMP
+         DS    XL3                 reserve the rest of a table
+D0004    DC    FL4'42'             ACC PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
 D0005    DC    CL5'00000'          OUT-NUM PIC 9(5)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

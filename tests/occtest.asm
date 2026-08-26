@@ -236,11 +236,13 @@ D0000    DS    0CL50               YEARLY-TABLE (01 group)
 D0001    DS    0CL10               YEARLY-TOTALS (05 group, OCCURS 5)
 D0002    DC    PL5'0'              YT-DEBITS PIC S9(9)v2 COMP-3
 D0003    DC    PL5'0'              YT-CREDITS PIC S9(9)v2 COMP-3
-         DS    XL40                reserve the rest of a table
+         DS    XL46                reserve the rest of a table
 D0004    DS    0CL24               MONTH-DAYS (01 group)
-D0005    DC    12H'0'              MD-ENTRY PIC 9(2)v0 COMP table
-D0006    DC    H'1'                WS-IDX PIC S9(4)v0 COMP
+D0005    DC    12HL2'0'            MD-ENTRY PIC 9(2)v0 COMP table
+D0006    DC    HL2'1'              WS-IDX PIC S9(4)v0 COMP
+         DS    XL6                 reserve the rest of a table
 D0007    DC    CL9'000000000'      OUT-NUM PIC 9(9)v2 DISP
+         DS    XL7                 reserve the rest of a table
 D0008    DC    CL4'0000'           OUT-SMALL PIC 9(4)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

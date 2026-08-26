@@ -128,15 +128,19 @@ WSC0000  EQU   COBWS               chunk origins
 D0000    DS    0CL9                MB-FTL (01 group)
 D0001    DC    CL8'FTL'            WS-MODULE-NAME PIC X(8)
 D0002    DC    CL1'K'              WS-CALL-MODE PIC X(1)
+         DS    XL7                 reserve the rest of a table
 D0003    DS    0CL9                MB-LTF (01 group)
 D0004    DC    CL8'LTF'            WS-MODULE-NAME PIC X(8)
 D0005    DC    CL1'D'              WS-CALL-MODE PIC X(1)
+         DS    XL7                 reserve the rest of a table
 D0006    DS    0CL2                OUTER-A (01 group)
 D0007    DS    0CL2                MID-LEVEL (05 group)
 D0008    DC    CL2'A1'             LEAF PIC X(2)
+         DS    XL6                 reserve the rest of a table
 D0009    DS    0CL2                OUTER-B (01 group)
 D0010    DS    0CL2                MID-LEVEL (05 group)
 D0011    DC    CL2'B2'             LEAF PIC X(2)
+         DS    XL6                 reserve the rest of a table
 D0012    DC    CL8' '              OUT-N PIC X(8)
 D0013    DC    CL2' '              OUT-L PIC X(2)
 *---------------------------------------------------------------

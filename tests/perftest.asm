@@ -406,12 +406,16 @@ WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DS    0CL10               TBL (01 group)
 D0001    DS    0CL2                ENT (05 group, OCCURS 5)
-D0002    DC    H'0'                ENT-YEAR PIC S9(4)v0 COMP
-         DS    XL8                 reserve the rest of a table
-D0003    DC    H'0'                WS-IDX PIC S9(4)v0 COMP
-D0004    DC    F'0'                WS-TOT PIC S9(7)v0 COMP
-D0005    DC    H'0'                WS-CNT PIC S9(4)v0 COMP
+D0002    DC    HL2'0'              ENT-YEAR PIC S9(4)v0 COMP
+         DS    XL14                reserve the rest of a table
+D0003    DC    HL2'0'              WS-IDX PIC S9(4)v0 COMP
+         DS    XL6                 reserve the rest of a table
+D0004    DC    FL4'0'              WS-TOT PIC S9(7)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0005    DC    HL2'0'              WS-CNT PIC S9(4)v0 COMP
+         DS    XL6                 reserve the rest of a table
 D0006    DC    CL1'N'              EOF-FLAG PIC X(1)
+         DS    XL7                 reserve the rest of a table
 D0008    DC    CL7'0000000'        OUT-NUM PIC 9(7)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

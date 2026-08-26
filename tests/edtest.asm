@@ -144,10 +144,15 @@ COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    PL6'-123456789'     SRC PIC S9(11)v2 COMP-3
+         DS    XL2                 reserve the rest of a table
 D0001    DC    CL15' '             E1 edited, 15 chars
+         DS    XL1                 reserve the rest of a table
 D0002    DC    CL10' '             E2 edited, 10 chars
+         DS    XL6                 reserve the rest of a table
 D0003    DC    CL6' '              E3 edited, 6 chars
+         DS    XL2                 reserve the rest of a table
 D0004    DC    CL10' '             E4 edited, 10 chars
+         DS    XL6                 reserve the rest of a table
 D0005    DC    CL11' '             E5 edited, 11 chars
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

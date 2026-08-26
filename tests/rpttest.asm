@@ -225,9 +225,11 @@ COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    CL16'ACME CORPORATION'  WS-NAME PIC X(16)
-D0001    DC    F'0'                WS-NUM PIC S9(5)v0 COMP
+D0001    DC    FL4'0'              WS-NUM PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
 D0002    DC    PL5'000'            WS-AMT PIC S9(9)v2 COMP-3
-D0003    DC    H'0'                WS-IDX PIC S9(4)v0 COMP
+         DS    XL3                 reserve the rest of a table
+D0003    DC    HL2'0'              WS-IDX PIC S9(4)v0 COMP
 D0004    DC    CL16' '             RPT0 PIC X(16)
 D0005    DC    CL11' '             RPT1 PIC X(11)
 D0006    DC    CL3' '              RPT2 PIC X(3)

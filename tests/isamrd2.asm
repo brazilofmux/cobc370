@@ -96,6 +96,7 @@ D0000    DS    0CL81               DESC-RECORD (01 group)
 D0001    DC    CL1' '              DESC-DELETE PIC X(1)
 D0002    DC    CL10'0000000000'    DESC-KEY PIC 9(10)v0 DISP
 D0003    DC    CL70' '             DESC-TEXT PIC X(70)
+         DS    XL7                 reserve the rest of a table
 D0004    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

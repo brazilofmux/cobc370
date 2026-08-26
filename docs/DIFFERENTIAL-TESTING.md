@@ -144,3 +144,42 @@ touched.
 
 Both earlier results were re-verified against the corrected normaliser before
 being believed.
+
+## Third swap: GL024 — and the bug of the project so far
+
+GL024 selects the month's transactions (`PARM='202608'`, an FTL date window) and
+feeds the entire journal pipeline. The first swap ran every step RC=0000 and
+silently selected **0 of 24,525** transactions: three downstream sorts went
+0-records, and the journal, activity and balance reports evaporated.
+
+The chain that found it: the window computation was correct in an isolated
+probe; an instrumented rebuild of the real program selected 172 (which is also
+the right answer — the reference's 364 is *lines*, two per double-entry
+transaction); the pristine build reproducibly selected 0. Diffing the two
+assemblies exposed it:
+
+**A bare `DC F` or `DC H` is aligned by the assembler.** My layout model assumed
+no padding, so the assembler slid slack bytes under my offsets. Label-based
+addressing hid it — every internal access stayed self-consistent — until a
+*group* address crossed a boundary the layout never predicted:
+`CALL 'DYNALOAD' USING … MB-FTL-IN` handed FTL an address three slack bytes
+short of where `FTL-YEAR` had actually been placed. FTL read a garbage date,
+returned a garbage window, and nothing matched it. The instrumented build only
+worked because its extra counters happened to push the group onto a multiple of
+four — alignment by luck, which is also why every earlier test and swap passed.
+
+Two-part fix, both matching what IKFCBL00 itself does:
+
+- COMP items are emitted `FL4'…'`/`HL2'…'` — the length modifier suppresses
+  assembler alignment, so the emitted layout **is** the computed layout, always.
+- 01/77 levels start on a doubleword (slack *between* areas, interiors tight),
+  so control blocks handed to assembler routines have the layout those routines
+  were written for, and COMP items land aligned in the common case. S/370's
+  byte-oriented operands cover the rare mid-group unaligned field.
+
+With the fix, GL022+GL023+GL024 swapped together reproduce the entire job:
+every non-blank line identical, all 37 steps RC=0000.
+
+The lesson for everything that follows: **RC=0000 with plausible-looking output
+proves nothing about a program whose answers feed other programs.** Only the
+end-to-end diff caught this.

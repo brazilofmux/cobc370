@@ -174,9 +174,12 @@ D0004    DS    0CL16               SAVE-REC (01 group)
 D0005    DC    CL9' '              SAVE-NAME PIC X(9)
 D0006    DC    CL3' '              SAVE-CODE PIC X(3)
 D0007    DC    PL4'000'            SAVE-BAL PIC S9(7)v2 COMP-3
-D0008    DC    H'0'                COUNTER PIC S9(4)v0 COMP
+D0008    DC    HL2'0'              COUNTER PIC S9(4)v0 COMP
+         DS    XL6                 reserve the rest of a table
 D0009    DC    CL9' '              OUT-NAME PIC X(9)
+         DS    XL7                 reserve the rest of a table
 D0010    DC    CL3' '              OUT-CODE PIC X(3)
+         DS    XL5                 reserve the rest of a table
 D0011    DC    CL7'0000000'        OUT-NUM PIC 9(7)v2 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

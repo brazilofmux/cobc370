@@ -153,16 +153,27 @@ COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    PL4'12345'          P1 PIC S9(7)v2 COMP-3
+         DS    XL4                 reserve the rest of a table
 D0001    DC    PL4'6789'           P2 PIC S9(7)v2 COMP-3
+         DS    XL4                 reserve the rest of a table
 D0002    DC    PL4'105'            P3 PIC S9(6)v1 COMP-3
-D0003    DC    F'1000'             B1 PIC S9(7)v0 COMP
-D0004    DC    F'250'              B2 PIC S9(7)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0003    DC    FL4'1000'           B1 PIC S9(7)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0004    DC    FL4'250'            B2 PIC S9(7)v0 COMP
+         DS    XL4                 reserve the rest of a table
 D0005    DC    ZL7'9999'           Z1 PIC S9(7)v2 DISP
+         DS    XL1                 reserve the rest of a table
 D0006    DC    PL2'00'             SC PIC S9(2)v1 COMP-3
+         DS    XL6                 reserve the rest of a table
 D0007    DC    CL9'000000000'      R1 PIC 9(9)v2 DISP
+         DS    XL7                 reserve the rest of a table
 D0008    DC    CL9'000000000'      R2 PIC 9(9)v0 DISP
+         DS    XL7                 reserve the rest of a table
 D0009    DC    CL9'000000000'      R3 PIC 9(9)v2 DISP
+         DS    XL7                 reserve the rest of a table
 D0010    DC    CL9'000000000'      R4 PIC 9(9)v2 DISP
+         DS    XL7                 reserve the rest of a table
 D0011    DC    CL4'0000'           R5 PIC 9(4)v1 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

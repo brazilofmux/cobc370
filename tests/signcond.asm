@@ -285,15 +285,18 @@ SAVEAREA DS    18F
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    F'42'               P PIC S9(5)v0 COMP
-D0001    DC    F'-7'               N PIC S9(5)v0 COMP
-D0002    DC    F'0'                Z PIC S9(5)v0 COMP
+D0000    DC    FL4'42'             P PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0001    DC    FL4'-7'             N PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0002    DC    FL4'0'              Z PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
 D0003    DS    0CL200              BIG-GRP (01 group)
 D0004    DC    CL200' '            BIG PIC X(200)
-D0005    EQU   COBWS+12            BIG-VIEW REDEFINES
-D0006    EQU   COBWS+12            BV-HEAD REDEFINES
-D0007    EQU   COBWS+22            FILL0007 REDEFINES
-D0008    EQU   COBWS+202           BV-TAIL REDEFINES
+D0005    EQU   COBWS+24            BIG-VIEW REDEFINES
+D0006    EQU   COBWS+24            BV-HEAD REDEFINES
+D0007    EQU   COBWS+34            FILL0007 REDEFINES
+D0008    EQU   COBWS+214           BV-TAIL REDEFINES
 D0009    DC    CL4'KEEP'           GUARD PIC X(4)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

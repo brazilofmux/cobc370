@@ -164,7 +164,8 @@ D0005    DS    0CL80               WS-OUT (01 group)
 D0006    DC    CL3'>> '            WO-MARK PIC X(3)
 D0007    DC    CL6' '              WO-TAG PIC X(6)
 D0008    DC    CL71' '             FILL0008 PIC X(71)
-D0009    DC    F'0'                CNT PIC S9(5)v0 COMP
+D0009    DC    FL4'0'              CNT PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
 D0010    DC    CL5'00000'          SHOW PIC 9(5)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

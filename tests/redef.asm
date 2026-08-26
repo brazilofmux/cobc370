@@ -167,12 +167,16 @@ D0004    EQU   COBWS+0             CLASS-TABLE REDEFINES
 D0005    EQU   COBWS+0             CLASS-ENTRY REDEFINES
 D0006    EQU   COBWS+0             CLASS-LETTER REDEFINES
 D0007    EQU   COBWS+1             CLASS-NAME REDEFINES
+         DS    XL6                 reserve the rest of a table
 D0008    DS    0CL7                TS-GRP (01 group)
 D0009    DC    CL4'2026'           TS-YEAR PIC X(4)
-D0010    EQU   COBWS+42            TS-YEAR-1 REDEFINES
+D0010    EQU   COBWS+48            TS-YEAR-1 REDEFINES
 D0011    DC    CL3'END'            TS-REST PIC X(3)
-D0012    DC    H'0'                WS-I PIC S9(4)v0 COMP
+         DS    XL1                 reserve the rest of a table
+D0012    DC    HL2'0'              WS-I PIC S9(4)v0 COMP
+         DS    XL6                 reserve the rest of a table
 D0013    DC    CL1' '              WS-L PIC X(1)
+         DS    XL7                 reserve the rest of a table
 D0014    DC    CL13' '             WS-N PIC X(13)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

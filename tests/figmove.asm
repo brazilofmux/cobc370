@@ -232,16 +232,25 @@ COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    CL20'ABCDEFGHIJKLMNOPQRST'  WS-NAME PIC X(20)
+         DS    XL4                 reserve the rest of a table
 D0001    DC    CL1'Z'              WS-CH PIC X(1)
+         DS    XL7                 reserve the rest of a table
 D0002    DC    CL6'ABCDEF'         WS-DIG PIC X(6)
+         DS    XL2                 reserve the rest of a table
 D0003    DC    CL5'12345'          WS-NUM PIC 9(5)v0 DISP
+         DS    XL3                 reserve the rest of a table
 D0004    DC    XL3'00999F'         WS-PK PIC 9(5)v0 COMP-3
-D0005    DC    H'77'               WS-BIN PIC 9(4)v0 COMP
+         DS    XL5                 reserve the rest of a table
+D0005    DC    HL2'77'             WS-BIN PIC 9(4)v0 COMP
+         DS    XL6                 reserve the rest of a table
 D0006    DC    CL5'00000'          ED-PK PIC 9(5)v0 DISP
+         DS    XL3                 reserve the rest of a table
 D0007    DC    CL4'0000'           ED-BIN PIC 9(4)v0 DISP
+         DS    XL4                 reserve the rest of a table
 D0008    DS    0CL6                WS-GRP (01 group)
 D0009    DC    CL3'XYZ'            WS-G1 PIC X(3)
 D0010    DC    CL3'PQR'            WS-G2 PIC X(3)
+         DS    XL2                 reserve the rest of a table
 D0011    DC    CL4'FULL'           WS-FLAG PIC X(4)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

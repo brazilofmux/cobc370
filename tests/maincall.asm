@@ -125,9 +125,10 @@ COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DS    0CL4                MB-IN (01 group)
-D0001    DC    F'0'                IN-VAL PIC S9(8)v0 COMP
+D0001    DC    FL4'0'              IN-VAL PIC S9(8)v0 COMP
+         DS    XL4                 reserve the rest of a table
 D0002    DS    0CL8                MB-OUT (01 group)
-D0003    DC    F'0'                OUT-VAL PIC S9(8)v0 COMP
+D0003    DC    FL4'0'              OUT-VAL PIC S9(8)v0 COMP
 D0004    DC    CL4' '              OUT-TAG PIC X(4)
 D0005    DC    CL8'00000000'       SHOW-VAL PIC 9(8)v0 DISP
 *---------------------------------------------------------------

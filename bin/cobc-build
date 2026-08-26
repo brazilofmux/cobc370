@@ -26,13 +26,20 @@ cat <<EOF
 //* The library must already exist; see bin/cobc-lib-init. Creating it here
 //* with IEFBR14 and DISP=(MOD,CATLG) cataloged it without ever writing a
 //* DSCB, and the link then failed S213-04 on a name that resolved to nothing.
-//S1      EXEC ASMFCL
+//* ASMFCL's link step says NCAL, which suppresses the automatic library
+//* call -- fine for a leaf program, fatal for one that calls DYNALOAD,
+//* whose object must be linked into every caller. Mirror the original
+//* COBUCL builds: drop NCAL and let autocall resolve V(DYNALOAD) from
+//* SVD001.DYNALOAD.LOADLIB. A program with nothing unresolved pulls in
+//* nothing, so this is safe for every module.
+//S1      EXEC ASMFCL,PARM.LKED='XREF,LET,LIST'
 //ASM.SYSIN DD  *
 EOF
 cat "$WORK/$prog.asm"
 cat <<EOF
 /*
 //LKED.SYSLMOD DD  DSN=$lib($prog),DISP=SHR
+//LKED.SYSLIB  DD  DSN=SVD001.DYNALOAD.LOADLIB,DISP=SHR
 EOF
 } > "$WORK/$prog.jcl"
 

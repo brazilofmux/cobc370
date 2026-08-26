@@ -156,8 +156,11 @@ D0000    DS    0CL13               MB-BLOCK (01 group)
 D0001    DC    CL8'LTF'            WS-MODULE-NAME PIC X(8)
 D0002    DC    4X'00'              WS-MODULE-ADDR PIC X(4)
 D0003    DC    CL1'K'              WS-CALL-MODE PIC X(1)
+         DS    XL3                 reserve the rest of a table
 D0004    DC    4X'00'              WS-LOW PIC X(4)
+         DS    XL4                 reserve the rest of a table
 D0005    DC    4X'FF'              WS-HIGH PIC X(4)
+         DS    XL4                 reserve the rest of a table
 D0006    DC    CL4' '              WS-SPC PIC X(4)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

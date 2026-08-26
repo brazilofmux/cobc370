@@ -1254,6 +1254,20 @@ The one holdout, JERM, needs the `CURRENT-DATE` special register and is not in
 BATCH. VALDATE was a genuine defect in the source (a missing period after
 PROGRAM-ID) and was fixed there rather than worked around here.
 
+## Slice 26: the alignment bug
+
+Found by the GL024 swap, which ran RC=0000 everywhere and silently selected 0
+of 24,525 transactions. A bare `DC F`/`DC H` is aligned by the assembler; the
+layout model assumed no padding; label addressing kept every internal access
+self-consistent; and the mismatch only surfaced when a group address was handed
+to an external assembler routine (FTL, via DYNALOAD) that read fields at the
+offsets the COBOL layout promised. Fixed by emitting `FL4`/`HL2` (length
+modifiers suppress alignment) and starting every 01/77 on a doubleword, as
+IKFCBL00 does. `doc/DIFFERENTIAL-TESTING.md` has the full story.
+
+Regression: 27 passed, 0 failed. Swaps verified: GL022, GL023, GL024 — whole
+job identical.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
