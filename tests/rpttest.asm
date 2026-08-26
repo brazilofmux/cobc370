@@ -11,6 +11,9 @@ COBBEG   EQU   *
          LA    11,2048(,12)        second code base
          LA    11,2048(,11)
          USING COBBEG+4096,11
+         LA    10,2048(,11)        third code base
+         LA    10,2048(,10)
+         USING COBBEG+8192,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -77,7 +80,7 @@ L0001    DS    0H
 * GENERATE DETAIL-LINE
          DROP  8
          LH    2,RL000
-         LA    2,1(2)              first line
+         LA    2,1(2)              last line of the group
          LH    3,RL000
          LTR   3,3                 no page yet?
          BZ    L0002

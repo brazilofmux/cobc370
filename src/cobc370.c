@@ -2064,9 +2064,16 @@ static void parse_procedure(void)
  * can arrive from somewhere that left different chunks loaded.
  */
 #define CHUNK 4096
-#define NBASE 3
-static const int base_reg[NBASE] = { 8, 9, 10 };
-static int base_chunk[NBASE] = { -9999, -9999, -9999 };
+/* Two data bases, not three. R10 became a third CODE base when GL042's program
+ * CSECT reached 9272 bytes and overran the 8192 that two code bases cover --
+ * SAVEAREA sat past the end and every reference to it failed IFO209. No work
+ * register was free to take the job, so the cheapest correct trade was to give
+ * one back from the data side: a program with more than 8K of WORKING-STORAGE
+ * now reloads its data bases more often, which costs instructions, not
+ * correctness. */
+#define NBASE 2
+static const int base_reg[NBASE] = { 8, 9 };
+static int base_chunk[NBASE] = { -9999, -9999 };
 static int base_next;
 
 static void reset_bases(void)
@@ -3001,6 +3008,9 @@ static void generate(void)
     asm_line("", "LA", "11,2048(,12)", "second code base");
     asm_line("", "LA", "11,2048(,11)", "");
     asm_line("", "USING", "COBBEG+4096,11", "");
+    asm_line("", "LA", "10,2048(,11)", "third code base");
+    asm_line("", "LA", "10,2048(,10)", "");
+    asm_line("", "USING", "COBBEG+8192,10", "");
     asm_line("", "ST", "13,SAVEAREA+4", "backward chain to caller");
     asm_line("", "LA", "0,SAVEAREA", "");
     asm_line("", "ST", "0,8(13)", "forward chain from caller");
@@ -3192,11 +3202,24 @@ static void generate(void)
             snprintf(b, sizeof b, " GENERATE %s", g->name);
             asm_comment(b);
             reset_bases();
-            RLine *l0 = &rlines[g->first_line];
-            if (l0->absolute) { snprintf(b, sizeof b, "2,%d", l0->n); asm_line("", "LA", b, "first line"); }
-            else {
+            /* A group fits on this page only if its LAST line is within LAST
+             * DETAIL, not its first. PL-CLASS-END carries a second LINE PLUS 1
+             * with no fields -- a blank spacer -- so measuring only the first
+             * line under-counts by one and squeezes in a group ANS COBOL would
+             * have pushed to the next page. */
+            int span = 0, abs_at = -1;
+            for (int k = g->first_line; k < g->first_line + g->nline; k++) {
+                RLine *lk = &rlines[k];
+                if (lk->absolute) { abs_at = lk->n; span = 0; }
+                else span += lk->n;
+            }
+            if (abs_at >= 0) {
+                snprintf(b, sizeof b, "2,%d", abs_at + span);
+                asm_line("", "LA", b, "last line of the group");
+            } else {
                 snprintf(b, sizeof b, "2,%s", rp->lbl_line); asm_line("", "LH", b, "");
-                snprintf(b, sizeof b, "2,%d(2)", l0->n); asm_line("", "LA", b, "first line");
+                snprintf(b, sizeof b, "2,%d(2)", span);
+                asm_line("", "LA", b, "last line of the group");
             }
             int lnew = ++genlabel, lok = ++genlabel;
             char ln[16], lo[16];

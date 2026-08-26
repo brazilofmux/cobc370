@@ -10,6 +10,9 @@ COBBEG   EQU   *
          LA    11,2048(,12)        second code base
          LA    11,2048(,11)
          USING COBBEG+4096,11
+         LA    10,2048(,11)        third code base
+         LA    10,2048(,10)
+         USING COBBEG+8192,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller

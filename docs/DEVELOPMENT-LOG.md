@@ -1287,6 +1287,23 @@ that boundary and zero.
 
 Regression: 28 passed, 0 failed.
 
+## Slice 28: addressability and page fit
+
+Both found by the final swap.
+
+**A third code base register.** GL042's program CSECT reaches 9272 bytes, past
+the 8192 two bases cover, and every reference to `SAVEAREA` failed IFO209. No
+work register was free, so R10 came back from the data side: `NBASE` is now 2.
+More than 8K of WORKING-STORAGE costs extra base reloads, not correctness.
+
+**Page fit measures a group's last line.** `PL-CLASS-END` in GL043 carries a
+second `LINE PLUS 1` with no fields — a blank spacer — so the group is two lines
+tall. Measuring only the first line kept a group on a page ANS COBOL would have
+broken.
+
+Regression: 28 passed, 0 failed. **All 18 of BATCH's programs now reproduce the
+monthly job exactly.**
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

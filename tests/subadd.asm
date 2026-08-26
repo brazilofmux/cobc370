@@ -10,6 +10,9 @@ COBBEG   EQU   *
          LA    11,2048(,12)        second code base
          LA    11,2048(,11)
          USING COBBEG+4096,11
+         LA    10,2048(,11)        third code base
+         LA    10,2048(,10)
+         USING COBBEG+8192,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -47,8 +50,9 @@ P0000    DS    0H
          ZAP   PWK1(8),DWK(8)
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
-         L     10,PBL0001          parameter address
-         USING LS0001,10
+         DROP  8
+         L     8,PBL0001           parameter address
+         USING LS0001,8
          ST    2,D0004
 * MOVE DONE -> OUT-TAG
          MVC   D0005(4),S0001      literal move, space padded

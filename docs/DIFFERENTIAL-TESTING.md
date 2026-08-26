@@ -234,3 +234,45 @@ loads R1 in that case, and the fallback was wrong. See the compiler README.
 Worth noting why nothing caught it earlier: GL030 uses the identical picture,
 and verified clean, because every amount in the journal is positive. It took a
 report with negative balances.
+
+## Complete: all 18 programs
+
+**Every COBOL program in BATCH — all 18, GL022 through GL043 — compiled by
+cobc370 and run ahead of the ANS COBOL library, reproduces the entire 37-step
+monthly job exactly: 2545 program-output lines, ordered, identical.**
+
+Confirmed by listing `SVD001.COBC370.LOADLIB`: 18 members, all picked up in
+preference to the shipped ones.
+
+### The last three bugs
+
+**GL042 would not assemble.** Its program CSECT reached 9272 bytes and overran
+the 8192 that two code base registers cover, so `SAVEAREA` sat past the end and
+every reference failed IFO209. No work register was free, so R10 was taken back
+from the data side to serve as a third code base. A program with more than 8K of
+WORKING-STORAGE now reloads its data bases more often — instructions, not
+correctness.
+
+**GL043 broke a page one group too late.** `PL-CLASS-END` carries a second
+`LINE PLUS 1` with no fields, a blank spacer, so the group occupies two lines.
+The page-fit test measured only a group's *first* line, under-counted, and kept
+a group ANS COBOL would have pushed to the next page — visible as a missing
+`P R O F I T   L O S S` heading near the end of the report. A group fits only if
+its **last** line is within LAST DETAIL.
+
+**GL035/GL036 exposed the floating sign** (see the compiler README).
+
+### What the reference run was worth
+
+Six real bugs, none of which the 28-test regression suite could find:
+
+| Bug | Why the tests missed it |
+|---|---|
+| Input DCB claimed unblocked | every test reads `DD *`, where `BLKSIZE=LRECL` is true |
+| COMP items aligned by the assembler | alignment by luck; only an external routine reading a group exposed it |
+| ISAM input DCB silent on RECFM | only BATCH's JCL codes a conflicting `RECFM=F` |
+| Floating sign misplaced | every earlier amount was positive |
+| Code addressability capped at 8K | no test program was large enough |
+| Page fit measured the first line | needed a multi-line group at a page boundary |
+
+Every one required real data, real JCL, or real program size.
