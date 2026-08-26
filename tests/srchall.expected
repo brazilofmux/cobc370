@@ -1,0 +1,7 @@
+A -> [Assets       ]
+E -> [Expenses     ]
+I -> [Income       ]
+L -> [Liabilities  ]
+Q -> [Equity       ]
+Z -> [*NOT FOUND*  ]
+B -> [*NOT FOUND*  ]

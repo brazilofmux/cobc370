@@ -1168,6 +1168,43 @@ Regression: 25 passed, 0 failed.
 
 `INDEXED BY` / `SEARCH ALL` is now the only substantial feature left.
 
+## Slice 24: INDEXED BY and SEARCH ALL
+
+The corpus scopes this tightly: only `SEARCH ALL` (never the serial `SEARCH`),
+always exactly one `WHEN`, and **no `SET` anywhere**. So an index is only ever
+written by SEARCH itself and read as a subscript.
+
+That makes the representation free: COBOL says an index holds a displacement,
+but this one holds the **occurrence number**, which is what the existing
+subscript machinery already expects and is indistinguishable from outside as
+long as nothing else may touch it.
+
+`INDEXED BY` names a new data item from inside an OCCURS clause on a group whose
+subordinates are still to come — creating it there would put it *inside the
+table's own storage*. The declarations are recorded and the items appended to
+WORKING-STORAGE once the data division is complete.
+
+`SEARCH ALL` generates a binary search over the `ASCENDING KEY`. Low and high
+live in storage rather than registers, because `gen_cond` may use any work
+register and so nothing may stay live across it. The `WHEN` condition is reused
+twice — once as `=` to detect a hit, once rewritten to `<` to decide which half
+to keep — which is why the equality form is required and enforced.
+
+`parse_stmt_list` now stops at `WHEN`, which ends a SEARCH's `AT END` clause.
+Nothing else begins with that word.
+
+Verified on the guest with a five-entry table: every key found, plus two misses
+— one past the end and one (`B`) sorting *between* existing keys, so the middle
+of the search is exercised and not just its bounds.
+
+Regression: 26 passed, 0 failed.
+
+### Corpus status
+
+23 of 30. SEARCH ALL is done and GL042/GL043 moved past it. What remains is
+seven one-off gaps, the largest being `MOVE x TO a b c` — one source, several
+receiving fields — which blocks three programs.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

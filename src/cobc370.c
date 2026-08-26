@@ -240,6 +240,8 @@ typedef struct {
     int  is_88;       /* condition name: no storage, tests its parent */
     int  parent;
     int  gparent;     /* enclosing group, -1 at 01/77 -- for OF/IN qualification */
+    int  index_sym;   /* INDEXED BY item for this OCCURS table, -1 if none */
+    int  askey_sym;   /* ASCENDING KEY field, -1 if none */
     int  linkage;     /* declared in the LINKAGE SECTION: storage belongs to the caller */
     int  link_area;   /* which linkage 01 it sits in, so it gets the right base */
     char cvalue[MAXTOK];
@@ -308,7 +310,7 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
-       ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL };
+       ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH };
 
 typedef struct {
     int  op;
@@ -325,6 +327,8 @@ typedef struct {
     char thru[31];          /* PERFORM ... THRU */
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
+    int  lab3;              /* ST_SEARCH: the end label */
+    struct Cond *cond2;     /* ST_SEARCH: the same operands compared with < */
     Node *dsub, *ssub;      /* subscripts on dst and src */
     int  vary_sym;          /* PERFORM ... VARYING identifier, -1 if none */
     Node *vary_from, *vary_by, *times_expr;
@@ -425,6 +429,14 @@ static int nstmt;
 /* Each LINKAGE SECTION 01 is a separate area: the caller owns the storage and
  * passes its address, so offsets restart at 0 and it gets a DSECT of its own
  * plus a cell holding whatever address arrived in the parameter list. */
+/* INDEXED BY names a new data item, but it appears inside an OCCURS clause on
+ * a group whose subordinates are still to come -- creating it there would put
+ * it inside the table's own storage. So they are recorded and appended to
+ * WORKING-STORAGE once the data division is finished. */
+#define MAXIDX 16
+static struct { char name[31], key[31]; int table; } pend_idx[MAXIDX];
+static int npend_idx;
+
 #define MAXLINK 16
 static int nlinkarea;
 static int link_root[MAXLINK];      /* the 01 sym for each area */
@@ -891,6 +903,7 @@ static void parse_data_division(void)
         memset(sy, 0, sizeof *sy);
         snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
         sy->occ_parent = -1;
+        sy->index_sym = sy->askey_sym = -1;
         for (int k = sp - 1; k >= 0; k--)
             if (syms[stack[k]].occurs > 0) { sy->occ_parent = stack[k]; break; }
         /* Anything under a REDEFINES shares that storage as well. */
@@ -935,9 +948,30 @@ static void parse_data_division(void)
                 next();
                 if (is("TIMES")) next();
                 if (is("DEPENDING")) die("OCCURS DEPENDING ON is not implemented yet");
-                if (is("INDEXED") || is("ASCENDING") || is("DESCENDING"))
-                    die("INDEXED BY, ASCENDING/DESCENDING KEY and SEARCH are "
-                        "not implemented yet");
+                for (;;) {
+                    if (is("DESCENDING"))
+                        die("DESCENDING KEY is not implemented yet");
+                    if (is("ASCENDING")) {
+                        next(); if (is("KEY")) next(); if (is("IS")) next();
+                        if (npend_idx >= MAXIDX) die("too many indexed tables");
+                        snprintf(pend_idx[npend_idx].key,
+                                 sizeof pend_idx[0].key, "%s", tok.text);
+                        pend_idx[npend_idx].table = nsym;
+                        next();
+                        continue;
+                    }
+                    if (is("INDEXED")) {
+                        next(); if (is("BY")) next();
+                        if (npend_idx >= MAXIDX) die("too many indexed tables");
+                        snprintf(pend_idx[npend_idx].name,
+                                 sizeof pend_idx[0].name, "%s", tok.text);
+                        pend_idx[npend_idx].table = nsym;
+                        npend_idx++;
+                        next();
+                        continue;
+                    }
+                    break;
+                }
             } else if (is("REDEFINES")) {
                 /* The redefining item is laid down on top of the redefined one:
                  * point the cursor at it so this item and everything
@@ -1077,6 +1111,33 @@ static void parse_data_division(void)
         else g->bytes = g->elem;
     }
     if (cursor > wslen) wslen = cursor;
+
+    /* Index items, appended after everything the program declared. COBOL says
+     * an index holds a displacement; this one holds the occurrence number,
+     * which is what the subscript machinery already expects and is
+     * indistinguishable from outside since nothing else may touch it. */
+    for (int k = 0; k < npend_idx; k++) {
+        if (nsym >= MAXSYM) die("too many data items");
+        Sym *ix = &syms[nsym];
+        memset(ix, 0, sizeof *ix);
+        ix->level = 77;
+        ix->occ_parent = ix->index_sym = ix->askey_sym = ix->gparent = -1;
+        snprintf(ix->label, sizeof ix->label, "D%04d", nsym);
+        snprintf(ix->name, sizeof ix->name, "%s", pend_idx[k].name);
+        if (lookup(ix->name) >= 0) die("INDEXED BY name is already declared");
+        ix->usage = U_COMP; ix->digits = 4; ix->is_signed = 1;
+        ix->bytes = ix->elem = 2;
+        ix->offset = wslen; wslen += 2;
+        ix->has_value = 1; strcpy(ix->value, "0");
+        syms[pend_idx[k].table].index_sym = nsym;
+        nsym++;
+        if (pend_idx[k].key[0]) {
+            int ks = lookup(pend_idx[k].key);
+            if (ks < 0) die("ASCENDING KEY names an item that was not declared");
+            syms[pend_idx[k].table].askey_sym = ks;
+        }
+    }
+
     for (int i = 0; i < nfile; i++) {
         if (files[i].report >= 0) { files[i].reclen = 133; continue; }
         if (files[i].rec_sym < 0) die("an FD has no record description");
@@ -1769,6 +1830,49 @@ static void parse_one_statement(void)
         return;
     }
 
+    if (is("SEARCH")) {
+        next();
+        if (!is("ALL"))
+            die("only SEARCH ALL is implemented; the corpus has no serial SEARCH");
+        next();
+        int t = consume_sym();
+        const Sym *tb = &syms[t];
+        if (tb->occurs < 1) die("SEARCH ALL names something that is not a table");
+        if (tb->index_sym < 0) die("SEARCH ALL needs the table to have INDEXED BY");
+        if (tb->askey_sym < 0) die("SEARCH ALL needs the table to have ASCENDING KEY");
+        Stmt *st = new_stmt(ST_SEARCH);
+        st->dst  = t;
+        st->lab1 = ++nlabel;             /* AT END */
+        st->lab2 = ++nlabel;             /* the WHEN body */
+        st->lab3 = ++nlabel;             /* past the whole statement */
+        st->src  = ++nlabel;             /* where "key < value" lands */
+        int have_atend = 0;
+        if (is("AT") || is("END")) {
+            if (is("AT")) next();
+            expect("END");
+            have_atend = 1;
+        }
+        /* The statement list order in the source is AT END first, then WHEN,
+         * but both are reached by a branch out of the search loop. */
+        new_stmt(ST_LABEL)->dst = st->lab1;
+        if (have_atend) parse_stmt_list(1);
+        new_stmt(ST_BRANCH)->dst = st->lab3;
+        expect("WHEN");
+        Cond *c = parse_cond();
+        if (c->kind != C_REL || c->op != REL_EQ)
+            die("SEARCH ALL wants a WHEN of the form  key (index) = value");
+        st->cond = c;
+        st->cond2 = cnode(C_REL);
+        st->cond2->op = REL_LT;
+        st->cond2->l = c->l;
+        st->cond2->r = c->r;
+        new_stmt(ST_LABEL)->dst = st->lab2;
+        parse_stmt_list(1);
+        new_stmt(ST_LABEL)->dst = st->lab3;
+        eat_period();
+        return;
+    }
+
     if (is("CALL")) {
         /* ANS COBOL has only CALL 'literal', which the linkage editor resolves
          * -- there is no CALL identifier and so nothing to decide at compile
@@ -1849,6 +1953,9 @@ static void parse_stmt_list(int allow_else)
 {
     while (!tok.eof && !at_period) {
         if (allow_else && is("ELSE")) return;
+        /* WHEN ends a SEARCH's AT END clause. Nothing else begins with it, so
+         * stopping here unconditionally is safe. */
+        if (is("WHEN")) return;
         parse_one_statement();
     }
 }
@@ -3139,6 +3246,60 @@ static void generate(void)
             }
             break;
         }
+        case ST_SEARCH: {
+            /* Binary search over an ASCENDING KEY table. Low and high live in
+             * storage rather than registers because gen_cond is free to use
+             * any work register, so nothing may stay live across it. */
+            const Sym *tb = &syms[st->dst];
+            const Sym *ix = &syms[tb->index_sym];
+            char lo[16], hi[16], lp[16], up[16];
+            snprintf(lo, sizeof lo, "SL%03d", i);
+            snprintf(hi, sizeof hi, "SH%03d", i);
+            snprintf(lp, sizeof lp, "SP%03d", i);   /* loop top */
+            snprintf(up, sizeof up, "SU%03d", i);   /* raise the low bound */
+            snprintf(b, sizeof b, " SEARCH ALL %s", tb->name);
+            asm_comment(b);
+            asm_line("", "LA", "1,1", "");
+            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "STH", b, "low = 1");
+            snprintf(b, sizeof b, "1,%d", tb->occurs);
+            asm_line("", "LA", b, "");
+            snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "STH", b, "high = OCCURS");
+            asm_line(lp, "DS", "0H", "");
+            reset_bases();
+            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "LH", b, "");
+            snprintf(b, sizeof b, "2,%s", hi);  asm_line("", "LH", b, "");
+            asm_line("", "CR", "1,2", "low > high means it is not there");
+            snprintf(b, sizeof b, "L%04d", st->lab1);
+            asm_line("", "BH", b, "");
+            asm_line("", "AR", "1,2", "");
+            asm_line("", "SRA", "1,1", "mid = (low + high) / 2");
+            need_sym_base(ix);
+            field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, b + 64, 64);
+            snprintf(b, sizeof b, "1,%s", b + 64);
+            asm_line("", "STH", b, "the index is the occurrence number");
+            gen_cond(st->cond,  st->lab2, 1);      /* key = value: found */
+            gen_cond(st->cond2, st->src, 1);       /* key < value: raise low */
+            /* key > value: lower the high bound and go round again. */
+            need_sym_base(ix);
+            field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, b + 64, 64);
+            snprintf(b, sizeof b, "1,%s", b + 64);
+            asm_line("", "LH", b, "");
+            asm_line("", "BCTR", "1,0", "");
+            snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "STH", b, "high = mid - 1");
+            asm_line("", "B", lp, "");
+            snprintf(up, sizeof up, "L%04d", st->src);
+            asm_line(up, "DS", "0H", "");
+            reset_bases();
+            need_sym_base(ix);
+            field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, b + 64, 64);
+            snprintf(b, sizeof b, "1,%s", b + 64);
+            asm_line("", "LH", b, "");
+            asm_line("", "LA", "1,1(1)", "");
+            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "STH", b, "low = mid + 1");
+            asm_line("", "B", lp, "");
+            reset_bases();
+            break;
+        }
         case ST_CALL: {
             char pl[16], vc[16];
             snprintf(pl, sizeof pl, "PL%03d", i);
@@ -3347,6 +3508,14 @@ static void generate(void)
             }
         }
     }
+    for (int i = 0; i < nstmt; i++)
+        if (stmts[i].op == ST_SEARCH) {
+            char lab[16];
+            snprintf(lab, sizeof lab, "SL%03d", i);
+            asm_line(lab, "DC", "H'0'", "SEARCH ALL low bound");
+            snprintf(lab, sizeof lab, "SH%03d", i);
+            asm_line(lab, "DC", "H'0'", "high bound");
+        }
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_PERFORM && stmts[i].times_expr) {
             char lab[16]; snprintf(lab, sizeof lab, "PT%03d", i);
