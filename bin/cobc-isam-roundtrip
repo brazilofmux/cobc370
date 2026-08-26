@@ -1,0 +1,84 @@
+#!/bin/bash
+# Prove QISAM load mode end to end: create an ISAM dataset with cobc370's
+# output, then read it back with cobc370's output.
+#
+# This cannot live in cobc-regress, which builds a single ASM/LKED/GO job per
+# test. An ISAM dataset has to be created in one step and read in a later one,
+# because allocation happens at step start and the dataset does not exist yet.
+set -u
+. "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
+CC="$(cd "$(dirname "$0")/../cobol/cc" && pwd)"
+WORK=${TMPDIR:-/tmp}/cobc-isam; mkdir -p "$WORK"
+DSN=SVD001.TESTIDX
+
+"$CC/cobc370" "$CC/tests/isamload.cbl" > "$CC/tests/isamload.asm" || die "isamload did not compile"
+"$CC/cobc370" "$CC/tests/isamrd2.cbl"  > "$CC/tests/isamrd2.asm"  || die "isamrd2 did not compile"
+
+{
+cat <<EOF
+//ISAMRT   JOB (5161A020,1A11),'ISAM ROUNDTRIP',
+//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+//             USER=HERC01,PASSWORD=@HERC01PW@
+//* 1. clear any leftover. MOD so the step works whether or not it exists.
+//S1      EXEC PGM=IEFBR14
+//DSN2DEL  DD  DSN=$DSN,DISP=(MOD,DELETE,DELETE),
+//             UNIT=3380,VOL=SER=SVD003
+//* 2. create and load it, ascending key order
+//S2      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$CC/tests/isamload.asm"
+cat <<EOF
+/*
+//GO.SYSOUT  DD  SYSOUT=Z
+//GO.DESCIDX DD  DSNAME=$DSN(INDEX),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,1),
+//             DCB=(DSORG=IS,RECFM=F)
+//           DD  DSNAME=$DSN(PRIME),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,2),DCB=*.DESCIDX
+//           DD  DSNAME=$DSN(OVFLOW),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,1),DCB=*.DESCIDX
+//GO.DESCIN  DD  *
+EOF
+for k in 0000000100 0000000205 0000000310 0000000420 0000000999; do
+    printf '%s%-70s\n' "$k" "DESCRIPTION FOR $k"
+done
+cat <<EOF
+/*
+//* 3. read it back. ASMFCLG's SYSLMOD is &&GOSET(GO); a second ASMFCLG in
+//*    the same job cannot store another member called GO, so give S3 its own
+//*    library or PGM=*.LKED.SYSLMOD silently re-runs the loader.
+//S3      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$CC/tests/isamrd2.asm"
+cat <<EOF
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET2(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+//* No DCB= here: OPEN takes every attribute from the label. Coding
+//* RECFM=F against a dataset the loader blocked as FB gives S03B.
+//GO.DESCIDX DD  DSNAME=$DSN,DISP=(OLD,KEEP),
+//             VOL=SER=SVD003,UNIT=3380
+//* 4. leave the volume as we found it
+//S4      EXEC PGM=IEFBR14
+//DSN2DEL  DD  DSN=$DSN,DISP=(MOD,DELETE,DELETE),
+//             UNIT=3380,VOL=SER=SVD003
+EOF
+} > "$WORK/roundtrip.jcl"
+
+"$(dirname "$0")/tk5-run" "$WORK/roundtrip.jcl" "$WORK/roundtrip.out" >/dev/null 2>&1
+grep -a "^DESCIDX LOADED\|^BACK \|^DUPLICATE" "$WORK/roundtrip.out" > "$WORK/got.txt"
+
+exp="$CC/tests/isamroundtrip.expected"
+if [ ! -r "$exp" ]; then
+    cp "$WORK/got.txt" "$exp"; say "recorded oracle -> $exp"; exit 0
+fi
+if diff -q "$exp" "$WORK/got.txt" >/dev/null; then
+    say "isam roundtrip: ok (load and read back both match oracle)"
+    exit 0
+fi
+say "isam roundtrip: FAILED"
+diff "$exp" "$WORK/got.txt" | head -20
+exit 1

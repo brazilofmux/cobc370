@@ -89,6 +89,15 @@ PY
     fi
 done
 
+# The ISAM round trip needs a multi-step job -- create in one step, read in a
+# later one -- which this single-job harness cannot express, so it lives in its
+# own script. Run it only on a full sweep.
+if [ $# -eq 0 ]; then
+    if "$(dirname "$0")/cobc-isam-roundtrip" >/dev/null 2>&1
+    then say "  isam-roundtrip: ok (QISAM load, then read back)"; pass=$((pass+1))
+    else say "  isam-roundtrip: FAILED"; fail=$((fail+1)); fi
+fi
+
 say ""
 say "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

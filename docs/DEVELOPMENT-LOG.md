@@ -777,6 +777,36 @@ deleted the `case ST_COMPUTE:` sitting between them. Every program using
 COMPUTE quietly stopped computing and displayed its initialised values instead.
 Nothing complained, because a missing `switch` case is not an error.
 
+## Slice 14: ISAM load mode
+
+`OPEN OUTPUT` on an indexed file, `PUT`, and `WRITE ... INVALID KEY`. The
+specification was `GL039` from the corpus, which BATCH runs on every reporting
+pass to build and then discard `SVD001.DESCIDX`. It compiles unchanged.
+
+Creating an ISAM dataset means there is no label to read attributes from, so the
+DCB now carries `LRECL`, `BLKSIZE`, `KEYLEN`, `RKP` and `OPTCD=L` — which is why
+`BLOCK CONTAINS` is finally parsed instead of skipped, and why `RKP` is computed
+from where the `RECORD KEY` sits inside the 01 record. Verified by
+`bin/cobc-isam-roundtrip`, which creates a dataset with cobc370's output and
+reads it back with cobc370's output; the DSCB it produces matches the shape ANS
+COBOL produced for GLACCT.
+
+Two bugs came out of it, both found by real code rather than by the tests:
+
+**A DCB could swallow the DCB after it.** `asm_cont` wrote the continuation
+operand without a length check, so an operand reaching column 72 became a
+continuation flag and ate the next card. It now splits at commas across as many
+cards as it takes.
+
+**`DISPLAY` was greedy.** Multi-operand `DISPLAY` consumed everything up to the
+next period, so two consecutive DISPLAYs inside an `INVALID KEY` clause — which
+is exactly what GL039 has — swallowed the second verb as an operand.
+
+Not implemented: `MOVE SPACE` and the other figurative constants as a MOVE
+source.
+
+Regression: 16 passed, 0 failed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

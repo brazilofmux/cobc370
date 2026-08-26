@@ -329,6 +329,7 @@ typedef struct {
     int  report;       /* the RD this FD carries, or -1 */
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
+    int  blk_records;  /* BLOCK CONTAINS n RECORDS, 0 when unblocked */
 } File;
 
 #define MAXFILE 16
@@ -688,6 +689,26 @@ static void parse_data_division(void)
                     files[cur_file].report = nreport;
                     nreport++;
                     next();
+                    continue;
+                }
+                if (is("BLOCK")) {
+                    /* Ignorable for QSAM and for reading ISAM, where OPEN takes
+                     * everything from the label -- but an ISAM file opened
+                     * OUTPUT is being *created*, so there is no label yet and
+                     * the DCB has to carry BLKSIZE itself. */
+                    next(); if (is("CONTAINS")) next();
+                    if (!is_numeric_literal(tok.text))
+                        die("BLOCK CONTAINS wants a number");
+                    int nrec = atoi(tok.text); next();
+                    if (is("TO")) {            /* n TO m RECORDS: m is the size */
+                        next();
+                        if (!is_numeric_literal(tok.text)) die("BLOCK CONTAINS n TO m");
+                        nrec = atoi(tok.text); next();
+                    }
+                    if (is("CHARACTERS"))
+                        die("BLOCK CONTAINS n CHARACTERS is not implemented yet");
+                    if (is("RECORDS")) next();
+                    files[cur_file].blk_records = nrec;
                     continue;
                 }
                 next();
@@ -1066,6 +1087,23 @@ static int nlabel;
 
 static void parse_stmt_list(int allow_else);
 
+/* True when the current token begins a new statement. DISPLAY takes a list of
+ * operands with no separator, so without this it happily swallows the verb of
+ * the statement that follows it -- two consecutive DISPLAYs inside an INVALID
+ * KEY clause is exactly the shape that exposed it. */
+static int starts_statement(void)
+{
+    static const char *verbs[] = {
+        "MOVE", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "COMPUTE", "IF",
+        "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
+        "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
+        "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", 0
+    };
+    if (tok.literal) return 0;             /* a quoted literal is an operand */
+    for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
+    return 0;
+}
+
 /* ---- conditions -------------------------------------------------------- */
 
 static Cond *parse_cond(void);
@@ -1165,7 +1203,7 @@ static void parse_one_statement(void)
         next();
         Stmt *st = new_stmt(ST_DISPLAY_LIT);
         /* COBOL concatenates the operands into one line. */
-        while (!tok.eof && !is(".")) {
+        while (!tok.eof && !is(".") && !(st->ndop > 0 && starts_statement())) {
             if (st->ndop >= 8) die("too many DISPLAY operands");
             if (tok.literal) {
                 memcpy(st->dop[st->ndop].lit, tok.text, (size_t)tok.len + 1);
@@ -1379,8 +1417,19 @@ static void parse_one_statement(void)
         if (fi < 0) die("WRITE names something that is not a file's record");
         next();
         if (is("FROM")) die("WRITE FROM is not implemented yet");
-        new_stmt(ST_WRITE)->dst = fi;
-        eat_period();
+        Stmt *st = new_stmt(ST_WRITE);
+        st->dst = fi;
+        st->lab1 = ++nlabel;                 /* INVALID KEY */
+        st->lab2 = ++nlabel;                 /* continue */
+        if (is("INVALID")) {
+            if (!files[fi].isam)
+                die("INVALID KEY on WRITE needs an INDEXED file");
+            next(); expect("KEY");
+            parse_stmt_list(1);
+        } else {
+            eat_period();
+        }
+        new_stmt(ST_LABEL)->dst = st->lab2;
         return;
     }
 
@@ -2016,15 +2065,53 @@ static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
 
 /* A continued statement: text padded so the continuation flag lands in
    column 72, and the continuation itself starting in column 16. */
+/* A statement whose operand will not fit one card. Continuation cards carry the
+ * operand in columns 16-71, with an X in column 72 of every card but the last.
+ *
+ * The operand must STOP by column 71: a character reaching column 72 is itself
+ * read as the continuation indicator, which turns the following card into a
+ * continuation of this one. That is how a DCB once swallowed the DCB defined
+ * after it, leaving its label undefined -- so split at commas across as many
+ * cards as it takes rather than assuming two will do. */
 static void asm_cont(const char *first, const char *second)
 {
-    char b[80];
     if (strlen(first) > 71) die("internal: continuation line too long");
+    /* The operand lives at buffer indices 15..70, i.e. columns 16..71.
+     * Index 71 is column 72 and must stay free for the continuation flag. */
+    enum { WIDTH = 70 - 15 + 1 };
+    char work[512];
+    if (strlen(second) >= sizeof work) die("internal: operand too long");
+    snprintf(work, sizeof work, "%s", second);
+
+    char lines[8][WIDTH + 1];
+    int nl = 0;
+    lines[0][0] = 0;
+    for (char *q = work; *q; ) {
+        char *c = strchr(q, ',');
+        size_t flen = c ? (size_t)(c - q) + 1 : strlen(q);
+        if (flen > WIDTH) die("internal: continuation field will not fit a card");
+        if (strlen(lines[nl]) + flen > WIDTH) {
+            if (++nl >= 8) die("internal: too many continuation cards");
+            lines[nl][0] = 0;
+        }
+        size_t at = strlen(lines[nl]);
+        memcpy(lines[nl] + at, q, flen);
+        lines[nl][at + flen] = 0;
+        q += flen;
+    }
+    char b[128];
     memset(b, ' ', sizeof b);
     memcpy(b, first, strlen(first));
     b[71] = 'X'; b[72] = 0;
     fprintf(out, "%s\n", b);
-    fprintf(out, "               %s\n", second);
+    for (int i = 0; i <= nl; i++) {
+        size_t n = strlen(lines[i]);
+        memset(b, ' ', sizeof b);
+        memcpy(b + 15, lines[i], n);
+        if (i < nl) { b[71] = 'X'; b[72] = 0; }
+        else b[15 + n] = 0;
+        fprintf(out, "%s\n", b);
+    }
 }
 
 /* Assembler C'...' needs both quotes and ampersands doubled. */
@@ -2545,8 +2632,28 @@ static void generate(void)
         }
         case ST_WRITE: {
             File *f = &files[st->dst];
+            char wle[16], wlc[16];
+            snprintf(wle, sizeof wle, "L%04d", st->lab1);
+            snprintf(wlc, sizeof wlc, "L%04d", st->lab2);
             snprintf(b, sizeof b, " WRITE %s", syms[f->rec_sym].name);
             asm_comment(b);
+            if (f->isam) {
+                /* QISAM load mode. PUT is the same macro as QSAM, but a key
+                 * out of ascending order or a duplicate is reported by the
+                 * access method through SYNAD -- that is what INVALID KEY
+                 * tests. Records must be presented in ascending key order;
+                 * ISAM has no way to insert during a load. */
+                asm_line("", "MVI", "ISFLG,X'00'", "");
+                need_sym_base(&syms[f->rec_sym]);
+                snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
+                asm_line("", "PUT", b, "QISAM load");
+                asm_line("", "CLI", "ISFLG,X'00'", "sequence or duplicate?");
+                asm_line("", "BNE", wle, "");
+                asm_line("", "B", wlc, "");
+                asm_line(wle, "DS", "0H", "INVALID KEY");
+                reset_bases();
+                break;
+            }
             need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
             asm_line("", "PUT", b, "");
@@ -2726,7 +2833,9 @@ static void generate(void)
 
     {
         int any_isam = 0;
-        for (int i = 0; i < nfile; i++) if (files[i].isam == 2) any_isam = 1;
+        for (int i = 0; i < nfile; i++)
+            if (files[i].isam == 2 || (files[i].isam && files[i].opened_output))
+                any_isam = 1;
         if (any_isam) {
             asm_comment(" BISAM permanent-error exit; a missing record instead");
             asm_comment(" shows up as a non-zero exception code in the DECB");
@@ -2833,11 +2942,37 @@ static void generate(void)
         File *f = &files[i];
         char first[96];
         if (i == 0) asm_comment(" file control blocks");
+        if (f->isam && f->opened_output) {
+            /* QISAM load mode. Reading an ISAM file takes every attribute from
+             * the label, but creating one means there is no label yet, so the
+             * DCB has to carry the geometry: LRECL and BLKSIZE from the FD,
+             * and KEYLEN and RKP worked out from where the RECORD KEY sits
+             * inside the 01 record.
+             *
+             * OPTCD=L is the delete option: it reserves the first byte of each
+             * record as a delete flag, which is why the corpus records all
+             * begin with one and why the key starts at RKP=1. */
+            if (f->key_sym < 0) die("an ISAM file opened OUTPUT needs a RECORD KEY");
+            int keylen = syms[f->key_sym].bytes;
+            int rkp    = syms[f->key_sym].offset - syms[f->rec_sym].offset;
+            if (rkp < 1)
+                die("RECORD KEY must follow the delete flag; put a PIC X first");
+            int blksize = f->reclen * (f->blk_records > 0 ? f->blk_records : 1);
+            snprintf(first, sizeof first,
+                     "%-8s DCB   DDNAME=%s,DSORG=IS,MACRF=(PM),RECFM=%s,",
+                     f->label, f->ddname, f->blk_records > 1 ? "FB" : "F");
+            char second[96];
+            snprintf(second, sizeof second,
+                     "LRECL=%d,BLKSIZE=%d,KEYLEN=%d,RKP=%d,OPTCD=L,SYNAD=ISYNAD",
+                     f->reclen, blksize, keylen, rkp);
+            asm_cont(first, second);
+            continue;
+        }
         if (f->isam) {
-            /* ISAM: RECFM, LRECL, BLKSIZE, KEYLEN and RKP all come from the
+            /* Reading: RECFM, LRECL, BLKSIZE, KEYLEN and RKP all come from the
              * dataset label at OPEN, so the DCB only has to say which access
-             * method. Random retrieval is BISAM (READ/CHECK); sequential is
-             * QISAM (GET), which is why the MACRF differs. */
+             * method. Random retrieval is BISAM; sequential is QISAM (GET),
+             * which is why the MACRF differs. */
             snprintf(b, sizeof b, "DDNAME=%s,DSORG=IS,MACRF=(%s)%s",
                      f->ddname, f->isam == 2 ? "R" : "GM",
                      f->isam == 2 ? ",SYNAD=ISYNAD" : "");

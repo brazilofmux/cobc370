@@ -102,6 +102,60 @@ sequential access cannot produce, and takes INVALID KEY for a missing key.
 Verified DCB offsets (from `DCBD DSORG=IS`): `DCBOPTCD` 52, `DCBBLKSI` 62,
 `DCBLRECL` 82, `DCBLRAN` 88, `DCBLWKN` 92, `DCBRELEX` 104, `DCBFREED` 108.
 
+## QISAM load mode — creating an ISAM dataset
+
+`OPEN OUTPUT` on an indexed file is load mode: ordinary `PUT`, records presented
+in **ascending key order**, and no way to insert. `GL039` in the corpus is the
+worked example — it loads `SVD001.DESCIDX` from a flat file, BATCH uses it, and
+then deletes it, so this path runs on every reporting run.
+
+Reading takes every attribute from the label, but **creating has no label yet**,
+so the DCB must carry the geometry itself:
+
+    FD000    DCB   DDNAME=DESCIDX,DSORG=IS,MACRF=(PM),RECFM=FB,          X
+                   LRECL=81,BLKSIZE=810,KEYLEN=10,RKP=1,OPTCD=L,         X
+                   SYNAD=ISYNAD
+
+`LRECL` and `BLKSIZE` come from `RECORD CONTAINS` and `BLOCK CONTAINS` — which
+is why `BLOCK CONTAINS` finally has to be *parsed* rather than skipped. `KEYLEN`
+and `RKP` are worked out from where the `RECORD KEY` sits inside the 01 record:
+`RKP = key.offset - record.offset`, which is 1 because the delete flag comes
+first. `OPTCD=L` selects the delete option and is what makes that first byte
+meaningful.
+
+A key out of order, or a duplicate, is reported through **SYNAD** — that is what
+`INVALID KEY` on `WRITE` tests.
+
+Verified end to end by `bin/cobc-isam-roundtrip`: a dataset created by
+cobc370's output and read back by cobc370's output. The resulting DSCB is
+structurally identical to the one ANS COBOL produced for GLACCT — `IS FB`,
+`OPTCD=02`, Format-2 DSCB present, `PRCTR` equal to the record count.
+
+### Four traps, all of which cost a run
+
+**RAKF.** Reading `SVD001.*` as the reader default user `PROD` is allowed;
+*creating* is not, and the failure surfaces as `IEF197I SYSTEM ERROR DURING
+ALLOCATION` plus `JOB FAILED - JCL ERROR`, which reads like a JCL bug. The
+actual cause is one line up: `RAKF000A PROD ,jobname ,DATASET ,SVD001.TESTIDX`.
+Creating decks need `USER=HERC01,PASSWORD=@HERC01PW@`.
+
+**Two `ASMFCLG` steps in one job collide.** The proc's `SYSLMOD` is
+`&&GOSET(GO)` with `DISP=(MOD,PASS)`, so the second link-edit cannot store
+another member called `GO`: it warns `IEW0421 ... WILL TRY TO STORE UNDER
+'TEMPNAME'` with RC=4, and `PGM=*.LKED.SYSLMOD` then silently runs the *first*
+program again. Give the second step its own `//LKED.SYSLMOD DD DSN=&&GOSET2(GO)`.
+
+**Do not code `DCB=(DSORG=IS,RECFM=F)` on the DD when reading.** A loader that
+honours `BLOCK CONTAINS` writes **FB**, and the JCL DCB overrides the label, so
+`RECFM=F` contradicts the data and OPEN abends **S03B**. Supply no DCB at all
+and let OPEN read the label.
+
+**Continuation cards must stop by column 71.** A character in column 72 *is* the
+continuation flag, so an operand that reaches it turns the next card into a
+continuation — one DCB silently swallowed the DCB defined after it, and the only
+symptom was `IFO188 ... IS AN UNDEFINED SYMBOL` for a label that was plainly
+there.
+
 ## Still worth moving to VSAM
 
 None of this makes ISAM a good idea. The escape hatch is the **ISAM Interface
