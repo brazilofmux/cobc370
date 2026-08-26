@@ -351,6 +351,13 @@ typedef struct {
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
     int  blk_records;  /* BLOCK CONTAINS n RECORDS, 0 when unblocked */
+    /* VSAM. The ANS COBOL system-name says which access method is meant:
+     * UT-S-x is QSAM, DA-I-x is ISAM, and a bare name -- or AS-x -- is VSAM.
+     * ORGANIZATION then picks the cluster type. */
+    int  vsam;         /* 1 when the ASSIGN name says VSAM */
+    int  org;          /* 0 sequential/ESDS, 1 indexed/KSDS, 2 relative/RRDS */
+    int  access;       /* 0 sequential, 1 random, 2 dynamic */
+    int  status_sym;   /* FILE STATUS field, -1 if none */
 } File;
 
 #define MAXFILE 16
@@ -358,7 +365,7 @@ static File files[MAXFILE];
 static int nfile;
 /* RECORD KEY and NOMINAL KEY name items declared later, so hold the names and
  * resolve once the data division has been read. */
-static char keyname[MAXFILE][31], nomname[MAXFILE][31];
+static char keyname[MAXFILE][31], nomname[MAXFILE][31], statname[MAXFILE][31];
 
 static int file_index(const char *n)
 {
@@ -1179,8 +1186,23 @@ static void parse_data_division(void)
         files[i].reclen = syms[files[i].rec_sym].bytes;
         if (keyname[i][0]) files[i].key_sym = need_sym(keyname[i]);
         if (nomname[i][0]) files[i].nominal_sym = need_sym(nomname[i]);
+        if (statname[i][0]) {
+            files[i].status_sym = need_sym(statname[i]);
+            const Sym *st = &syms[files[i].status_sym];
+            if (!(st->is_alpha || st->is_group) || st->bytes != 2)
+                die("FILE STATUS must be a two-character alphanumeric item");
+        }
         if (files[i].isam == 2 && files[i].nominal_sym < 0)
             die("ACCESS IS RANDOM needs a NOMINAL KEY");
+        if (files[i].vsam) {
+            /* Slice 1 is KSDS read sequentially. Everything else is refused by
+             * name so the gap is obvious rather than mysterious. */
+            if (files[i].org == 0) die("VSAM ESDS is not implemented yet");
+            if (files[i].org == 2) die("VSAM RRDS is not implemented yet");
+            if (files[i].access == 1) die("VSAM ACCESS IS RANDOM is not implemented yet");
+            if (files[i].access == 2) die("VSAM ACCESS IS DYNAMIC is not implemented yet");
+            if (files[i].key_sym < 0) die("a VSAM KSDS needs a RECORD KEY");
+        }
     }
     if (wslen > 64 * 1024)
         die("WORKING-STORAGE beyond 64K would need more base locator cells "
@@ -1212,7 +1234,7 @@ static void parse_environment(void)
                 snprintf(f->label, sizeof f->label, "FD%03d", nfile);
                 f->rec_sym = -1;
                 f->report = -1;
-                f->key_sym = f->nominal_sym = -1;
+                f->key_sym = f->nominal_sym = f->status_sym = -1;
                 next();
                 if (is("OPTIONAL")) die("SELECT OPTIONAL is not implemented yet");
                 expect("ASSIGN"); if (is("TO")) next();
@@ -1221,6 +1243,12 @@ static void parse_environment(void)
                     const char *dd = dash ? dash + 1 : tok.text;
                     if (strlen(dd) > 8) die("ddname longer than 8 characters");
                     snprintf(f->ddname, sizeof f->ddname, "%s", dd);
+                    /* A traditional system-name leads with a device class:
+                     * UT-S-x, DA-I-x, UR-S-x. VSAM has no device to name, so it
+                     * is written bare or as AS-x. That is how one INDEXED file
+                     * is told from another. */
+                    if (!dash) f->vsam = 1;
+                    else if (!strncmp(tok.text, "AS-", 3)) f->vsam = 1;
                 }
                 next();
                 while (!tok.eof && !is(".")) {
@@ -1231,13 +1259,30 @@ static void parse_environment(void)
                         continue;
                     }
                     if (is("ACCESS")) { next(); if (is("IS")) next();
-                        if (is("SEQUENTIAL")) { next(); continue; }
-                        if (is("RANDOM")) { next(); continue; }
-                        die("only ACCESS IS SEQUENTIAL and ACCESS IS RANDOM are implemented"); }
+                        if (is("MODE")) next(); if (is("IS")) next();
+                        if (is("SEQUENTIAL")) { f->access = 0; next(); continue; }
+                        if (is("RANDOM"))     { f->access = 1; next(); continue; }
+                        if (is("DYNAMIC"))    { f->access = 2; next(); continue; }
+                        die("ACCESS must be SEQUENTIAL, RANDOM or DYNAMIC"); }
                     if (is("ORGANIZATION")) { next(); if (is("IS")) next();
-                        if (is("INDEXED")) { if (!f->isam) f->isam = 1; next(); continue; }
-                        if (!is("SEQUENTIAL")) die("only ORGANIZATION SEQUENTIAL and INDEXED are implemented");
-                        next(); continue; }
+                        if (is("INDEXED")) {
+                            f->org = 1;
+                            if (!f->vsam && !f->isam) f->isam = 1;
+                            next(); continue;
+                        }
+                        if (is("RELATIVE")) {
+                            if (!f->vsam) die("ORGANIZATION RELATIVE needs a VSAM file");
+                            f->org = 2; next();
+                            if (is("KEY")) die("RELATIVE KEY is not implemented yet");
+                            continue;
+                        }
+                        if (!is("SEQUENTIAL")) die("ORGANIZATION must be SEQUENTIAL, INDEXED or RELATIVE");
+                        f->org = 0; next(); continue; }
+                    if (is("FILE")) {
+                        next(); expect("STATUS"); if (is("IS")) next();
+                        snprintf(statname[nfile], sizeof statname[0], "%s", tok.text);
+                        next(); continue;
+                    }
                     if (is("RECORD")) {      /* RECORD KEY IS x -- resolved later */
                         next(); expect("KEY"); if (is("IS")) next();
                         snprintf(f->name + 31 - 1, 0, "%s", "");   /* no-op */
@@ -2302,6 +2347,66 @@ static void gen_rescale(const char *wk, int from, int to)
  */
 static int gen_edited_labels;
 
+/* Set a file's FILE STATUS from R15 after a VSAM request.
+ *
+ *   simple = 1  a request with no end-of-data to distinguish (OPEN, CLOSE):
+ *               '00' when R15 is zero, '30' otherwise.
+ *   simple = 0  a retrieval: '00', '10' at end of data, '30' for anything else.
+ *
+ * Nothing is emitted when the program declared no FILE STATUS, which is legal
+ * -- the AT END branch still works, it just cannot be inspected afterwards.
+ */
+static void gen_vsam_status(const File *f, int simple);
+
+static void gen_vsam_status(const File *f, int simple)
+{
+    char b[128], fd[64];
+    if (f->status_sym < 0) return;
+    const Sym *st = &syms[f->status_sym];
+    int lok = ++gen_edited_labels, ldone = ++gen_edited_labels;
+    char aok[16], adone[16];
+    snprintf(aok,   sizeof aok,   "G%04d", lok);
+    snprintf(adone, sizeof adone, "G%04d", ldone);
+    asm_line("", "LTR", "15,15", "VSAM request succeeded?");
+    asm_line("", "BZ", aok, "");
+    if (!simple) {
+        /* R15 alone does not say why. The RPL feedback code does: 4 is end of
+         * data on a sequential retrieval. */
+        snprintf(b, sizeof b, "RPL=%sR,FIELDS=FDBK,AREA=VSFB,LENGTH=4", f->label);
+        asm_line("", "SHOWCB", b, "why did it fail?");
+        int lend = ++gen_edited_labels;
+        char aend[16]; snprintf(aend, sizeof aend, "G%04d", lend);
+        asm_line("", "CLI", "VSFB+3,X'04'", "end of data?");
+        asm_line("", "BE", aend, "");
+        need_sym_base(st);
+        field_ref(st, NULL, 2, 6, fd, sizeof fd);
+        snprintf(b, sizeof b, "%s,=C'30'", fd);
+        asm_line("", "MVC", b, "some other failure");
+        asm_line("", "B", adone, "");
+        asm_line(aend, "DS", "0H", "");
+        reset_bases();          /* arrived by branch: nothing is loaded */
+        need_sym_base(st);
+        field_ref(st, NULL, 2, 6, fd, sizeof fd);
+        snprintf(b, sizeof b, "%s,=C'10'", fd);
+        asm_line("", "MVC", b, "AT END");
+        asm_line("", "B", adone, "");
+    } else {
+        need_sym_base(st);
+        field_ref(st, NULL, 2, 6, fd, sizeof fd);
+        snprintf(b, sizeof b, "%s,=C'30'", fd);
+        asm_line("", "MVC", b, "request failed");
+        asm_line("", "B", adone, "");
+    }
+    asm_line(aok, "DS", "0H", "");
+    reset_bases();              /* arrived by branch: nothing is loaded */
+    need_sym_base(st);
+    field_ref(st, NULL, 2, 6, fd, sizeof fd);
+    snprintf(b, sizeof b, "%s,=C'00'", fd);
+    asm_line("", "MVC", b, "");
+    asm_line(adone, "DS", "0H", "");
+    reset_bases();
+}
+
 static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
 {
     char b[160], f[64];
@@ -3076,6 +3181,15 @@ static void generate(void)
             File *f = &files[st->dst];
             snprintf(b, sizeof b, " OPEN %s %s", st->src == 1 ? "INPUT" : "OUTPUT", f->name);
             asm_comment(b);
+            if (f->vsam) {
+                /* VSAM takes its mode from the ACB's MACRF, so OPEN names only
+                 * the control block. */
+                snprintf(b, sizeof b, "(%s)", f->label);
+                asm_line("", "OPEN", b, "VSAM ACB");
+                gen_vsam_status(f, 1);
+                reset_bases();
+                break;
+            }
             snprintf(b, sizeof b, "(%s,%s)", f->label, st->src == 1 ? "INPUT" : "OUTPUT");
             asm_line("", "OPEN", b, "");
             if (f->isam == 2) {
@@ -3099,6 +3213,7 @@ static void generate(void)
             asm_comment(b);
             snprintf(b, sizeof b, "(%s)", f->label);
             asm_line("", "CLOSE", b, "");
+            if (f->vsam) { gen_vsam_status(f, 1); reset_bases(); }
             break;
         }
         case ST_READ: {
@@ -3157,6 +3272,28 @@ static void generate(void)
                 }
                 asm_line("", "B", lc, "");
                 asm_line(le, "DS", "0H", "INVALID KEY");
+                reset_bases();
+                break;
+            }
+            if (f->vsam) {
+                /* GET moves the record into the FD area because the RPL says
+                 * MVE. R15 is zero when a record came back; anything else is
+                 * end of data or a failure, and both take the AT END path. */
+                snprintf(b, sizeof b, "RPL=%sR", f->label);
+                asm_line("", "GET", b, "VSAM sequential retrieval");
+                asm_line("", "LTR", "15,15", "got a record?");
+                asm_line("", "BNZ", le, "");
+                gen_vsam_status(f, 0);
+                if (st->src >= 0) {
+                    const Sym *t = &syms[st->src];
+                    asm_comment("  INTO: only reached when a record was read");
+                    need_sym_base(t); need_sym_base(&syms[f->rec_sym]);
+                    gen_move_alpha(t, NULL, &syms[f->rec_sym], NULL);
+                }
+                asm_line("", "B", lc, "");
+                asm_line(le, "DS", "0H", "AT END");
+                reset_bases();
+                gen_vsam_status(f, 0);
                 reset_bases();
                 break;
             }
@@ -3734,6 +3871,33 @@ static void generate(void)
         File *f = &files[i];
         char first[96];
         if (i == 0) asm_comment(" file control blocks");
+        if (f->vsam) {
+            /* VSAM wants an ACB, an RPL and an exit list where QSAM wants a
+             * DCB. VSAMIOS builds these with MODCB because it serves any file
+             * at run time; a compiler knows the organization, access and mode
+             * when it emits them, so they can be assembled outright.
+             *
+             * MACRF/OPTCD for a KSDS read sequentially: KEY addressing, SEQ
+             * sequence, IN for input, NUP because the records are not being
+             * held for update, MVE because the record is moved into the FD area
+             * rather than the program being handed a pointer. */
+            /* No EXLST. An exit routine is entered on VSAM's terms, with
+             * its own save area and return conventions, which suits a callable
+             * routine like VSAMIOS but not code generated inline. Without an
+             * EODAD, VSAM simply returns 8 in R15 with feedback 4 at end of
+             * data, which is easier to test and impossible to get wrong. */
+            snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,SEQ,IN)", f->ddname);
+            asm_line(f->label, "ACB", b, "VSAM access method control block");
+            char rlab[10];
+            snprintf(rlab, sizeof rlab, "%sR", f->label);
+            snprintf(first, sizeof first, "%-8s RPL   ACB=%s,AREA=%s,",
+                     rlab, f->label, syms[f->rec_sym].label);
+            char second[80];
+            snprintf(second, sizeof second, "AREALEN=%d,OPTCD=(KEY,SEQ,NUP,MVE)",
+                     f->reclen);
+            asm_cont(first, second);
+            continue;
+        }
         if (f->isam && f->opened_output) {
             /* QISAM load mode. Reading an ISAM file takes every attribute from
              * the label, but creating one means there is no label yet, so the
@@ -3866,6 +4030,11 @@ static void generate(void)
     }
     /* Must sit in the program CSECT: it is addressed off the code base. */
     if (has_display) asm_line("DSPBUF", "DS", "CL121", "DISPLAY line");
+    {
+        int anyvsam = 0;
+        for (int i = 0; i < nfile; i++) if (files[i].vsam) anyvsam = 1;
+        if (anyvsam) asm_line("VSFB", "DS", "F", "VSAM SHOWCB feedback word");
+    }
     asm_line("SAVEAREA", "DS", "18F", "");
 
     /* ---- COBWS: WORKING-STORAGE and the file records ----

@@ -69,6 +69,47 @@ Work list:
 5. Maintain FILE STATUS: `'00'` on success, `'10'` at end of file, and the
    VSAM feedback codes mapped for the error cases.
 
+## Slice 1: DONE
+
+`tests/ksdsnat.cbl` — KSDSREAD written against native VSAM — produces
+**byte-identical output to the VSAMIO version**: 100 records, 102 lines, no
+difference.
+
+What it took:
+
+- `FILE STATUS IS` on SELECT, resolved after the data division like RECORD KEY.
+- VSAM told from ISAM by the ASSIGN name, as planned.
+- `ACB DDNAME=x,MACRF=(KEY,SEQ,IN)` and
+  `RPL ACB=,AREA=,AREALEN=,OPTCD=(KEY,SEQ,NUP,MVE)`.
+- `OPEN (acb)` — no mode operand, VSAM takes it from MACRF — and `CLOSE (acb)`.
+- `READ` as `GET RPL=`, with R15 tested for the AT END branch.
+- FILE STATUS set from R15, and from the RPL feedback code via `SHOWCB` where
+  end of data has to be told from a real failure.
+
+**No exit list.** VSAMIOS uses `EXLST EODAD=,LERAD=,SYNAD=` because a callable
+routine can branch straight out to its own return path. Generated inline code
+cannot: an exit is entered on VSAM's terms and has to get back. Without an
+EODAD, VSAM simply returns 8 in R15 with feedback 4, which is easier to test and
+impossible to get wrong.
+
+### The bug worth remembering
+
+The first attempt abended S0C4 in what looked like OPEN. It was not OPEN — a
+hand-written assembler probe opened the same cluster cleanly, and a generated
+program with no FILE STATUS ran fine. The fault was in the status code itself:
+
+    BZ    G0001
+    L     8,BL0000          base loaded only on the failure path
+    MVC   D0003(2),=C'30'
+    B     G0002
+    G0001 DS 0H
+    MVC   D0003(2),=C'00'   base register never loaded on this path
+
+`need_sym_base` tracks which base registers are live and emits nothing when it
+thinks one already is. A label is a branch target, so that belief cannot survive
+it — which the base-locator comment in the compiler has said all along.
+`reset_bases()` at every label inside the status generator fixes it.
+
 ## Scale
 
 This is bigger than the ISAM slice. SELECT grows several clauses, the verb set

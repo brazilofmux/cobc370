@@ -1304,6 +1304,19 @@ broken.
 Regression: 28 passed, 0 failed. **All 18 of BATCH's programs now reproduce the
 monthly job exactly.**
 
+## Slice 29: VSAM, KSDS sequential read
+
+`ORGANIZATION IS INDEXED` with a VSAM ASSIGN name now emits an ACB and RPL
+instead of a DCB, `OPEN`/`CLOSE` address the ACB, `READ` becomes `GET RPL=`, and
+`FILE STATUS` is maintained from R15 and the RPL feedback code.
+
+Verified against Jay Moseley's VSAMIO suite, which drives the same cluster
+through a hand-written assembler engine: byte-identical output, 100 records.
+ANS COBOL has no VSAM at all, so this is new capability rather than a
+reimplementation. See `doc/VSAM-PLAN.md`.
+
+Regression: 28 passed, 0 failed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
