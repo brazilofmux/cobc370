@@ -86,12 +86,22 @@ static void die(const char *msg)
     exit(1);
 }
 
+/* COBOL lets a comma or semicolon stand in for a space between operands --
+ * OPEN INPUT A, B and DISPLAY X, Y both appear in the corpus. It is a separator
+ * only when a space follows it, which is exactly what keeps the commas inside
+ * PIC ZZZ,ZZ9.99 and PIC ---,---,--9 part of the picture. */
+static int sep_punct(const char *p)
+{
+    if (*p != ',' && *p != ';') return 0;
+    return p[1] == 0 || isspace((unsigned char)p[1]);
+}
+
 static void next(void)
 {
     tok.eof = 0;
     for (;;) {
         if (!src.p || !*src.p) { if (!src_fill(&src)) { tok.eof = 1; tok.text[0]=0; return; } }
-        while (*src.p && isspace((unsigned char)*src.p)) src.p++;
+        while (*src.p && (isspace((unsigned char)*src.p) || sep_punct(src.p))) src.p++;
         if (*src.p) break;
     }
     tok.line = src.line;
@@ -118,6 +128,7 @@ static void next(void)
     }
     int i = 0;
     while (*src.p && !isspace((unsigned char)*src.p)) {
+        if (sep_punct(src.p)) break;
         if (lex_parens && (*src.p == '(' || *src.p == ')')) break;
         if (*src.p == '.') {
             /* A period is a decimal point only when it sits between digits;

@@ -923,6 +923,37 @@ gap. Remaining blockers:
 | `INDEXED BY` / `SEARCH ALL` | 2 |
 | `WRITE FROM`, `READ INTO`, and two one-offs | 1 each |
 
+## Slice 18: the comma is a separator
+
+`OPEN INPUT COMPANIES-FILE, ACCOUNTS-FILE.` failed with *"OPEN names something
+that is not a file"* — not because of the file, but because the tokenizer glued
+the comma onto the word and then looked up `COMPANIES-FILE,`. The same fault
+produced `undeclared identifier 'NUMBER1A,'` elsewhere, which is how a lexer bug
+gets reported three different ways and looks like three different features.
+
+COBOL allows a comma or semicolon anywhere a space may appear. What makes that
+safe to implement is COBOL's own disambiguation rule: **it is a separator only
+when a space follows it**. That is exactly what keeps the commas inside
+`PIC ZZZ,ZZ9.99` and `PIC ---,---,--9` part of the picture, where a naive
+"strip all commas" would have quietly wrecked every edited field.
+
+`tests/commatok.cbl` pins both halves — an edited PICTURE containing commas, and
+`DISPLAY A, B` — so neither can regress without the other noticing.
+
+Regression: 20 passed, 0 failed.
+
+### Corpus status
+
+**8 → 10 of 30.** GL022 and GL023 compile. The `OPEN` blocker is gone entirely,
+and it was never about the `UT-S-` / `DA-I-` assign names.
+
+| Blocker | Programs |
+|---|---|
+| `LINKAGE SECTION` / `PROCEDURE DIVISION USING` | 7 |
+| qualification with `OF` / `IN` | 6 |
+| `INDEXED BY` / `SEARCH ALL` | 2 |
+| `CALL`, `WRITE FROM`, `READ INTO`, and three one-offs | 1 each |
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
