@@ -1136,6 +1136,38 @@ Regression: 24 passed, 0 failed.
 | `INDEXED BY` / `SEARCH ALL` | 2 |
 | `READ INTO`, `DISPLAY` of a group, and four one-offs | 1 each |
 
+## Slice 23: READ INTO and WRITE FROM
+
+Both are a MOVE fused onto the I/O verb, and both reuse `gen_move_alpha`, which
+already truncates and space-pads the way a COBOL group move does.
+
+The only thing that needs care is *where* the move goes. `READ f INTO x` must
+move on the success path only — never on AT END — so it is emitted after the
+`GET` and before the branch that skips the AT END statements:
+
+    GET   FD000,D0000     QSAM move mode
+    MVC   D0002(80),D0000 alphanumeric move     <- INTO, success path only
+    B     L0002
+    L0001 DS 0H                                 <- AT END
+
+`tests/intofrom.cbl` checks exactly that: after the loop ends it displays the
+buffer again, and `LAST [DDD444]` proves the INTO move did not fire on the AT
+END that terminated the loop. The random-ISAM READ gets the same treatment,
+placed after the record is lifted out of the block.
+
+Regression: 25 passed, 0 failed.
+
+### Corpus status
+
+**20 → 23 of 30.**
+
+| Blocker | Programs |
+|---|---|
+| `INDEXED BY` / `SEARCH ALL` | 2 |
+| `DISPLAY` of a group, `DISPLAY` of a signed item, and three one-offs | 1 each |
+
+`INDEXED BY` / `SEARCH ALL` is now the only substantial feature left.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

@@ -1696,9 +1696,15 @@ static void parse_one_statement(void)
         if (fi < 0) die("READ names something that is not a file");
         next();
         if (is("RECORD")) next();
-        if (is("INTO")) die("READ INTO is not implemented yet");
         Stmt *st = new_stmt(ST_READ);
         st->dst = fi;
+        if (is("INTO")) {
+            /* READ f INTO x is READ f followed by MOVE record TO x, and the
+             * move happens only when a record was actually read -- never on
+             * the AT END path. */
+            next();
+            st->src = consume_sym();
+        }
         st->lab1 = ++nlabel;                 /* AT END */
         st->lab2 = ++nlabel;                 /* continue */
         if (is("INVALID")) {
@@ -1719,9 +1725,13 @@ static void parse_one_statement(void)
         int fi = -1;
         for (int k = 0; k < nfile; k++) if (files[k].rec_sym == i) fi = k;
         if (fi < 0) die("WRITE names something that is not a file's record");
-        if (is("FROM")) die("WRITE FROM is not implemented yet");
         Stmt *st = new_stmt(ST_WRITE);
         st->dst = fi;
+        if (is("FROM")) {
+            /* WRITE r FROM x is MOVE x TO r followed by WRITE r. */
+            next();
+            st->src = consume_sym();
+        }
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
         if (is("INVALID")) {
@@ -2949,6 +2959,12 @@ static void generate(void)
                 need_sym_base(&syms[f->rec_sym]);
                 snprintf(b, sizeof b, "%s(%d),0(1)", syms[f->rec_sym].label, f->reclen);
                 asm_line("", "MVC", b, "block-relative record into the FD area");
+                if (st->src >= 0) {
+                    const Sym *t = &syms[st->src];
+                    asm_comment("  INTO: only reached when a record was found");
+                    need_sym_base(t); need_sym_base(&syms[f->rec_sym]);
+                    gen_move_alpha(t, NULL, &syms[f->rec_sym], NULL);
+                }
                 asm_line("", "B", lc, "");
                 asm_line(le, "DS", "0H", "INVALID KEY");
                 reset_bases();
@@ -2962,6 +2978,12 @@ static void generate(void)
             need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
             asm_line("", "GET", b, "QSAM move mode");
+            if (st->src >= 0) {
+                const Sym *t = &syms[st->src];
+                asm_comment("  INTO: only reached when a record was read");
+                need_sym_base(t); need_sym_base(&syms[f->rec_sym]);
+                gen_move_alpha(t, NULL, &syms[f->rec_sym], NULL);
+            }
             asm_line("", "B", lc, "");
             asm_line(le, "DS", "0H", "AT END");
             reset_bases();
@@ -3033,6 +3055,12 @@ static void generate(void)
             snprintf(wlc, sizeof wlc, "L%04d", st->lab2);
             snprintf(b, sizeof b, " WRITE %s", syms[f->rec_sym].name);
             asm_comment(b);
+            if (st->src >= 0) {
+                const Sym *sv = &syms[st->src];
+                asm_comment("  FROM: fill the record area first");
+                need_sym_base(&syms[f->rec_sym]); need_sym_base(sv);
+                gen_move_alpha(&syms[f->rec_sym], NULL, sv, NULL);
+            }
             if (f->isam) {
                 /* QISAM load mode. PUT is the same macro as QSAM, but a key
                  * out of ascending order or a duplicate is reported by the
