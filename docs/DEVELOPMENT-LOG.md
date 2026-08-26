@@ -1098,6 +1098,44 @@ The `MOVE SPACES` one is **our own limit, not the language's**: the fill is
 built as a constant in a `MAXTOK` buffer. Filling with `MVI` plus a propagating
 `MVC` would drop the limit entirely and remove the constant as well.
 
+## Slice 22: sign conditions, and a fill that is not capped
+
+Two small things, both of which had been *mis-diagnosed* from their error
+messages alone.
+
+**Sign conditions.** `IF FD-X IS NOT NEGATIVE` and `IF FDM-MOD IS NOT ZERO`
+reported *"NOT must be followed by a relational operator"*, which reads like a
+condition-name problem. They are `IS [NOT] POSITIVE / NEGATIVE / ZERO` — a
+comparison against an implicit zero with no right-hand operand to parse. `relop`
+now returns a third result meaning "the caller supplies a zero". Class
+conditions (`IS NUMERIC`, `IS ALPHABETIC`) are refused explicitly rather than
+falling into the same misleading message.
+
+**A figurative MOVE no longer builds a constant.** It sets the first byte and
+lets `MVC` propagate it across the rest, one byte at a time, which is what the
+overlapping operands of an SS instruction do:
+
+    LA    1,D0004             MOVE ZEROS
+    MVI   0(1),C'0'
+    MVC   1(199,1),0(1)       propagate across the item
+
+The old version built a constant the width of the receiving item, which capped
+`MOVE SPACES` at the token buffer — an artificial limit at 127 bytes that had
+nothing to do with the language. Going through R1 keeps it working the same
+whether the item is subscripted or reached off a base locator.
+
+Regression: 24 passed, 0 failed.
+
+### Corpus status
+
+**15 → 20 of 30.** Two thirds compile.
+
+| Blocker | Programs |
+|---|---|
+| `WRITE FROM` | 2 |
+| `INDEXED BY` / `SEARCH ALL` | 2 |
+| `READ INTO`, `DISPLAY` of a group, and four one-offs | 1 each |
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

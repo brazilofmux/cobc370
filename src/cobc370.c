@@ -1309,6 +1309,15 @@ static int relop(int *op)
         next(); if (is("THAN")) next();
         *op = neg ? REL_NLT : REL_LT; return 1;
     }
+    /* Sign conditions. IS [NOT] POSITIVE / NEGATIVE / ZERO compare against an
+     * implicit zero, so there is no right operand to parse -- return 2 and let
+     * the caller supply it. */
+    if (is("POSITIVE")) { next(); *op = neg ? REL_NGT : REL_GT; return 2; }
+    if (is("NEGATIVE")) { next(); *op = neg ? REL_NLT : REL_LT; return 2; }
+    if (is("ZERO") || is("ZEROS") || is("ZEROES"))
+                        { next(); *op = neg ? REL_NE  : REL_EQ; return 2; }
+    if (is("NUMERIC") || is("ALPHABETIC"))
+        die("class conditions (IS NUMERIC / IS ALPHABETIC) are not implemented yet");
     if (neg) die("NOT must be followed by a relational operator");
     return 0;
 }
@@ -1354,7 +1363,16 @@ static Cond *parse_relation(void)
     if (is("(")) { next(); Cond *c = parse_cond(); expect(")"); return c; }
     Node *l = parse_expr();
     int op;
-    if (!relop(&op)) {
+    int rk = relop(&op);
+    if (rk == 2) {                       /* sign condition: compare with zero */
+        Cond *c = cnode(C_REL);
+        Node *z = node(N_LIT);
+        z->litscale = 0;
+        scale_literal("0", 0, z->lit, sizeof z->lit);
+        c->op = op; c->l = l; c->r = z;
+        return c;
+    }
+    if (!rk) {
         /* No operator: this must be a level 88 condition name. */
         if (l->kind != N_SYM || !syms[l->sym].is_88)
             die("expected a relational operator, or a level 88 condition name");
@@ -3188,21 +3206,27 @@ static void generate(void)
             asm_comment(b);
             if (st->op == ST_MOVE) {
                 if (st->fig) {
-                    /* Fill the whole receiving item. intern_str pads with
-                     * blanks, so a constant of exactly the right length is
-                     * built here rather than relying on the padding. */
+                    /* Set the first byte and let MVC propagate it across the
+                     * rest, one byte at a time, which is what the overlapping
+                     * operands of an SS instruction do. That needs no constant
+                     * at all -- the earlier version built one the width of the
+                     * receiving item, which capped MOVE SPACES at the token
+                     * buffer rather than at anything the language cares about.
+                     * Addressing goes through R1 so it works the same whether
+                     * the item is subscripted or reached off a base locator. */
                     int dn = st->dsub ? d->elem : d->bytes;
-                    if (dn > 256) die("MVC is limited to 256 bytes");
-                    char fill[MAXTOK];
-                    if (dn >= (int)sizeof fill) die("item too long for MOVE SPACES");
-                    memset(fill, st->fig == FIG_SPACE ? ' ' : '0', (size_t)dn);
-                    fill[dn] = 0;
-                    const char *sl = intern_str(fill, dn, dn);
+                    if (dn > 256) die("a figurative MOVE is limited to 256 bytes");
                     char fd[64];
-                    field_ref(d, st->dsub, dn, 6, fd, sizeof fd);
-                    snprintf(b, sizeof b, "%s,%s", fd, sl);
-                    asm_line("", "MVC", b, st->fig == FIG_SPACE ? "MOVE SPACES"
+                    field_ref_m(d, st->dsub, FR_RX, dn, 6, fd, sizeof fd);
+                    snprintf(b, sizeof b, "1,%s", fd);
+                    asm_line("", "LA", b, st->fig == FIG_SPACE ? "MOVE SPACES"
                                                                : "MOVE ZEROS");
+                    snprintf(b, sizeof b, "0(1),C'%c'", st->fig == FIG_SPACE ? ' ' : '0');
+                    asm_line("", "MVI", b, "");
+                    if (dn > 1) {
+                        snprintf(b, sizeof b, "1(%d,1),0(1)", dn - 1);
+                        asm_line("", "MVC", b, "propagate across the item");
+                    }
                     break;
                 }
                 if (st->imm == 2) {
