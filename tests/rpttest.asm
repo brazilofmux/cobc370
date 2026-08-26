@@ -167,7 +167,7 @@ L0004    DS    0H
          ZAP   PWK1(8),D0002(5)
          ZAP   EDSRC(6),PWK1(8)    source, sized to the selector count
          MVC   EDWK(16),M0001      load the ED pattern
-         LA    1,EDWK+3            default sign position
+         LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(16),EDSRC
          BCTR  1,0                 one left of the first significant di
          BNM   G0001               not negative?

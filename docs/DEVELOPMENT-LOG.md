@@ -1268,6 +1268,25 @@ IKFCBL00 does. `doc/DIFFERENTIAL-TESTING.md` has the full story.
 Regression: 27 passed, 0 failed. Swaps verified: GL022, GL023, GL024 — whole
 job identical.
 
+## Slice 27: the floating sign
+
+Found by the GL035/GL036 swap: `-1.98` in `PIC ---,---,--9.99` printed as
+`-         1.98` instead of `         -1.98`. Larger values were right, which is
+why every earlier test passed — GL030 uses the same picture but all its amounts
+are positive.
+
+`EDMK` loads R1 only when it meets a nonzero digit with the significance
+indicator still **off**. A value whose first nonzero digit falls at or after the
+significance starter never satisfies that: the starter turns significance on, so
+every later digit prints with the indicator already set and R1 is never touched.
+The floating sign then landed wherever R1 happened to point.
+
+The fallback is now one byte past the significance starter, which is where
+printing begins when EDMK stays silent. `tests/fltsign.cbl` covers both sides of
+that boundary and zero.
+
+Regression: 28 passed, 0 failed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

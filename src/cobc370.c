@@ -2318,11 +2318,25 @@ static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
     asm_line("", "MVC", b, "load the ED pattern");
 
     if (sy->floating) {
-        /* EDMK reports where the first significant digit landed; the floating
-           sign goes one byte to its left. R1 is preloaded in case significance
-           was already on, in which case EDMK leaves it alone. */
-        snprintf(b, sizeof b, "1,EDWK+%d", sy->first_sel + spare);
-        asm_line("", "LA", b, "default sign position");
+        /* EDMK reports where the first significant digit landed, and the
+           floating sign goes one byte to its left.
+           
+           But EDMK loads R1 only when it meets a nonzero digit with the
+           significance indicator still OFF. A value small enough that its first
+           nonzero digit falls at or after the significance starter never
+           satisfies that: the starter itself turns significance on, so every
+           later digit prints with the indicator already set and R1 is never
+           touched. -1.98 in ---,---,--9.99 is exactly that case, and the sign
+           then landed wherever R1 happened to point.
+           
+           So the fallback must be one byte past the significance starter, which
+           is where printing begins when EDMK stays silent. Scan the pattern
+           rather than recomputing the arithmetic. */
+        int fallback = sy->first_sel + spare;
+        for (int i = 0; i < patlen; i++)
+            if (pat[i] == 0x21) { fallback = i + 1; break; }
+        snprintf(b, sizeof b, "1,EDWK+%d", fallback);
+        asm_line("", "LA", b, "where printing starts if EDMK stays silent");
         snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
         asm_line("", "EDMK", b, "");
         asm_line("", "BCTR", "1,0", "one left of the first significant digit");

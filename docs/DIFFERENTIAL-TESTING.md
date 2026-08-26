@@ -220,3 +220,17 @@ is that cobc370 was right all along. See OPEN-ITEMS item 1 for the ASA evidence.
 The lesson is about the harness rather than the compiler: **a positional diff of
 printer output is not a valid comparison** when two compilers encode the same
 spacing differently. `bin/batch-compare` replaces it.
+
+## Swaps 9-11: GL034, GL035, GL036
+
+All verified. GL034 went clean first try — 1617 lines of assembler, DYNALOAD
+calls to both LTF and FTL, an `OCCURS 10` table of COMP-3 subtotals, a PARM.
+
+GL035/GL036 exposed a real edited-field bug: a floating minus printed at the far
+left of the field instead of against the digits, for values small enough that
+the first nonzero digit falls at or after the significance starter. `EDMK` never
+loads R1 in that case, and the fallback was wrong. See the compiler README.
+
+Worth noting why nothing caught it earlier: GL030 uses the identical picture,
+and verified clean, because every amount in the journal is positive. It took a
+report with negative balances.

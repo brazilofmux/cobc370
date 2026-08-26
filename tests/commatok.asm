@@ -35,7 +35,7 @@ P0000    DS    0H
          PACK  PWK1(8),D0005(9)    zoned -> packed
          ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
          MVC   EDWK(13),M0002      load the ED pattern
-         LA    1,EDWK+3            default sign position
+         LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(13),EDSRC
          BCTR  1,0                 one left of the first significant di
          BNM   G0001               not negative?
