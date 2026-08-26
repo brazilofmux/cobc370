@@ -311,7 +311,8 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
-       ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH };
+       ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH,
+       ST_REWRITE, ST_DELETE };
 
 typedef struct {
     int  op;
@@ -347,6 +348,7 @@ typedef struct {
     int  reclen;
     int  opened_input; /* which OPEN modes appear, so MACRF can be set */
     int  opened_output;
+    int  opened_io;    /* OPEN I-O: retrieval and update through one RPL */
     int  report;       /* the RD this FD carries, or -1 */
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
@@ -1429,7 +1431,8 @@ static int starts_statement(void)
         "MOVE", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "COMPUTE", "IF",
         "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
-        "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL", 0
+        "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
+        "REWRITE", "DELETE", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -1817,14 +1820,18 @@ static void parse_one_statement(void)
     if (is("OPEN")) {
         next();
         while (is("INPUT") || is("OUTPUT") || is("I-O") || is("EXTEND")) {
-            if (is("I-O") || is("EXTEND")) die("OPEN I-O and EXTEND are not implemented yet");
-            int mode = is("INPUT") ? 1 : 2;
+            if (is("EXTEND")) die("OPEN EXTEND is not implemented yet");
+            int mode = is("INPUT") ? 1 : is("OUTPUT") ? 2 : 3;
             next();
             int any = 0;
-            while (!tok.eof && !is(".") && !is("INPUT") && !is("OUTPUT")) {
+            while (!tok.eof && !is(".") && !is("INPUT") && !is("OUTPUT") && !is("I-O")) {
                 int fi = file_index(tok.text);
                 if (fi < 0) die("OPEN names something that is not a file");
-                if (mode == 1) files[fi].opened_input = 1; else files[fi].opened_output = 1;
+                if (mode == 3 && !files[fi].vsam)
+                    die("OPEN I-O is implemented for VSAM files only");
+                if (mode == 1) files[fi].opened_input = 1;
+                else if (mode == 2) files[fi].opened_output = 1;
+                else files[fi].opened_io = 1;
                 Stmt *st = new_stmt(ST_OPEN); st->dst = fi; st->src = mode;
                 any = 1; next();
             }
@@ -1900,6 +1907,44 @@ static void parse_one_statement(void)
         } else {
             eat_period();
         }
+        new_stmt(ST_LABEL)->dst = st->lab2;
+        return;
+    }
+
+    /* REWRITE r [FROM x] [INVALID KEY ...] -- put back the record the last
+     * READ is holding. DELETE f [RECORD] [INVALID KEY ...] -- erase it. Both
+     * name what COBOL says they name: REWRITE a record, DELETE a file. */
+    if (is("REWRITE")) {
+        next();
+        int i = consume_sym();
+        int fi = -1;
+        for (int k = 0; k < nfile; k++) if (files[k].rec_sym == i) fi = k;
+        if (fi < 0) die("REWRITE names something that is not a file's record");
+        if (!files[fi].vsam) die("REWRITE is implemented for VSAM files only");
+        Stmt *st = new_stmt(ST_REWRITE);
+        st->dst = fi;
+        if (is("FROM")) { next(); st->src = consume_sym(); }
+        st->lab1 = ++nlabel;                 /* INVALID KEY */
+        st->lab2 = ++nlabel;                 /* continue */
+        if (is("INVALID")) { next(); expect("KEY"); parse_stmt_list(1); }
+        else eat_period();
+        new_stmt(ST_LABEL)->dst = st->lab2;
+        return;
+    }
+
+    if (is("DELETE")) {
+        next();
+        int fi = file_index(tok.text);
+        if (fi < 0) die("DELETE names something that is not a file");
+        if (!files[fi].vsam) die("DELETE is implemented for VSAM files only");
+        next();
+        if (is("RECORD")) next();
+        Stmt *st = new_stmt(ST_DELETE);
+        st->dst = fi;
+        st->lab1 = ++nlabel;
+        st->lab2 = ++nlabel;
+        if (is("INVALID")) { next(); expect("KEY"); parse_stmt_list(1); }
+        else eat_period();
         new_stmt(ST_LABEL)->dst = st->lab2;
         return;
     }
@@ -2385,6 +2430,17 @@ static const VsFbk vs_read[] = {
 static const VsFbk vs_write[] = {
     {  8, "22", "duplicate key" },
     { 12, "21", "key out of sequence" },
+    { 28, "24", "cluster is full" },
+    {0, NULL, NULL}
+};
+
+/* Rewriting or erasing the record a GET is holding. Feedback 8 is an attempt
+ * to change the prime key, which COBOL folds into 21 along with the other
+ * sequence violations; 16 is no such record; 28 is a cluster with no room to
+ * put the longer record back. */
+static const VsFbk vs_upd[] = {
+    {  8, "21", "prime key changed" },
+    { 16, "23", "no such record" },
     { 28, "24", "cluster is full" },
     {0, NULL, NULL}
 };
@@ -3487,6 +3543,41 @@ static void generate(void)
             asm_line("", "PUT", b, "");
             break;
         }
+        case ST_REWRITE:
+        case ST_DELETE: {
+            File *f = &files[st->dst];
+            int erase = (st->op == ST_DELETE);
+            char wle[16], wlc[16];
+            snprintf(wle, sizeof wle, "L%04d", st->lab1);
+            snprintf(wlc, sizeof wlc, "L%04d", st->lab2);
+            snprintf(b, sizeof b, " %s %s", erase ? "DELETE" : "REWRITE",
+                     erase ? f->name : syms[f->rec_sym].name);
+            asm_comment(b);
+            if (!f->opened_io)
+                die("REWRITE and DELETE need the file opened I-O");
+            if (st->src >= 0) {
+                const Sym *sv = &syms[st->src];
+                asm_comment("  FROM: fill the record area first");
+                need_sym_base(&syms[f->rec_sym]); need_sym_base(sv);
+                gen_move_alpha(&syms[f->rec_sym], NULL, sv, NULL);
+            }
+            /* Neither macro takes a key. The RPL is holding the record the
+             * last GET returned, and that is the one acted on -- which is why
+             * changing the key first is an error rather than a move. */
+            need_sym_base(&syms[f->rec_sym]);
+            snprintf(b, sizeof b, "RPL=%sR", f->label);
+            asm_line("", erase ? "ERASE" : "PUT", b,
+                     erase ? "erase the held record" : "put the held record back");
+            asm_line("", "LTR", "15,15", "done?");
+            asm_line("", "BNZ", wle, "");
+            gen_vsam_status(f, vs_upd);
+            asm_line("", "B", wlc, "");
+            asm_line(wle, "DS", "0H", "INVALID KEY");
+            reset_bases();
+            gen_vsam_status(f, vs_upd);
+            reset_bases();
+            break;
+        }
         case ST_PERFORM: {
             char p1[16], x[16], f[16], r[16], lt[16], le[16], pt[16];
             snprintf(p1, sizeof p1, "P%04d", st->dst);
@@ -3943,7 +4034,14 @@ static void generate(void)
              * IN or OUT comes from how the program opens the file. OUT in
              * SEQ is load mode, which is the only way records get into a KSDS
              * in the first place -- and which is why the keys have to arrive in
-             * ascending order.
+             * ascending order. OPEN I-O is OUT as well, since IN is retrieval
+             * only, but without RST -- emptying a file the program means to
+             * update would be a spectacular way to misread the verb.
+             *
+             * The RPL's NUP/UPD is the other half of I-O. Under UPD a GET does
+             * not merely return the record, it holds it, and the PUT or ERASE
+             * that follows acts on what is held rather than on a key. That is
+             * exactly COBOL's rule that REWRITE and DELETE follow a READ.
              *
              * RST goes with it. OPEN OUTPUT in COBOL means this program
              * creates the file's contents, and RST is how VSAM says that: the
@@ -3957,8 +4055,11 @@ static void generate(void)
              * routine like VSAMIOS but not code generated inline. Without an
              * EODAD, VSAM simply returns 8 in R15 with feedback 4 at end of
              * data, which is easier to test and impossible to get wrong. */
+            const char *macrf = f->opened_output ? "OUT,RST"
+                              : f->opened_io     ? "OUT" : "IN";
+            const char *optcd = f->opened_io ? "UPD" : "NUP";
             snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,SEQ,%s)",
-                     f->ddname, f->opened_output ? "OUT,RST" : "IN");
+                     f->ddname, macrf);
             asm_line(f->label, "ACB", b, "VSAM access method control block");
             char rlab[10];
             snprintf(rlab, sizeof rlab, "%sR", f->label);
@@ -3971,8 +4072,8 @@ static void generate(void)
              * never been told fails. Records here are fixed length, so it can
              * be assembled once rather than stored before each write. */
             snprintf(second, sizeof second,
-                     "AREALEN=%d,RECLEN=%d,OPTCD=(KEY,SEQ,NUP,MVE)",
-                     f->reclen, f->reclen);
+                     "AREALEN=%d,RECLEN=%d,OPTCD=(KEY,SEQ,%s,MVE)",
+                     f->reclen, f->reclen, optcd);
             asm_cont(first, second);
             continue;
         }

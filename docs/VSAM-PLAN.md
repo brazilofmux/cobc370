@@ -158,6 +158,55 @@ them. This was waiting for any program that tests FILE STATUS -- which is to
 say, most programs that use VSAM at all -- and no test in the suite had ever
 written one.
 
+## Slice 4: update in place, DONE
+
+`tests/ksdsnatu.cbl` -- KSDSUPDT written against native VSAM -- matches the
+VSAMIO version byte for byte, and the cluster it leaves behind is byte for byte
+the one VSAMIO leaves behind: 99 records, four rewritten in place, one erased.
+
+What it took:
+
+- `OPEN I-O` as `MACRF=(KEY,SEQ,OUT)`. OUT, because IN is retrieval only --
+  but *not* RST, since emptying a file the program means to update would be a
+  spectacular way to misread the verb.
+- `OPTCD=UPD` in place of NUP. This is the whole of the slice. Under UPD a GET
+  does not merely return the record, it *holds* it, and the PUT or ERASE that
+  follows acts on what is held rather than on a key. COBOL's rule that REWRITE
+  and DELETE must follow a READ is not a rule the compiler has to enforce --
+  it is what the access method already does.
+- `REWRITE` as `PUT RPL=`, `DELETE` as `ERASE RPL=`. Neither macro takes a key.
+- Feedback 8 is an attempt to change the prime key, which COBOL folds into `21`;
+  16 is no such record, which is `23`.
+
+Nothing about GET needed changing. The same `GET RPL=` that slice 1 emits
+retrieves and holds a record once the RPL says UPD, which is a good sign that
+the shape of the generated code is right.
+
+## The rig wedged in the middle of this, and it was our own doing
+
+Halfway through slice 4 every submission started hanging. The visible symptom
+was Hercules refusing the card reader:
+
+    HHC01038E 0:000C COMM: client localhost ... rejected: client ... still connected
+
+which looks like a Hercules problem and is not. `$DQ` told the truth:
+
+    $HASP000 1009 PPU LOCAL    ANY
+    $HASP000  71 PERCENT SPOOL UTILIZATION
+    $HASP050 JES2 RESOURCE SHORTAGE.   CODE = JQES
+
+`tk5-run` captured each job's output off PRINTER2 and then walked away, so JES2
+kept a job queue element for every job it had ever run. A thousand runs later
+the queue was full, JES2 stopped creating jobs, the reader never consumed the
+deck it had been fed, the socket that fed it was never released, and every
+later submission bounced off the stale connection.
+
+`$PJ1-9999` cleared it -- 1009 jobs to 15, 71 percent spool to 0 -- and
+`devinit 000C 3505 sockdev ascii trunc eof` released the socket. `tk5-run` now
+purges each job as it finishes, which is one console command and means it
+cannot recur. Worth knowing that the shortage message appears **once**, hours
+before anything visibly breaks, and never again.
+
 ## The incident: UCSVD001, 2026-08-26
 
 Running Jay's `VSTESTK1` (DELETE + DEFINE of the test cluster) took the

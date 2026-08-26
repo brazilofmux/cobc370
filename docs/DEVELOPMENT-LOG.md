@@ -1343,6 +1343,20 @@ characters between them.
 
 Regression: 30 passed, 0 failed.
 
+## Slice 31: VSAM, update in place
+
+`OPEN I-O` emits `MACRF=(KEY,SEQ,OUT)` -- OUT because IN is retrieval only, and
+deliberately without RST -- together with `OPTCD=UPD` on the RPL. Under UPD a
+GET holds the record it returns, so `REWRITE` is `PUT RPL=` and `DELETE` is
+`ERASE RPL=`, neither of them naming a key: they act on what is held. COBOL's
+rule that REWRITE and DELETE follow a READ turns out to be what VSAM does
+anyway. Feedback 8 (prime key changed) becomes FILE STATUS `21`, 16 (no such
+record) becomes `23`.
+
+Verified against Jay Moseley's KSDSUPDT through VSAMIOS: identical output, and
+the cluster left behind is identical too -- 99 records, four rewritten, one
+erased. See `doc/VSAM-PLAN.md`.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
