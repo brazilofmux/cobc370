@@ -175,8 +175,7 @@ WK5      DS    PL16
 FD000    DCB   DDNAME=DESCIDX,DSORG=IS,MACRF=(PM),RECFM=FB,            X
                LRECL=81,BLKSIZE=810,KEYLEN=10,RKP=1,OPTCD=L,           X
                SYNAD=ISYNAD
-FD001    DCB   DDNAME=DESCIN,DSORG=PS,MACRF=(GM),RECFM=FB,             X
-               LRECL=80,BLKSIZE=80
+FD001    DCB   DDNAME=DESCIN,DSORG=PS,MACRF=(GM)
 K0001    DC    PL8'1'              numeric constants
 S0001    DC    CL1'Y'              nonnumeric constants
 S0002    DC    CL15'DESCIDX LOADED.'

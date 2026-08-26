@@ -78,3 +78,43 @@ commit them, and do not send them anywhere.
 A caveat worth keeping in view: the ledger data itself changes as transactions
 are posted, so a reference is only comparable to runs against the same data.
 Re-take it if the input datasets change.
+
+## First swap: GL022
+
+**Result: every non-blank line of the report is identical — 1164 lines, 8 page
+headings, matching the ANS COBOL build exactly, on real ledger data.** All 37
+steps returned RC=0000.
+
+`bin/cobc-build GL022` compiles the corpus source with cobc370 and links it into
+`SVD001.COBC370.LOADLIB`, which `bin/cobc-lib-init`'s JCL
+(`jcl/cobc370-lib-init.jcl`) allocates once. `bin/batch-run swap-gl022
+SVD001.COBC370.LOADLIB` then puts that library ahead of the shipped one.
+
+### What the swap caught
+
+The first attempt abended **S001-4** on the very first read, and it was a real
+bug: every sequential input DCB was emitted as `LRECL=n,BLKSIZE=n`, declaring
+each file unblocked. `SVD001.COMPANY` is `FB 50/23450` — 469 records to a block,
+exactly as its FD says — so OPEN rejected the mismatch immediately.
+
+Input files now carry no geometry at all: `DDNAME=x,DSORG=PS,MACRF=(GM)`, with
+RECFM, LRECL and BLKSIZE taken from the label. That is the same lesson ISAM
+taught. Output files state their geometry, now using `BLOCK CONTAINS` for the
+blocking factor.
+
+This bug could not have been found by the regression suite: every test there
+reads `DD *`, where the reader supplies 80-byte unblocked records and
+`BLKSIZE=LRECL` happens to be true.
+
+### The one remaining difference
+
+36 blank lines appear only in the reference and 31 only in the swap. They fall
+immediately **before each page heading** — that is, as a trailing blank at the
+foot of the preceding page. Both builds then eject to top of form, so on paper
+this should be invisible; the report body, the page breaks and the record on
+every line are identical.
+
+That last sentence is an inference from the text capture, not a verified fact:
+the printer emulation has already interpreted the ASA carriage control by the
+time we see it. Confirming it means comparing the raw carriage-control stream,
+or simply comparing the two PDFs virtual1403 renders.

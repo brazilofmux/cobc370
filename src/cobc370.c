@@ -3706,14 +3706,30 @@ static void generate(void)
             asm_line(f->label, "DCB", b, "");
             continue;
         }
-        const char *macrf = f->opened_output ? "PM" : "GM";
-        const char *recfm = (f->report >= 0) ? "FBA" : "FB";
-        snprintf(first, sizeof first,
-                 "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(%s),RECFM=%s,",
-                 f->label, f->ddname, macrf, recfm);
-        char second[64];
-        snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", f->reclen, f->reclen);
-        asm_cont(first, second);
+        if (!f->opened_output) {
+            /* Reading: RECFM, LRECL and BLKSIZE all come from the label, so
+             * saying nothing is not laziness, it is the only correct thing.
+             * Asserting BLKSIZE=LRECL here declared every input file
+             * unblocked, and reading a real blocked dataset -- SVD001.COMPANY
+             * is FB 50/23450 -- then abends S001-4 the moment OPEN compares
+             * them. A DD * gets its attributes from the reader the same way. */
+            snprintf(b, sizeof b, "DDNAME=%s,DSORG=PS,MACRF=(GM)", f->ddname);
+            asm_line(f->label, "DCB", b, "");
+            continue;
+        }
+        /* Writing: there is no label yet, so the geometry has to be stated.
+         * BLOCK CONTAINS gives the blocking factor when the program declares
+         * one; without it the records go out unblocked. */
+        {
+            const char *recfm = (f->report >= 0) ? "FBA" : "FB";
+            int blk = f->reclen * (f->blk_records > 0 ? f->blk_records : 1);
+            snprintf(first, sizeof first,
+                     "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(PM),RECFM=%s,",
+                     f->label, f->ddname, recfm);
+            char second[64];
+            snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", f->reclen, blk);
+            asm_cont(first, second);
+        }
     }
     for (int i = 0; i < nconst; i++) {
         snprintf(b, sizeof b, "PL8'%s'", consts[i].digits);

@@ -140,8 +140,7 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
-FD000    DCB   DDNAME=INFILE,DSORG=PS,MACRF=(GM),RECFM=FB,             X
-               LRECL=80,BLKSIZE=80
+FD000    DCB   DDNAME=INFILE,DSORG=PS,MACRF=(GM)
 FD001    DCB   DDNAME=OUTFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
                LRECL=80,BLKSIZE=80
 K0001    DC    PL8'1'              numeric constants
