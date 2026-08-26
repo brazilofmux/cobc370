@@ -118,3 +118,29 @@ That last sentence is an inference from the text capture, not a verified fact:
 the printer emulation has already interpreted the ASA carriage control by the
 time we see it. Confirming it means comparing the raw carriage-control stream,
 or simply comparing the two PDFs virtual1403 renders.
+
+## Second swap: GL023
+
+Both GL022 and GL023 compiled by cobc370, both ahead of the shipped library:
+**every non-blank line of the entire 37-step job is identical** — 2547 lines,
+with GL023's own report matching at 302 lines. All steps RC=0000.
+
+### The normaliser was hiding a whole report
+
+GL023's page heading is `B Y   N A M E`. That line uses exactly six distinct
+characters, is all capitals and spaces, and is over forty columns wide — which
+is precisely how the banner heuristic identified JES2 separator art. It had been
+deleting the heading, and with it any chance of noticing a difference there.
+
+The raw capture had it four times; the normalised file had it zero times. Caught
+only by looking for GL023's report by name after the diff came back clean.
+
+Judging such a line in isolation cannot work: a block letter's thick row is
+unmistakable (`JJJJJJJJJJ`) but its thin rows are not (`JJ      33        33`),
+and they look exactly like a spaced-out heading. The detector now finds the
+unmistakable rows and grows outward over adjacent lines that could belong to the
+same block, so a heading standing on its own is never adjacent to one and never
+touched.
+
+Both earlier results were re-verified against the corrected normaliser before
+being believed.
