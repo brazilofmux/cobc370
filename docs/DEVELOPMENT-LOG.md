@@ -1375,6 +1375,26 @@ cluster left behind. This is also the slice where feedback 8 stops being
 theoretical -- a duplicate key on a direct insert reports it, where a duplicate
 during a load reports 12 like any other sequence error.
 
+## Slice 33: VSAM, START
+
+`START f KEY IS EQUAL TO k` emits `OPTCD=KEQ`, `KEY IS NOT LESS THAN k` emits
+`KGE`, and both are followed by `POINT RPL=`. The key named must be the RECORD
+KEY -- where the RPL's search argument already points.
+
+This is the one place a runtime `MODCB` is the right answer rather than a second
+assembled control block. VSAM keeps position per RPL, so the RPL that POINT
+positions must be the one the following READ reads from; a second control block
+cannot stand in for a runtime change when the object being changed is the one
+whose state matters. It runs once per START, not once per record.
+
+Verified against Jay Moseley's KSDSSSEQ: identical output over four positions,
+including a key that does not exist and one that falls between two records.
+
+**The KSDS is now complete** -- sequential read, load, update in place, random
+by key, and browse from a key, all checked against VSAMIO on every regression
+run. ESDS and RRDS are next and both are narrower: ESDS addresses by RBA with
+no key at all, RRDS by record number.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

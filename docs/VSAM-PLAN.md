@@ -223,6 +223,49 @@ eject. Content is identical; only the padding moved. `cobc-regress` already
 drops blank lines before comparing -- carriage control is not content -- so the
 oracle is the 25 non-blank lines.
 
+## Slice 6: START, DONE
+
+`tests/ksdsnats.cbl` -- KSDSSSEQ written against native VSAM -- matches the
+VSAMIO version line for line: four positions, one of them a key that does not
+exist, one a key that falls between two records, and five records read from
+each that succeeded.
+
+`START ... KEY IS EQUAL TO` is `OPTCD=KEQ`, `KEY IS NOT LESS THAN` is `KGE`,
+and both are followed by `POINT RPL=`. The key named must be the RECORD KEY,
+which is where the RPL's search argument already points, so there is nothing to
+move and nothing to choose.
+
+### The one place MODCB earns its keep
+
+Slice 5 replaced VSAMIOS's runtime MODCB with two assembled RPLs, on the
+grounds that a compiler knows which verb it is emitting. START is the exception,
+and it is worth being precise about why: VSAM keeps position **per RPL**, so
+the RPL that POINT positions has to be the same one the following GET reads
+from. A second control block cannot stand in for a runtime change when the
+thing being changed is the object whose state matters. So KEQ and KGE are set
+with MODCB -- once per START, not once per record.
+
+A MODCB that fails takes the INVALID KEY path, where the feedback decoded will
+be whatever the RPL last held rather than a reason for this failure. That is
+worth knowing and not worth machinery: MODCB against a control block the
+assembler built cannot fail for anything a COBOL program can cause.
+
+## The KSDS is finished
+
+Every access pattern a COBOL program can ask of a key-sequenced dataset now
+works and is checked against VSAMIO on every regression run:
+
+| | verb | VSAM |
+|---|---|---|
+| read forwards | `READ` | `GET` SEQ |
+| create | `OPEN OUTPUT`, `WRITE` | `PUT` SEQ, MACRF RST |
+| update in place | `OPEN I-O`, `REWRITE`, `DELETE` | `PUT`/`ERASE`, OPTCD UPD |
+| by key | `ACCESS IS RANDOM`, `READ`/`WRITE` | GET/PUT DIR, ARG |
+| browse from a key | `START` | `POINT`, KEQ/KGE |
+
+ESDS and RRDS are next, and both are narrower than any of the above: ESDS is
+ADR addressing with no key at all, RRDS is a record number in place of one.
+
 ## The rig wedged in the middle of this, and it was our own doing
 
 Halfway through slice 4 every submission started hanging. The visible symptom

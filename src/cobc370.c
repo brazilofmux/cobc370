@@ -312,7 +312,7 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH,
-       ST_REWRITE, ST_DELETE };
+       ST_REWRITE, ST_DELETE, ST_START };
 
 typedef struct {
     int  op;
@@ -350,6 +350,7 @@ typedef struct {
     int  opened_output;
     int  opened_io;    /* OPEN I-O: retrieval and update through one RPL */
     int  has_write;    /* a WRITE names this file, so an insert RPL is needed */
+    int  has_start;    /* a START names it, so the RPL needs a search argument */
     int  report;       /* the RD this FD carries, or -1 */
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
@@ -1432,7 +1433,7 @@ static int starts_statement(void)
         "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
-        "REWRITE", "DELETE", 0
+        "REWRITE", "DELETE", "START", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -1950,6 +1951,54 @@ static void parse_one_statement(void)
         return;
     }
 
+    /* START f [KEY IS {EQUAL TO | NOT LESS THAN | GREATER THAN} k]
+     *          [INVALID KEY ...]
+     * Positions the file so the next sequential READ returns the record the
+     * key phrase describes. The key named must be the RECORD KEY: that is
+     * where the RPL's search argument already points, so there is nothing to
+     * move and nothing to choose. */
+    if (is("START")) {
+        next();
+        int fi = file_index(tok.text);
+        if (fi < 0) die("START names something that is not a file");
+        if (!files[fi].vsam) die("START is implemented for VSAM files only");
+        next();
+        files[fi].has_start = 1;
+        Stmt *st = new_stmt(ST_START);
+        st->dst = fi;
+        st->src = 0;                         /* 0 KEQ, 1 KGE */
+        if (is("KEY")) {
+            next(); if (is("IS")) next();
+            if (is("=") || is("EQUAL")) {
+                st->src = 0; next(); if (is("TO")) next();
+            } else if (is(">")) {
+                die("START KEY IS GREATER THAN is not implemented yet");
+            } else if (is(">=")) {
+                st->src = 1; next();
+            } else if (is("NOT")) {
+                next();
+                if (!is("<") && !is("LESS")) die("START KEY IS NOT what?");
+                next(); if (is("THAN")) next();
+                st->src = 1;
+            } else if (is("GREATER")) {
+                next(); if (is("THAN")) next();
+                if (!is("OR")) die("START KEY IS GREATER THAN is not implemented yet");
+                next(); expect("EQUAL"); if (is("TO")) next();
+                st->src = 1;
+            } else die("START KEY IS what?");
+            int k = consume_sym();
+            if (k != files[fi].key_sym)
+                die("START must name the RECORD KEY; generic keys are not "
+                    "implemented yet");
+        }
+        st->lab1 = ++nlabel;                 /* INVALID KEY */
+        st->lab2 = ++nlabel;                 /* continue */
+        if (is("INVALID")) { next(); expect("KEY"); parse_stmt_list(1); }
+        else eat_period();
+        new_stmt(ST_LABEL)->dst = st->lab2;
+        return;
+    }
+
     if (is("INITIATE") || is("TERMINATE")) {
         int init = is("INITIATE");
         next();
@@ -2461,6 +2510,15 @@ static const VsFbk vs_read_dir[] = {
  * which verb it is generating, so it can assemble both control blocks and
  * pick -- no runtime call, and no window in which a failed MODCB leaves the
  * RPL set wrong. */
+/* Positioning. Feedback 16 is no record with that key; 4 is no record at or
+ * after it, which is the same answer to the same question when the key phrase
+ * was NOT LESS THAN. COBOL calls both INVALID KEY, status 23. */
+static const VsFbk vs_start[] = {
+    {  4, "23", "nothing at or after the key" },
+    { 16, "23", "no such record" },
+    {0, NULL, NULL}
+};
+
 static const char *rpl_name(const File *f, int inserting, char *buf, size_t n)
 {
     snprintf(buf, n, "%s%c", f->label,
@@ -3572,6 +3630,42 @@ static void generate(void)
             asm_line("", "PUT", b, "");
             break;
         }
+        case ST_START: {
+            File *f = &files[st->dst];
+            char sle[16], slc[16];
+            snprintf(sle, sizeof sle, "L%04d", st->lab1);
+            snprintf(slc, sizeof slc, "L%04d", st->lab2);
+            snprintf(b, sizeof b, " START %s", f->name);
+            asm_comment(b);
+            char sn[10]; rpl_name(f, 0, sn, sizeof sn);
+            /* KEQ and KGE are the same field of the same RPL, and the RPL that
+             * is positioned has to be the one the following READ uses -- VSAM
+             * keeps position per RPL. So this is the one place a second
+             * control block cannot stand in for a runtime change, and MODCB
+             * earns its keep. It runs once per START, not once per record.
+             *
+             * A MODCB that fails takes the INVALID KEY path. The feedback code
+             * decoded there will be whatever the RPL last held rather than a
+             * reason for this failure, which is worth knowing but not worth
+             * machinery: MODCB against a control block the assembler built
+             * cannot fail for any reason a COBOL program can cause. */
+            snprintf(b, sizeof b, "RPL=%s,OPTCD=(%s)", sn,
+                     st->src ? "KGE" : "KEQ");
+            asm_line("", "MODCB", b, st->src ? "not less than" : "equal to");
+            asm_line("", "LTR", "15,15", "");
+            asm_line("", "BNZ", sle, "");
+            snprintf(b, sizeof b, "RPL=%s", sn);
+            asm_line("", "POINT", b, "position by key");
+            asm_line("", "LTR", "15,15", "positioned?");
+            asm_line("", "BNZ", sle, "");
+            gen_vsam_status(f, sn, vs_start);
+            asm_line("", "B", slc, "");
+            asm_line(sle, "DS", "0H", "INVALID KEY");
+            reset_bases();
+            gen_vsam_status(f, sn, vs_start);
+            reset_bases();
+            break;
+        }
         case ST_REWRITE:
         case ST_DELETE: {
             File *f = &files[st->dst];
@@ -4102,7 +4196,7 @@ static void generate(void)
              * inside the record area, exactly where RECORD KEY says it does,
              * which is also where VSAMIOS points ARG. */
             char keyarg[80] = "";
-            if (f->access == 1) {
+            if (f->access == 1 || f->has_start) {
                 const Sym *k = &syms[f->key_sym];
                 snprintf(keyarg, sizeof keyarg, "ARG=%s,KEYLEN=%d,",
                          k->label, k->bytes);

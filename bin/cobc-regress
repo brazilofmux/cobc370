@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="ksdsnatl ksdsnat ksdsnatu ksdsnatr isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 pass=0; fail=0
 
@@ -40,11 +40,12 @@ for t in $TESTS; do
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
         case "$t" in isamseq|isamrnd)
             printf '//GO.GLACCT DD  DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003\n' ;;
-        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr)
+        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr|ksdsnats)
             # The VSAM trio is stateful and runs in this order: ksdsnatl loads
             # the cluster, ksdsnat reads back what it wrote, ksdsnatu updates
-            # it in place and ksdsnatr adds and deletes by key. The last two
-            # leave the cluster changed, which is why
+            # it in place, ksdsnatr adds and deletes by key. ksdsnats only
+            # reads, so it sits with the readers; the two that change the
+            # cluster come last, which is why
             # the cluster changed, and the next pass starts by loading it. The
             # cluster is defined REUSE, so the load empties it at OPEN OUTPUT
             # and the pair can be re-run any number of times without the
