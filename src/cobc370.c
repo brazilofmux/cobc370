@@ -240,6 +240,8 @@ typedef struct {
     int  is_88;       /* condition name: no storage, tests its parent */
     int  parent;
     int  gparent;     /* enclosing group, -1 at 01/77 -- for OF/IN qualification */
+    int  linkage;     /* declared in the LINKAGE SECTION: storage belongs to the caller */
+    int  link_area;   /* which linkage 01 it sits in, so it gets the right base */
     char cvalue[MAXTOK];
     int  cvalue_len, cvalue_str;
 } Sym;
@@ -306,7 +308,7 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
-       ST_INITIATE, ST_GENERATE, ST_TERMINATE };
+       ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL };
 
 typedef struct {
     int  op;
@@ -419,6 +421,16 @@ static int para_index(const char *n)
 #define MAXSTMT 512
 static Stmt stmts[MAXSTMT];
 static int nstmt;
+
+/* Each LINKAGE SECTION 01 is a separate area: the caller owns the storage and
+ * passes its address, so offsets restart at 0 and it gets a DSECT of its own
+ * plus a cell holding whatever address arrived in the parameter list. */
+#define MAXLINK 16
+static int nlinkarea;
+static int link_root[MAXLINK];      /* the 01 sym for each area */
+static int using_parm[MAXLINK];     /* PROCEDURE DIVISION USING, in order */
+static int nusing;
+static int is_subprogram;
 
 static int lookup(const char *n)
 {
@@ -705,6 +717,7 @@ static void parse_data_division(void)
     next(); expect("DIVISION"); expect(".");
     if (is("FILE")) { next(); expect("SECTION"); expect("."); }
     else if (is("WORKING-STORAGE")) { next(); expect("SECTION"); expect("."); }
+    else if (is("LINKAGE")) { next(); expect("SECTION"); expect("."); }
     else { while (!tok.eof && !is("PROCEDURE")) next(); return; }
     int cur_file = -1;
 
@@ -714,7 +727,21 @@ static void parse_data_division(void)
     int redef_resume = -1, redef_limit = -1;
     int cursor = 0;
 
+    int in_linkage = is("LINKAGE") || 0;
     while (!tok.eof && !is("PROCEDURE")) {
+        if (is("LINKAGE")) {
+            next(); expect("SECTION"); expect(".");
+            while (sp > 0) {
+                Sym *g = &syms[stack[--sp]];
+                g->elem = cursor - g->offset;
+                if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
+                else g->bytes = g->elem;
+            }
+            if (!in_linkage && cursor > wslen) wslen = cursor;
+            in_linkage = 1;
+            cursor = 0;
+            continue;
+        }
         if (is("WORKING-STORAGE")) {
             next(); expect("SECTION"); expect(".");
             while (sp > 0) {
@@ -848,11 +875,15 @@ static void parse_data_division(void)
                 if (g->occurs > 0) { g->bytes = g->elem * g->occurs; cursor = g->offset + g->bytes; }
                 else g->bytes = g->elem;
             }
-            /* A group at 01 never ran through the elementary path that
-               advances wslen, so record its extent before starting the next
-               01 -- otherwise the next item is laid down on top of it. */
-            if (cursor > wslen) wslen = cursor;
-            cursor = wslen;                 /* 01 items start a fresh area */
+            if (in_linkage) {
+                cursor = 0;                 /* the caller owns this storage */
+            } else {
+                /* A group at 01 never ran through the elementary path that
+                   advances wslen, so record its extent before starting the next
+                   01 -- otherwise the next item is laid down on top of it. */
+                if (cursor > wslen) wslen = cursor;
+                cursor = wslen;             /* 01 items start a fresh area */
+            }
         }
 
         if (nsym >= MAXSYM) die("too many data items");
@@ -866,6 +897,14 @@ static void parse_data_division(void)
         for (int k = sp - 1; k >= 0; k--)
             if (syms[stack[k]].alias) { sy->alias = 1; break; }
         sy->gparent = sp ? stack[sp-1] : -1;
+        sy->linkage = in_linkage;
+        if (in_linkage) {
+            if (sp == 0) {                  /* a new 01: a new area */
+                if (nlinkarea >= MAXLINK) die("too many LINKAGE SECTION items");
+                sy->link_area = nlinkarea;
+                link_root[nlinkarea++] = nsym;
+            } else sy->link_area = syms[stack[0]].link_area;
+        }
         sy->level = level;
         if (strlen(tok.text) > 30) die("data name too long");
         if (!strcmp(tok.text, "FILLER")) snprintf(sy->name, sizeof sy->name, "FILL%04d", nsym);
@@ -1024,7 +1063,7 @@ static void parse_data_division(void)
         }
         if (redef_limit >= 0 && cursor > redef_limit)
             die("a REDEFINES may not be longer than the item it redefines");
-        if ((level == 1 || level == 77) && cursor > wslen) wslen = cursor;
+        if (!in_linkage && (level == 1 || level == 77) && cursor > wslen) wslen = cursor;
         if (cur_file >= 0 && level == 1 && files[cur_file].rec_sym < 0) {
             files[cur_file].rec_sym = nsym;
             files[cur_file].reclen = sy->bytes;
@@ -1615,6 +1654,34 @@ static void parse_one_statement(void)
         return;
     }
 
+    if (is("CALL")) {
+        /* ANS COBOL has only CALL 'literal', which the linkage editor resolves
+         * -- there is no CALL identifier and so nothing to decide at compile
+         * time. Dynamic loading is what the corpus's DYNALOAD routine provides
+         * at run time, and DYNALOAD is itself reached by an ordinary static
+         * call like any other subroutine. */
+        next();
+        if (!tok.literal)
+            die("CALL needs a literal program name; ANS COBOL has no CALL "
+                "identifier -- that is what DYNALOAD is for");
+        if (tok.len < 1 || tok.len > 8)
+            die("a called program name is 1 to 8 characters");
+        Stmt *st = new_stmt(ST_CALL);
+        memcpy(st->para, tok.text, (size_t)tok.len + 1);
+        next();
+        if (is("USING")) {
+            next();
+            while (!tok.eof && !is(".") && !starts_statement()) {
+                if (st->ndop >= 8) die("too many CALL arguments");
+                st->dop[st->ndop].sym = consume_sym();
+                st->dop[st->ndop].litlen = 0;
+                st->ndop++;
+            }
+        }
+        eat_period();
+        return;
+    }
+
     if (is("GOBACK")) {                 /* what the corpus uses, not STOP RUN */
         next();
         new_stmt(ST_STOP);
@@ -1674,7 +1741,22 @@ static void parse_stmt_list(int allow_else)
 static void parse_procedure(void)
 {
     lex_parens = 1;
-    expect("PROCEDURE"); expect("DIVISION"); expect(".");
+    expect("PROCEDURE"); expect("DIVISION");
+    if (is("USING")) {
+        next();
+        is_subprogram = 1;
+        while (!is(".")) {
+            if (nusing >= MAXLINK) die("too many USING parameters");
+            int i = consume_sym();
+            if (!syms[i].linkage)
+                die("PROCEDURE DIVISION USING names an item that is not in the "
+                    "LINKAGE SECTION");
+            if (syms[i].level != 1)
+                die("PROCEDURE DIVISION USING needs an 01-level item");
+            using_parm[nusing++] = i;
+        }
+    }
+    expect(".");
     int stopped = 0;
     while (!tok.eof) {
         at_period = 0;
@@ -1717,7 +1799,7 @@ static void parse_procedure(void)
 #define CHUNK 4096
 #define NBASE 3
 static const int base_reg[NBASE] = { 8, 9, 10 };
-static int base_chunk[NBASE] = { -1, -1, -1 };
+static int base_chunk[NBASE] = { -9999, -9999, -9999 };
 static int base_next;
 
 static void reset_bases(void)
@@ -1725,33 +1807,50 @@ static void reset_bases(void)
     char b[64]; int j = 0, any = 0;
     b[0] = 0;
     for (int i = 0; i < NBASE; i++) {
-        if (base_chunk[i] < 0) continue;
+        if (base_chunk[i] == -9999) continue;
         j += snprintf(b + j, sizeof b - j, "%s%d", any ? "," : "", base_reg[i]);
         any = 1;
-        base_chunk[i] = -1;
+        base_chunk[i] = -9999;
     }
     if (any) asm_line("", "DROP", b, "");
     base_next = 0;
 }
 
-static void need_base(int chunk)
+/* Areas are numbered: 0.. are WORKING-STORAGE chunks, and -(n+1) is LINKAGE
+ * area n, whose base cell holds an address the caller supplied rather than one
+ * of our own. Same mechanism either way -- load a cell, USING, DROP on reset. */
+#define LINK_AREA(n) (-((n) + 1))
+
+static void need_base(int area)
 {
     char b[64];
-    for (int i = 0; i < NBASE; i++) if (base_chunk[i] == chunk) return;
+    for (int i = 0; i < NBASE; i++) if (base_chunk[i] == area) return;
     int slot = base_next % NBASE;
     base_next++;
-    if (base_chunk[slot] >= 0) {
+    if (base_chunk[slot] != -9999) {
         snprintf(b, sizeof b, "%d", base_reg[slot]);
         asm_line("", "DROP", b, "");
     }
-    snprintf(b, sizeof b, "%d,BL%04d", base_reg[slot], chunk);
-    asm_line("", "L", b, "base locator");
-    snprintf(b, sizeof b, "WSC%04d,%d", chunk, base_reg[slot]);
-    asm_line("", "USING", b, "");
-    base_chunk[slot] = chunk;
+    if (area < 0) {
+        int a = -area - 1;
+        snprintf(b, sizeof b, "%d,PBL%04d", base_reg[slot], a);
+        asm_line("", "L", b, "parameter address");
+        snprintf(b, sizeof b, "LS%04d,%d", a, base_reg[slot]);
+        asm_line("", "USING", b, "");
+    } else {
+        snprintf(b, sizeof b, "%d,BL%04d", base_reg[slot], area);
+        asm_line("", "L", b, "base locator");
+        snprintf(b, sizeof b, "WSC%04d,%d", area, base_reg[slot]);
+        asm_line("", "USING", b, "");
+    }
+    base_chunk[slot] = area;
 }
 
-static void need_sym_base(const Sym *sy) { need_base(sy->offset / CHUNK); }
+static void need_sym_base(const Sym *sy)
+{
+    if (sy->linkage) need_base(LINK_AREA(sy->link_area));
+    else             need_base(sy->offset / CHUNK);
+}
 
 /* ED patterns, emitted as hex constants. */
 static struct { char label[16]; unsigned char b[PIC_MAXMASK]; int len; } mconsts[64];
@@ -2611,6 +2710,20 @@ static void generate(void)
     asm_line("", "LA", "0,SAVEAREA", "");
     asm_line("", "ST", "0,8(13)", "forward chain from caller");
     asm_line("", "LR", "13,0", "our save area is now current");
+    if (nusing) {
+        /* OS/360 linkage: R1 points at a list of fullword addresses, one per
+         * argument, and R1 has survived the entry sequence untouched. Each is
+         * stashed in that parameter's base cell; from then on a LINKAGE item is
+         * addressed exactly like WORKING-STORAGE, just off a different cell. */
+        asm_comment(" PROCEDURE DIVISION USING: the caller's parameter list");
+        for (int k = 0; k < nusing; k++) {
+            char b2[64];
+            snprintf(b2, sizeof b2, "0,%d(0,1)", k * 4);
+            asm_line("", "L", b2, "");
+            snprintf(b2, sizeof b2, "0,PBL%04d", syms[using_parm[k]].link_area);
+            asm_line("", "ST", b2, syms[using_parm[k]].name);
+        }
+    }
 
     int ndlit = 0, cur_para = -1, nret = 0;
     genlabel = nlabel;
@@ -2893,9 +3006,40 @@ static void generate(void)
             }
             break;
         }
+        case ST_CALL: {
+            char pl[16], vc[16];
+            snprintf(pl, sizeof pl, "PL%03d", i);
+            snprintf(vc, sizeof vc, "VC%03d", i);
+            snprintf(b, sizeof b, " CALL '%s'", st->para);
+            asm_comment(b);
+            for (int k = 0; k < st->ndop; k++) {
+                const Sym *a = &syms[st->dop[k].sym];
+                char fa[64];
+                need_sym_base(a);
+                field_ref_m(a, NULL, FR_RX, a->bytes, 6, fa, sizeof fa);
+                snprintf(b, sizeof b, "0,%s", fa);
+                asm_line("", "LA", b, a->name);
+                snprintf(b, sizeof b, "0,%s+%d", pl, k * 4);
+                asm_line("", "ST", b, "");
+            }
+            if (st->ndop) {
+                /* OS/360 convention: the high bit of the last address marks the
+                 * end of the list, which is how the callee knows where to stop. */
+                snprintf(b, sizeof b, "%s+%d,X'80'", pl, (st->ndop - 1) * 4);
+                asm_line("", "OI", b, "high bit marks the last argument");
+            }
+            snprintf(b, sizeof b, "1,%s", pl);
+            asm_line("", "LA", b, "R1 -> parameter list");
+            snprintf(b, sizeof b, "15,%s", vc);
+            asm_line("", "L", b, "");
+            asm_line("", "BALR", "14,15", "static call, resolved by the linkage editor");
+            break;
+        }
         case ST_STOP:
-            asm_comment(" STOP RUN");
-            if (has_display) {
+            asm_comment(is_subprogram ? " GOBACK to the caller" : " STOP RUN");
+            /* A subprogram must not close the runtime's SYSOUT: the caller may
+             * still be using it, and control is coming back here again. */
+            if (has_display && !is_subprogram) {
                 asm_line("", "L", "15,VTERM", "close anything the runtime opened");
                 asm_line("", "BALR", "14,15", "");
             }
@@ -3223,6 +3367,28 @@ static void generate(void)
             asm_line(lab, "DC", b, "");
         }
     }
+    {
+        int any = 0;
+        for (int i = 0; i < nstmt; i++) {
+            if (stmts[i].op != ST_CALL) continue;
+            char lab[16];
+            if (!any) { asm_comment(" CALL parameter lists and entry points"); any = 1; }
+            snprintf(lab, sizeof lab, "PL%03d", i);
+            snprintf(b, sizeof b, "%dF", stmts[i].ndop ? stmts[i].ndop : 1);
+            asm_line(lab, "DS", b, "");
+            snprintf(lab, sizeof lab, "VC%03d", i);
+            snprintf(b, sizeof b, "V(%s)", stmts[i].para);
+            asm_line(lab, "DC", b, "");
+        }
+    }
+    if (nlinkarea) {
+        asm_comment(" one cell per LINKAGE 01, filled in from the parameter list");
+        for (int i = 0; i < nlinkarea; i++) {
+            char lab[16];
+            snprintf(lab, sizeof lab, "PBL%04d", i);
+            asm_line(lab, "DC", "A(0)", syms[link_root[i]].name);
+        }
+    }
     /* Must sit in the program CSECT: it is addressed off the code base. */
     if (has_display) asm_line("DSPBUF", "DS", "CL121", "DISPLAY line");
     asm_line("SAVEAREA", "DS", "18F", "");
@@ -3253,6 +3419,7 @@ static void generate(void)
             Sym *sy = &syms[i];
             char cmt[96];
             if (sy->is_88) continue;
+            if (sy->linkage) continue;      /* described by a DSECT, not stored */
             if (sy->alias) {
                 /* Shares storage with what it redefines, so it defines no bytes
                  * -- just a name for the same address. COBWS is the CSECT
@@ -3355,6 +3522,38 @@ static void generate(void)
         if (wslen > at) {
             snprintf(b, sizeof b, "XL%d", wslen - at);
             asm_line("", "DS", b, "reserve the rest of the last table");
+        }
+    }
+
+    /* ---- LINKAGE SECTION: one DSECT per 01 ----
+     * These describe storage the caller owns. A DSECT reserves nothing; it just
+     * names the offsets, and the USING on the matching PBL cell supplies the
+     * address that arrived in the parameter list. */
+    for (int a = 0; a < nlinkarea; a++) {
+        char lab[16], cmt[96];
+        snprintf(lab, sizeof lab, "LS%04d", a);
+        snprintf(cmt, sizeof cmt, "%s (caller's storage)", syms[link_root[a]].name);
+        asm_line(lab, "DSECT", "", cmt);
+        int at = 0;
+        for (int i = 0; i < nsym; i++) {
+            Sym *sy = &syms[i];
+            if (!sy->linkage || sy->link_area != a || sy->is_88) continue;
+            if (sy->offset > at) {
+                snprintf(b, sizeof b, "XL%d", sy->offset - at);
+                asm_line("", "DS", b, "");
+                at = sy->offset;
+            }
+            if (sy->is_group) {
+                if (sy->elem <= 256) snprintf(b, sizeof b, "0CL%d", sy->elem);
+                else                 snprintf(b, sizeof b, "0C");
+                snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
+                asm_line(sy->label, "DS", b, cmt);
+                continue;
+            }
+            snprintf(b, sizeof b, "CL%d", sy->elem * (sy->occurs ? sy->occurs : 1));
+            snprintf(cmt, sizeof cmt, "%s", sy->name);
+            asm_line(sy->label, "DS", b, cmt);
+            at = sy->offset + sy->bytes;
         }
     }
 

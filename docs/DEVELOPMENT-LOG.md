@@ -998,6 +998,64 @@ Regression: 21 passed, 0 failed. Negative fixtures now include `bad-ambiguous`.
 `LINKAGE SECTION` is now the whole story: 12 of the 20 remaining programs stop
 there, and `CALL` is its other half.
 
+## Slice 20: LINKAGE SECTION, PROCEDURE DIVISION USING, and CALL
+
+Callable subprograms, which is the feature ANS COBOL's absence of made DYNALOAD
+necessary in the first place.
+
+**Static or dynamic?** Neither deduced nor assumed: ANS COBOL has *only*
+`CALL 'literal'`, which the linkage editor resolves. There is no `CALL
+identifier` form to distinguish — that arrived with VS COBOL, where the literal
+form is static, the identifier form dynamic, and the `DYNAM` option forces all
+calls dynamic. Every `CALL` in the corpus is `CALL 'DYNALOAD' USING …`, and
+DYNALOAD's own header spells out the consequence: *"it is necessary to link the
+object module for the DYNALOAD routine to each calling program."* So the
+compiler always emits a static `V`-con and never needs to know DYNALOAD is
+special; the dynamism is entirely DYNALOAD's, at run time.
+
+**Callee.** Each LINKAGE 01 becomes a DSECT plus a `PBL` cell holding whatever
+address arrived in the parameter list. The entry sequence lifts them out of R1,
+which survives the prologue untouched:
+
+    L     0,0(0,1)
+    ST    0,PBL0000           LS-IN
+    L     0,4(0,1)
+    ST    0,PBL0001           LS-OUT
+
+After that a LINKAGE item is addressed exactly like WORKING-STORAGE — load a
+cell, `USING`, `DROP` on reset. The base machinery needed only one change:
+areas are now numbered, with `0..` a WS chunk and `-(n+1)` a LINKAGE area.
+
+**Caller.** The parameter list is built at run time rather than assembled, so an
+argument may itself be a LINKAGE item, with the OS/360 high bit marking the last
+entry. `GOBACK` in a subprogram returns without closing the runtime's SYSOUT,
+which the caller may still be using.
+
+Verified by `bin/cobc-call-roundtrip`: two programs compiled separately by
+cobc370, link-edited together, called twice with different data, parameters
+passed both ways.
+
+    RESULT 00001042 TAG [DONE]
+    RESULT 00001007 TAG [DONE]
+
+Regression: 22 passed, 0 failed.
+
+### Corpus status
+
+Still 10 of 30 — but the LINKAGE blocker is gone entirely and all 12 programs
+that stopped there moved on. What is left is a long tail rather than one wall:
+
+| Blocker | Programs |
+|---|---|
+| `GIVING` | 4 |
+| `expected TO` (an ADD/MOVE form not yet parsed) | 4 |
+| `IF NOT <condition-name>` | 3 |
+| `INDEXED BY` / `SEARCH ALL` | 2 |
+| `WRITE FROM`, `READ INTO`, and five one-offs | 1 each |
+
+`GIVING` is the largest and appears in 13 programs overall, so it will keep
+turning up behind whatever else is fixed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

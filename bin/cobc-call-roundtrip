@@ -1,0 +1,54 @@
+#!/bin/bash
+# Prove CALL / LINKAGE SECTION end to end: two programs compiled separately by
+# cobc370, link-edited together, passing parameters both ways.
+#
+# Like the ISAM round trip this cannot live in cobc-regress, which builds one
+# ASM/LKED/GO job per test. The subprogram has to be assembled on its own and
+# its object fed to the caller's link-edit step.
+set -u
+. "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
+CC="$(cd "$(dirname "$0")/../cobol/cc" && pwd)"
+WORK=${TMPDIR:-/tmp}/cobc-call; mkdir -p "$WORK"
+
+"$CC/cobc370" "$CC/tests/subadd.cbl"   -o "$CC/tests/subadd.asm"   || die "subadd did not compile"
+"$CC/cobc370" "$CC/tests/maincall.cbl" -o "$CC/tests/maincall.asm" || die "maincall did not compile"
+
+{
+cat <<'EOF'
+//CALLTEST JOB (5161A020,1A11),'CALL LINKAGE',
+//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1)
+//* 1. assemble the subprogram alone and keep its object module.
+//*    PARM.ASM=OBJ is not optional: without it ASMFC writes nothing to
+//*    SYSGO and the link-edit silently leaves V(SUBADD) unresolved, which
+//*    NCAL reports only as RC=4 and then abends S0C1 at run time.
+//S1      EXEC ASMFC,PARM.ASM='OBJ,NODECK'
+//ASM.SYSGO DD  DSN=&&SUBOBJ,DISP=(NEW,PASS),UNIT=SYSDA,
+//             SPACE=(80,(200,50))
+//ASM.SYSIN DD  *
+EOF
+cat "$CC/tests/subadd.asm"
+cat <<'EOF'
+/*
+//* 2. assemble the caller, and feed the subprogram's object to the linker
+//*    through the proc's DDNAME=SYSIN placeholder.
+//S2      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$CC/tests/maincall.asm"
+cat <<'EOF'
+/*
+//LKED.SYSIN DD  DSN=&&SUBOBJ,DISP=(OLD,DELETE)
+//GO.SYSOUT  DD  SYSOUT=Z
+EOF
+} > "$WORK/calltest.jcl"
+
+"$(dirname "$0")/tk5-run" "$WORK/calltest.jcl" "$WORK/calltest.out" >/dev/null 2>&1
+grep -a "^RESULT" "$WORK/calltest.out" > "$WORK/got.txt"
+
+exp="$CC/tests/callroundtrip.expected"
+if [ ! -r "$exp" ]; then cp "$WORK/got.txt" "$exp"; say "recorded oracle -> $exp"; exit 0; fi
+if diff -q "$exp" "$WORK/got.txt" >/dev/null; then
+    say "call roundtrip: ok (separate compile, linked, parameters both ways)"
+    exit 0
+fi
+say "call roundtrip: FAILED"; diff "$exp" "$WORK/got.txt" | head -20; exit 1

@@ -96,6 +96,9 @@ if [ $# -eq 0 ]; then
     if "$(dirname "$0")/cobc-isam-roundtrip" >/dev/null 2>&1
     then say "  isam-roundtrip: ok (QISAM load, then read back)"; pass=$((pass+1))
     else say "  isam-roundtrip: FAILED"; fail=$((fail+1)); fi
+    if "$(dirname "$0")/cobc-call-roundtrip" >/dev/null 2>&1
+    then say "  call-roundtrip: ok (separate compile, linked, parameters both ways)"; pass=$((pass+1))
+    else say "  call-roundtrip: FAILED"; fail=$((fail+1)); fi
 fi
 
 say ""
