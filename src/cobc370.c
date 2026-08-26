@@ -1313,6 +1313,42 @@ static int relop(int *op)
     return 0;
 }
 
+static Node *opt_subscript(void);
+
+/* GIVING turns an arithmetic verb into an assignment, so it is built as an
+ * expression tree and handed to the COMPUTE path -- which already does the
+ * scaling, the packed arithmetic and the store. Only the forms the corpus uses
+ * are accepted: no REMAINDER, and ROUNDED only where COMPUTE already takes it.
+ */
+static Node *operand_node(const char *save, char q[][31], int nq, Node *sub)
+{
+    Node *n;
+    if (is_numeric_literal(save)) {
+        n = node(N_LIT);
+        const char *dot = strchr(save, '.');
+        n->litscale = dot ? (int)strlen(dot + 1) : 0;
+        scale_literal(save, n->litscale, n->lit, sizeof n->lit);
+        return n;
+    }
+    n = node(N_SYM);
+    n->sym = resolve_sym(save, q, nq);
+    n->sub = sub;
+    return n;
+}
+
+static Node *binop(int kind, Node *l, Node *r)
+{
+    Node *t = node(kind); t->l = l; t->r = r; return t;
+}
+
+/* dst [ROUNDED] for the GIVING target, then the expression. */
+static void giving_target(Stmt *st)
+{
+    st->dst = consume_sym();
+    st->dsub = opt_subscript();
+    if (is("ROUNDED")) { st->rounded = 1; next(); }
+}
+
 static Cond *parse_relation(void)
 {
     if (is("(")) { next(); Cond *c = parse_cond(); expect(")"); return c; }
@@ -1483,17 +1519,68 @@ static void parse_one_statement(void)
         char squal2[MAXQUAL][31];
         int snq2 = is_numeric_literal(save) ? 0 : consume_quals(squal2);
         Node *ssub2 = opt_subscript();
+        if (!sub && !is("TO")) {
+            /* ADD a b [c...] GIVING d -- no TO, so every operand is a source. */
+            Node *e = operand_node(save, squal2, snq2, ssub2);
+            while (!tok.eof && !is("GIVING") && !is(".")) e = binop(N_ADD, e, parse_expr());
+            expect("GIVING");
+            st->op = ST_COMPUTE;
+            st->src = -1;
+            giving_target(st);
+            st->expr = e;
+            eat_period();
+            return;
+        }
         expect(sub ? "FROM" : "TO");
         st->dst = consume_sym();
         st->dsub = opt_subscript();
         st->ssub = ssub2;
-        if (is("GIVING")) die("GIVING is not implemented yet");
+        if (is("GIVING")) {
+            /* ADD a TO b GIVING c  /  SUBTRACT a FROM b GIVING c: what was
+             * parsed as the destination is really the second operand, and the
+             * true destination follows GIVING. */
+            next();
+            Node *lhs = node(N_SYM);
+            lhs->sym = st->dst; lhs->sub = st->dsub;
+            Node *rhs = operand_node(save, squal2, snq2, ssub2);
+            st->op = ST_COMPUTE;
+            st->src = -1; st->imm = 0; st->dsub = NULL;
+            giving_target(st);
+            st->expr = sub ? binop(N_SUB, lhs, rhs) : binop(N_ADD, lhs, rhs);
+            eat_period();
+            return;
+        }
         if (is_numeric_literal(save)) {
             const char *dot = strchr(save, '.');
             st->imm = 1;
             st->immscale = dot ? (int)strlen(dot + 1) : 0;
             scale_literal(save, st->immscale, st->immdigits, sizeof st->immdigits);
         } else st->src = resolve_sym(save, squal2, snq2);
+        eat_period();
+        return;
+    }
+
+    if (is("MULTIPLY") || is("DIVIDE")) {
+        int div = is("DIVIDE");
+        next();
+        Node *a = parse_expr();
+        int into = 0;
+        if (div) {
+            if (is("INTO")) { into = 1; next(); }
+            else if (is("BY")) next();
+            else die("DIVIDE wants INTO or BY");
+        } else expect("BY");
+        Node *b = parse_expr();
+        if (!is("GIVING"))
+            die(div ? "DIVIDE without GIVING is not implemented yet"
+                    : "MULTIPLY without GIVING is not implemented yet");
+        next();
+        Stmt *st = new_stmt(ST_COMPUTE);
+        giving_target(st);
+        if (is("REMAINDER")) die("DIVIDE ... REMAINDER is not implemented yet");
+        /* DIVIDE a INTO b  is  b / a;  DIVIDE a BY b  is  a / b. */
+        st->expr = div ? (into ? binop(N_DIV, b, a) : binop(N_DIV, a, b))
+                       : binop(N_MUL, a, b);
         eat_period();
         return;
     }

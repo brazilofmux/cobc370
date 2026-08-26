@@ -1056,6 +1056,48 @@ that stopped there moved on. What is left is a long tail rather than one wall:
 `GIVING` is the largest and appears in 13 programs overall, so it will keep
 turning up behind whatever else is fixed.
 
+## Slice 21: GIVING
+
+`ADD a b GIVING c`, `ADD a TO b GIVING c`, `SUBTRACT a FROM b GIVING c`,
+`MULTIPLY a BY b GIVING c`, `DIVIDE a INTO b GIVING c` and `DIVIDE a BY b
+GIVING c`. MULTIPLY and DIVIDE had no parser at all before this.
+
+GIVING turns an arithmetic verb into an assignment, so each form is built as an
+expression tree and handed to the **COMPUTE** path, which already does the
+scaling, the packed arithmetic, the rescale and the store. The whole slice is
+parsing; there is no new code generation.
+
+The awkward part is that `ADD` has two shapes. `ADD a TO b GIVING c` parses like
+the ordinary in-place form right up to the destination, at which point the item
+just parsed turns out to be the second *operand* and the real destination
+follows GIVING. `ADD a b GIVING c` has no `TO` at all and every operand is a
+source. Both are handled without disturbing the non-GIVING path, which still
+emits the simpler `ST_ADD`/`ST_SUB` code.
+
+Not implemented, because the corpus has neither: `REMAINDER`, and `ROUNDED`
+anywhere COMPUTE does not already accept it.
+
+Regression: 23 passed, 0 failed.
+
+### Corpus status
+
+**10 → 15 of 30.** Half the corpus compiles. This one feature cleared two
+entries from the blocker table at once — the four programs reported as
+`GIVING is not implemented yet` and the four reported as `expected TO`, which
+were the same feature seen from the two different `ADD` shapes.
+
+| Blocker | Programs |
+|---|---|
+| `IF NOT <condition-name>` | 3 |
+| `WRITE FROM` | 2 |
+| `MOVE SPACES` to an item over 127 bytes | 2 |
+| `INDEXED BY` / `SEARCH ALL` | 2 |
+| `READ INTO` and five one-offs | 1 each |
+
+The `MOVE SPACES` one is **our own limit, not the language's**: the fill is
+built as a constant in a `MAXTOK` buffer. Filling with `MVI` plus a propagating
+`MVC` would drop the limit entirely and remove the constant as well.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
