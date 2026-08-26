@@ -232,7 +232,7 @@ D0004    DC    CL16' '             RPT0 PIC X(16)
 D0005    DC    CL11' '             RPT1 PIC X(11)
 D0006    DC    CL3' '              RPT2 PIC X(3)
 D0007    DC    CL6' '              RPT3 PIC X(6)
-D0008    DC    ZL5'0'              RPT4 PIC 9(5)v0 DISP
+D0008    DC    CL5'00000'          RPT4 PIC 9(5)v0 DISP
 D0009    DC    CL14' '             RPT5 edited, 14 chars
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

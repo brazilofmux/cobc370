@@ -81,7 +81,7 @@ D0002    DC    PL5'0'              TA PIC S9(9)v2 COMP-3
 D0003    DC    PL5'0'              TB PIC S9(9)v2 COMP-3
          DS    XL40                reserve the rest of a table
 D0004    DC    H'3'                IDX PIC S9(4)v0 COMP
-D0005    DC    ZL9'000'            OUT-NUM PIC 9(9)v2 DISP
+D0005    DC    CL9'000000000'      OUT-NUM PIC 9(9)v2 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

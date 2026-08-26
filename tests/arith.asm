@@ -159,11 +159,11 @@ D0003    DC    F'1000'             B1 PIC S9(7)v0 COMP
 D0004    DC    F'250'              B2 PIC S9(7)v0 COMP
 D0005    DC    ZL7'9999'           Z1 PIC S9(7)v2 DISP
 D0006    DC    PL2'00'             SC PIC S9(2)v1 COMP-3
-D0007    DC    ZL9'000'            R1 PIC 9(9)v2 DISP
-D0008    DC    ZL9'0'              R2 PIC 9(9)v0 DISP
-D0009    DC    ZL9'000'            R3 PIC 9(9)v2 DISP
-D0010    DC    ZL9'000'            R4 PIC 9(9)v2 DISP
-D0011    DC    ZL4'00'             R5 PIC 9(4)v1 DISP
+D0007    DC    CL9'000000000'      R1 PIC 9(9)v2 DISP
+D0008    DC    CL9'000000000'      R2 PIC 9(9)v0 DISP
+D0009    DC    CL9'000000000'      R3 PIC 9(9)v2 DISP
+D0010    DC    CL9'000000000'      R4 PIC 9(9)v2 DISP
+D0011    DC    CL4'0000'           R5 PIC 9(4)v1 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

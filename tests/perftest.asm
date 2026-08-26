@@ -412,7 +412,7 @@ D0003    DC    H'0'                WS-IDX PIC S9(4)v0 COMP
 D0004    DC    F'0'                WS-TOT PIC S9(7)v0 COMP
 D0005    DC    H'0'                WS-CNT PIC S9(4)v0 COMP
 D0006    DC    CL1'N'              EOF-FLAG PIC X(1)
-D0008    DC    ZL7'0'              OUT-NUM PIC 9(7)v0 DISP
+D0008    DC    CL7'0000000'        OUT-NUM PIC 9(7)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

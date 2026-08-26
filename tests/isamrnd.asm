@@ -262,14 +262,14 @@ WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DS    0CL57               GLAC-RECORD (01 group)
 D0001    DC    CL1' '              GLAC-DELETE PIC X(1)
-D0002    DC    PL6'0'              GLAC-KEY PIC 9(10)v0 COMP-3
+D0002    DC    XL6'00000000000F'   GLAC-KEY PIC 9(10)v0 COMP-3
 D0003    DC    PL1'0'              GLAC-CRDB PIC S9(1)v0 COMP-3
 D0004    DC    CL1' '              GLAC-CLASS PIC X(1)
 D0005    DC    CL2' '              GLAC-SUBCLASS PIC X(2)
 D0006    DC    PL6'0'              GLAC-BALANCE PIC S9(11)v2 COMP-3
 D0007    DC    CL40' '             GLAC-NAME PIC X(40)
-D0008    DC    PL6'0'              WS-NOMKEY PIC 9(10)v0 COMP-3
-D0009    DC    ZL10'0'             OUT-KEY PIC 9(10)v0 DISP
+D0008    DC    XL6'00000000000F'   WS-NOMKEY PIC 9(10)v0 COMP-3
+D0009    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

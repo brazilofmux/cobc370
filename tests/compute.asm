@@ -195,13 +195,13 @@ WSC0000  EQU   COBWS               chunk origins
 D0000    DC    PL4'10000'          A PIC S9(7)v2 COMP-3
 D0001    DC    PL4'600'            B PIC S9(7)v2 COMP-3
 D0002    DC    F'7'                C PIC S9(5)v0 COMP
-D0003    DC    ZL9'000'            R1 PIC 9(9)v2 DISP
-D0004    DC    ZL9'000'            R2 PIC 9(9)v2 DISP
-D0005    DC    ZL9'000'            R3 PIC 9(9)v2 DISP
-D0006    DC    ZL9'000'            R4 PIC 9(9)v2 DISP
-D0007    DC    ZL9'000'            R5 PIC 9(9)v2 DISP
-D0008    DC    ZL9'000'            R6 PIC 9(9)v2 DISP
-D0009    DC    ZL9'000'            R7 PIC 9(9)v2 DISP
+D0003    DC    CL9'000000000'      R1 PIC 9(9)v2 DISP
+D0004    DC    CL9'000000000'      R2 PIC 9(9)v2 DISP
+D0005    DC    CL9'000000000'      R3 PIC 9(9)v2 DISP
+D0006    DC    CL9'000000000'      R4 PIC 9(9)v2 DISP
+D0007    DC    CL9'000000000'      R5 PIC 9(9)v2 DISP
+D0008    DC    CL9'000000000'      R6 PIC 9(9)v2 DISP
+D0009    DC    CL9'000000000'      R7 PIC 9(9)v2 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

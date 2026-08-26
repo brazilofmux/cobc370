@@ -130,7 +130,7 @@ WSC0000  EQU   COBWS               chunk origins
 D0000    DC    CL80' '             IN-REC PIC X(80)
 D0001    DC    CL80' '             OUT-REC PIC X(80)
 D0002    DC    F'0'                REC-COUNT PIC S9(5)v0 COMP
-D0003    DC    ZL5'0'              OUT-NUM PIC 9(5)v0 DISP
+D0003    DC    CL5'00000'          OUT-NUM PIC 9(5)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

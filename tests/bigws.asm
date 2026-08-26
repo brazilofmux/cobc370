@@ -93,7 +93,7 @@ D0001    DC    2100C' '            PAD1 PIC X(2100)
 D0002    DC    2100C' '            PAD2 PIC X(2100)
 D0003    DC    CL5' '              MSG2 PIC X(5)
 D0004    DC    F'42'               ACC PIC S9(5)v0 COMP
-D0005    DC    ZL5'0'              OUT-NUM PIC 9(5)v0 DISP
+D0005    DC    CL5'00000'          OUT-NUM PIC 9(5)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

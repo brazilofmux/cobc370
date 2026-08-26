@@ -301,6 +301,7 @@ typedef struct {
     char lit[MAXTOK];       /* DISPLAY literal */
     int  litlen;
     int  imm;               /* source is a numeric literal */
+    int  fig;               /* source is a figurative constant: FIG_SPACE/FIG_ZERO */
     char immdigits[34];     /* that literal, scaled to an integer */
     int  immscale;
     Node *expr;             /* COMPUTE */
@@ -1071,6 +1072,25 @@ static Node *parse_expr(void)
     }
 }
 
+/* Figurative constants. Expressions already handle SPACE and ZERO through
+ * parse_expr, which is why IF X = SPACES has always worked; MOVE has its own
+ * source parser and did not. LOW-VALUES and HIGH-VALUES appear in the corpus
+ * only in VALUE clauses, never as a MOVE source, so they are refused here with
+ * a message rather than half-implemented. */
+enum { FIG_NONE = 0, FIG_SPACE = 1, FIG_ZERO = 2 };
+
+static int fig_code(const char *w)
+{
+    if (!strcmp(w, "SPACE")  || !strcmp(w, "SPACES"))  return FIG_SPACE;
+    if (!strcmp(w, "ZERO")   || !strcmp(w, "ZEROS") ||
+        !strcmp(w, "ZEROES"))                          return FIG_ZERO;
+    if (!strcmp(w, "LOW-VALUE")  || !strcmp(w, "LOW-VALUES") ||
+        !strcmp(w, "HIGH-VALUE") || !strcmp(w, "HIGH-VALUES") ||
+        !strcmp(w, "QUOTE")      || !strcmp(w, "QUOTES"))
+        die("only SPACE and ZERO are implemented as a MOVE source");
+    return FIG_NONE;
+}
+
 static Stmt *new_stmt(int op)
 {
     if (nstmt >= MAXSTMT) die("too many statements");
@@ -1269,7 +1289,20 @@ static void parse_one_statement(void)
         } else if (is_numeric_literal(save)) {
             st->imm = 1; st->immscale = syms[st->dst].scale;
             scale_literal(save, syms[st->dst].scale, st->immdigits, sizeof st->immdigits);
-        } else st->src = need_sym(save);
+        } else {
+            int fg = fig_code(save);
+            const Sym *d = &syms[st->dst];
+            if (fg == FIG_ZERO && !(d->is_alpha || d->is_group)) {
+                /* ZERO into a numeric item is simply MOVE 0, so let the
+                 * existing numeric path scale and store it. */
+                st->imm = 1; st->immscale = d->scale;
+                scale_literal("0", d->scale, st->immdigits, sizeof st->immdigits);
+            } else if (fg != FIG_NONE) {
+                if (!(d->is_alpha || d->is_group))
+                    die("MOVE SPACES to a numeric item is not valid");
+                st->fig = fg;
+            } else st->src = need_sym(save);
+        }
         eat_period();
         return;
     }
@@ -1896,6 +1929,17 @@ static const char *intern_const(const char *digits)
 /* Nonnumeric constants, padded to the length the comparison or move needs. */
 static struct { char label[16]; char text[MAXTOK]; int len; } sconsts[256];
 static int nsconst;
+
+/* Right-justify a digit string in WIDTH, zero filled. COBOL truncates on the
+ * left, so an over-long value keeps its low-order digits. */
+static void zero_pad(const char *v, int width, char *out, size_t n)
+{
+    int len = (int)strlen(v);
+    if ((size_t)width + 1 > n) die("internal: VALUE too wide to pad");
+    if (len >= width) { snprintf(out, n, "%s", v + (len - width)); return; }
+    memset(out, '0', (size_t)(width - len));
+    memcpy(out + (width - len), v, (size_t)len + 1);
+}
 
 static const char *intern_str(const char *text, int len, int pad)
 {
@@ -2772,10 +2816,30 @@ static void generate(void)
             const Sym *d = &syms[st->dst];
             const char *verb = st->op == ST_MOVE ? "MOVE" :
                                st->op == ST_ADD  ? "ADD"  : "SUBTRACT";
-            if (st->imm) snprintf(b, sizeof b, " %s %s -> %s", verb, st->immdigits, d->name);
-            else         snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
+            const char *figname = st->fig == FIG_SPACE ? "SPACES" : "ZEROS";
+            if (st->fig)      snprintf(b, sizeof b, " %s %s -> %s", verb, figname, d->name);
+            else if (st->imm) snprintf(b, sizeof b, " %s %s -> %s", verb, st->immdigits, d->name);
+            else              snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
             asm_comment(b);
             if (st->op == ST_MOVE) {
+                if (st->fig) {
+                    /* Fill the whole receiving item. intern_str pads with
+                     * blanks, so a constant of exactly the right length is
+                     * built here rather than relying on the padding. */
+                    int dn = st->dsub ? d->elem : d->bytes;
+                    if (dn > 256) die("MVC is limited to 256 bytes");
+                    char fill[MAXTOK];
+                    if (dn >= (int)sizeof fill) die("item too long for MOVE SPACES");
+                    memset(fill, st->fig == FIG_SPACE ? ' ' : '0', (size_t)dn);
+                    fill[dn] = 0;
+                    const char *sl = intern_str(fill, dn, dn);
+                    char fd[64];
+                    field_ref(d, st->dsub, dn, 6, fd, sizeof fd);
+                    snprintf(b, sizeof b, "%s,%s", fd, sl);
+                    asm_line("", "MVC", b, st->fig == FIG_SPACE ? "MOVE SPACES"
+                                                               : "MOVE ZEROS");
+                    break;
+                }
                 if (st->imm == 2) {
                     if (!(d->is_alpha || d->is_group))
                         die("MOVE of a nonnumeric literal to a numeric item is "
@@ -3103,9 +3167,30 @@ static void generate(void)
                 continue;
             }
             const char *v = (sy->has_value == 1) ? sy->value : "0";
+            char digs[80], hex[96];
             switch (sy->usage) {
-            case U_DISPLAY: snprintf(b, sizeof b, "%sZL%d'%s'", dup, sy->elem, v); break;
-            case U_COMP3:   snprintf(b, sizeof b, "%sPL%d'%s'", dup, sy->elem, v); break;
+            case U_DISPLAY:
+                /* A Z constant signs the last byte's zone C for a positive
+                 * value. An UNSIGNED item must carry F there, or DISPLAY shows
+                 * the final digit as a letter -- 12345 prints as 1234E -- and
+                 * any byte-wise comparison against it fails. */
+                if (sy->is_signed) snprintf(b, sizeof b, "%sZL%d'%s'", dup, sy->elem, v);
+                else {
+                    zero_pad(v, sy->elem, digs, sizeof digs);
+                    snprintf(b, sizeof b, "%sCL%d'%s'", dup, sy->elem, digs);
+                }
+                break;
+            case U_COMP3:
+                /* Same for packed: a P constant signs C, and an unsigned packed
+                 * item carries F. Latent until such a field is compared as
+                 * bytes -- which is exactly what an ISAM key is. */
+                if (sy->is_signed) snprintf(b, sizeof b, "%sPL%d'%s'", dup, sy->elem, v);
+                else {
+                    zero_pad(v, sy->elem * 2 - 1, digs, sizeof digs);
+                    snprintf(hex, sizeof hex, "%sF", digs);
+                    snprintf(b, sizeof b, "%sXL%d'%s'", dup, sy->elem, hex);
+                }
+                break;
             default:        snprintf(b, sizeof b, "%s%s'%s'", dup, sy->elem == 2 ? "H" : "F", v); break;
             }
             snprintf(cmt, sizeof cmt, "%s PIC %s9(%d)v%d %s%s",

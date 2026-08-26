@@ -240,8 +240,8 @@ D0003    DC    PL5'0'              YT-CREDITS PIC S9(9)v2 COMP-3
 D0004    DS    0CL24               MONTH-DAYS (01 group)
 D0005    DC    12H'0'              MD-ENTRY PIC 9(2)v0 COMP table
 D0006    DC    H'1'                WS-IDX PIC S9(4)v0 COMP
-D0007    DC    ZL9'000'            OUT-NUM PIC 9(9)v2 DISP
-D0008    DC    ZL4'0'              OUT-SMALL PIC 9(4)v0 DISP
+D0007    DC    CL9'000000000'      OUT-NUM PIC 9(9)v2 DISP
+D0008    DC    CL4'0000'           OUT-SMALL PIC 9(4)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

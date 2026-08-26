@@ -807,6 +807,42 @@ source.
 
 Regression: 16 passed, 0 failed.
 
+## Slice 15: figurative constants in MOVE
+
+`MOVE SPACES` / `MOVE SPACE` and `MOVE ZERO` / `ZEROS` / `ZEROES`. The corpus
+uses ZERO 19 times and SPACES 4 times as a MOVE source; `LOW-VALUES` and
+`HIGH-VALUES` never appear there, only in VALUE clauses, so they are refused
+with a message rather than half-implemented.
+
+Conditions already worked — `parse_expr` has handled `SPACE` and `ZERO` since
+the IF slice, which is why `IF WS-NAME = SPACES` has always compiled. MOVE has
+its own source parser and did not. A numeric target takes the existing literal
+path, so `MOVE ZERO TO a COMP-3 item` is just `MOVE 0` and picks up the sign
+handling for free; an alphanumeric target gets an MVC against a constant built
+to exactly the receiving item's length.
+
+### Two sign bugs the new test caught
+
+`PIC 9(5) VALUE 12345` displayed as **`1234E`**. The assembler's `Z` constant
+puts a **C** sign in the last byte's zone, but an *unsigned* item must carry
+`F` — so the final digit came out as a letter. Unsigned DISPLAY items are now
+emitted as `CL5'12345'`.
+
+The same bug sat in packed VALUEs: `P` also signs `C`, so `PIC 9(5) COMP-3
+VALUE 999` was initialised `00999C`. That one is invisible to DISPLAY, which
+unpacks and forces the zone — and it is exactly the hazard the ISAM slice
+documented, because an unsigned packed field compared byte-wise is what an ISAM
+key is. Unsigned packed VALUEs are now emitted as `XL3'00999F'`.
+
+Regression: 17 passed, 0 failed.
+
+### Corpus status
+
+8 of the 30 programs in `SVD001.DEFTLY.COBOL` now compile. The single largest
+remaining blocker is **`VALUE LOW-VALUES`**, which stops 12 of them — every one
+on the same `05 WS-MODULE-ADDR PIC X(4) VALUE LOW-VALUES` line, the DYNALOAD
+module-address cell.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

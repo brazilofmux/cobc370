@@ -190,10 +190,10 @@ WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DS    0CL81               DESC-RECORD (01 group)
 D0001    DC    CL1' '              DESC-DELETE PIC X(1)
-D0002    DC    ZL10'0'             DESC-KEY PIC 9(10)v0 DISP
+D0002    DC    CL10'0000000000'    DESC-KEY PIC 9(10)v0 DISP
 D0003    DC    CL70' '             DESC-TEXT PIC X(70)
 D0004    DS    0CL80               INPUT-RECORD (01 group)
-D0005    DC    ZL10'0'             IN-KEY PIC 9(10)v0 DISP
+D0005    DC    CL10'0000000000'    IN-KEY PIC 9(10)v0 DISP
 D0006    DC    CL70' '             IN-TEXT PIC X(70)
 D0007    DC    CL1'N'              WS-EOF-FLAG PIC X(1)
 D0009    DC    H'0'                WS-CNT PIC S9(4)v0 COMP
