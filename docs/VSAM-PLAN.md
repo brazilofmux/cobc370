@@ -110,6 +110,104 @@ thinks one already is. A label is a branch target, so that belief cannot survive
 it — which the base-locator comment in the compiler has said all along.
 `reset_bases()` at every label inside the status generator fixes it.
 
+## Slice 2: KSDS load, DONE
+
+`tests/ksdsnatl.cbl` -- KSDSLOAD written against native VSAM -- matches the
+VSAMIO version byte for byte on both paths, and the records it writes read back
+identical to the ones VSAMIO wrote.
+
+What it took:
+
+- `MACRF=(KEY,SEQ,OUT,RST)` when the program opens the file OUTPUT.
+- `WRITE` as `PUT RPL=`, with INVALID KEY taken when R15 is not zero.
+- FILE STATUS from the feedback code: 12 is `21`, 8 is `22`, 28 is `24`.
+- `RECLEN` on the RPL. This is what the first attempt was missing, and every
+  `PUT` failed with status `30` until it was there. `AREALEN` is how big the
+  area is; `RECLEN` is how long the record in it actually is. VSAM fills RECLEN
+  in itself on a GET, which is why slice 1 never needed it, but on a PUT it is
+  the program's to supply.
+
+### RST, and why the cluster is defined REUSE
+
+COBOL's `OPEN OUTPUT` means *this program creates the file's contents*. VSAM
+spells that `MACRF=RST`: the cluster is emptied at OPEN. It requires the cluster
+to be defined REUSE.
+
+The alternative -- DELETE and DEFINE the cluster before every load, which is
+what Jay's own `VSTESTK1` does -- is catalog surgery, and see the incident
+below for what that cost. With REUSE the whole VSAM ladder can be re-run any
+number of times and the catalog is never written to again. `bin/cobc-regress`
+now runs `ksdsnatl` then `ksdsnat` on every pass, and it is idempotent.
+
+### Duplicate keys are sequence errors in load mode
+
+Worth knowing before writing any test that expects otherwise. Fed an input
+holding both a duplicate key and a key lower than its predecessor, VSAM
+reported *both* as feedback 12, and Jay's KSDSLOAD classified both as
+`VSIO-SEQUENCE-ERROR`. In load mode "not greater than the previous key" covers
+duplicates, so there is nothing left for feedback 8 to mean. Status `21` for
+both is therefore correct rather than a limitation. The mapping of 8 to `22`
+stays in the table for the random-insert slice, where the two do separate.
+
+### A compiler bug this slice flushed out
+
+`IF WS-STATUS = '24'` would not compile: `parse_primary` tested
+`is_numeric_literal` before it tested `tok.literal`, so a quoted literal made
+of digits was typed as numeric. The quotes decide, not the characters between
+them. This was waiting for any program that tests FILE STATUS -- which is to
+say, most programs that use VSAM at all -- and no test in the suite had ever
+written one.
+
+## The incident: UCSVD001, 2026-08-26
+
+Running Jay's `VSTESTK1` (DELETE + DEFINE of the test cluster) took the
+`SVD001` VSAM user catalog offline. The job itself reported complete success --
+`IDC0550I ... DELETED`, allocation status 0, maximum condition code 0 -- and
+every job after it failed:
+
+    IEC331I 024-002,...,IORA,IGG0CLAG
+    IEC333I P004,A0,181,CI=000003
+    IEC161I 036(024,002,IGG0CLAG)-001,...,UCSVD001
+    IEF361I ... UNABLE TO ALLOCATE / OPEN PRIVATE CATALOG OR ALLOCATE CVOL
+
+An error reading control interval 3 of the catalog. A clean shutdown and re-IPL
+did not clear it, so it was on disk rather than in storage. Everything named
+`SVD001.*` is cataloged there, so the monthly pipeline could not allocate its
+inputs by name.
+
+**Nothing was lost.** What made that clear, in order:
+
+1. `IEHLIST LISTVTOC` on SVD002/003/004 -- reads the VTOC, needs no catalog --
+   showed all 27 datasets present.
+2. `IEBPTPCH` on `SVD001.DEFTLY.COBOL(GL022)` with an explicit
+   `UNIT=3380,VOL=SER=SVD003` read it, RC=0000. Physically intact and
+   reachable.
+3. `LISTCAT ENTRIES(UCSVD001)` against the *master* catalog answered normally,
+   with the right VOLSER and VOLFLAG. Only the user catalog's own contents were
+   unreachable.
+
+Recovery, about ten minutes:
+
+1. `tk5-down`.
+2. `cp -c dasd/svd001.3380e dasd/svd001.3380e.broken-20260826` -- keep the
+   broken image, so the whole thing is reversible.
+3. `cp -c dasd.post-intercomm-clone/svd001.3380e dasd/` (2026-08-21).
+4. `tk5-up`, then confirm with a LISTCAT and an IEFBR14 that allocates a few
+   `SVD001.*` datasets by name.
+5. `LISTCAT` every dataset the VTOCs listed to find what the older catalog did
+   not know about. Two: `SVD001.COBC370.LOADLIB` and `SVD001.VSAMTEST.DATA`.
+6. `DEFINE NONVSAM (NAME(...) DEVICETYPES(3380) VOLUMES(SVD003))` for the
+   first; the second is instream in `VSTESTK01` and was simply re-run.
+
+The DEFINE that followed, without a DELETE in front of it, was clean -- no
+`IEC331I` at all, where the DELETE had emitted two. That is suggestive but not
+proof, and there is no intention of proving it.
+
+**The standing rule that comes out of this: do not DELETE/DEFINE against
+UCSVD001.** Test clusters are defined once, REUSE, and emptied by `OPEN
+OUTPUT`. If a cluster ever genuinely has to be redefined, take a DASD clone
+first.
+
 ## Scale
 
 This is bigger than the ISAM slice. SELECT grows several clauses, the verb set

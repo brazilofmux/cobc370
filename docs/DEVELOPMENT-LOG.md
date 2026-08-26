@@ -1317,6 +1317,32 @@ reimplementation. See `doc/VSAM-PLAN.md`.
 
 Regression: 28 passed, 0 failed.
 
+## Slice 30: VSAM, KSDS load
+
+`OPEN OUTPUT` on a VSAM file emits `MACRF=(KEY,SEQ,OUT,RST)`, `WRITE` becomes
+`PUT RPL=`, and INVALID KEY is taken from the RPL feedback code -- 12 is FILE
+STATUS `21`, 8 is `22`, 28 is `24`. The RPL carries `RECLEN` as well as
+`AREALEN`: VSAM fills RECLEN in itself on a GET but the program supplies it on
+a PUT, and without it every write fails.
+
+Verified against Jay Moseley's KSDSLOAD driving the same cluster through
+VSAMIOS: identical output on the clean load, identical output on an input
+carrying a duplicate key and an out-of-order key (both of which VSAM reports as
+sequence errors in load mode), and the 100 records written read back byte for
+byte the same as the ones VSAMIO wrote.
+
+`RST` is what makes this repeatable. It requires the cluster to be defined
+REUSE, and in exchange `OPEN OUTPUT` empties the cluster in place -- so the
+regression suite loads and reads the KSDS on every pass without ever issuing
+the DELETE/DEFINE that took this system's user catalog offline once already.
+See `doc/VSAM-PLAN.md`.
+
+Also fixed here: a quoted literal made of digits was being typed as numeric, so
+`IF WS-STATUS = '24'` would not compile at all. The quotes decide, not the
+characters between them.
+
+Regression: 30 passed, 0 failed.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

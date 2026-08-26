@@ -1285,12 +1285,15 @@ static void parse_environment(void)
                     }
                     if (is("RECORD")) {      /* RECORD KEY IS x -- resolved later */
                         next(); expect("KEY"); if (is("IS")) next();
-                        snprintf(f->name + 31 - 1, 0, "%s", "");   /* no-op */
-                        if (!f->isam) f->isam = 1;
+                        /* RECORD KEY is written the same way for ISAM and for
+                         * a VSAM KSDS, so it cannot be what marks a file as
+                         * ISAM -- only the absence of a VSAM assign name can. */
+                        if (!f->vsam && !f->isam) f->isam = 1;
                         snprintf(keyname[nfile], sizeof keyname[0], "%s", tok.text);
                         next(); continue; }
                     if (is("NOMINAL")) {
                         next(); expect("KEY"); if (is("IS")) next();
+                        if (f->vsam) die("NOMINAL KEY is an ISAM clause; VSAM uses RECORD KEY");
                         f->isam = 2;
                         snprintf(nomname[nfile], sizeof nomname[0], "%s", tok.text);
                         next(); continue; }
@@ -1316,18 +1319,22 @@ static Node *parse_expr(void);
 static Node *parse_primary(void)
 {
     if (is("(")) { next(); Node *n = parse_expr(); expect(")"); return n; }
+    /* The quotes decide, not the characters between them. '24' is an
+     * alphanumeric literal and 24 is a numeric one, and COBOL draws no other
+     * distinction -- which matters most for FILE STATUS, whose values are
+     * two-character alphanumeric and all look like numbers. */
+    if (tok.literal) {
+        Node *n = node(N_STR);
+        memcpy(n->lit, tok.text, (size_t)tok.len + 1);
+        n->litlen = tok.len;
+        next();
+        return n;
+    }
     if (is_numeric_literal(tok.text)) {
         Node *n = node(N_LIT);
         const char *dot = strchr(tok.text, '.');
         n->litscale = dot ? (int)strlen(dot + 1) : 0;
         scale_literal(tok.text, n->litscale, n->lit, sizeof n->lit);
-        next();
-        return n;
-    }
-    if (tok.literal) {
-        Node *n = node(N_STR);
-        memcpy(n->lit, tok.text, (size_t)tok.len + 1);
-        n->litlen = tok.len;
         next();
         return n;
     }
@@ -1886,7 +1893,7 @@ static void parse_one_statement(void)
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
         if (is("INVALID")) {
-            if (!files[fi].isam)
+            if (!files[fi].isam && !files[fi].vsam)
                 die("INVALID KEY on WRITE needs an INDEXED file");
             next(); expect("KEY");
             parse_stmt_list(1);
@@ -2349,16 +2356,42 @@ static int gen_edited_labels;
 
 /* Set a file's FILE STATUS from R15 after a VSAM request.
  *
- *   simple = 1  a request with no end-of-data to distinguish (OPEN, CLOSE):
- *               '00' when R15 is zero, '30' otherwise.
- *   simple = 0  a retrieval: '00', '10' at end of data, '30' for anything else.
+ * R15 says only that a request failed. Why it failed is in the RPL feedback
+ * byte, and which feedback codes can occur depends on the request -- a GET can
+ * reach end of data, a PUT cannot; a PUT can find a duplicate key, a GET
+ * cannot. So each kind of request brings its own table of the codes it can
+ * raise and the FILE STATUS each one means. Both halves of that mapping are
+ * fixed, VSAM's by the access method and COBOL's by the standard; neither is
+ * this compiler's to choose.
  *
  * Nothing is emitted when the program declared no FILE STATUS, which is legal
- * -- the AT END branch still works, it just cannot be inspected afterwards.
+ * -- the AT END and INVALID KEY branches still work, the reason for taking one
+ * just cannot be inspected afterwards.
  */
-static void gen_vsam_status(const File *f, int simple);
+typedef struct { int fdbk; const char *status; const char *why; } VsFbk;
 
-static void gen_vsam_status(const File *f, int simple)
+/* A request that cannot fail in any way worth telling apart: OPEN, CLOSE. */
+static const VsFbk vs_simple[] = {{0, NULL, NULL}};
+
+/* Sequential retrieval. Feedback 4 is end of data, which COBOL calls AT END. */
+static const VsFbk vs_read[] = {
+    { 4, "10", "end of data" },
+    {0, NULL, NULL}
+};
+
+/* Storing a record. Feedback 8 is a key already present, 12 a key not greater
+ * than the last one written, and 28 a cluster with no room left to extend
+ * into. COBOL calls those 22, 21 and 24, and all three are INVALID KEY. */
+static const VsFbk vs_write[] = {
+    {  8, "22", "duplicate key" },
+    { 12, "21", "key out of sequence" },
+    { 28, "24", "cluster is full" },
+    {0, NULL, NULL}
+};
+
+static void gen_vsam_status(const File *f, const VsFbk *tab);
+
+static void gen_vsam_status(const File *f, const VsFbk *tab)
 {
     char b[128], fd[64];
     if (f->status_sym < 0) return;
@@ -2367,44 +2400,50 @@ static void gen_vsam_status(const File *f, int simple)
     char aok[16], adone[16];
     snprintf(aok,   sizeof aok,   "G%04d", lok);
     snprintf(adone, sizeof adone, "G%04d", ldone);
+
+    /* Setting the status is a store through a base register, and every label
+     * below is a branch target, so the base tracker has to be told to forget
+     * what it believes is loaded at each one. That is the whole of the S0C4
+     * slice 1 cost: a base loaded on one path only, then used on both. */
+    #define VS_SET(code, why) do {                                          \
+        need_sym_base(st);                                                  \
+        field_ref(st, NULL, 2, 6, fd, sizeof fd);                           \
+        snprintf(b, sizeof b, "%s,=C'%s'", fd, (code));                     \
+        asm_line("", "MVC", b, (why));                                      \
+    } while (0)
+
     asm_line("", "LTR", "15,15", "VSAM request succeeded?");
     asm_line("", "BZ", aok, "");
-    if (!simple) {
-        /* R15 alone does not say why. The RPL feedback code does: 4 is end of
-         * data on a sequential retrieval. */
+
+    int ncase = 0;
+    while (tab[ncase].status) ncase++;
+    if (ncase > 8) die("too many VSAM feedback cases");
+    if (ncase) {
+        /* R15 alone does not say why, so ask the RPL. */
         snprintf(b, sizeof b, "RPL=%sR,FIELDS=FDBK,AREA=VSFB,LENGTH=4", f->label);
         asm_line("", "SHOWCB", b, "why did it fail?");
-        int lend = ++gen_edited_labels;
-        char aend[16]; snprintf(aend, sizeof aend, "G%04d", lend);
-        asm_line("", "CLI", "VSFB+3,X'04'", "end of data?");
-        asm_line("", "BE", aend, "");
-        need_sym_base(st);
-        field_ref(st, NULL, 2, 6, fd, sizeof fd);
-        snprintf(b, sizeof b, "%s,=C'30'", fd);
-        asm_line("", "MVC", b, "some other failure");
-        asm_line("", "B", adone, "");
-        asm_line(aend, "DS", "0H", "");
+    }
+    char acase[8][16];
+    for (int i = 0; i < ncase; i++) {
+        snprintf(acase[i], sizeof acase[i], "G%04d", ++gen_edited_labels);
+        snprintf(b, sizeof b, "VSFB+3,X'%02X'", tab[i].fdbk);
+        asm_line("", "CLI", b, tab[i].why);
+        asm_line("", "BE", acase[i], "");
+    }
+    VS_SET("30", "permanent error");
+    asm_line("", "B", adone, "");
+    for (int i = 0; i < ncase; i++) {
+        asm_line(acase[i], "DS", "0H", "");
         reset_bases();          /* arrived by branch: nothing is loaded */
-        need_sym_base(st);
-        field_ref(st, NULL, 2, 6, fd, sizeof fd);
-        snprintf(b, sizeof b, "%s,=C'10'", fd);
-        asm_line("", "MVC", b, "AT END");
-        asm_line("", "B", adone, "");
-    } else {
-        need_sym_base(st);
-        field_ref(st, NULL, 2, 6, fd, sizeof fd);
-        snprintf(b, sizeof b, "%s,=C'30'", fd);
-        asm_line("", "MVC", b, "request failed");
+        VS_SET(tab[i].status, tab[i].why);
         asm_line("", "B", adone, "");
     }
     asm_line(aok, "DS", "0H", "");
-    reset_bases();              /* arrived by branch: nothing is loaded */
-    need_sym_base(st);
-    field_ref(st, NULL, 2, 6, fd, sizeof fd);
-    snprintf(b, sizeof b, "%s,=C'00'", fd);
-    asm_line("", "MVC", b, "");
+    reset_bases();
+    VS_SET("00", "");
     asm_line(adone, "DS", "0H", "");
     reset_bases();
+    #undef VS_SET
 }
 
 static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
@@ -3186,7 +3225,7 @@ static void generate(void)
                  * the control block. */
                 snprintf(b, sizeof b, "(%s)", f->label);
                 asm_line("", "OPEN", b, "VSAM ACB");
-                gen_vsam_status(f, 1);
+                gen_vsam_status(f, vs_simple);
                 reset_bases();
                 break;
             }
@@ -3213,7 +3252,7 @@ static void generate(void)
             asm_comment(b);
             snprintf(b, sizeof b, "(%s)", f->label);
             asm_line("", "CLOSE", b, "");
-            if (f->vsam) { gen_vsam_status(f, 1); reset_bases(); }
+            if (f->vsam) { gen_vsam_status(f, vs_simple); reset_bases(); }
             break;
         }
         case ST_READ: {
@@ -3283,7 +3322,7 @@ static void generate(void)
                 asm_line("", "GET", b, "VSAM sequential retrieval");
                 asm_line("", "LTR", "15,15", "got a record?");
                 asm_line("", "BNZ", le, "");
-                gen_vsam_status(f, 0);
+                gen_vsam_status(f, vs_read);
                 if (st->src >= 0) {
                     const Sym *t = &syms[st->src];
                     asm_comment("  INTO: only reached when a record was read");
@@ -3293,7 +3332,7 @@ static void generate(void)
                 asm_line("", "B", lc, "");
                 asm_line(le, "DS", "0H", "AT END");
                 reset_bases();
-                gen_vsam_status(f, 0);
+                gen_vsam_status(f, vs_read);
                 reset_bases();
                 break;
             }
@@ -3406,6 +3445,25 @@ static void generate(void)
                 asm_comment("  FROM: fill the record area first");
                 need_sym_base(&syms[f->rec_sym]); need_sym_base(sv);
                 gen_move_alpha(&syms[f->rec_sym], NULL, sv, NULL);
+            }
+            if (f->vsam) {
+                /* PUT stores from the FD area because the RPL says MVE. In
+                 * load mode a key that is not greater than the last one
+                 * written, or a cluster with no room to extend, come back as
+                 * feedback codes rather than an abend -- which is exactly what
+                 * COBOL's INVALID KEY is for. */
+                need_sym_base(&syms[f->rec_sym]);
+                snprintf(b, sizeof b, "RPL=%sR", f->label);
+                asm_line("", "PUT", b, "VSAM sequential store");
+                asm_line("", "LTR", "15,15", "stored?");
+                asm_line("", "BNZ", wle, "");
+                gen_vsam_status(f, vs_write);
+                asm_line("", "B", wlc, "");
+                asm_line(wle, "DS", "0H", "INVALID KEY");
+                reset_bases();
+                gen_vsam_status(f, vs_write);
+                reset_bases();
+                break;
             }
             if (f->isam) {
                 /* QISAM load mode. PUT is the same macro as QSAM, but a key
@@ -3877,24 +3935,44 @@ static void generate(void)
              * at run time; a compiler knows the organization, access and mode
              * when it emits them, so they can be assembled outright.
              *
-             * MACRF/OPTCD for a KSDS read sequentially: KEY addressing, SEQ
-             * sequence, IN for input, NUP because the records are not being
-             * held for update, MVE because the record is moved into the FD area
-             * rather than the program being handed a pointer. */
+             * MACRF/OPTCD for a KSDS: KEY addressing, SEQ sequence, NUP
+             * because no record is being held for update, and MVE because the
+             * record is moved to and from the FD area rather than the program
+             * being handed a pointer into VSAM's buffer.
+             *
+             * IN or OUT comes from how the program opens the file. OUT in
+             * SEQ is load mode, which is the only way records get into a KSDS
+             * in the first place -- and which is why the keys have to arrive in
+             * ascending order.
+             *
+             * RST goes with it. OPEN OUTPUT in COBOL means this program
+             * creates the file's contents, and RST is how VSAM says that: the
+             * cluster is emptied at OPEN. It requires the cluster to be
+             * defined REUSE, which is the right attribute for anything a
+             * program loads. The alternative is to DELETE and DEFINE the
+             * cluster before every load, which is catalog surgery, and this
+             * system has demonstrated what that can cost. */
             /* No EXLST. An exit routine is entered on VSAM's terms, with
              * its own save area and return conventions, which suits a callable
              * routine like VSAMIOS but not code generated inline. Without an
              * EODAD, VSAM simply returns 8 in R15 with feedback 4 at end of
              * data, which is easier to test and impossible to get wrong. */
-            snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,SEQ,IN)", f->ddname);
+            snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,SEQ,%s)",
+                     f->ddname, f->opened_output ? "OUT,RST" : "IN");
             asm_line(f->label, "ACB", b, "VSAM access method control block");
             char rlab[10];
             snprintf(rlab, sizeof rlab, "%sR", f->label);
             snprintf(first, sizeof first, "%-8s RPL   ACB=%s,AREA=%s,",
                      rlab, f->label, syms[f->rec_sym].label);
             char second[80];
-            snprintf(second, sizeof second, "AREALEN=%d,OPTCD=(KEY,SEQ,NUP,MVE)",
-                     f->reclen);
+            /* AREALEN is how big the area is; RECLEN is how long the record in
+             * it actually is. VSAM sets RECLEN itself on a GET, but on a PUT it
+             * is the program's to supply, and a PUT through an RPL that has
+             * never been told fails. Records here are fixed length, so it can
+             * be assembled once rather than stored before each write. */
+            snprintf(second, sizeof second,
+                     "AREALEN=%d,RECLEN=%d,OPTCD=(KEY,SEQ,NUP,MVE)",
+                     f->reclen, f->reclen);
             asm_cont(first, second);
             continue;
         }
