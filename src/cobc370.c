@@ -387,7 +387,7 @@ typedef struct {
     char name[31];
     int  file;
     int  page_limit, heading, first_detail, last_detail;
-    char lbl_line[9], lbl_page[9];
+    char lbl_line[9], lbl_page[9], lbl_first[9];
 } Report;
 
 #define MAXREPORT 4
@@ -806,6 +806,7 @@ static void parse_data_division(void)
                     memset(rp, 0, sizeof *rp);
                     snprintf(rp->name, sizeof rp->name, "%s", tok.text);
                     snprintf(rp->lbl_line, sizeof rp->lbl_line, "RL%03d", nreport);
+                    snprintf(rp->lbl_first, sizeof rp->lbl_first, "RF%03d", nreport);
                     snprintf(rp->lbl_page, sizeof rp->lbl_page, "RP%03d", nreport);
                     rp->file = cur_file;
                     rp->page_limit = 66; rp->heading = 1;
@@ -2889,6 +2890,20 @@ static void emit_report_group(int gi)
                so LA 0,n(0) loads n rather than adding to it. */
             snprintf(b, sizeof b, "2,%d(2)", l->n);
             asm_line("", "LA", b, "LINE PLUS n");
+            if (li == g->first_line) {
+                /* The first group printed on a fresh page goes at FIRST DETAIL,
+                 * not wherever LINE PLUS n happens to land. The cell is set
+                 * right after a page heading and consumed once. */
+                char nf[16];
+                snprintf(nf, sizeof nf, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "3,%s", rp->lbl_first); asm_line("", "LH", b, "");
+                asm_line("", "LTR", "3,3", "a page was just started?");
+                asm_line("", "BZ", nf, "");
+                asm_line("", "LR", "2,3", "then start at FIRST DETAIL");
+                asm_line("", "SR", "3,3", "");
+                snprintf(b, sizeof b, "3,%s", rp->lbl_first); asm_line("", "STH", b, "consume it");
+                asm_line(nf, "DS", "0H", "");
+            }
         }
         asm_line("", "STH", "2,RTGT", "");
         /* blank the buffer, carrying the pending carriage control */
@@ -3183,9 +3198,15 @@ static void generate(void)
             asm_line("", "SR", "2,2", "");
             snprintf(b, sizeof b, "2,%s", rp->lbl_line); asm_line("", "STH", b, "");
             if (ph >= 0) { snprintf(b, sizeof b, "14,RG%03d", ph); asm_line("", "BAL", b, "page heading"); }
-            snprintf(b, sizeof b, "2,%d", rp->first_detail - 1);
-            asm_line("", "LA", b, "details start at FIRST DETAIL");
-            snprintf(b, sizeof b, "2,%s", rp->lbl_line); asm_line("", "STH", b, "");
+            /* Do NOT fake the line counter here. Forcing it to FIRST DETAIL-1
+             * without moving any paper leaves the logical line ahead of the
+             * physical one, COBWRL then advances too few blanks, and every page
+             * after the heading is short -- which is what split a transaction
+             * across a page boundary in the journal. Leave the counter at what
+             * the heading actually reached, and force the TARGET instead. */
+            snprintf(b, sizeof b, "2,%d", rp->first_detail);
+            asm_line("", "LA", b, "first group goes at FIRST DETAIL");
+            snprintf(b, sizeof b, "2,%s", rp->lbl_first); asm_line("", "STH", b, "");
             asm_line(lo, "DS", "0H", "");
             snprintf(b, sizeof b, "14,RG%03d", st->dst);
             asm_line("", "BAL", b, "");
@@ -3622,6 +3643,7 @@ static void generate(void)
         for (int i = 0; i < nreport; i++) {
             asm_line(reports[i].lbl_line, "DC", "H'0'", reports[i].name);
             asm_line(reports[i].lbl_page, "DC", "H'0'", "");
+            asm_line(reports[i].lbl_first, "DC", "H'0'", "forced first-detail line");
         }
         asm_line("RTGT", "DS", "H", "target line");
         asm_line("RGS", "DS", "F", "renderer return address");
@@ -3706,8 +3728,17 @@ static void generate(void)
              * dataset label at OPEN, so the DCB only has to say which access
              * method. Random retrieval is BISAM; sequential is QISAM (GET),
              * which is why the MACRF differs. */
-            snprintf(b, sizeof b, "DDNAME=%s,DSORG=IS,MACRF=(%s)%s",
-                     f->ddname, f->isam == 2 ? "R" : "GM",
+            /* State the record format when the FD states it. OPEN merges JCL
+             * DCB= only into fields the program left zero, so a DCB that says
+             * nothing lets the JCL win -- and BATCH codes RECFM=F on a DESCIDX
+             * that GL039 blocked 257 to a block, which is S03B at OPEN. Where
+             * the FD gives no BLOCK CONTAINS, stay silent and let the label
+             * speak, which is what the sequential ISAM tests rely on. */
+            char rf[16] = "";
+            if (f->blk_records > 1)      snprintf(rf, sizeof rf, ",RECFM=FB");
+            else if (f->blk_records == 1) snprintf(rf, sizeof rf, ",RECFM=F");
+            snprintf(b, sizeof b, "DDNAME=%s,DSORG=IS,MACRF=(%s)%s%s",
+                     f->ddname, f->isam == 2 ? "R" : "GM", rf,
                      f->isam == 2 ? ",SYNAD=ISYNAD" : "");
             asm_line(f->label, "DCB", b, "");
             continue;

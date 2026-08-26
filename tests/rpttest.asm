@@ -87,8 +87,8 @@ L0002    MVI   RCTL,C'1'           new page
          SR    2,2
          STH   2,RL000
          BAL   14,RG000            page heading
-         LA    2,3                 details start at FIRST DETAIL
-         STH   2,RL000
+         LA    2,4                 first group goes at FIRST DETAIL
+         STH   2,RF000
 L0003    DS    0H
          BAL   14,RG001
 * GO TO LOOP-PARA
@@ -141,6 +141,13 @@ RG000    ST    14,RGS              save the return, COBWRL clobbers R14
 RG001    ST    14,RGS              save the return, COBWRL clobbers R14
          LH    2,RL000
          LA    2,1(2)              LINE PLUS n
+         LH    3,RF000
+         LTR   3,3                 a page was just started?
+         BZ    L0004
+         LR    2,3                 then start at FIRST DETAIL
+         SR    3,3
+         STH   3,RF000             consume it
+L0004    DS    0H
          STH   2,RTGT
          MVC   RBUF(1),RCTL        carriage control
          MVI   RCTL,C' '           one eject only
@@ -187,6 +194,7 @@ RGP001   DC    A(FD000)            DETAIL-LINE
          DC    X'80',AL3(RBUF)     last parameter
 RL000    DC    H'0'                SIMPLE-RPT
 RP000    DC    H'0'
+RF000    DC    H'0'                forced first-detail line
 RTGT     DS    H                   target line
 RGS      DS    F                   renderer return address
 RCTL     DC    C' '                pending carriage control

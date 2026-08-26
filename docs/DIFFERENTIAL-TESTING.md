@@ -183,3 +183,26 @@ every non-blank line identical, all 37 steps RC=0000.
 The lesson for everything that follows: **RC=0000 with plausible-looking output
 proves nothing about a program whose answers feed other programs.** Only the
 end-to-end diff caught this.
+
+## Swaps 4-7: GL025, GL026, GL029, GL030
+
+**GL025, GL026 and GL029 verified**: with GL022-GL026 and GL029 all compiled by
+cobc370, every non-blank line of the 37-step job is identical.
+
+**GL030 is content-verified but not layout-verified.** Its journal report
+contains exactly the same 497 non-blank lines as the reference — same multiset,
+same 160 transaction lines, every amount identical — but two of them sit on a
+different page. See OPEN-ITEMS item 1.
+
+### GL030 needed an ISAM DCB fix first
+
+It abended **S03B** at OPEN. BATCH codes `DCB=(DSORG=IS,RECFM=F)` on DESCIDX,
+but GL039 creates that dataset blocked 257 records to a block, so it is really
+FB. OPEN merges JCL `DCB=` only into fields the program left zero, and our ISAM
+input DCB stated no RECFM at all — so the JCL's wrong value won.
+
+The DCB now states the record format when the FD states it (`BLOCK CONTAINS` >
+1 gives FB), and stays silent when the FD does not, which is what the sequential
+ISAM tests rely on. This is the mirror image of the sequential-input lesson from
+GL022: say nothing where the label is authoritative, say it where the program
+is.
