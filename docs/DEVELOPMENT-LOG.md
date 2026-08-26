@@ -843,6 +843,42 @@ remaining blocker is **`VALUE LOW-VALUES`**, which stops 12 of them — every on
 on the same `05 WS-MODULE-ADDR PIC X(4) VALUE LOW-VALUES` line, the DYNALOAD
 module-address cell.
 
+## Slice 16: VALUE LOW-VALUES
+
+`VALUE LOW-VALUES`, `HIGH-VALUES` and `QUOTES` on `PIC X` items, emitted as a
+repeated byte with a duplication factor — `4X'00'`, `4X'FF'`, `4X'7D'` — so
+length and OCCURS need no special case. They are refused on numeric items.
+
+This was the single largest blocker in the corpus, stopping 12 of the 30
+programs, every one on the DYNALOAD control block's
+`05 WS-MODULE-ADDR PIC X(4) VALUE LOW-VALUES`.
+
+`tests/figval.cbl` checks the *bytes*, not just that it compiles: `X'00'` must
+sort below space and `X'FF'` above it, which a field that quietly stayed blank
+would fail. It also displays the fields on either side, since a wrong length
+here would corrupt the neighbours rather than the field itself.
+
+Regression: 18 passed, 0 failed.
+
+### Corpus status
+
+Still 8 of 30 compiling — the 12 unblocked programs each moved on to their
+*next* missing feature, which is progress that the headline number hides. What
+now stands in the way, in order:
+
+| Blocker | Programs |
+|---|---|
+| `LINKAGE SECTION` / `PROCEDURE DIVISION USING` | 7 |
+| qualification with `OF` / `IN` | 5 |
+| `REDEFINES` | 4 |
+| `OPEN` of something not declared as a file | 3 |
+| `WRITE FROM`, `READ INTO` | 1 each |
+
+The `LINKAGE SECTION` seven are the DYNALOAD sub-modules — `DIV`, `DIVMOD`,
+`FTL`, `ISLEAP`, `LTF`, `GL024`, `GL040` — so callable modules with parameters
+are both the largest remaining group and the feature ANS COBOL never had, which
+is why DYNALOAD exists at all.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

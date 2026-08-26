@@ -816,6 +816,9 @@ static void parse_data_division(void)
                 next(); if (is("IS")) next();
                 if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(sy->value, "0"); sy->has_value = 1; next(); }
                 else if (is("SPACE") || is("SPACES")) { sy->has_value = 2; next(); }
+                else if (is("LOW-VALUE")  || is("LOW-VALUES"))  { sy->has_value = 4; next(); }
+                else if (is("HIGH-VALUE") || is("HIGH-VALUES")) { sy->has_value = 5; next(); }
+                else if (is("QUOTE")      || is("QUOTES"))      { sy->has_value = 6; next(); }
                 else if (tok.literal) {
                     sy->has_value = 3;
                     snprintf(sy->value, sizeof sy->value, "%s", tok.text);
@@ -867,6 +870,9 @@ static void parse_data_division(void)
             } else {
                 if (sy->has_value == 3)
                     die("a nonnumeric VALUE on a numeric item is not implemented yet");
+                if (sy->has_value >= 4)
+                    die("VALUE LOW-VALUES, HIGH-VALUES and QUOTES are only "
+                        "implemented on PIC X items");
                 if (sy->has_value == 1) {
                     char scaled[34];
                     scale_literal(sy->value, sy->scale, scaled, sizeof scaled);
@@ -3148,6 +3154,14 @@ static void generate(void)
                     }
                     op[j++] = '\''; op[j] = 0;
                     snprintf(b, sizeof b, "%s", op);
+                } else if (sy->has_value >= 4) {
+                    /* A repeated byte: X'00', X'FF', or the EBCDIC quote X'7D'.
+                     * A duplication factor keeps this independent of length,
+                     * so tables and long items need no special case. */
+                    const char *by = sy->has_value == 4 ? "00"
+                                   : sy->has_value == 5 ? "FF" : "7D";
+                    snprintf(b, sizeof b, "%dX'%s'",
+                             sy->elem * (sy->occurs ? sy->occurs : 1), by);
                 } else if (sy->elem <= 256) {
                     snprintf(b, sizeof b, "%sCL%d' '", dup, sy->elem);
                 } else {
