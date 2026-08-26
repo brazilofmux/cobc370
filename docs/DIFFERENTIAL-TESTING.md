@@ -189,10 +189,12 @@ end-to-end diff caught this.
 **GL025, GL026 and GL029 verified**: with GL022-GL026 and GL029 all compiled by
 cobc370, every non-blank line of the 37-step job is identical.
 
-**GL030 is content-verified but not layout-verified.** Its journal report
-contains exactly the same 497 non-blank lines as the reference — same multiset,
-same 160 transaction lines, every amount identical — but two of them sit on a
-different page. See OPEN-ITEMS item 1.
+**GL030 is fully verified.** It was briefly reported as layout-differing; that
+was a flaw in the comparison, not in the compiler — see OPEN-ITEMS item 1, now
+closed. Use `bin/batch-compare`, which compares the ordered program-output lines
+with blanks removed. Blank lines cannot be compared positionally, because ANS
+COBOL and cobc370 encode identical vertical spacing differently in the ASA
+carriage control.
 
 ### GL030 needed an ISAM DCB fix first
 
@@ -206,3 +208,15 @@ The DCB now states the record format when the FD states it (`BLOCK CONTAINS` >
 ISAM tests rely on. This is the mirror image of the sequential-input lesson from
 GL022: say nothing where the label is authoritative, say it where the program
 is.
+
+## Swap 8: GL033, and closing the pagination question
+
+GL033 verified. All eight swapped programs — GL022, GL023, GL024, GL025, GL026,
+GL029, GL030, GL033 — now reproduce the entire 37-step job exactly:
+**2545 program-output lines, ordered, identical.**
+
+The pagination question that had been open since GL022 is closed, and the answer
+is that cobc370 was right all along. See OPEN-ITEMS item 1 for the ASA evidence.
+The lesson is about the harness rather than the compiler: **a positional diff of
+printer output is not a valid comparison** when two compilers encode the same
+spacing differently. `bin/batch-compare` replaces it.
