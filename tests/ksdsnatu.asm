@@ -35,7 +35,7 @@ P0000    DS    0H
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
-* OPEN OUTPUT KSDS-FILE
+* OPEN I-O KSDS-FILE
          OPEN  (FD000)             VSAM ACB
          LTR   15,15               VSAM request succeeded?
          BZ    G0001

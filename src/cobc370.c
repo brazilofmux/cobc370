@@ -351,6 +351,7 @@ typedef struct {
     int  opened_io;    /* OPEN I-O: retrieval and update through one RPL */
     int  has_write;    /* a WRITE names this file, so an insert RPL is needed */
     int  has_start;    /* a START names it, so the RPL needs a search argument */
+    int  opened_extend;/* OPEN EXTEND: append to what is already there */
     int  report;       /* the RD this FD carries, or -1 */
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
@@ -1199,12 +1200,24 @@ static void parse_data_division(void)
         if (files[i].isam == 2 && files[i].nominal_sym < 0)
             die("ACCESS IS RANDOM needs a NOMINAL KEY");
         if (files[i].vsam) {
-            /* Slice 1 is KSDS read sequentially. Everything else is refused by
-             * name so the gap is obvious rather than mysterious. */
-            if (files[i].org == 0) die("VSAM ESDS is not implemented yet");
+            /* What is not implemented is refused by name, so the gap is
+             * obvious rather than mysterious. */
             if (files[i].org == 2) die("VSAM RRDS is not implemented yet");
             if (files[i].access == 2) die("VSAM ACCESS IS DYNAMIC is not implemented yet");
-            if (files[i].key_sym < 0) die("a VSAM KSDS needs a RECORD KEY");
+            if (files[i].org == 1 && files[i].key_sym < 0)
+                die("a VSAM KSDS needs a RECORD KEY");
+            if (files[i].org == 0) {
+                /* An entry-sequenced dataset has no key: records are found by
+                 * where they are, not by what is in them. So the clauses that
+                 * name a key have nothing to name, and the access modes that
+                 * use one have nothing to use. */
+                if (files[i].key_sym >= 0)
+                    die("a VSAM ESDS has no key, so no RECORD KEY");
+                if (files[i].access != 0)
+                    die("a VSAM ESDS can only be ACCESS IS SEQUENTIAL");
+                if (files[i].has_start)
+                    die("START needs a key, which a VSAM ESDS does not have");
+            }
         }
     }
     if (wslen > 64 * 1024)
@@ -1821,18 +1834,19 @@ static void parse_one_statement(void)
     if (is("OPEN")) {
         next();
         while (is("INPUT") || is("OUTPUT") || is("I-O") || is("EXTEND")) {
-            if (is("EXTEND")) die("OPEN EXTEND is not implemented yet");
-            int mode = is("INPUT") ? 1 : is("OUTPUT") ? 2 : 3;
+            int mode = is("INPUT") ? 1 : is("OUTPUT") ? 2 : is("I-O") ? 3 : 4;
             next();
             int any = 0;
-            while (!tok.eof && !is(".") && !is("INPUT") && !is("OUTPUT") && !is("I-O")) {
+            while (!tok.eof && !is(".") && !is("INPUT") && !is("OUTPUT")
+                   && !is("I-O") && !is("EXTEND")) {
                 int fi = file_index(tok.text);
                 if (fi < 0) die("OPEN names something that is not a file");
-                if (mode == 3 && !files[fi].vsam)
-                    die("OPEN I-O is implemented for VSAM files only");
+                if (mode >= 3 && !files[fi].vsam)
+                    die("OPEN I-O and EXTEND are implemented for VSAM files only");
                 if (mode == 1) files[fi].opened_input = 1;
                 else if (mode == 2) files[fi].opened_output = 1;
-                else files[fi].opened_io = 1;
+                else if (mode == 3) files[fi].opened_io = 1;
+                else files[fi].opened_extend = 1;
                 Stmt *st = new_stmt(ST_OPEN); st->dst = fi; st->src = mode;
                 any = 1; next();
             }
@@ -3355,7 +3369,9 @@ static void generate(void)
             break;
         case ST_OPEN: {
             File *f = &files[st->dst];
-            snprintf(b, sizeof b, " OPEN %s %s", st->src == 1 ? "INPUT" : "OUTPUT", f->name);
+            snprintf(b, sizeof b, " OPEN %s %s",
+                     st->src == 1 ? "INPUT" : st->src == 2 ? "OUTPUT"
+                                  : st->src == 3 ? "I-O" : "EXTEND", f->name);
             asm_comment(b);
             if (f->vsam) {
                 /* VSAM takes its mode from the ACB's MACRF, so OPEN names only
@@ -3678,6 +3694,9 @@ static void generate(void)
             asm_comment(b);
             if (!f->opened_io)
                 die("REWRITE and DELETE need the file opened I-O");
+            if (erase && f->org == 0)
+                die("a record cannot be deleted from a VSAM ESDS -- entry "
+                    "sequence is fixed once written");
             if (st->src >= 0) {
                 const Sym *sv = &syms[st->src];
                 asm_comment("  FROM: fill the record area first");
@@ -4179,16 +4198,27 @@ static void generate(void)
              * routine like VSAMIOS but not code generated inline. Without an
              * EODAD, VSAM simply returns 8 in R15 with feedback 4 at end of
              * data, which is easier to test and impossible to get wrong. */
+            /* OUT covers everything that writes. RST is what separates
+             * creating a file from adding to one: OPEN OUTPUT means this
+             * program supplies the contents, so the cluster is emptied at
+             * OPEN; OPEN EXTEND and OPEN I-O mean it is already there. For an
+             * ESDS that distinction is the whole of ESDSLOAD versus ESDSADDT,
+             * which are otherwise the same program. */
             const char *macrf = f->opened_output ? "OUT,RST"
-                              : f->opened_io     ? "OUT" : "IN";
+                              : (f->opened_io || f->opened_extend) ? "OUT"
+                              : "IN";
             const char *optcd = f->opened_io ? "UPD" : "NUP";
+            /* KEY finds a record by what is in it, ADR by where it is. An
+             * entry-sequenced dataset has no key, so it can only be the
+             * second. */
+            const char *keyadr = f->org == 0 ? "ADR" : "KEY";
             /* SEQ walks the file in key order; DIR goes straight to one record
              * by key. That is the whole of ACCESS IS SEQUENTIAL versus RANDOM,
              * and it is why a random READ has an INVALID KEY rather than an AT
              * END: there is no end to reach when you asked for one record. */
             const char *seqdir = f->access == 1 ? "DIR" : "SEQ";
-            snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,%s,%s)",
-                     f->ddname, seqdir, macrf);
+            snprintf(b, sizeof b, "DDNAME=%s,MACRF=(%s,%s,%s)",
+                     f->ddname, keyadr, seqdir, macrf);
             asm_line(f->label, "ACB", b, "VSAM access method control block");
 
             /* A direct request has to say which record it means. ARG is the
@@ -4214,8 +4244,8 @@ static void generate(void)
                  * find the record whose key equals the argument, rather than
                  * the first one greater than or equal to it. */
                 snprintf(second, sizeof second,
-                         "AREALEN=%d,RECLEN=%d,%sOPTCD=(KEY,%s,%s%s,MVE)",
-                         f->reclen, f->reclen, keyarg, seqdir,
+                         "AREALEN=%d,RECLEN=%d,%sOPTCD=(%s,%s,%s%s,MVE)",
+                         f->reclen, f->reclen, keyarg, keyadr, seqdir,
                          f->access == 1 ? "KEQ," : "",
                          pass ? "NUP" : optcd);
                 asm_cont(first, second);

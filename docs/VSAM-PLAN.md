@@ -266,6 +266,44 @@ works and is checked against VSAMIO on every regression run:
 ESDS and RRDS are next, and both are narrower than any of the above: ESDS is
 ADR addressing with no key at all, RRDS is a record number in place of one.
 
+## DEFINE CLUSTER against UCSVD001 is not safe, and that is now the finding
+
+Three of four `DEFINE CLUSTER` commands issued against the SVD001 user catalog
+have taken it offline. Each reported complete success -- condition code 0,
+allocation status 0 -- and the next job to touch the catalog failed with
+
+    IEC331I 024-002,...,IORA,IGG0CLAG
+    IEC333I P004,A0,181,CI=000003
+
+Every time. The morning's guess that DELETE was the culprit is wrong: the second
+and third failures were plain DEFINEs with no DELETE in front of them, one for a
+NONINDEXED cluster and one job holding a NONINDEXED and a NUMBERED define
+together. The one that survived was a single INDEXED define. That is not enough
+to call it a pattern, and it is certainly not enough to build on.
+
+**So the ESDS and RRDS slices are blocked on their fixtures, not on the
+compiler.** The generated code for ESDS is written and compiles -- `ADR`
+addressing in MACRF and OPTCD, `OPEN EXTEND` as OUT-without-RST, no ARG or
+KEYLEN, ERASE refused because entry sequence is fixed once written -- but there
+is nowhere safe to put a cluster to test it against.
+
+### What to do instead
+
+Stop using UCSVD001 for test fixtures. Put the VSAM test clusters in their own
+user catalog on a scratch volume, so that a catalog casualty costs a
+`DEFINE USERCATALOG` and not a DASD restore:
+
+    DEFINE USERCATALOG (NAME(UCVSTEST) VOLUMES(WORK01) CYLINDERS(5 1))
+    DEFINE ALIAS (NAME(VSTEST) RELATE(UCVSTEST))
+
+then name the fixtures `VSTEST.KSDS.CLUSTER` and so on. The one thing to weigh
+first: `DEFINE USERCATALOG` writes to the **master** catalog, which is on
+`tk5cat.391` and is not covered by `dasd.checkpoint-20260826`. Clone that volume
+before trying it.
+
+Until then: the KSDS cluster that exists works, is REUSE, and is captured in the
+checkpoint. Do not define anything else against UCSVD001.
+
 ## The rig wedged in the middle of this, and it was our own doing
 
 Halfway through slice 4 every submission started hanging. The visible symptom

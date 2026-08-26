@@ -37,7 +37,7 @@ P0000    DS    0H
          BALR  14,15
 * OPEN INPUT RECORD-IMAGES
          OPEN  (FD000,INPUT)
-* OPEN OUTPUT KSDS-FILE
+* OPEN I-O KSDS-FILE
          OPEN  (FD001)             VSAM ACB
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
