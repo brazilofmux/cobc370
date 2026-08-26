@@ -349,6 +349,7 @@ typedef struct {
     int  opened_input; /* which OPEN modes appear, so MACRF can be set */
     int  opened_output;
     int  opened_io;    /* OPEN I-O: retrieval and update through one RPL */
+    int  has_write;    /* a WRITE names this file, so an insert RPL is needed */
     int  report;       /* the RD this FD carries, or -1 */
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
@@ -1201,7 +1202,6 @@ static void parse_data_division(void)
              * name so the gap is obvious rather than mysterious. */
             if (files[i].org == 0) die("VSAM ESDS is not implemented yet");
             if (files[i].org == 2) die("VSAM RRDS is not implemented yet");
-            if (files[i].access == 1) die("VSAM ACCESS IS RANDOM is not implemented yet");
             if (files[i].access == 2) die("VSAM ACCESS IS DYNAMIC is not implemented yet");
             if (files[i].key_sym < 0) die("a VSAM KSDS needs a RECORD KEY");
         }
@@ -1890,6 +1890,7 @@ static void parse_one_statement(void)
         int fi = -1;
         for (int k = 0; k < nfile; k++) if (files[k].rec_sym == i) fi = k;
         if (fi < 0) die("WRITE names something that is not a file's record");
+        files[fi].has_write = 1;
         Stmt *st = new_stmt(ST_WRITE);
         st->dst = fi;
         if (is("FROM")) {
@@ -2445,9 +2446,31 @@ static const VsFbk vs_upd[] = {
     {0, NULL, NULL}
 };
 
-static void gen_vsam_status(const File *f, const VsFbk *tab);
+/* Retrieving one record by key. Feedback 16 is no record with that key, which
+ * COBOL calls INVALID KEY rather than AT END -- a direct read has no end to
+ * reach. */
+static const VsFbk vs_read_dir[] = {
+    { 16, "23", "no such record" },
+    {0, NULL, NULL}
+};
 
-static void gen_vsam_status(const File *f, const VsFbk *tab)
+/* A file needs two RPLs when it is opened I-O and the program also inserts.
+ * Retrieval, rewrite and erase all want OPTCD=UPD so the record is held;
+ * an insert is by definition not an update and wants NUP. VSAMIOS flips the
+ * option with MODCB around each insert and flips it back. A compiler knows
+ * which verb it is generating, so it can assemble both control blocks and
+ * pick -- no runtime call, and no window in which a failed MODCB leaves the
+ * RPL set wrong. */
+static const char *rpl_name(const File *f, int inserting, char *buf, size_t n)
+{
+    snprintf(buf, n, "%s%c", f->label,
+             (inserting && f->opened_io) ? 'N' : 'R');
+    return buf;
+}
+
+static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab);
+
+static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
 {
     char b[128], fd[64];
     if (f->status_sym < 0) return;
@@ -2476,7 +2499,7 @@ static void gen_vsam_status(const File *f, const VsFbk *tab)
     if (ncase > 8) die("too many VSAM feedback cases");
     if (ncase) {
         /* R15 alone does not say why, so ask the RPL. */
-        snprintf(b, sizeof b, "RPL=%sR,FIELDS=FDBK,AREA=VSFB,LENGTH=4", f->label);
+        snprintf(b, sizeof b, "RPL=%s,FIELDS=FDBK,AREA=VSFB,LENGTH=4", rpl);
         asm_line("", "SHOWCB", b, "why did it fail?");
     }
     char acase[8][16];
@@ -3281,7 +3304,7 @@ static void generate(void)
                  * the control block. */
                 snprintf(b, sizeof b, "(%s)", f->label);
                 asm_line("", "OPEN", b, "VSAM ACB");
-                gen_vsam_status(f, vs_simple);
+                gen_vsam_status(f, NULL, vs_simple);
                 reset_bases();
                 break;
             }
@@ -3308,7 +3331,7 @@ static void generate(void)
             asm_comment(b);
             snprintf(b, sizeof b, "(%s)", f->label);
             asm_line("", "CLOSE", b, "");
-            if (f->vsam) { gen_vsam_status(f, vs_simple); reset_bases(); }
+            if (f->vsam) { gen_vsam_status(f, NULL, vs_simple); reset_bases(); }
             break;
         }
         case ST_READ: {
@@ -3374,11 +3397,14 @@ static void generate(void)
                 /* GET moves the record into the FD area because the RPL says
                  * MVE. R15 is zero when a record came back; anything else is
                  * end of data or a failure, and both take the AT END path. */
-                snprintf(b, sizeof b, "RPL=%sR", f->label);
-                asm_line("", "GET", b, "VSAM sequential retrieval");
+                char rn[10]; rpl_name(f, 0, rn, sizeof rn);
+                const VsFbk *rtab = f->access == 1 ? vs_read_dir : vs_read;
+                snprintf(b, sizeof b, "RPL=%s", rn);
+                asm_line("", "GET", b, f->access == 1
+                         ? "VSAM retrieval by key" : "VSAM sequential retrieval");
                 asm_line("", "LTR", "15,15", "got a record?");
                 asm_line("", "BNZ", le, "");
-                gen_vsam_status(f, vs_read);
+                gen_vsam_status(f, rn, rtab);
                 if (st->src >= 0) {
                     const Sym *t = &syms[st->src];
                     asm_comment("  INTO: only reached when a record was read");
@@ -3386,9 +3412,10 @@ static void generate(void)
                     gen_move_alpha(t, NULL, &syms[f->rec_sym], NULL);
                 }
                 asm_line("", "B", lc, "");
-                asm_line(le, "DS", "0H", "AT END");
+                asm_line(le, "DS", "0H",
+                         f->access == 1 ? "INVALID KEY" : "AT END");
                 reset_bases();
-                gen_vsam_status(f, vs_read);
+                gen_vsam_status(f, rn, rtab);
                 reset_bases();
                 break;
             }
@@ -3509,15 +3536,17 @@ static void generate(void)
                  * feedback codes rather than an abend -- which is exactly what
                  * COBOL's INVALID KEY is for. */
                 need_sym_base(&syms[f->rec_sym]);
-                snprintf(b, sizeof b, "RPL=%sR", f->label);
-                asm_line("", "PUT", b, "VSAM sequential store");
+                char wn[10]; rpl_name(f, 1, wn, sizeof wn);
+                snprintf(b, sizeof b, "RPL=%s", wn);
+                asm_line("", "PUT", b, f->access == 1
+                         ? "VSAM insert by key" : "VSAM sequential store");
                 asm_line("", "LTR", "15,15", "stored?");
                 asm_line("", "BNZ", wle, "");
-                gen_vsam_status(f, vs_write);
+                gen_vsam_status(f, wn, vs_write);
                 asm_line("", "B", wlc, "");
                 asm_line(wle, "DS", "0H", "INVALID KEY");
                 reset_bases();
-                gen_vsam_status(f, vs_write);
+                gen_vsam_status(f, wn, vs_write);
                 reset_bases();
                 break;
             }
@@ -3565,16 +3594,17 @@ static void generate(void)
              * last GET returned, and that is the one acted on -- which is why
              * changing the key first is an error rather than a move. */
             need_sym_base(&syms[f->rec_sym]);
-            snprintf(b, sizeof b, "RPL=%sR", f->label);
+            char un[10]; rpl_name(f, 0, un, sizeof un);
+            snprintf(b, sizeof b, "RPL=%s", un);
             asm_line("", erase ? "ERASE" : "PUT", b,
                      erase ? "erase the held record" : "put the held record back");
             asm_line("", "LTR", "15,15", "done?");
             asm_line("", "BNZ", wle, "");
-            gen_vsam_status(f, vs_upd);
+            gen_vsam_status(f, un, vs_upd);
             asm_line("", "B", wlc, "");
             asm_line(wle, "DS", "0H", "INVALID KEY");
             reset_bases();
-            gen_vsam_status(f, vs_upd);
+            gen_vsam_status(f, un, vs_upd);
             reset_bases();
             break;
         }
@@ -4058,23 +4088,44 @@ static void generate(void)
             const char *macrf = f->opened_output ? "OUT,RST"
                               : f->opened_io     ? "OUT" : "IN";
             const char *optcd = f->opened_io ? "UPD" : "NUP";
-            snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,SEQ,%s)",
-                     f->ddname, macrf);
+            /* SEQ walks the file in key order; DIR goes straight to one record
+             * by key. That is the whole of ACCESS IS SEQUENTIAL versus RANDOM,
+             * and it is why a random READ has an INVALID KEY rather than an AT
+             * END: there is no end to reach when you asked for one record. */
+            const char *seqdir = f->access == 1 ? "DIR" : "SEQ";
+            snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,%s,%s)",
+                     f->ddname, seqdir, macrf);
             asm_line(f->label, "ACB", b, "VSAM access method control block");
-            char rlab[10];
-            snprintf(rlab, sizeof rlab, "%sR", f->label);
-            snprintf(first, sizeof first, "%-8s RPL   ACB=%s,AREA=%s,",
-                     rlab, f->label, syms[f->rec_sym].label);
-            char second[80];
-            /* AREALEN is how big the area is; RECLEN is how long the record in
-             * it actually is. VSAM sets RECLEN itself on a GET, but on a PUT it
-             * is the program's to supply, and a PUT through an RPL that has
-             * never been told fails. Records here are fixed length, so it can
-             * be assembled once rather than stored before each write. */
-            snprintf(second, sizeof second,
-                     "AREALEN=%d,RECLEN=%d,OPTCD=(KEY,SEQ,%s,MVE)",
-                     f->reclen, f->reclen, optcd);
-            asm_cont(first, second);
+
+            /* A direct request has to say which record it means. ARG is the
+             * address of the search key and KEYLEN its length; the key lives
+             * inside the record area, exactly where RECORD KEY says it does,
+             * which is also where VSAMIOS points ARG. */
+            char keyarg[80] = "";
+            if (f->access == 1) {
+                const Sym *k = &syms[f->key_sym];
+                snprintf(keyarg, sizeof keyarg, "ARG=%s,KEYLEN=%d,",
+                         k->label, k->bytes);
+            }
+            for (int pass = 0; pass < 2; pass++) {
+                /* pass 1 is the insert RPL, and only an I-O file that also
+                 * inserts needs one. */
+                if (pass == 1 && !(f->opened_io && f->has_write)) continue;
+                char rlab[10];
+                snprintf(rlab, sizeof rlab, "%s%c", f->label, pass ? 'N' : 'R');
+                snprintf(first, sizeof first, "%-8s RPL   ACB=%s,AREA=%s,",
+                         rlab, f->label, syms[f->rec_sym].label);
+                char second[100];
+                /* KEQ is an OPTCD sub-option, not an RPL keyword of its own:
+                 * find the record whose key equals the argument, rather than
+                 * the first one greater than or equal to it. */
+                snprintf(second, sizeof second,
+                         "AREALEN=%d,RECLEN=%d,%sOPTCD=(KEY,%s,%s%s,MVE)",
+                         f->reclen, f->reclen, keyarg, seqdir,
+                         f->access == 1 ? "KEQ," : "",
+                         pass ? "NUP" : optcd);
+                asm_cont(first, second);
+            }
             continue;
         }
         if (f->isam && f->opened_output) {

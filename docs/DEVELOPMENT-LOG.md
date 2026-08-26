@@ -1357,6 +1357,24 @@ Verified against Jay Moseley's KSDSUPDT through VSAMIOS: identical output, and
 the cluster left behind is identical too -- 99 records, four rewritten, one
 erased. See `doc/VSAM-PLAN.md`.
 
+## Slice 32: VSAM, random by key
+
+`ACCESS IS RANDOM` emits `DIR` in place of `SEQ` in both MACRF and OPTCD, plus
+`ARG` (the address of the key, inside the record area where RECORD KEY puts it),
+`KEYLEN`, and `KEQ` inside OPTCD. A random `READ` therefore carries INVALID KEY
+rather than AT END -- a direct read has no end to reach.
+
+An I-O file that also inserts gets **two RPLs**: UPD for retrieval, rewrite and
+erase, which hold the record, and NUP for inserts, which by definition are not
+updates. VSAMIOS flips that option with MODCB around every insert; a compiler
+knows which verb it is emitting and can just assemble both and pick.
+
+Verified against Jay Moseley's KSDSRAND through VSAMIOS: identical output over
+adds, duplicate adds, changes, not-found changes and deletes, and an identical
+cluster left behind. This is also the slice where feedback 8 stops being
+theoretical -- a duplicate key on a direct insert reports it, where a duplicate
+during a load reports 12 like any other sequence error.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

@@ -182,6 +182,47 @@ Nothing about GET needed changing. The same `GET RPL=` that slice 1 emits
 retrieves and holds a record once the RPL says UPD, which is a good sign that
 the shape of the generated code is right.
 
+## Slice 5: random by key, DONE
+
+`tests/ksdsnatr.cbl` -- KSDSRAND written against native VSAM -- matches the
+VSAMIO version line for line across every path it has, and leaves the same
+cluster behind: 102 records, three inserted by key, one rewritten, one erased.
+
+What it took:
+
+- `ACCESS IS RANDOM` is `DIR` where sequential is `SEQ`, in both the ACB's
+  MACRF and the RPL's OPTCD. That is the whole difference, and it is also why
+  a random READ carries INVALID KEY rather than AT END: there is no end to
+  reach when you asked for one particular record.
+- `ARG` and `KEYLEN` on the RPL, plus `KEQ` inside OPTCD. ARG is the address of
+  the search key, which lives inside the record area exactly where RECORD KEY
+  says it does -- the same place VSAMIOS points it. KEQ is an OPTCD sub-option,
+  not an RPL keyword of its own; the first attempt wrote it as one.
+- **Two RPLs.** An I-O file that also inserts needs both: retrieval, rewrite
+  and erase want UPD so the record is held, while an insert is by definition
+  not an update and wants NUP. VSAMIOS flips the option with MODCB around every
+  insert and flips it back, guarding against the flip failing. A compiler knows
+  which verb it is emitting, so it can assemble both control blocks and pick
+  between them -- no runtime call, and no window in which a failed MODCB leaves
+  the RPL set wrong.
+
+### Feedback 8 finally means something
+
+Slice 2 recorded that a duplicate key during a *load* comes back as feedback 12,
+indistinguishable from any other out-of-sequence key, and kept 8 in the table
+"for the random-insert slice, where the two do separate". They do. Inserting a
+key that already exists through a DIR request returns 8, the program printed
+`*** DUPLICATE RECORD ON FILE`, and it matched the reference exactly. Feedback
+16, no record with that key, is FILE STATUS `23`.
+
+### A note on the oracles
+
+The reference output has a blank line that lands in a different place from
+ours, because a `DISPLAY ' '` fell on a page boundary and became part of the
+eject. Content is identical; only the padding moved. `cobc-regress` already
+drops blank lines before comparing -- carriage control is not content -- so the
+oracle is the 25 non-blank lines.
+
 ## The rig wedged in the middle of this, and it was our own doing
 
 Halfway through slice 4 every submission started hanging. The visible symptom

@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="ksdsnatl ksdsnat ksdsnatu isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="ksdsnatl ksdsnat ksdsnatu ksdsnatr isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 pass=0; fail=0
 
@@ -40,10 +40,11 @@ for t in $TESTS; do
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
         case "$t" in isamseq|isamrnd)
             printf '//GO.GLACCT DD  DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003\n' ;;
-        ksdsnat|ksdsnatl|ksdsnatu)
+        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr)
             # The VSAM trio is stateful and runs in this order: ksdsnatl loads
             # the cluster, ksdsnat reads back what it wrote, ksdsnatu updates
-            # it in place. ksdsnatu is last because it is the one that leaves
+            # it in place and ksdsnatr adds and deletes by key. The last two
+            # leave the cluster changed, which is why
             # the cluster changed, and the next pass starts by loading it. The
             # cluster is defined REUSE, so the load empties it at OPEN OUTPUT
             # and the pair can be re-run any number of times without the
@@ -52,6 +53,15 @@ for t in $TESTS; do
         esac
         if [ "$t" = ksdsnatl ]; then
             printf '//GO.IMAGES  DD  DSN=SVD001.VSAMTEST.DATA,DISP=SHR\n'
+        fi
+        if [ "$t" = ksdsnatr ]; then
+            # The action cards are Jay's, taken from VSTESTK5 so both sides
+            # see exactly the same input -- including its truncation at 72.
+            printf '//GO.CARDIN  DD  *\n'
+            sed -n '/^\/\/SYSIN    DD  \*/,/^\/\*/p' \
+                "$HOME/majesty/mvs/SVD001.VSAMIO.CNTL/VSTESTK5" \
+                | grep -E '^[ACD] ' | cut -c1-72
+            printf '/*\n'
         fi
         if [ "$t" = rpttest ]; then printf '//GO.PROUT   DD  SYSOUT=Z\n'; fi
         if [ "$t" = intofrom ]; then
