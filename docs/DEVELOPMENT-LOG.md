@@ -1205,6 +1205,55 @@ Regression: 26 passed, 0 failed.
 seven one-off gaps, the largest being `MOVE x TO a b c` — one source, several
 receiving fields — which blocks three programs.
 
+## Slice 25: the long tail
+
+`MOVE x TO a b c` (one source, several receiving fields), `DISPLAY` of a group
+and of a signed DISPLAY item, alphanumeric into an unsigned numeric item, and
+`SYNCHRONIZED`.
+
+**A latent bug the multi-destination MOVE exposed.** `CALL` was never added to
+`starts_statement()`, the list that tells an operand loop where the next
+statement begins. Nothing noticed until MOVE started scanning for further
+receiving fields and swallowed the following `CALL` as one, which reported as
+`undeclared identifier 'CALL'` in three programs that had compiled the slice
+before. That list has to be maintained alongside every new verb.
+
+**SYNCHRONIZED is accepted and then verified.** This compiler lays items out
+with no padding, so SYNC is a no-op exactly when every binary item under the
+group already sits on its natural boundary. Where it would not, the layout
+would silently differ from what the clause asks for, so that is refused rather
+than guessed at.
+
+### GnuCOBOL is not authoritative everywhere
+
+`DISPLAY` of a signed DISPLAY item is a place the oracle is simply **wrong**.
+GnuCOBOL `-std=mvs` renders `PIC S9(5) VALUE 12345` as `12345+`. Asked
+directly, ANS COBOL on the guest prints:
+
+    POS [1234E]      NEG [1234N]      UNS [12345]
+    GRP [ABCDEF]     NUM6 [002026]
+
+The sign is overpunched into the low-order digit — `X'C5'` for +5, `X'D5'` for
+−5. ANS only produces a separate trailing sign as an *edited* field, and that
+conversion is one-way. The same run confirmed group DISPLAY and the
+right-justified zero fill of alphanumeric-into-numeric.
+
+Where the two disagree, **IKFCBL00 on the guest is the oracle**, not GnuCOBOL.
+That is worth remembering for everything that follows.
+
+Regression: 27 passed, 0 failed.
+
+### Corpus status
+
+**29 of 30**, and more to the point:
+
+> **Every COBOL program BATCH runs — all 18 of GL022 through GL043 — compiles,
+> along with all seven DYNALOAD sub-modules they call.**
+
+The one holdout, JERM, needs the `CURRENT-DATE` special register and is not in
+BATCH. VALDATE was a genuine defect in the source (a missing period after
+PROGRAM-ID) and was fixed there rather than worked around here.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

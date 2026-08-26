@@ -240,6 +240,7 @@ typedef struct {
     int  is_88;       /* condition name: no storage, tests its parent */
     int  parent;
     int  gparent;     /* enclosing group, -1 at 01/77 -- for OF/IN qualification */
+    int  sync;        /* SYNCHRONIZED: alignment is promised, so it is checked */
     int  index_sym;   /* INDEXED BY item for this OCCURS table, -1 if none */
     int  askey_sym;   /* ASCENDING KEY field, -1 if none */
     int  linkage;     /* declared in the LINKAGE SECTION: storage belongs to the caller */
@@ -987,6 +988,15 @@ static void parse_data_division(void)
                 cursor = syms[t].offset;
                 redef_limit = syms[t].offset + syms[t].bytes;
                 next();
+            } else if (is("SYNC") || is("SYNCHRONIZED")) {
+                /* Accepted, then verified. This compiler lays items out with no
+                 * padding, so SYNC is a no-op exactly when every binary item
+                 * under the group already sits on its natural boundary. Where
+                 * that is not so the layout would silently differ from what the
+                 * clause asks for, which is refused rather than guessed at. */
+                sy->sync = 1;
+                next();
+                if (is("LEFT") || is("RIGHT")) next();
             } else if (is("USAGE")) { next(); if (is("IS")) next(); }
             else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; next(); }
             else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; next(); }
@@ -1111,6 +1121,24 @@ static void parse_data_division(void)
         else g->bytes = g->elem;
     }
     if (cursor > wslen) wslen = cursor;
+
+    /* SYNCHRONIZED is a promise about alignment; check it holds. */
+    for (int i = 0; i < nsym; i++) {
+        if (!syms[i].sync) continue;
+        int base = syms[i].offset;
+        for (int k = i + 1; k < nsym && syms[k].level > syms[i].level; k++) {
+            const Sym *e = &syms[k];
+            if (e->is_group || e->is_88 || e->usage != U_COMP) continue;
+            int need = e->bytes;                      /* 2 or 4 */
+            if ((e->offset - base) % need == 0) continue;
+            char m[160];
+            snprintf(m, sizeof m, "%s is SYNCHRONIZED but %s would need %d bytes "
+                     "of padding to reach its boundary, which this compiler does "
+                     "not insert", syms[i].name, e->name,
+                     need - (e->offset - base) % need);
+            die(m);
+        }
+    }
 
     /* Index items, appended after everything the program declared. COBOL says
      * an index holds a displacement; this one holds the occurrence number,
@@ -1342,7 +1370,7 @@ static int starts_statement(void)
         "MOVE", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "COMPUTE", "IF",
         "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
-        "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", 0
+        "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -1513,12 +1541,16 @@ static void parse_one_statement(void)
                 /* consume_sym has already advanced past the name and any
                  * OF/IN chain -- do NOT advance again here. */
                 int i = consume_sym();
-                if (syms[i].is_group) die("DISPLAY of a group item is not implemented yet");
                 if (syms[i].is_88) die("DISPLAY of a condition name is meaningless");
-                if (!syms[i].is_alpha && !syms[i].edited &&
-                    (syms[i].usage != U_DISPLAY || syms[i].is_signed))
-                    die("DISPLAY takes an alphanumeric, edited, or unsigned "
-                        "DISPLAY item; MOVE to one first.");
+                /* A group and a signed DISPLAY item are both just bytes as far
+                 * as DISPLAY is concerned. A signed item shows its last digit
+                 * overpunched -- 12345 in a PIC S9(5) prints as 1234E -- which
+                 * is what IKFCBL00 does and what the oracle confirms. COMP and
+                 * COMP-3 are still refused: their bytes are not characters. */
+                if (!syms[i].is_alpha && !syms[i].is_group && !syms[i].edited &&
+                    syms[i].usage != U_DISPLAY)
+                    die("DISPLAY of a COMP or COMP-3 item needs a MOVE to a "
+                        "DISPLAY item first");
                 st->dop[st->ndop].sym = i;
                 st->dop[st->ndop].litlen = 0;
             }
@@ -1560,29 +1592,35 @@ static void parse_one_statement(void)
         char squal[MAXQUAL][31]; int snq = savelit ? 0 : consume_quals(squal);
         Node *ssub = opt_subscript();
         expect("TO");
-        st->dst = consume_sym();
-        st->dsub = opt_subscript();
-        st->ssub = ssub;
-        if (savelit) {
-            st->imm = 2;                       /* nonnumeric literal */
-            memcpy(st->immdigits, save, (size_t)savelen + 1);
-            st->immscale = savelen;
-        } else if (is_numeric_literal(save)) {
-            st->imm = 1; st->immscale = syms[st->dst].scale;
-            scale_literal(save, syms[st->dst].scale, st->immdigits, sizeof st->immdigits);
-        } else {
-            int fg = fig_code(save);
-            const Sym *d = &syms[st->dst];
-            if (fg == FIG_ZERO && !(d->is_alpha || d->is_group)) {
-                /* ZERO into a numeric item is simply MOVE 0, so let the
-                 * existing numeric path scale and store it. */
-                st->imm = 1; st->immscale = d->scale;
-                scale_literal("0", d->scale, st->immdigits, sizeof st->immdigits);
-            } else if (fg != FIG_NONE) {
-                if (!(d->is_alpha || d->is_group))
-                    die("MOVE SPACES to a numeric item is not valid");
-                st->fig = fg;
-            } else st->src = resolve_sym(save, squal, snq);
+        /* One source, any number of receiving fields. The scaling of a numeric
+         * literal depends on the item it lands in, so the source is classified
+         * once per destination rather than once per statement. */
+        for (Stmt *m = st; ; m = new_stmt(ST_MOVE)) {
+            m->dst = consume_sym();
+            m->dsub = opt_subscript();
+            m->ssub = ssub;
+            if (savelit) {
+                m->imm = 2;                       /* nonnumeric literal */
+                memcpy(m->immdigits, save, (size_t)savelen + 1);
+                m->immscale = savelen;
+            } else if (is_numeric_literal(save)) {
+                m->imm = 1; m->immscale = syms[m->dst].scale;
+                scale_literal(save, syms[m->dst].scale, m->immdigits, sizeof m->immdigits);
+            } else {
+                int fg = fig_code(save);
+                const Sym *d = &syms[m->dst];
+                if (fg == FIG_ZERO && !(d->is_alpha || d->is_group)) {
+                    /* ZERO into a numeric item is simply MOVE 0, so let the
+                     * existing numeric path scale and store it. */
+                    m->imm = 1; m->immscale = d->scale;
+                    scale_literal("0", d->scale, m->immdigits, sizeof m->immdigits);
+                } else if (fg != FIG_NONE) {
+                    if (!(d->is_alpha || d->is_group))
+                        die("MOVE SPACES to a numeric item is not valid");
+                    m->fig = fg;
+                } else m->src = resolve_sym(save, squal, snq);
+            }
+            if (tok.eof || is(".") || starts_statement()) break;
         }
         eat_period();
         return;
@@ -3434,9 +3472,48 @@ static void generate(void)
                 if (!st->imm && (d->is_alpha || d->is_group ||
                                  syms[st->src].is_alpha || syms[st->src].is_group)) {
                     const Sym *sv = &syms[st->src];
-                    if (!(d->is_alpha || d->is_group) || !(sv->is_alpha || sv->is_group))
-                        die("MOVE between a numeric and an alphanumeric item is "
-                            "not implemented yet");
+                    int s_alpha = sv->is_alpha || sv->is_group;
+                    int d_alpha = d->is_alpha  || d->is_group;
+                    if (s_alpha && !d_alpha && d->usage == U_DISPLAY &&
+                        !d->is_signed && d->scale == 0 && !d->edited) {
+                        /* Alphanumeric into an unsigned display integer. The
+                         * characters are already the zoned digits, so this is a
+                         * copy aligned on the right, zero filled or truncated
+                         * on the left the way a decimal point alignment would
+                         * leave it. */
+                        int dn = st->dsub ? d->elem : d->bytes;
+                        int sn = st->ssub ? sv->elem : sv->bytes;
+                        int cp = dn < sn ? dn : sn;
+                        char fs2[64], fdr[64];
+                        if (dn > 256 || cp > 256) die("that move needs a loop");
+                        need_sym_base(d); need_sym_base(sv);
+                        /* Address the receiver through R1 so the offsets below
+                         * are plain displacements. Doing the arithmetic on the
+                         * label instead produces a relocatable displacement,
+                         * which the assembler rejects (IFO228). */
+                        field_ref_m(d, st->dsub, FR_RX, dn, 6, fdr, sizeof fdr);
+                        snprintf(b, sizeof b, "1,%s", fdr);
+                        asm_line("", "LA", b, "");
+                        if (dn > cp) {
+                            asm_line("", "MVI", "0(1),C'0'", "zero fill on the left");
+                            if (dn - cp > 1) {
+                                snprintf(b, sizeof b, "1(%d,1),0(1)", dn - cp - 1);
+                                asm_line("", "MVC", b, "");
+                            }
+                        }
+                        field_ref_m(sv, st->ssub, FR_SS_NOLEN, cp, 7, fs2, sizeof fs2);
+                        snprintf(b, sizeof b, "%d(%d,1),%s", dn - cp, cp, fs2);
+                        asm_line("", "MVC", b, "alphanumeric into a numeric item");
+                        break;
+                    }
+                    if (!d_alpha || !s_alpha) {
+                        char m[160];
+                        snprintf(m, sizeof m, "MOVE %s (%s) TO %s (%s): between a "
+                                 "numeric and an alphanumeric item, not implemented yet",
+                                 sv->name, (sv->is_alpha || sv->is_group) ? "alphanumeric" : "numeric",
+                                 d->name,  (d->is_alpha  || d->is_group)  ? "alphanumeric" : "numeric");
+                        die(m);
+                    }
                     gen_move_alpha(d, st->dsub, sv, st->ssub);
                     break;
                 }

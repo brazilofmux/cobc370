@@ -43,6 +43,13 @@ test: cobc370
 	   else echo "  $$t rejected"; fi; \
 	 done
 
+# GnuCOBOL is not authoritative everywhere. DISPLAY of a signed DISPLAY item is
+# one place it diverges: -std=mvs renders PIC S9(5) VALUE 12345 as "12345+",
+# while ANS COBOL on the guest prints "1234E" -- the sign overpunched into the
+# low-order digit, X'C5'. ANS only produces a separate trailing sign as an
+# edited field, and that conversion is one-way. Where the two disagree the
+# guest's own IKFCBL00 is the oracle; see tests/misc2.expected.
+#
 # The oracle. -std=mvs is not optional: GnuCOBOL's default dialect renders a
 # decimal point for PIC 9(7)V99, which COBOL-74 does not -- V is implied, not
 # stored. Comparing against the default dialect reads as a mismatch when the
