@@ -239,6 +239,7 @@ typedef struct {
     int  alias;       /* REDEFINES: shares storage, so emit a label not a DC */
     int  is_88;       /* condition name: no storage, tests its parent */
     int  parent;
+    int  gparent;     /* enclosing group, -1 at 01/77 -- for OF/IN qualification */
     char cvalue[MAXTOK];
     int  cvalue_len, cvalue_str;
 } Sym;
@@ -436,6 +437,75 @@ static int need_sym(const char *n)
     return i;
 }
 
+/* ---- qualification with OF / IN ---------------------------------------
+ * COBOL allows the same data name in different groups; a reference then has to
+ * name enough enclosing groups to be unique. The corpus does this constantly
+ * without ever qualifying anything -- every DYNALOAD control block carries its
+ * own WS-MODULE-NAME and WS-MODULE-ADDR, and only the 01 group is ever passed
+ * to CALL. So duplicates are legal at declaration and ambiguity is an error
+ * only where a name is actually USED. */
+
+#define MAXQUAL 4
+
+static int has_ancestor(int i, const char *q)
+{
+    for (int p = syms[i].gparent; p >= 0; p = syms[p].gparent)
+        if (!strcmp(syms[p].name, q)) return 1;
+    return 0;
+}
+
+/* Qualifiers may skip levels: B OF D is valid for A > B under C > D. */
+static int resolve_sym(const char *name, char q[][31], int nq)
+{
+    int found = -1, count = 0;
+    for (int i = 0; i < nsym; i++) {
+        if (strcmp(syms[i].name, name)) continue;
+        int ok = 1;
+        for (int k = 0; k < nq; k++) if (!has_ancestor(i, q[k])) { ok = 0; break; }
+        if (!ok) continue;
+        if (count++ == 0) found = i;
+    }
+    char m[160];
+    if (count == 0) {
+        if (nq) snprintf(m, sizeof m, "no '%s' is inside '%s'", name, q[0]);
+        else    snprintf(m, sizeof m, "undeclared identifier '%s'", name);
+        die(m);
+    }
+    if (count > 1) {
+        snprintf(m, sizeof m, "'%s' is ambiguous -- %d items share that name; "
+                 "qualify it with OF or IN", name, count);
+        die(m);
+    }
+    return found;
+}
+
+static void expect(const char *w);
+
+/* Reads any OF/IN chain that follows a name already consumed. */
+static int consume_quals(char q[][31])
+{
+    int nq = 0;
+    while (is("OF") || is("IN")) {
+        next();
+        if (nq >= MAXQUAL) die("too many levels of qualification");
+        if (strlen(tok.text) > 30) die("data name too long");
+        strcpy(q[nq++], tok.text);
+        next();
+    }
+    return nq;
+}
+
+/* Consumes  name [OF group]...  and resolves it. */
+static int consume_sym(void)
+{
+    char name[31], q[MAXQUAL][31];
+    if (strlen(tok.text) > 30) die("data name too long");
+    strcpy(name, tok.text);
+    next();
+    int nq = consume_quals(q);
+    return resolve_sym(name, q, nq);
+}
+
 static void parse_program_id(void)
 {
     expect("IDENTIFICATION"); expect("DIVISION"); expect(".");
@@ -588,7 +658,7 @@ static void parse_report_section(void)
                     snprintf(pic, sizeof pic, "%s", tok.text); next();
                 } else if (is("SOURCE")) {
                     next(); if (is("IS")) next();
-                    fl->src = need_sym(tok.text); next();
+                    fl->src = consume_sym();
                 } else if (is("VALUE")) {
                     next(); if (is("IS")) next();
                     if (!tok.literal) die("a report VALUE must be a nonnumeric literal");
@@ -795,14 +865,17 @@ static void parse_data_division(void)
         /* Anything under a REDEFINES shares that storage as well. */
         for (int k = sp - 1; k >= 0; k--)
             if (syms[stack[k]].alias) { sy->alias = 1; break; }
+        sy->gparent = sp ? stack[sp-1] : -1;
         sy->level = level;
         if (strlen(tok.text) > 30) die("data name too long");
         if (!strcmp(tok.text, "FILLER")) snprintf(sy->name, sizeof sy->name, "FILL%04d", nsym);
         else {
             strcpy(sy->name, tok.text);
-            if (lookup(sy->name) >= 0)
-                die("duplicate data name (qualification with OF/IN is not "
-                    "implemented yet)");
+            /* Legal in a different group; only a clash inside the SAME group is
+             * an error, because no qualification could ever separate those. */
+            for (int k = 0; k < nsym; k++)
+                if (!strcmp(syms[k].name, sy->name) && syms[k].gparent == sy->gparent)
+                    die("duplicate data name in the same group");
         }
         next();
 
@@ -1086,8 +1159,7 @@ static Node *parse_primary(void)
     }
     if (!tok.text[0]) die("expression ended unexpectedly");
     Node *n = node(N_SYM);
-    n->sym = need_sym(tok.text);
-    next();
+    n->sym = consume_sym();
     if (is("(")) {                       /* a subscript, not a grouping paren */
         next();
         n->sub = parse_expr();
@@ -1282,8 +1354,11 @@ static void parse_one_statement(void)
                 memcpy(st->dop[st->ndop].lit, tok.text, (size_t)tok.len + 1);
                 st->dop[st->ndop].litlen = tok.len;
                 st->dop[st->ndop].sym = -1;
+                next();
             } else {
-                int i = need_sym(tok.text);
+                /* consume_sym has already advanced past the name and any
+                 * OF/IN chain -- do NOT advance again here. */
+                int i = consume_sym();
                 if (syms[i].is_group) die("DISPLAY of a group item is not implemented yet");
                 if (syms[i].is_88) die("DISPLAY of a condition name is meaningless");
                 if (!syms[i].is_alpha && !syms[i].edited &&
@@ -1294,7 +1369,6 @@ static void parse_one_statement(void)
                 st->dop[st->ndop].litlen = 0;
             }
             st->ndop++;
-            next();
             if (is("(")) die("DISPLAY of a subscripted item is not implemented yet");
             if (is("UPON")) die("DISPLAY UPON is not implemented yet");
         }
@@ -1329,10 +1403,10 @@ static void parse_one_statement(void)
         char save[MAXTOK]; int savelit = tok.literal, savelen = tok.len;
         memcpy(save, tok.text, (size_t)tok.len + 1);
         next();
+        char squal[MAXQUAL][31]; int snq = savelit ? 0 : consume_quals(squal);
         Node *ssub = opt_subscript();
         expect("TO");
-        st->dst = need_sym(tok.text);
-        next();
+        st->dst = consume_sym();
         st->dsub = opt_subscript();
         st->ssub = ssub;
         if (savelit) {
@@ -1354,7 +1428,7 @@ static void parse_one_statement(void)
                 if (!(d->is_alpha || d->is_group))
                     die("MOVE SPACES to a numeric item is not valid");
                 st->fig = fg;
-            } else st->src = need_sym(save);
+            } else st->src = resolve_sym(save, squal, snq);
         }
         eat_period();
         return;
@@ -1367,10 +1441,11 @@ static void parse_one_statement(void)
         char save[MAXTOK];
         memcpy(save, tok.text, (size_t)tok.len + 1);
         next();
+        char squal2[MAXQUAL][31];
+        int snq2 = is_numeric_literal(save) ? 0 : consume_quals(squal2);
         Node *ssub2 = opt_subscript();
         expect(sub ? "FROM" : "TO");
-        st->dst = need_sym(tok.text);
-        next();
+        st->dst = consume_sym();
         st->dsub = opt_subscript();
         st->ssub = ssub2;
         if (is("GIVING")) die("GIVING is not implemented yet");
@@ -1379,7 +1454,7 @@ static void parse_one_statement(void)
             st->imm = 1;
             st->immscale = dot ? (int)strlen(dot + 1) : 0;
             scale_literal(save, st->immscale, st->immdigits, sizeof st->immdigits);
-        } else st->src = need_sym(save);
+        } else st->src = resolve_sym(save, squal2, snq2);
         eat_period();
         return;
     }
@@ -1387,8 +1462,7 @@ static void parse_one_statement(void)
     if (is("COMPUTE")) {
         next();
         Stmt *st = new_stmt(ST_COMPUTE);
-        st->dst = need_sym(tok.text);
-        next();
+        st->dst = consume_sym();
         st->dsub = opt_subscript();
         if (is("ROUNDED")) { st->rounded = 1; next(); }
         if (is("EQUAL")) { next(); if (is("TO")) next(); } else expect("=");
@@ -1408,7 +1482,7 @@ static void parse_one_statement(void)
 
         if (is("VARYING")) {
             next();
-            st->vary_sym = need_sym(tok.text); next();
+            st->vary_sym = consume_sym();
             if (syms[st->vary_sym].is_alpha || syms[st->vary_sym].is_group)
                 die("PERFORM VARYING needs a numeric identifier");
             expect("FROM"); st->vary_from = parse_expr();
@@ -1497,11 +1571,10 @@ static void parse_one_statement(void)
 
     if (is("WRITE")) {
         next();
-        int i = need_sym(tok.text);
+        int i = consume_sym();
         int fi = -1;
         for (int k = 0; k < nfile; k++) if (files[k].rec_sym == i) fi = k;
         if (fi < 0) die("WRITE names something that is not a file's record");
-        next();
         if (is("FROM")) die("WRITE FROM is not implemented yet");
         Stmt *st = new_stmt(ST_WRITE);
         st->dst = fi;
@@ -2506,7 +2579,15 @@ static void generate(void)
             has_display = 1;
 
     asm_comment("---------------------------------------------------------------");
-    snprintf(b, sizeof b, " Generated by cobc370 from %s", src.name);
+    {
+        /* The banner is a comment, but a comment still may not reach column 72
+         * -- and an absolute source path easily does. Fall back to the base
+         * name, then truncate, rather than emitting a card the assembler will
+         * read as continued. */
+        const char *sn = src.name, *slash = strrchr(sn, '/');
+        if ((int)strlen(sn) + 27 > 70 && slash) sn = slash + 1;
+        snprintf(b, sizeof b, " Generated by cobc370 from %.40s", sn);
+    }
     asm_comment(b);
     asm_comment(" Standard OS/360 entry linkage. SYS1.COBLIB is never referenced.");
     if (has_display || nreport)

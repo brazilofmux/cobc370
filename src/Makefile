@@ -37,7 +37,7 @@ test: cobc370
 	@# duplicate name are errors forever, and ALTER has zero uses in the
 	@# corpus and is not going to be implemented. Twice now a fixture went
 	@# stale because the next slice implemented the very thing it tested.
-	@for t in bad-undeclared bad-verb bad-duplicate; do \
+	@for t in bad-undeclared bad-verb bad-duplicate bad-ambiguous; do \
 	   if ./cobc370 tests/$$t.cbl -o /dev/null >/dev/null 2>&1; then \
 	     echo "  $$t ACCEPTED -- it should have been rejected"; exit 1; \
 	   else echo "  $$t rejected"; fi; \

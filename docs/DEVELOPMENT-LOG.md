@@ -954,6 +954,50 @@ and it was never about the `UT-S-` / `DA-I-` assign names.
 | `INDEXED BY` / `SEARCH ALL` | 2 |
 | `CALL`, `WRITE FROM`, `READ INTO`, and three one-offs | 1 each |
 
+## Slice 19: qualification with OF / IN
+
+The same data name may appear in different groups; a reference then has to name
+enough enclosing groups to be unique. The corpus does this constantly and never
+qualifies anything — every DYNALOAD control block carries its own
+`WS-MODULE-NAME` and `WS-MODULE-ADDR`, and only the 01 group is ever passed to
+`CALL`. So the important half was making duplicates **legal at declaration**,
+with ambiguity an error only where a name is actually *used*:
+
+- two items with the same name in the same group is still an error, because no
+  qualification could ever separate them
+- an unqualified reference to a name that several items share reports how many
+  share it and asks for `OF`/`IN`
+- `LEAF OF OUTER-A` may skip intervening levels, as COBOL allows
+
+Sym gained a `gparent` link for the enclosing group, which is what makes the
+ancestor walk possible.
+
+### A refactor hazard worth naming
+
+Switching the eight reference sites from `need_sym(tok.text)` to a
+`consume_sym()` that advances the token itself was mechanical everywhere except
+DISPLAY, whose operand loop had its own trailing `next()` shared by both
+branches. The result was a **double advance** that stepped over whatever ended
+the statement: in one program past `GO` onto `TO`, in another past the `.` onto
+the next paragraph name. Both surfaced as `undeclared identifier` for a token
+that was never meant to be an identifier — and both were programs that had
+compiled *before* the slice, which is the only reason it was caught.
+
+Regression: 21 passed, 0 failed. Negative fixtures now include `bad-ambiguous`.
+
+### Corpus status
+
+10 of 30, with the duplicate-name blocker gone entirely.
+
+| Blocker | Programs |
+|---|---|
+| `LINKAGE SECTION` / `PROCEDURE DIVISION USING` | 12 |
+| `INDEXED BY` / `SEARCH ALL` | 2 |
+| `CALL`, `WRITE FROM`, `READ INTO`, `DISPLAY` of a group, and two one-offs | 1 each |
+
+`LINKAGE SECTION` is now the whole story: 12 of the 20 remaining programs stop
+there, and `CALL` is its other half.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
