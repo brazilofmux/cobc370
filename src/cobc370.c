@@ -225,6 +225,7 @@ typedef struct {
     int  occurs;      /* OCCURS count, 0 when not a table */
     int  elem;        /* size of one element */
     int  occ_parent;  /* the table this item sits inside, -1 if none */
+    int  alias;       /* REDEFINES: shares storage, so emit a label not a DC */
     int  is_88;       /* condition name: no storage, tests its parent */
     int  parent;
     char cvalue[MAXTOK];
@@ -629,6 +630,7 @@ static void parse_data_division(void)
     /* Open groups, innermost last. A group's size is not known until an item
      * at the same or a lower level closes it. */
     int stack[32], sp = 0;
+    int redef_resume = -1, redef_limit = -1;
     int cursor = 0;
 
     while (!tok.eof && !is("PROCEDURE")) {
@@ -758,6 +760,7 @@ static void parse_data_division(void)
             else g->bytes = g->elem;
         }
         if (level == 1 || level == 77) {
+            redef_resume = -1; redef_limit = -1;   /* a new 01 area starts clean */
             while (sp > 0) {
                 Sym *g = &syms[stack[--sp]];
                 g->elem = cursor - g->offset;
@@ -778,6 +781,9 @@ static void parse_data_division(void)
         sy->occ_parent = -1;
         for (int k = sp - 1; k >= 0; k--)
             if (syms[stack[k]].occurs > 0) { sy->occ_parent = stack[k]; break; }
+        /* Anything under a REDEFINES shares that storage as well. */
+        for (int k = sp - 1; k >= 0; k--)
+            if (syms[stack[k]].alias) { sy->alias = 1; break; }
         sy->level = level;
         if (strlen(tok.text) > 30) die("data name too long");
         if (!strcmp(tok.text, "FILLER")) snprintf(sy->name, sizeof sy->name, "FILL%04d", nsym);
@@ -790,6 +796,7 @@ static void parse_data_division(void)
         next();
 
         char pic[64] = "";
+        int item_redef = 0;        /* this item carries REDEFINES itself */
         sy->usage = U_DISPLAY;
         while (!tok.eof && !is(".")) {
             if (is("PIC") || is("PICTURE")) {
@@ -808,6 +815,21 @@ static void parse_data_division(void)
                 if (is("INDEXED") || is("ASCENDING") || is("DESCENDING"))
                     die("INDEXED BY, ASCENDING/DESCENDING KEY and SEARCH are "
                         "not implemented yet");
+            } else if (is("REDEFINES")) {
+                /* The redefining item is laid down on top of the redefined one:
+                 * point the cursor at it so this item and everything
+                 * subordinate to it takes the same offsets. */
+                next();
+                int t = lookup(tok.text);
+                if (t < 0) die("REDEFINES names an item that was not declared");
+                if (syms[t].level != level)
+                    die("REDEFINES must name an item at the same level");
+                sy->alias = 1;
+                item_redef = 1;
+                redef_resume = cursor;
+                cursor = syms[t].offset;
+                redef_limit = syms[t].offset + syms[t].bytes;
+                next();
             } else if (is("USAGE")) { next(); if (is("IS")) next(); }
             else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; next(); }
             else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; next(); }
@@ -904,7 +926,21 @@ static void parse_data_division(void)
         }
         sy->offset = cursor;
         cursor += sy->bytes;
-        if (level == 1 || level == 77) wslen = cursor;
+        if (item_redef) {
+            /* Only the item that carries REDEFINES resumes the cursor. A group
+             * redefinition's SUBORDINATES must keep walking forward through the
+             * aliased area -- resuming there would drop every field after the
+             * first on top of the end of the redefined item. Groups never reach
+             * here; theirs resumes at the next 01 boundary.
+             *
+             * An elementary redefinition may also be shorter than what it
+             * covers, and the item after it still follows the ORIGINAL. */
+            if (redef_resume > cursor) cursor = redef_resume;
+            redef_resume = -1; redef_limit = -1;
+        }
+        if (redef_limit >= 0 && cursor > redef_limit)
+            die("a REDEFINES may not be longer than the item it redefines");
+        if ((level == 1 || level == 77) && cursor > wslen) wslen = cursor;
         if (cur_file >= 0 && level == 1 && files[cur_file].rec_sym < 0) {
             files[cur_file].rec_sym = nsym;
             files[cur_file].reclen = sy->bytes;
@@ -3125,6 +3161,16 @@ static void generate(void)
             Sym *sy = &syms[i];
             char cmt[96];
             if (sy->is_88) continue;
+            if (sy->alias) {
+                /* Shares storage with what it redefines, so it defines no bytes
+                 * -- just a name for the same address. COBWS is the CSECT
+                 * origin, and the assembler works out the displacement from
+                 * whichever chunk base is in use. */
+                snprintf(b, sizeof b, "COBWS+%d", sy->offset);
+                snprintf(cmt, sizeof cmt, "%s REDEFINES", sy->name);
+                asm_line(sy->label, "EQU", b, cmt);
+                continue;
+            }
             if (sy->offset > at) {
                 snprintf(b, sizeof b, "XL%d", sy->offset - at);
                 asm_line("", "DS", b, "reserve the rest of a table");

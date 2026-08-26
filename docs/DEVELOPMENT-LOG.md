@@ -879,6 +879,50 @@ The `LINKAGE SECTION` seven are the DYNALOAD sub-modules — `DIV`, `DIVMOD`,
 are both the largest remaining group and the feature ANS COBOL never had, which
 is why DYNALOAD exists at all.
 
+## Slice 17: REDEFINES
+
+Both shapes the corpus uses: an 01-level group laid over another 01 group — the
+classic table-over-initialised-FILLERs idiom — and an elementary item
+redefining another elementary item inside a group.
+
+A redefinition defines no storage, so it is emitted as an `EQU` to the address
+it shares rather than a `DC`:
+
+    D0003    DC    CL14'IIncome       '  FILL0003 PIC X(14)
+    D0004    EQU   COBWS+0             CLASS-TABLE REDEFINES
+    D0005    EQU   COBWS+0             CLASS-ENTRY REDEFINES
+    D0006    EQU   COBWS+0             CLASS-LETTER REDEFINES
+    D0007    EQU   COBWS+1             CLASS-NAME REDEFINES
+
+`COBWS` is the CSECT origin, so the assembler works out the displacement from
+whichever chunk base is loaded and base-locator addressing needs no special
+case. A redefinition longer than what it covers is rejected.
+
+### The bug worth remembering
+
+The cursor has to be *resumed* after a redefinition, since the item that
+follows sits after the ORIGINAL. Applying that to every item while a
+redefinition was open was wrong: the **subordinates** of a group redefinition
+must keep walking forward through the aliased area. Getting it wrong put
+`CLASS-NAME` at offset 42 instead of 1 — every field after the first landing on
+the end of the redefined item — and left a phantom 123-byte gap behind it. Only
+the item actually carrying the REDEFINES clause resumes.
+
+Regression: 19 passed, 0 failed.
+
+### Corpus status
+
+Still 8 of 30, with the five REDEFINES programs each advancing to their next
+gap. Remaining blockers:
+
+| Blocker | Programs |
+|---|---|
+| `LINKAGE SECTION` / `PROCEDURE DIVISION USING` | 7 |
+| qualification with `OF` / `IN` | 6 |
+| `OPEN` of something not declared as a file | 3 |
+| `INDEXED BY` / `SEARCH ALL` | 2 |
+| `WRITE FROM`, `READ INTO`, and two one-offs | 1 each |
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:
