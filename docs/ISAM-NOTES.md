@@ -111,11 +111,20 @@ support here is not wasted after VSAM lands — the *JCL* can redirect a program
 without recompiling it. (IIP was withdrawn from z/OS around V1R7; whether 3.8j's
 VSAM has it is untested here.)
 
-## Recovery gap
+## Recovery gap — narrower than it first looks
 
-`FW.ACCOUNTS`, the flat input `LDGLACCT` loads from, no longer exists — it is an
-older schema. `SVD001.GLACCT` therefore **cannot be rebuilt from source** and
-must be preserved as data. See `doc/DISASTER-RECOVERY.md`.
+`FW.ACCOUNTS`, the flat input `LDGLACCT` loads from, no longer exists; it is an
+older schema. So `SVD001.GLACCT` specifically **cannot be rebuilt from source**
+and must be preserved as data. See `doc/DISASTER-RECOVERY.md`.
+
+That is a gap in one dataset's provenance, **not** in the ISAM load path. BATCH
+still creates an ISAM file of descriptions, uses it, and deletes it on every
+run, so the three-DD create JCL above is exercised routinely and is known good.
+
+It also means retrieval is not the whole story for the compiler: replacing that
+BATCH program eventually needs ISAM **load mode** — QISAM sequential output in
+ascending key order — and not just the random and sequential reads implemented
+so far.
 
 ## The JCL, which is worse than the access method
 
