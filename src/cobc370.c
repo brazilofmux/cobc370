@@ -80,6 +80,12 @@ static Tok tok;
  * only breaks on them once the procedure division has started. */
 static int lex_parens;
 
+/* A PICTURE character-string is one word even when it contains a period --
+ * PIC 9(2).99 must survive whole. The scanner cannot tell that from the
+ * characters alone: a ')' before a decimal point is legal in a picture and
+ * nowhere else. So the parser says when a picture is coming. */
+static int lex_picture;
+
 static void die(const char *msg)
 {
     fprintf(stderr, "%s:%d: %s\n", src.name, tok.line ? tok.line : src.line, msg);
@@ -132,8 +138,13 @@ static void next(void)
         if (lex_parens && (*src.p == '(' || *src.p == ')')) break;
         if (*src.p == '.') {
             /* A period is a decimal point only when it sits between digits;
-               otherwise it ends the sentence. */
-            if (!(i > 0 && isdigit((unsigned char)tok.text[i-1])
+               otherwise it ends the sentence. Inside a PICTURE the rule is the
+               standard's own: the period is a separator only when a space
+               follows it, so PIC 9(2).99 and PIC -.9(18) stay one word. */
+            if (lex_picture) {
+                char nx = *(src.p + 1);
+                if (!nx || isspace((unsigned char)nx)) break;
+            } else if (!(i > 0 && isdigit((unsigned char)tok.text[i-1])
                        && isdigit((unsigned char)*(src.p + 1)))) break;
         }
         if (i < MAXTOK-1) tok.text[i++] = (char)toupper((unsigned char)*src.p);
@@ -143,6 +154,15 @@ static void next(void)
 }
 
 static int is(const char *w) { return strcmp(tok.text, w) == 0; }
+
+/* Step past PIC / PICTURE [IS] and leave the character-string in tok. */
+static void next_pic(void)
+{
+    lex_picture = 1;
+    next();
+    if (is("IS")) next();
+    lex_picture = 0;
+}
 
 static void expect(const char *w)
 {
@@ -699,7 +719,7 @@ static void parse_report_section(void)
             char pic[64] = "";
             while (!tok.eof && !is(".")) {
                 if (is("PIC") || is("PICTURE")) {
-                    next(); if (is("IS")) next();
+                    next_pic();
                     snprintf(pic, sizeof pic, "%s", tok.text); next();
                 } else if (is("SOURCE")) {
                     next(); if (is("IS")) next();
@@ -995,7 +1015,7 @@ static void parse_data_division(void)
         sy->usage = U_DISPLAY;
         while (!tok.eof && !is(".")) {
             if (is("PIC") || is("PICTURE")) {
-                next(); if (is("IS")) next();
+                next_pic();
                 if (strlen(tok.text) >= sizeof pic) die("PICTURE too long");
                 strcpy(pic, tok.text); next();
             } else if (is("OCCURS")) {

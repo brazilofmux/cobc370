@@ -176,16 +176,52 @@ worth knowing that it is eleven and not a hundred.
 
 ## Testing it
 
-**Obtainable today: CCVS-85.** The NIST COBOL-85 validation suite is public
+**In use here: CCVS-85.** The NIST COBOL-85 validation suite is public
 domain — `newcob.val`, 512 test programs plus copy members and data files
 delimited by `*HEADER`, extracted with `EXEC85`.
 <https://github.com/Zaneham/nist-cobol85-test-suite>
 
 It is the wrong standard year, but it is organised by the *same* map: test
 names encode module and level (`NC211A` is Nucleus level 2, `SG102A` is
-Segmentation level 1). So the level-1 tests of the modules claimed here can be
-run selectively, and failures triaged into "genuinely missing" versus
-"COBOL-85 semantics that '74 did not have."
+Segmentation level 1). So the modules claimed here can be run selectively, and
+failures triaged into "genuinely missing" versus "COBOL-85 semantics that '74
+did not have."
+
+GnuCOBOL already carries the harness. In `~/gnucobol-svn/tests/cobol85`,
+`make NC` (or `make modules`) downloads `newcob.val`, extracts `EXEC85` from
+it, and splits the population file into per-module `.CBL` files -- 426
+programs and 9748 assertions across twelve modules, all of which GnuCOBOL
+passes. `bin/cobc-ccvs` runs them through this front end.
+
+### What that measured
+
+Almost nothing compiles yet, which was expected. The useful output is not a
+score but a histogram -- which single missing thing blocks the most programs:
+
+    126   more than 15 digits (see below)
+     25   an unimplemented SELECT clause
+     20   literal continuation
+     20   an unrecognised Data Division entry
+     13   BLOCK CONTAINS n CHARACTERS
+      9   the SIGN clause
+      6   the JUSTIFIED clause
+
+Two of those are Nucleus **Level 1** requirements this map had missed:
+
+- **18 digits.** `1 NUC 1,2` sets numeric literals at 1 through 18 digits and
+  arithmetic operands at 18. cobc370 stops at 15, because the packed work area
+  it allocates is 8 bytes. It is now the single largest blocker in the corpus.
+- **Literal continuation.** Level 1 permits a nonnumeric literal to be
+  continued on the next line with a hyphen in column 7; only *words and
+  numeric* literals are held back to Level 2. cobc370 rejects all continuation.
+
+The first run also found an outright bug rather than an absence: a PICTURE
+containing a repetition count before its decimal point -- `PIC 9(2).99`, or
+`-9(9).9(9)` -- was split at the period and the rest of the entry read as a
+new one. It blocked 98 of the 336 programs, more than any missing feature.
+Fixed: the scanner now applies the standard's own rule inside a picture, where
+a period is a separator only when a space follows it. Every existing test's
+generated assembler is byte-identical across the change.
 
 **CCVS-74 itself: identified, not obtained.** Reported catalogue identifiers
 are NTIS `AD/A-036 173` / DTIC `ADA036173`, "COBOL Compiler Validation System,

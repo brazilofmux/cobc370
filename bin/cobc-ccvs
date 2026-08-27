@@ -1,0 +1,44 @@
+#!/bin/bash
+# Run the NIST CCVS-85 corpus through the front end and rank what stops it.
+#
+# This does not run the tests -- almost none of them compile yet, and the
+# useful output is not a score but a histogram: which single missing thing
+# blocks the most programs. The first one found paid for the exercise (a
+# PICTURE containing a repetition count before its decimal point, 98 programs).
+#
+#   cobc-ccvs [module ...]      default: the modules cobc370 has any claim to
+#
+# Prerequisite: GnuCOBOL's harness has extracted the modules. In
+# ~/gnucobol-svn/tests/cobol85, "make NC" (or "make modules") downloads
+# newcob.val and runs EXEC85 to split it into per-module .CBL files.
+set -u
+. "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
+CC="$(cd "$(dirname "$0")/../src" && pwd)"
+CCVS=${COBC370_CCVS:-$HOME/gnucobol-svn/tests/cobol85}
+
+[ -d "$CCVS" ] || die "no CCVS-85 tree at $CCVS -- set COBC370_CCVS"
+( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
+
+MODULES=${*:-NC SQ RL IX RW IC}
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+total=0; built=0
+
+for m in $MODULES; do
+    d="$CCVS/$m"
+    if [ ! -d "$d" ]; then say "  $m: not extracted (run 'make $m' in $CCVS)"; continue; fi
+    ok=0; n=0
+    for f in "$d"/*.CBL; do
+        n=$((n+1))
+        if "$CC/cobc370" "$f" -o /dev/null >/dev/null 2>"$work/err"; then ok=$((ok+1))
+        else sed -n '1p' "$work/err" >> "$work/reasons"; fi
+    done
+    printf '  %-3s %3d of %3d compile\n' "$m" "$ok" "$n"
+    total=$((total+n)); built=$((built+ok))
+done
+
+say ""
+say "$built of $total compile"
+say ""
+say "what stops the rest, most common first:"
+[ -f "$work/reasons" ] && sed 's/^[^:]*:[0-9]*: *//' "$work/reasons" \
+    | sort | uniq -c | sort -rn | head -15 | sed 's/^/  /'
