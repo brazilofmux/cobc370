@@ -206,18 +206,25 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Two slices in, the same histogram reads:
+Three slices in, the same histogram reads:
 
-    112   literal continuation
+     77   a SECTION in the Procedure Division
      25   an unimplemented SELECT clause
      22   a USAGE DISPLAY item past 16 digits
      12   BLOCK CONTAINS n CHARACTERS
       9   the SIGN clause
 
-Each fix uncovers the next thing: the 126-program digit blocker fell to 22, a
-group `REDEFINES` bug worth 94 programs appeared behind it and is now fixed,
-and literal continuation -- which had been sitting at 20 because most programs
-hit something else first -- is now the top of the list at 112.
+Each fix uncovers the next thing, and the count that matters is the one at the
+top of the list rather than the number that compile:
+
+    blocker                     start   after digits   after REDEFINES   now
+    more than 15 digits           126             22                22    22
+    group REDEFINES                 -             94                 0     0
+    literal continuation           20             20               112     0
+    a SECTION in Procedure Div      -              -                 -    77
+
+Two of those had been sitting near the bottom of the list the whole time, only
+because most programs hit something else first.
 
 Three of those are Nucleus **Level 1** requirements this map had missed:
 
@@ -297,6 +304,45 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### Literal continuation
+
+`1 NUC 1,2` allows a nonnumeric literal to be broken across lines; words and
+numeric literals are held back to Level 2. I-106, 5.8.2.2 gives the rule: a
+hyphen in the indicator area, area A blank, and -- because the literal has no
+closing quotation mark yet -- the first nonblank character in area B must be a
+quotation mark, with the literal resuming at the character after it.
+
+The clause that costs something is **"all spaces at the end of the continued
+line are considered part of the literal."** A file whose line stops at column
+38 still contributes 34 spaces, because the reference-format line runs to
+column 72 whether or not the bytes are in the file. That was verified against
+GnuCOBOL at six different stopping columns before implementing it: the spaces
+contributed are always `72 - column of the last character`.
+
+A hyphen outside a literal now gets a diagnostic naming what it is, instead of
+being silently discarded as it was before.
+
+### Three silent truncations behind it
+
+Making the literal reach the compiler was one thing; getting it out the other
+side turned up three places that cut data without saying so.
+
+- **`asm_line` clamped a statement at column 71.** A comment being trimmed is
+  fine, and that is what the code was written for -- but the clamp applied to
+  the operand too. A 51-character literal became
+  `DC CL51'...33 characters...'`, which assembles clean at RC=0000 and holds
+  the wrong bytes. This is now fatal.
+- **`Sym.value` was 34 bytes**, sized for a scaled numeric and shared with
+  alphanumeric `VALUE`s, so any `VALUE` literal past 33 characters had been
+  quietly cut -- with or without continuation.
+- **`MAXTOK` was 64**, and the scanner dropped characters past it rather than
+  complaining. It is 132 now, enough for the standard's 120-character literal,
+  and overflow is diagnosed.
+
+A literal too long for one statement is emitted as adjacent `DC`s. The
+assembler lays them down contiguously, so the field is the same bytes; only
+the source is split.
 
 ### A bug rather than an absence
 

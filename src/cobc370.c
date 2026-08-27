@@ -29,7 +29,10 @@
 #include "picture.h"
 
 #define MAXLINE 256
-#define MAXTOK  64
+/* 1 NUC 1,2 puts a nonnumeric literal at 1 through 120 characters, so a token
+ * has to be able to hold one -- with room for the terminator and for a word
+ * that runs long enough to be worth diagnosing rather than silently cutting. */
+#define MAXTOK  132
 
 /* ---- source reader: fixed format ------------------------------------- */
 /* cols 1-6 sequence, 7 indicator, 8-72 code, 73-80 sequence. A '*' or '/'
@@ -40,6 +43,7 @@ typedef struct {
     char  buf[MAXLINE];
     char *p;            /* cursor within the current line's code area */
     int   line;
+    int   cont;         /* this line carries a hyphen in the indicator area */
     const char *name;
 } Src;
 
@@ -53,6 +57,7 @@ static int src_fill(Src *s)
         if (n < 7) continue;                       /* blank or short: skip */
         if (s->buf[6] == '*' || s->buf[6] == '/') continue;   /* comment */
         if (n > 72) s->buf[72] = 0;                /* drop cols 73-80 */
+        s->cont = (s->buf[6] == '-');
         s->p = s->buf + 7;                         /* code starts col 8 */
         int blank = 1;
         for (char *q = s->p; *q; q++) if (!isspace((unsigned char)*q)) blank = 0;
@@ -86,6 +91,29 @@ static int lex_parens;
  * nowhere else. So the parser says when a picture is coming. */
 static int lex_picture;
 
+/* Move a nonnumeric literal onto its continuation line, or return 0 if the
+ * next line is not one. I-106, 5.8.2.2: a hyphen in the indicator area, area A
+ * blank, and -- because the literal has no closing quotation mark yet -- the
+ * first nonblank character in area B must be a quotation mark, with the
+ * literal resuming at the character after it. */
+static int lit_continue(Src *s)
+{
+    if (!fgets(s->buf, sizeof s->buf, s->fp)) return 0;
+    s->line++;
+    size_t n = strlen(s->buf);
+    while (n && (s->buf[n-1] == '\n' || s->buf[n-1] == '\r')) s->buf[--n] = 0;
+    if (n < 12 || s->buf[6] != '-') return 0;
+    if (n > 72) { s->buf[72] = 0; n = 72; }
+    for (size_t k = 7; k < 11 && k < n; k++)
+        if (s->buf[k] != ' ') return 0;            /* area A must be blank */
+    char *q = s->buf + 11;                         /* area B starts at col 12 */
+    while (*q == ' ') q++;
+    if (*q != '"' && *q != '\'') return 0;
+    s->cont = 1;
+    s->p = q + 1;
+    return 1;
+}
+
 static void die(const char *msg)
 {
     fprintf(stderr, "%s:%d: %s\n", src.name, tok.line ? tok.line : src.line, msg);
@@ -106,7 +134,17 @@ static void next(void)
 {
     tok.eof = 0;
     for (;;) {
-        if (!src.p || !*src.p) { if (!src_fill(&src)) { tok.eof = 1; tok.text[0]=0; return; } }
+        if (!src.p || !*src.p) {
+            if (!src_fill(&src)) { tok.eof = 1; tok.text[0]=0; return; }
+            /* A hyphen joins the first nonblank in area B to the last nonblank
+             * of the line before it, with no space between. Reaching here means
+             * the previous token already ended, so this is a word or a numeric
+             * literal being continued -- level 2 of the Nucleus, where level 1
+             * allows only a nonnumeric literal to be broken across lines. */
+            if (src.cont)
+                die("continuation of a word or a numeric literal is not "
+                    "implemented; only a nonnumeric literal may be continued");
+        }
         while (*src.p && (isspace((unsigned char)*src.p) || sep_punct(src.p))) src.p++;
         if (*src.p) break;
     }
@@ -122,12 +160,32 @@ static void next(void)
         char q = *src.p++;
         int i = 0;
         for (;;) {
-            if (!*src.p) die("unterminated literal (literals may not span lines)");
+            if (!*src.p) {
+                /* "All spaces at the end of the continued line are considered
+                 * part of the literal" -- the line runs to margin R whether or
+                 * not the file carries the blanks, so pad to column 72 before
+                 * moving on. */
+                int col = (int)(src.p - src.buf);
+                while (col++ < 72) {
+                    if (i >= MAXTOK - 1)
+                        die("nonnumeric literal too long -- the standard's "
+                            "limit is 120 characters");
+                    tok.text[i++] = ' ';
+                }
+                if (!lit_continue(&src))
+                    die("unterminated literal: a continuation line needs a "
+                        "hyphen in column 7, a blank area A, and a quotation "
+                        "mark as the first nonblank character in area B");
+                continue;
+            }
             if (*src.p == q) {
                 if (*(src.p + 1) == q) { src.p += 2; }
                 else { src.p++; break; }
             } else { src.p++; }
-            if (i < MAXTOK - 1) tok.text[i++] = *(src.p - 1);
+            if (i >= MAXTOK - 1)
+                die("nonnumeric literal too long -- the standard's limit is "
+                    "120 characters");
+            tok.text[i++] = *(src.p - 1);
         }
         tok.text[i] = 0; tok.len = i; tok.literal = 1;
         return;
@@ -147,7 +205,8 @@ static void next(void)
             } else if (!(i > 0 && isdigit((unsigned char)tok.text[i-1])
                        && isdigit((unsigned char)*(src.p + 1)))) break;
         }
-        if (i < MAXTOK-1) tok.text[i++] = (char)toupper((unsigned char)*src.p);
+        if (i >= MAXTOK - 1) die("word too long");
+        tok.text[i++] = (char)toupper((unsigned char)*src.p);
         src.p++;
     }
     tok.text[i] = 0; tok.len = i;
@@ -197,7 +256,15 @@ static void asm_line(const char *name, const char *op, const char *operand,
      * it one blank instead. */
     int ostart = 15;
     if (9 + (int)opl + 1 > ostart) ostart = 9 + (int)opl + 1;
-    if (operand && *operand) { n = strlen(operand); memcpy(b + ostart, operand, n); }
+    if (operand && *operand) {
+        n = strlen(operand);
+        /* A statement must end by column 71 -- column 72 is the continuation
+         * indicator. Truncating an operand here once produced a DC that
+         * assembled cleanly and held the wrong bytes, so this is fatal. */
+        if (ostart + (int)n > 71)
+            die("internal: assembler operand runs past column 71");
+        memcpy(b + ostart, operand, n);
+    }
     int end = ostart + (operand ? (int)strlen(operand) : 0);
     if (end < 15) end = 15;
     if (comment && *comment) {
@@ -220,6 +287,51 @@ static void asm_line(const char *name, const char *op, const char *operand,
 }
 
 static void asm_comment(const char *text) { fprintf(out, "*%s\n", text); }
+
+/* A quote or an ampersand has to be doubled inside an assembler character
+ * constant, so how much room a literal needs is not its length. */
+static int escaped_len(const char *v)
+{
+    int n = 0;
+    for (const char *q = v; *q; q++) n += (*q == '\'' || *q == '&') ? 2 : 1;
+    return n;
+}
+
+/* Emit a character constant as one or more adjacent DC statements. A statement
+ * must end by column 71, and a nonnumeric literal may be 120 characters, so a
+ * long one will not fit on a line. Adjacent DCs occupy contiguous storage, so
+ * the field is identical either way -- and the declared length of the last
+ * chunk carries any blank padding the value does not fill. */
+static void emit_split_dc(const char *label, const char *value, int total,
+                          const char *cmt)
+{
+    enum { ROOM = 40 };                 /* escaped characters per statement */
+    const char *q = value;
+    int left = total;
+    int first = 1;
+    while (*q && left > 0) {
+        char op[96]; int j = 0, taken = 0, used = 0;
+        char body[64]; int bj = 0;
+        while (*q && taken < left && used < ROOM) {
+            int w = (*q == '\'' || *q == '&') ? 2 : 1;
+            if (used + w > ROOM) break;
+            if (w == 2) body[bj++] = *q;
+            body[bj++] = *q++;
+            used += w; taken++;
+        }
+        body[bj] = 0;
+        j = snprintf(op, sizeof op, "CL%d'%s'", taken, body);
+        (void)j;
+        asm_line(first ? label : "", "DC", op, first ? cmt : "");
+        first = 0;
+        left -= taken;
+    }
+    if (left > 0) {                     /* the value stopped short of the field */
+        char op[32];
+        snprintf(op, sizeof op, "CL%d' '", left);
+        asm_line(first ? label : "", "DC", op, first ? cmt : "");
+    }
+}
 
 /* ---- parser ----------------------------------------------------------- */
 
@@ -246,7 +358,7 @@ typedef struct {
     int  bytes;
     int  offset;
     int  has_value;
-    char value[34];   /* the VALUE literal, already scaled to an integer */
+    char value[MAXTOK]; /* the VALUE literal; numerics already scaled */
     int  edited;      /* needs an ED pattern */
     int  floating;    /* floating insertion -> EDMK */
     int  masklen;
@@ -4870,7 +4982,16 @@ static void generate(void)
                 if (sy->has_value == 3 && sy->elem > 256)
                     die("a VALUE literal on an item longer than 256 bytes is "
                         "not implemented yet");
-                if (sy->has_value == 3) {
+                if (sy->has_value == 3 && !dup[0]
+                    && escaped_len(sy->value) + 8 > 71 - 15) {
+                    /* Too long for one statement. Adjacent DCs lay the same
+                     * bytes down, so the field is unchanged; only the source
+                     * is split. The label goes on the first. */
+                    snprintf(cmt, sizeof cmt, "%s PIC X(%d)", sy->name, sy->elem);
+                    emit_split_dc(sy->label, sy->value, sy->elem, cmt);
+                    at = sy->offset + sy->bytes;
+                    continue;
+                } else if (sy->has_value == 3) {
                     char op[MAXTOK * 2 + 24]; int j = 0;
                     j += snprintf(op + j, sizeof op - j, "%sCL%d'", dup, sy->elem);
                     for (const char *q = sy->value; *q; q++) {
