@@ -23,44 +23,44 @@ COBBEG   EQU   *
 P0000    DS    0H
 T0000    DS    0H
 * MOVE 7 -> A
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0000
 T0001    DS    0H
 * MOVE 7 -> B
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0001
 T0002    DS    0H
 * MOVE 7 -> C
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0003    DS    0H
 * MOVE A -> SA
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(5),PWK1(16)   packed -> zoned
          OI    D0003+4,X'F0'       unsigned: force an F zone
 T0004    DS    0H
 * MOVE B -> SB
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0004(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0004(5),PWK1(16)   packed -> zoned
          OI    D0004+4,X'F0'       unsigned: force an F zone
 T0005    DS    0H
 * MOVE C -> SC
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0005(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0005(5),PWK1(16)   packed -> zoned
          OI    D0005+4,X'F0'       unsigned: force an F zone
 T0006    DS    0H
 * DISPLAY
@@ -142,9 +142,9 @@ PARM0005 DC    A(DSPBUF)
 LEN0005  DC    H'13'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -155,7 +155,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'7'              numeric constants
+K0001    DC    PL16'7'             numeric constants
 S0001    DC    CL6'MULTI '         nonnumeric constants
 S0002    DC    CL1' '
 S0003    DC    CL7'GROUP ['

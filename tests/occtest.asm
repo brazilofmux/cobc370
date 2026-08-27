@@ -23,8 +23,8 @@ COBBEG   EQU   *
 P0000    DS    0H
 T0000    DS    0H
 * MOVE 1 -> WS-IDX
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -39,7 +39,7 @@ T0001    DS    0H
          LH    2,D0006
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(8)    literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0001
 T0002    DS    0H
@@ -54,39 +54,39 @@ T0003    DS    0H
          LH    2,D0006
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(8)    literal
+         ZAP   WK1(16),K0003(16)   literal
          ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
          MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
          SRP   WK0(16),2,0         align scale (left)
-         ZAP   PWK1(8),WK0(16)
+         ZAP   PWK1(16),WK0(16)
          LH    6,D0006             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         ZAP   0(5,6),PWK1(8)
+         ZAP   0(5,6),PWK1(16)
 T0004    DS    0H
 * COMPUTE YT-CREDITS = ...
          LH    2,D0006
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0004(8)    literal
+         ZAP   WK1(16),K0004(16)   literal
          ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
          MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
          SRP   WK0(16),2,0         align scale (left)
-         ZAP   PWK1(8),WK0(16)
+         ZAP   PWK1(16),WK0(16)
          LH    6,D0006             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         ZAP   0(5,6),PWK1(8)
+         ZAP   0(5,6),PWK1(16)
 T0005    DS    0H
 * ADD 1 -> WS-IDX
          LH    2,D0006
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0006
 T0006    DS    0H
@@ -97,8 +97,8 @@ T0006    DS    0H
 P0002    DS    0H
 T0007    DS    0H
 * MOVE 3 -> WS-IDX
-         ZAP   PWK1(8),K0005(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0005(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -109,8 +109,8 @@ T0008    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
-         ZAP   PWK1(8),0(5,7)
-         UNPK  D0007(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),0(5,7)
+         UNPK  D0007(9),PWK1(16)   packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * DISPLAY
@@ -124,8 +124,8 @@ T0010    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0003(7)          element address
-         ZAP   PWK1(8),0(5,7)
-         UNPK  D0007(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),0(5,7)
+         UNPK  D0007(9),PWK1(16)   packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
 T0011    DS    0H
 * DISPLAY
@@ -138,8 +138,8 @@ T0012    DS    0H
          LA    7,4                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
-         ZAP   PWK1(8),0(5,7)
-         UNPK  D0007(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),0(5,7)
+         UNPK  D0007(9),PWK1(16)   packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
 T0013    DS    0H
 * DISPLAY
@@ -158,8 +158,8 @@ T0014    DS    0H
          LA    7,D0003(7)          element address
          ZAP   WK1(16),0(5,7)
          AP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0007(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0007(9),PWK1(16)   packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
 T0015    DS    0H
 * DISPLAY
@@ -169,8 +169,8 @@ T0015    DS    0H
          BALR  14,15
 T0016    DS    0H
 * MOVE 12 -> MD-ENTRY
-         ZAP   PWK1(8),K0006(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0006(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          LA    6,0                 subscript-1
          MH    6,H0002             times element size
@@ -178,8 +178,8 @@ T0016    DS    0H
          STH   2,0(,6)
 T0017    DS    0H
 * MOVE 31 -> MD-ENTRY
-         ZAP   PWK1(8),K0007(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0007(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          LA    6,11                subscript-1
          MH    6,H0002             times element size
@@ -192,8 +192,8 @@ T0018    DS    0H
          LA    7,D0005(7)          element address
          LH    2,0(,7)
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0008(4),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0008(4),PWK1(16)   packed -> zoned
          OI    D0008+3,X'F0'       unsigned: force an F zone
 T0019    DS    0H
 * DISPLAY
@@ -228,9 +228,9 @@ PARM0005 DC    A(DSPBUF)
 LEN0005  DC    H'4'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -241,13 +241,13 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'1'              numeric constants
-K0002    DC    PL8'5'
-K0003    DC    PL8'100'
-K0004    DC    PL8'10'
-K0005    DC    PL8'3'
-K0006    DC    PL8'12'
-K0007    DC    PL8'31'
+K0001    DC    PL16'1'             numeric constants
+K0002    DC    PL16'5'
+K0003    DC    PL16'100'
+K0004    DC    PL16'10'
+K0005    DC    PL16'3'
+K0006    DC    PL16'12'
+K0007    DC    PL16'31'
 H0001    DC    H'10'               element sizes
 H0002    DC    H'2'
 * base locator cells, one per 4096 bytes of COBWS

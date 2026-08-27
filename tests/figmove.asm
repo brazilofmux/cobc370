@@ -25,15 +25,15 @@ T0000    DS    0H
 * MOVE WS-PK -> ED-PK
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(8),D0004(3)
-         UNPK  D0006(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),D0004(3)
+         UNPK  D0006(5),PWK1(16)   packed -> zoned
          OI    D0006+4,X'F0'       unsigned: force an F zone
 T0001    DS    0H
 * MOVE WS-BIN -> ED-BIN
          LH    2,D0005
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0007(4),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0007(4),PWK1(16)   packed -> zoned
          OI    D0007+3,X'F0'       unsigned: force an F zone
 T0002    DS    0H
 * DISPLAY
@@ -84,18 +84,18 @@ T0007    DS    0H
          MVC   1(5,1),0(1)         propagate across the item
 T0008    DS    0H
 * MOVE 0 -> WS-NUM
-         ZAP   PWK1(8),K0001(8)    literal
-         UNPK  D0003(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),K0001(16)  literal
+         UNPK  D0003(5),PWK1(16)   packed -> zoned
          OI    D0003+4,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * MOVE 0 -> WS-PK
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   D0004(3),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   D0004(3),PWK1(16)
          OI    D0004+2,X'0F'       unsigned: force an F sign
 T0010    DS    0H
 * MOVE 0 -> WS-BIN
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0005
 T0011    DS    0H
@@ -105,15 +105,15 @@ T0011    DS    0H
          MVC   1(5,1),0(1)         propagate across the item
 T0012    DS    0H
 * MOVE WS-PK -> ED-PK
-         ZAP   PWK1(8),D0004(3)
-         UNPK  D0006(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),D0004(3)
+         UNPK  D0006(5),PWK1(16)   packed -> zoned
          OI    D0006+4,X'F0'       unsigned: force an F zone
 T0013    DS    0H
 * MOVE WS-BIN -> ED-BIN
          LH    2,D0005
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0007(4),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0007(4),PWK1(16)   packed -> zoned
          OI    D0007+3,X'F0'       unsigned: force an F zone
 T0014    DS    0H
 * DISPLAY
@@ -227,9 +227,9 @@ PARM0009 DC    A(DSPBUF)
 LEN0009  DC    H'12'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -240,7 +240,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'0'              numeric constants
+K0001    DC    PL16'0'             numeric constants
 S0001    DC    CL8'BEFORE ['       nonnumeric constants
 S0002    DC    CL2']['
 S0003    DC    CL1']'

@@ -38,18 +38,18 @@ T0002    DS    0H
 * ADD 100 -> ACC
          L     2,D0004
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0004
 T0003    DS    0H
 * MOVE ACC -> OUT-NUM
          L     2,D0004
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0005(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0005(5),PWK1(16)   packed -> zoned
          OI    D0005+4,X'F0'       unsigned: force an F zone
 T0004    DS    0H
 * DISPLAY
@@ -75,9 +75,9 @@ PARM0002 DC    A(DSPBUF)
 LEN0002  DC    H'5'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -88,7 +88,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'100'            numeric constants
+K0001    DC    PL16'100'           numeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 BL0001   DC    A(WSC0001)

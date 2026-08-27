@@ -61,8 +61,8 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * MOVE SAVE-BAL -> OUT-NUM
-         ZAP   PWK1(8),D0007(4)
-         UNPK  D0011(7),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),D0007(4)
+         UNPK  D0011(7),PWK1(16)   packed -> zoned
          OI    D0011+6,X'F0'       unsigned: force an F zone
 T0007    DS    0H
 * DISPLAY
@@ -74,9 +74,9 @@ T0008    DS    0H
 * MOVE COUNTER -> OUT-NUM
          LH    2,D0008
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         SRP   PWK1(8),2,0         align scale (left)
-         UNPK  D0011(7),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         SRP   PWK1(16),2,0        align scale (left)
+         UNPK  D0011(7),PWK1(16)   packed -> zoned
          OI    D0011+6,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * DISPLAY
@@ -109,18 +109,18 @@ T0012    DS    0H
          USING WSC0000,8
          LH    2,D0008
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0008
 T0013    DS    0H
 * ADD 1050 -> CUST-BAL
-         ZAP   PWK1(8),D0003(4)
-         ZAP   PWK2(8),K0002(8)    literal
-         AP    PWK1(8),PWK2(8)
-         ZAP   D0003(4),PWK1(8)
+         ZAP   PWK1(16),D0003(4)
+         ZAP   PWK2(16),K0002(16)  literal
+         AP    PWK1(16),PWK2(16)
+         ZAP   D0003(4),PWK1(16)
          DROP  8
 * ADD-EXIT.
 P0002    DS    0H
@@ -165,9 +165,9 @@ PARM0004 DC    A(DSPBUF)
 LEN0004  DC    H'3'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -178,8 +178,8 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'1'              numeric constants
-K0002    DC    PL8'1050'
+K0001    DC    PL16'1'             numeric constants
+K0002    DC    PL16'1050'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

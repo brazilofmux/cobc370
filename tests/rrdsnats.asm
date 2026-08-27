@@ -103,8 +103,8 @@ T0006    DS    0H
 P0003    DS    0H
 T0007    DS    0H
 * MOVE 21 -> WS-RRN
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -203,8 +203,8 @@ R0002    DS    0H
          ST    15,X0006
 T0013    DS    0H
 * MOVE 51 -> WS-RRN
-         ZAP   PWK1(8),K0002(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0002(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -303,8 +303,8 @@ R0003    DS    0H
          ST    15,X0006
 T0019    DS    0H
 * MOVE 81 -> WS-RRN
-         ZAP   PWK1(8),K0003(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -403,8 +403,8 @@ R0004    DS    0H
          ST    15,X0006
 T0025    DS    0H
 * MOVE 111 -> WS-RRN
-         ZAP   PWK1(8),K0004(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0004(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -564,12 +564,12 @@ T0038    DS    0H
          USING WSC0000,8
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0008(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0008(8),PWK1(16)   packed -> zoned
 T0039    DS    0H
 * MOVE 0 -> RECORD-COUNTER
-         ZAP   PWK1(8),K0005(8)    literal
-         UNPK  D0007(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),K0005(16)  literal
+         UNPK  D0007(8),PWK1(16)   packed -> zoned
 T0040    DS    0H
 * PERFORM 130-READ-AND-DISPLAY THRU 139-EXIT
 L0026    DS    0H
@@ -579,7 +579,7 @@ L0026    DS    0H
          CLC   D0003(1),S0004      alphanumeric compare
          BE    L0027
          PACK  WK0(16),D0007(8)    zoned -> packed
-         ZAP   WK1(16),K0006(8)    literal
+         ZAP   WK1(16),K0006(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0027
          LA    15,R0007            return here
@@ -673,8 +673,8 @@ T0045    DS    0H
          BE    L0013
 T0046    DS    0H
 * MOVE SLOT-COUNTER -> COUNTER-EDIT
-         PACK  PWK1(8),D0008(8)    zoned -> packed
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         PACK  PWK1(16),D0008(8)   zoned -> packed
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0009(10),EDWK+2    the edited result
@@ -688,20 +688,20 @@ T0047    DS    0H
          BALR  14,15
 T0048    DS    0H
 * ADD 1 -> SLOT-COUNTER
-         PACK  PWK1(8),D0008(8)    zoned -> packed
-         ZAP   PWK2(8),K0007(8)    literal
-         AP    PWK1(8),PWK2(8)
-         UNPK  D0008(8),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0008(8)   zoned -> packed
+         ZAP   PWK2(16),K0007(16)  literal
+         AP    PWK1(16),PWK2(16)
+         UNPK  D0008(8),PWK1(16)   packed -> zoned
          DROP  8
 L0013    DS    0H
 T0049    DS    0H
 * ADD 1 -> RECORD-COUNTER
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(8),D0007(8)    zoned -> packed
-         ZAP   PWK2(8),K0007(8)    literal
-         AP    PWK1(8),PWK2(8)
-         UNPK  D0007(8),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0007(8)   zoned -> packed
+         ZAP   PWK2(16),K0007(16)  literal
+         AP    PWK1(16),PWK2(16)
+         UNPK  D0007(8),PWK1(16)   packed -> zoned
          DROP  8
 * 139-EXIT.
 P0010    DS    0H
@@ -746,9 +746,9 @@ PARM0009 DC    A(DSPBUF)
 LEN0009  DC    H'92'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -763,13 +763,13 @@ WK5      DS    PL16
 FD000    ACB   DDNAME=RRDSF01,MACRF=(KEY,SEQ,IN)  VSAM access method co
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,ARG=D0001,OPTCD=(KEY,SEQ,NUP,MVE)
-K0001    DC    PL8'21'             numeric constants
-K0002    DC    PL8'51'
-K0003    DC    PL8'81'
-K0004    DC    PL8'111'
-K0005    DC    PL8'0'
-K0006    DC    PL8'4'
-K0007    DC    PL8'1'
+K0001    DC    PL16'21'            numeric constants
+K0002    DC    PL16'51'
+K0003    DC    PL16'81'
+K0004    DC    PL16'111'
+K0005    DC    PL16'0'
+K0006    DC    PL16'4'
+K0007    DC    PL16'1'
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
 S0001    DC    CL42'RRDSSSEQ: READ RRDS SEQUENTIALLY (W/START)'  nonnum
 S0002    DC    CL42'------------------------------------------'

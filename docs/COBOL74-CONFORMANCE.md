@@ -206,16 +206,60 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Two of those are Nucleus **Level 1** requirements this map had missed:
+Three of those are Nucleus **Level 1** requirements this map had missed:
 
 - **18 digits.** `1 NUC 1,2` sets numeric literals at 1 through 18 digits and
-  arithmetic operands at 18. cobc370 stops at 15, because the packed work area
-  it allocates is 8 bytes. It is now the single largest blocker in the corpus.
+  arithmetic operands at 18. **Done** -- see below.
 - **Literal continuation.** Level 1 permits a nonnumeric literal to be
   continued on the next line with a hyphen in column 7; only *words and
   numeric* literals are held back to Level 2. cobc370 rejects all continuation.
+- **Operand series.** `ADD identifier/literal series TO identifier` is Level 1,
+  not 2. cobc370 takes one operand.
 
-The first run also found an outright bug rather than an absence: a PICTURE
+### 15 digits to 18
+
+The ceiling was 15 because the packed scratch areas were 8 bytes. They are now
+16, and the standard's 18 is reached for `COMP-3` and for literals: `PWK1`,
+`PWK2` and `EDSRC` are `PL16`, and every `ZAP`/`AP`/`SP`/`SRP`/`CP` on them
+carries a 16-byte length. `tests/bigdig.cbl` exercises 18-digit add, subtract,
+`COMPUTE`, comparison, sign test and edited output, and agrees with GnuCOBOL.
+
+**Zoned stops at 16, and that one is the machine.** `PACK` and `UNPK` hold each
+operand length in four bits, so the widest zoned field they can convert is 16
+bytes. A `USAGE DISPLAY` item of 17 or 18 digits now gets a diagnostic saying
+so. Lifting it means splitting the conversion and shifting the top digits into
+place with `MVO`; nothing has asked for that yet. Edited items are unaffected --
+they are destinations, reached through `ED` rather than `UNPK`.
+
+`MULTIPLY` and `DIVIDE` have their own machine ceiling: `MP` and `DP` take a
+right-hand operand of at most 8 bytes, so a multiplier or divisor is limited to
+15 digits whatever the scratch areas are. `MULT8`, `DIVR8` and `QTMP` stay
+`PL8` for that reason.
+
+In the corpus the 15-digit blocker went from **126 programs to 22**.
+
+### An oracle that was wrong
+
+`tests/bigdig.expected` records one value that GnuCOBOL does not produce.
+GnuCOBOL 4.0-early-dev reports a signed `COMP-3` item of exactly 18 digits as
+**not less than zero**:
+
+    PIC S9(16) COMP-3 VALUE -1234567890123456      < 0  ->  true    correct
+    PIC S9(17) COMP-3 VALUE -12345678901234567     < 0  ->  true    correct
+    PIC S9(18) COMP-3 VALUE -123456789012345678    < 0  ->  false   WRONG
+    PIC S9(18)        VALUE -123456789012345678    < 0  ->  true    correct
+
+The same 18-digit packed item compares equal to its own literal, and moves to
+an edited field correctly, so the value is intact -- only the comparison
+against zero is wrong, and only when packed at the full 18 digits. cobc370
+says `NEG`, which is the answer, so the test records `NEG` and says why.
+
+Six bugs have come out of differential testing against GnuCOBOL. This is the
+first one that was on the other side.
+
+### A bug rather than an absence
+
+The first CCVS run also found a PICTURE
 containing a repetition count before its decimal point -- `PIC 9(2).99`, or
 `-9(9).9(9)` -- was split at the period and the rest of the entry read as a
 new one. It blocked 98 of the 336 programs, more than any missing feature.

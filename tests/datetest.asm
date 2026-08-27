@@ -58,7 +58,7 @@ T0005    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0002(2)    zoned -> packed
-         ZAP   WK1(16),K0001(8)    literal
+         ZAP   WK1(16),K0001(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNL   L0003
 T0006    DS    0H
@@ -71,7 +71,7 @@ T0007    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0002(2)    zoned -> packed
-         ZAP   WK1(16),K0002(8)    literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0004
 T0008    DS    0H
@@ -84,7 +84,7 @@ T0009    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0001(8)    literal
+         ZAP   WK1(16),K0001(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNL   L0005
 T0010    DS    0H
@@ -97,7 +97,7 @@ T0011    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0003(8)    literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0006
 T0012    DS    0H
@@ -153,9 +153,9 @@ PARM0002 DC    A(DSPBUF)
 LEN0002  DC    H'24'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -166,9 +166,9 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'1'              numeric constants
-K0002    DC    PL8'12'
-K0003    DC    PL8'31'
+K0001    DC    PL16'1'             numeric constants
+K0002    DC    PL16'12'
+K0003    DC    PL16'31'
 S0001    DC    CL1'/'              nonnumeric constants
 S0002    DC    CL1'Y'
 S0003    DC    CL24'CURRENT-DATE MALFORMED: '

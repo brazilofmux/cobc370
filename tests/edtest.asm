@@ -25,8 +25,8 @@ T0000    DS    0H
 * MOVE SRC -> E1
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(8),D0000(6)
-         ZAP   EDSRC(6),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),D0000(6)
+         ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
          MVC   EDWK(16),M0001      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(16),EDSRC
@@ -43,8 +43,8 @@ T0001    DS    0H
          BALR  14,15
 T0002    DS    0H
 * MOVE 123456 -> E2
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0002      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0002(10),EDWK+2    the edited result
@@ -56,8 +56,8 @@ T0003    DS    0H
          BALR  14,15
 T0004    DS    0H
 * MOVE 42 -> E3
-         ZAP   PWK1(8),K0002(8)    literal
-         ZAP   EDSRC(4),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),K0002(16)  literal
+         ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
          MVC   EDWK(9),M0003       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0003               not negative?
@@ -74,8 +74,8 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * MOVE 123456 -> E4
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0004      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0004(10),EDWK+2    the edited result
@@ -87,8 +87,8 @@ T0007    DS    0H
          BALR  14,15
 T0008    DS    0H
 * MOVE -98765 -> E5
-         ZAP   PWK1(8),K0003(8)    literal
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(13),M0005      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(13),EDSRC
@@ -130,9 +130,9 @@ PARM0005 DC    A(DSPBUF)
 LEN0005  DC    H'11'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -143,9 +143,9 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'123456'         numeric constants
-K0002    DC    PL8'42'
-K0003    DC    PL8'-98765'
+K0001    DC    PL16'123456'        numeric constants
+K0002    DC    PL16'42'
+K0003    DC    PL16'-98765'
 M0001    DC    XL16'40402020206B2020206B2021204B2020'  ED patterns
 M0002    DC    XL12'40202020206B2021204B2020'
 M0003    DC    XL9'402021402020202020'

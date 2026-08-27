@@ -185,10 +185,10 @@ T0012    DS    0H
          BE    L0004
 T0013    DS    0H
 * ADD 1 -> RECORD-COUNTER
-         PACK  PWK1(8),D0011(8)    zoned -> packed
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         UNPK  D0011(8),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0011(8)   zoned -> packed
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         UNPK  D0011(8),PWK1(16)   packed -> zoned
 T0014    DS    0H
 * PERFORM 120-UPDATE-PROCESS THRU 129-EXIT
          LA    15,R0002            return here
@@ -214,15 +214,15 @@ T0016    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0002(8)    literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0014
          PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0003(8)    literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0014
          PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0004(8)    literal
+         ZAP   WK1(16),K0004(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0005
 L0014    DS    0H
@@ -250,8 +250,8 @@ T0019    DS    0H
 * MOVE RECORD-COUNTER -> COUNTER-EDIT
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(8),D0011(8)    zoned -> packed
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         PACK  PWK1(16),D0011(8)   zoned -> packed
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0012(10),EDWK+2    the edited result
@@ -265,8 +265,8 @@ T0020    DS    0H
          BALR  14,15
 T0021    DS    0H
 * MOVE 99 -> ESRI-HIGH
-         ZAP   PWK1(8),K0005(8)    literal
-         UNPK  D0002(2),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),K0005(16)  literal
+         UNPK  D0002(2),PWK1(16)   packed -> zoned
          OI    D0002+1,X'F0'       unsigned: force an F zone
 T0022    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
@@ -425,9 +425,9 @@ PARM0007 DC    A(DSPBUF)
 LEN0007  DC    H'32'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -442,11 +442,11 @@ WK5      DS    PL16
 FD000    ACB   DDNAME=ESDSF01,MACRF=(ADR,SEQ,OUT)  VSAM access method c
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(ADR,SEQ,UPD,MVE)
-K0001    DC    PL8'1'              numeric constants
-K0002    DC    PL8'2'
-K0003    DC    PL8'6'
-K0004    DC    PL8'7'
-K0005    DC    PL8'99'
+K0001    DC    PL16'1'             numeric constants
+K0002    DC    PL16'2'
+K0003    DC    PL16'6'
+K0004    DC    PL16'7'
+K0005    DC    PL16'99'
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
 S0001    DC    CL40'ESDSUPDT: READ/REWRITE ESDS SEQUENTIALLY'  nonnumer
 S0002    DC    CL40'----------------------------------------'

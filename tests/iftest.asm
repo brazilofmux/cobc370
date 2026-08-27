@@ -68,7 +68,7 @@ T0005    DS    0H
          L     2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(8)    literal
+         ZAP   WK1(16),K0001(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0003
 T0006    DS    0H
@@ -98,13 +98,13 @@ T0010    DS    0H
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(8)    literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0019
          L     2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(8)    literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0005
 L0019    DS    0H
@@ -214,7 +214,7 @@ T0030    DS    0H
 T0031    DS    0H
 * IF
          ZAP   WK0(16),D0002(4)
-         ZAP   WK1(16),K0001(8)    literal
+         ZAP   WK1(16),K0001(16)   literal
          SRP   WK1(16),2,0         align scale (left)
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0013
@@ -255,7 +255,7 @@ T0037    DS    0H
          L     2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(8)    literal
+         ZAP   WK1(16),K0001(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0016
 T0038    DS    0H
@@ -326,9 +326,9 @@ PARM0008 DC    A(DSPBUF)
 LEN0008  DC    H'6'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -339,9 +339,9 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'0'              numeric constants
-K0002    DC    PL8'99'
-K0003    DC    PL8'20'
+K0001    DC    PL16'0'             numeric constants
+K0002    DC    PL16'99'
+K0003    DC    PL16'20'
 S0001    DC    CL6'LESS  '         nonnumeric constants
 S0002    DC    CL6'NOTLES'
 S0003    DC    CL6'ANDOK '

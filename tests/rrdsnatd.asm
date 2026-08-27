@@ -235,16 +235,16 @@ T0024    DS    0H
          MVC   D0004+79(1),D0004+78
 T0025    DS    0H
 * MOVE RRK-LOW -> WS-RRN
-         PACK  PWK1(8),D0007(3)    zoned -> packed
-         ZAP   DWK(8),PWK1(8)
+         PACK  PWK1(16),D0007(3)   zoned -> packed
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0009
 T0026    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),DWK(8)
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
@@ -428,8 +428,8 @@ T0041    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),DWK(8)
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
@@ -480,8 +480,8 @@ T0047    DS    0H
          USING WSC0000,8
          L     2,D0009
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),DWK(8)
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
@@ -605,8 +605,8 @@ T0055    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),DWK(8)
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
@@ -675,8 +675,8 @@ T0064    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),DWK(8)
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
@@ -727,8 +727,8 @@ T0070    DS    0H
          USING WSC0000,8
          L     2,D0009
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),DWK(8)
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
@@ -891,8 +891,8 @@ T0082    DS    0H
          MVC   D0004+79(1),D0004+78
 T0083    DS    0H
 * MOVE RRK-LOW -> WS-RRN
-         PACK  PWK1(8),D0007(3)    zoned -> packed
-         ZAP   DWK(8),PWK1(8)
+         PACK  PWK1(16),D0007(3)   zoned -> packed
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0009
 T0084    DS    0H
@@ -1046,9 +1046,9 @@ PARM0024 DC    A(DSPBUF)
 LEN0024  DC    H'1'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor

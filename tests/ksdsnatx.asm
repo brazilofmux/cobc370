@@ -263,8 +263,8 @@ T0022    DS    0H
          BALR  14,15
 T0023    DS    0H
 * MOVE 0 -> RECORD-COUNTER
-         ZAP   PWK1(8),K0001(8)    literal
-         UNPK  D0008(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),K0001(16)  literal
+         UNPK  D0008(8),PWK1(16)   packed -> zoned
 T0024    DS    0H
 * MOVE N -> END-OF-FILE-SWITCH
          MVC   D0004(1),S0008      literal move, space padded
@@ -277,7 +277,7 @@ L0016    DS    0H
          CLC   D0004(1),S0009      alphanumeric compare
          BE    L0017
          PACK  WK0(16),D0008(8)    zoned -> packed
-         ZAP   WK1(16),K0002(8)    literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0017
          LA    15,R0005            return here
@@ -392,10 +392,10 @@ T0032    DS    0H
 * ADD 1 -> RECORD-COUNTER
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(8),D0008(8)    zoned -> packed
-         ZAP   PWK2(8),K0003(8)    literal
-         AP    PWK1(8),PWK2(8)
-         UNPK  D0008(8),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0008(8)   zoned -> packed
+         ZAP   PWK2(16),K0003(16)  literal
+         AP    PWK1(16),PWK2(16)
+         UNPK  D0008(8),PWK1(16)   packed -> zoned
          DROP  8
 * 105-EXIT.
 P0008    DS    0H
@@ -439,9 +439,9 @@ PARM0009 DC    A(DSPBUF)
 LEN0009  DC    H'90'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -457,9 +457,9 @@ FD000    ACB   DDNAME=KSDSF01,MACRF=(KEY,SEQ,DIR,IN)  VSAM access metho
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,ARG=D0001,KEYLEN=10,OPTCD=(KEY,SEQ,X
                KEQ,NUP,MVE)
-K0001    DC    PL8'0'              numeric constants
-K0002    DC    PL8'2'
-K0003    DC    PL8'1'
+K0001    DC    PL16'0'             numeric constants
+K0002    DC    PL16'2'
+K0003    DC    PL16'1'
 S0001    DC    CL43'KSDSNATX: DYNAMIC, KEYED READ AND READ NEXT'  nonnu
 S0002    DC    CL43'-------------------------------------------'
 S0003    DC    CL1' '

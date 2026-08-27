@@ -129,9 +129,12 @@ int pic_analyse(const char *s, PicInfo *info)
     info->floating = (fl != 0);
 
     if (info->digits == 0) return fail(info, "PICTURE has no digit positions");
-    if (info->digits > 15)
-        return fail(info, "more than 15 digits needs a wider packed work area "
-                          "than this compiler allocates");
+    /* The standard sets the ceiling at 18: 1 NUC 1,2 puts numeric literals at
+     * 1 through 18 digits and arithmetic operands at 18. Packed, 18 digits is
+     * 10 bytes, which is why the decimal scratch areas are 16 and not 8. */
+    if (info->digits > 18)
+        return fail(info, "more than 18 digits -- the standard's limit for a "
+                          "numeric item is 18");
     if (!info->edited) return 0;
 
     /* ---- the ED pattern -------------------------------------------------

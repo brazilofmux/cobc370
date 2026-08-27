@@ -119,8 +119,8 @@ T0011    DS    0H
 * MOVE RECORD-COUNTER -> COUNTER-EDIT
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(8),D0007(8)    zoned -> packed
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         PACK  PWK1(16),D0007(8)   zoned -> packed
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0008(10),EDWK+2    the edited result
@@ -289,10 +289,10 @@ T0023    DS    0H
          BE    L0007
 T0024    DS    0H
 * ADD 1 -> RECORD-COUNTER
-         PACK  PWK1(8),D0007(8)    zoned -> packed
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         UNPK  D0007(8),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0007(8)   zoned -> packed
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         UNPK  D0007(8),PWK1(16)   packed -> zoned
          DROP  8
 L0007    DS    0H
 T0025    DS    0H
@@ -369,9 +369,9 @@ PARM0007 DC    A(DSPBUF)
 LEN0007  DC    H'30'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -387,7 +387,7 @@ FD000    DCB   DDNAME=IMAGES,DSORG=PS,MACRF=(GM)
 FD001    ACB   DDNAME=ESDSF01,MACRF=(ADR,SEQ,OUT,RST)  VSAM access meth
 FD001R   RPL   ACB=FD001,AREA=D0001,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(ADR,SEQ,NUP,MVE)
-K0001    DC    PL8'1'              numeric constants
+K0001    DC    PL16'1'             numeric constants
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
 S0001    DC    CL33'ESDSLOAD: WRITE ESDS SEQUENTIALLY'  nonnumeric cons
 S0002    DC    CL33'---------------------------------'

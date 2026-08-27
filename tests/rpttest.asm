@@ -31,8 +31,8 @@ T0001    DS    0H
          MVI   RCTL,C'1'           eject before the first page
 T0002    DS    0H
 * MOVE 0 -> WS-IDX
-         ZAP   PWK1(8),K0001(8)    literal
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -46,10 +46,10 @@ T0003    DS    0H
          USING WSC0000,8
          LH    2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   PWK2(8),K0002(8)    literal
-         AP    PWK1(8),PWK2(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   PWK2(16),K0002(16)  literal
+         AP    PWK1(16),PWK2(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0003
 T0004    DS    0H
@@ -57,7 +57,7 @@ T0004    DS    0H
          LH    2,D0003
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(8)    literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0001
 T0005    DS    0H
@@ -71,8 +71,8 @@ T0006    DS    0H
          USING WSC0000,8
          LH    2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0001
 T0007    DS    0H
@@ -80,12 +80,12 @@ T0007    DS    0H
          LH    2,D0003
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0004(8)    literal
+         ZAP   WK1(16),K0004(16)   literal
          ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
          MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
          SRP   WK0(16),2,0         align scale (left)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   D0002(5),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   D0002(5),PWK1(16)
 T0008    DS    0H
 * GENERATE DETAIL-LINE
          DROP  8
@@ -174,15 +174,15 @@ L0004    DS    0H
          USING WSC0000,8
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0008(5),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0008(5),PWK1(16)   packed -> zoned
          OI    D0008+4,X'F0'       unsigned: force an F zone
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   RBUF+1(5),D0008     COLUMN placement
-         ZAP   PWK1(8),D0002(5)
-         ZAP   EDSRC(6),PWK1(8)    source, sized to the selector count
+         ZAP   PWK1(16),D0002(5)
+         ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
          MVC   EDWK(16),M0001      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(16),EDSRC
@@ -218,9 +218,9 @@ RCTL     DC    C' '                pending carriage control
 RBUF     DC    CL133' '            ASA byte + 132 columns
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -234,10 +234,10 @@ WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FBA,             X
                LRECL=133,BLKSIZE=133
-K0001    DC    PL8'0'              numeric constants
-K0002    DC    PL8'1'
-K0003    DC    PL8'10'
-K0004    DC    PL8'1000'
+K0001    DC    PL16'0'             numeric constants
+K0002    DC    PL16'1'
+K0003    DC    PL16'10'
+K0004    DC    PL16'1000'
 M0001    DC    XL16'40204020206B2020206B2021204B2020'  ED patterns
 H0001    DC    H'10'               element sizes
 S0001    DC    CL11'TEST REPORT'   nonnumeric constants

@@ -276,3 +276,29 @@ Six real bugs, none of which the 28-test regression suite could find:
 | Page fit measured the first line | needed a multi-line group at a page boundary |
 
 Every one required real data, real JCL, or real program size.
+
+## When the oracle is the one that is wrong
+
+An oracle is a second opinion, not an authority, and the seventh finding went
+the other way.
+
+`tests/bigdig.cbl` compares a signed `COMP-3` item against zero. GnuCOBOL
+4.0-early-dev answers wrongly, and only in one narrow place:
+
+    PIC S9(16) COMP-3 VALUE -1234567890123456      < 0  ->  true    correct
+    PIC S9(17) COMP-3 VALUE -12345678901234567     < 0  ->  true    correct
+    PIC S9(18) COMP-3 VALUE -123456789012345678    < 0  ->  false   WRONG
+    PIC S9(18)        VALUE -123456789012345678    < 0  ->  true    correct
+
+The value itself is fine: the same item compares equal to its own 18-digit
+literal and moves to an edited field correctly. It is the comparison against
+zero, at exactly 18 packed digits.
+
+cobc370 gets it right, so `bigdig.expected` records `NEG` and the test carries
+a comment saying that this line is deliberately not the oracle's answer.
+
+The practice that matters here is the one that made it visible: when a
+comparison fails, find out *which* side is wrong before believing either. This
+one was found by narrowing until a single construct differed, then checking the
+neighbouring widths -- 16 and 17 digits packed, and 18 digits zoned -- until
+the wrong answer was surrounded by right ones.

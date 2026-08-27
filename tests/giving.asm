@@ -23,23 +23,23 @@ COBBEG   EQU   *
 P0000    DS    0H
 T0000    DS    0H
 * COMPUTE C = ...
-         ZAP   WK0(16),K0001(8)    literal
+         ZAP   WK0(16),K0001(16)   literal
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK1(16),DWK(8)
          AP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0001    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0002    DS    0H
 * DISPLAY
@@ -57,16 +57,16 @@ T0003    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1(16),DWK(8)
          AP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0004    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0005    DS    0H
 * DISPLAY
@@ -80,18 +80,18 @@ T0006    DS    0H
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(8)    literal
+         ZAP   WK1(16),K0001(16)   literal
          SP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0007    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0008    DS    0H
 * DISPLAY
@@ -109,16 +109,16 @@ T0009    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1(16),DWK(8)
          SP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0010    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0011    DS    0H
 * DISPLAY
@@ -137,16 +137,16 @@ T0012    DS    0H
          ZAP   WK1(16),DWK(8)
          ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
          MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0013    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0014    DS    0H
 * DISPLAY
@@ -169,16 +169,16 @@ T0015    DS    0H
          ZAP   QTMP(8),WK0(8)
          ZAP   WK0(16),QTMP(8)     drop the remainder
          SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0016    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0017    DS    0H
 * DISPLAY
@@ -201,16 +201,16 @@ T0018    DS    0H
          ZAP   QTMP(8),WK0(8)
          ZAP   WK0(16),QTMP(8)     drop the remainder
          SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0019    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0020    DS    0H
 * DISPLAY
@@ -221,7 +221,7 @@ T0020    DS    0H
          BALR  14,15
 T0021    DS    0H
 * COMPUTE C = ...
-         ZAP   WK0(16),K0001(8)    literal
+         ZAP   WK0(16),K0001(16)   literal
          L     2,D0000
          CVD   2,DWK               binary -> packed
          ZAP   WK1(16),DWK(8)
@@ -230,16 +230,16 @@ T0021    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1(16),DWK(8)
          AP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),WK0(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0022    DS    0H
 * MOVE C -> S
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0003(8),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0003(8),PWK1(16)   packed -> zoned
          OI    D0003+7,X'F0'       unsigned: force an F zone
 T0023    DS    0H
 * DISPLAY
@@ -284,9 +284,9 @@ PARM0008 DC    A(DSPBUF)
 LEN0008  DC    H'15'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -297,7 +297,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'1'              numeric constants
+K0001    DC    PL16'1'             numeric constants
 S0001    DC    CL7'ADD2   '        nonnumeric constants
 S0002    DC    CL7'ADDTO  '
 S0003    DC    CL7'SUB    '

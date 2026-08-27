@@ -31,8 +31,8 @@ T0000    DS    0H
          ZAP   MULT8(8),WK2(16)    MP takes at most 8 bytes on the righ
          MP    WK1(16),MULT8(8)    scale becomes the sum of the scales
          AP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0003(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0003(9),PWK1(16)   packed -> zoned
          OI    D0003+8,X'F0'       unsigned: force an F zone
 T0001    DS    0H
 * COMPUTE R2 = ...
@@ -44,8 +44,8 @@ T0001    DS    0H
          ZAP   WK1(16),DWK(8)
          ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
          MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0004(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0004(9),PWK1(16)   packed -> zoned
          OI    D0004+8,X'F0'       unsigned: force an F zone
 T0002    DS    0H
 * COMPUTE R3 = ...
@@ -57,8 +57,8 @@ T0002    DS    0H
          ZAP   QTMP(8),WK0(8)
          ZAP   WK0(16),QTMP(8)     drop the remainder
          SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0005(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0005(9),PWK1(16)   packed -> zoned
          OI    D0005+8,X'F0'       unsigned: force an F zone
 T0003    DS    0H
 * COMPUTE R4 ROUNDED = ...
@@ -70,18 +70,18 @@ T0003    DS    0H
          ZAP   QTMP(8),WK0(8)
          ZAP   WK0(16),QTMP(8)     drop the remainder
          SRP   WK0(16),60,5        align scale (right, ROUNDED)
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0006(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0006(9),PWK1(16)   packed -> zoned
          OI    D0006+8,X'F0'       unsigned: force an F zone
 T0004    DS    0H
 * COMPUTE R5 = ...
          ZAP   WK1(16),D0001(4)
-         ZAP   WK0(16),K0001(8)    unary minus
+         ZAP   WK0(16),K0001(16)   unary minus
          SP    WK0(16),WK1(16)
          ZAP   WK1(16),D0000(4)
          AP    WK0(16),WK1(16)
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0007(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0007(9),PWK1(16)   packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
 T0005    DS    0H
 * COMPUTE R6 = ...
@@ -95,8 +95,8 @@ T0005    DS    0H
          ZAP   QTMP(8),WK0(8)
          ZAP   WK0(16),QTMP(8)     drop the remainder
          SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0008(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0008(9),PWK1(16)   packed -> zoned
          OI    D0008+8,X'F0'       unsigned: force an F zone
 T0006    DS    0H
 * COMPUTE R7 ROUNDED = ...
@@ -112,8 +112,8 @@ T0006    DS    0H
          ZAP   QTMP(8),WK0(8)
          ZAP   WK0(16),QTMP(8)     drop the remainder
          SRP   WK0(16),60,5        align scale (right, ROUNDED)
-         ZAP   PWK1(8),WK0(16)
-         UNPK  D0009(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),WK0(16)
+         UNPK  D0009(9),PWK1(16)   packed -> zoned
          OI    D0009+8,X'F0'       unsigned: force an F zone
 T0007    DS    0H
 * DISPLAY
@@ -190,9 +190,9 @@ PARM0007 DC    A(DSPBUF)
 LEN0007  DC    H'9'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -203,7 +203,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'0'              numeric constants
+K0001    DC    PL16'0'             numeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

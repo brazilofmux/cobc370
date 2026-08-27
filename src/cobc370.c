@@ -1152,7 +1152,19 @@ static void parse_data_division(void)
                         die("VALUE on an edited item is not implemented yet");
                     sy->bytes = pi.bytes;
                 } else switch (sy->usage) {
-                case U_DISPLAY: sy->bytes = pi.digits; break;
+                case U_DISPLAY:
+                    /* PACK and UNPK carry their operand lengths in four bits,
+                     * so a zoned field they can convert is at most 16 bytes.
+                     * The standard's ceiling is 18 digits and COMP-3 reaches
+                     * it -- zoned stops two short of it, on the machine rather
+                     * than on this compiler. Lifting it means splitting the
+                     * conversion in two and shifting the top digits into place
+                     * with MVO, which nothing has asked for yet. */
+                    if (pi.digits > 16)
+                        die("a USAGE DISPLAY item is limited to 16 digits: "
+                            "PACK and UNPK cannot convert a zoned field wider "
+                            "than 16 bytes. COMP-3 reaches the standard's 18.");
+                    sy->bytes = pi.digits; break;
                 case U_COMP3:   sy->bytes = pi.digits / 2 + 1; break;
                 case U_COMP:
                     if (pi.digits <= 4)      sy->bytes = 2;
@@ -2516,12 +2528,12 @@ static void gen_load(const Sym *sy, Node *sub, const char *wk)
     switch (sy->usage) {
     case U_DISPLAY:
         field_ref(sy, sub, sy->elem, 7, f, sizeof f);
-        snprintf(b, sizeof b, "%s(8),%s", wk, f);
+        snprintf(b, sizeof b, "%s(16),%s", wk, f);
         asm_line("", "PACK", b, "zoned -> packed");
         break;
     case U_COMP3:
         field_ref(sy, sub, sy->elem, 7, f, sizeof f);
-        snprintf(b, sizeof b, "%s(8),%s", wk, f);
+        snprintf(b, sizeof b, "%s(16),%s", wk, f);
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
@@ -2529,7 +2541,7 @@ static void gen_load(const Sym *sy, Node *sub, const char *wk)
         snprintf(b, sizeof b, "2,%s", f);
         asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
         asm_line("", "CVD", "2,DWK", "binary -> packed");
-        snprintf(b, sizeof b, "%s(8),DWK(8)", wk);
+        snprintf(b, sizeof b, "%s(16),DWK(8)", wk);
         asm_line("", "ZAP", b, "");
         break;
     }
@@ -2538,7 +2550,7 @@ static void gen_load(const Sym *sy, Node *sub, const char *wk)
 static void gen_load_imm(const char *label, const char *wk)
 {
     char b[96];
-    snprintf(b, sizeof b, "%s(8),%s(8)", wk, label);
+    snprintf(b, sizeof b, "%s(16),%s(16)", wk, label);
     asm_line("", "ZAP", b, "literal");
 }
 
@@ -2547,7 +2559,7 @@ static void gen_rescale(const char *wk, int from, int to)
     if (from == to) return;
     char b[96];
     int d = to - from;
-    snprintf(b, sizeof b, "%s(8),%d,0", wk, d > 0 ? d : 64 + d);
+    snprintf(b, sizeof b, "%s(16),%d,0", wk, d > 0 ? d : 64 + d);
     asm_line("", "SRP", b, d > 0 ? "align scale (left)" : "align scale (right)");
 }
 
@@ -2724,7 +2736,7 @@ static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
     if (sy->need_lead_start) pat[spare] = 0x21;
     memcpy(pat + 1 + spare, sy->mask + 1, (size_t)sy->bytes);
 
-    snprintf(b, sizeof b, "EDSRC(%d),%s(8)", n, wk);
+    snprintf(b, sizeof b, "EDSRC(%d),%s(16)", n, wk);
     asm_line("", "ZAP", b, "source, sized to the selector count");
     snprintf(b, sizeof b, "EDWK(%d),%s", patlen, intern_mask(pat, patlen));
     asm_line("", "MVC", b, "load the ED pattern");
@@ -2798,7 +2810,7 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
     switch (sy->usage) {
     case U_DISPLAY:
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
-        snprintf(b, sizeof b, "%s,%s(8)", f, wk);
+        snprintf(b, sizeof b, "%s,%s(16)", f, wk);
         asm_line("", "UNPK", b, "packed -> zoned");
         if (!sy->is_signed) {
             if (sub) snprintf(b, sizeof b, "%d(6),X'F0'", sy->elem - 1);
@@ -2808,7 +2820,7 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
         break;
     case U_COMP3:
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
-        snprintf(b, sizeof b, "%s,%s(8)", f, wk);
+        snprintf(b, sizeof b, "%s,%s(16)", f, wk);
         asm_line("", "ZAP", b, "");
         if (!sy->is_signed) {
             /* ZAP leaves a C sign; an unsigned packed item carries F, which
@@ -2820,7 +2832,7 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
         }
         break;
     case U_COMP:
-        snprintf(b, sizeof b, "DWK(8),%s(8)", wk);
+        snprintf(b, sizeof b, "DWK(8),%s(16)", wk);
         asm_line("", "ZAP", b, "");
         asm_line("", "CVB", "2,DWK", "packed -> binary");
         field_ref(sy, sub, 0, 6, f, sizeof f);
@@ -2939,14 +2951,14 @@ static int gen_expr(Node *n, int d, int tgtscale)
 
     case N_LIT: {
         const char *lab = intern_const(n->lit);
-        snprintf(b, sizeof b, "%s(16),%s(8)", wk, lab);
+        snprintf(b, sizeof b, "%s(16),%s(16)", wk, lab);
         asm_line("", "ZAP", b, "literal");
         return n->litscale;
     }
 
     case N_NEG: {
         int s = gen_expr(n->l, d + 1, tgtscale);
-        snprintf(b, sizeof b, "%s(16),%s(8)", wk, intern_const("0"));
+        snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("0"));
         asm_line("", "ZAP", b, "unary minus");
         snprintf(b, sizeof b, "%s(16),%s(16)", wk, wk2);
         asm_line("", "SP", b, "");
@@ -3426,11 +3438,11 @@ static void emit_set_from_expr(const Sym *d, Node *e, int add)
     int rs = gen_expr(e, 0, d->scale);
     gen_rescale16("WK0", rs, d->scale, 0);
     if (add) {
-        asm_line("", "ZAP", "PWK2(8),WK0(16)", "");
+        asm_line("", "ZAP", "PWK2(16),WK0(16)", "");
         gen_load(d, NULL, "PWK1");
-        asm_line("", "AP", "PWK1(8),PWK2(8)", "");
+        asm_line("", "AP", "PWK1(16),PWK2(16)", "");
     } else {
-        asm_line("", "ZAP", "PWK1(8),WK0(16)", "");
+        asm_line("", "ZAP", "PWK1(16),WK0(16)", "");
     }
     gen_store(d, NULL, "PWK1");
 }
@@ -4154,7 +4166,7 @@ static void generate(void)
             asm_comment(b);
             int rs = gen_expr(st->expr, 0, d->scale);
             gen_rescale16("WK0", rs, d->scale, st->rounded);
-            asm_line("", "ZAP", "PWK1(8),WK0(16)", "");
+            asm_line("", "ZAP", "PWK1(16),WK0(16)", "");
             gen_store(d, st->dsub, "PWK1");
             break;
         }
@@ -4306,7 +4318,7 @@ static void generate(void)
                 if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK2"); }
                 else { gen_load(&syms[st->src], st->ssub, "PWK2"); }
                 gen_rescale("PWK2", ss, ws);
-                asm_line("", st->op == ST_ADD ? "AP" : "SP", "PWK1(8),PWK2(8)", "");
+                asm_line("", st->op == ST_ADD ? "AP" : "SP", "PWK1(16),PWK2(16)", "");
                 gen_rescale("PWK1", ws, d->scale);
                 gen_store(d, st->dsub, "PWK1");
             }
@@ -4431,9 +4443,9 @@ static void generate(void)
     if (nsym) {
         asm_comment(" work areas for decimal arithmetic");
         asm_line("DWK", "DS", "D", "CVD/CVB doubleword");
-        asm_line("PWK1", "DS", "PL8", "");
-        asm_line("PWK2", "DS", "PL8", "");
-        asm_line("EDSRC", "DS", "PL8", "ED source, exactly sized");
+        asm_line("PWK1", "DS", "PL16", "");
+        asm_line("PWK2", "DS", "PL16", "");
+        asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");
         asm_line("EDWK", "DS", "CL64", "ED pattern and result");
         asm_line("MULT8", "DS", "PL8", "MP right operand");
         asm_line("DIVR8", "DS", "PL8", "DP divisor");
@@ -4632,7 +4644,7 @@ static void generate(void)
         }
     }
     for (int i = 0; i < nconst; i++) {
-        snprintf(b, sizeof b, "PL8'%s'", consts[i].digits);
+        snprintf(b, sizeof b, "PL16'%s'", consts[i].digits);
         asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");
     }
     for (int i = 0; i < nmconst; i++) {

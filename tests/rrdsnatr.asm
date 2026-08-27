@@ -167,14 +167,14 @@ T0009    DS    0H
          BE    L0003
 T0010    DS    0H
 * ADD 1 -> RECORD-COUNTER
-         PACK  PWK1(8),D0004(8)    zoned -> packed
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         UNPK  D0004(8),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0004(8)   zoned -> packed
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         UNPK  D0004(8),PWK1(16)   packed -> zoned
 T0011    DS    0H
 * MOVE RECORD-COUNTER -> COUNTER-EDIT
-         PACK  PWK1(8),D0004(8)    zoned -> packed
-         ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
+         PACK  PWK1(16),D0004(8)   zoned -> packed
+         ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0005(10),EDWK+2    the edited result
@@ -213,9 +213,9 @@ PARM0004 DC    A(DSPBUF)
 LEN0004  DC    H'92'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -231,7 +231,7 @@ FD000    ACB   DDNAME=RRDSF01,MACRF=(KEY,SEQ,IN)  VSAM access method co
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,ARG=FD000K,OPTCD=(KEY,SEQ,NUP,MVE)
 FD000K   DS    F                   relative record number
-K0001    DC    PL8'1'              numeric constants
+K0001    DC    PL16'1'             numeric constants
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
 S0001    DC    CL32'RRDSREAD: READ RRDS SEQUENTIALLY'  nonnumeric const
 S0002    DC    CL32'--------------------------------'

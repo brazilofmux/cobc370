@@ -44,8 +44,8 @@ T0003    DS    0H
 * MOVE DESC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(8),D0002(10)   zoned -> packed
-         UNPK  D0004(10),PWK1(8)   packed -> zoned
+         PACK  PWK1(16),D0002(10)  zoned -> packed
+         UNPK  D0004(10),PWK1(16)  packed -> zoned
          OI    D0004+9,X'F0'       unsigned: force an F zone
 T0004    DS    0H
 * DISPLAY
@@ -80,9 +80,9 @@ PARM0001 DC    A(DSPBUF)
 LEN0001  DC    H'86'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor

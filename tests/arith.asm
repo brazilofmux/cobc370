@@ -23,14 +23,14 @@ T0000    DS    0H
 * ADD P1 -> P2
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(8),D0001(4)
-         ZAP   PWK2(8),D0000(4)
-         AP    PWK1(8),PWK2(8)
-         ZAP   D0001(4),PWK1(8)
+         ZAP   PWK1(16),D0001(4)
+         ZAP   PWK2(16),D0000(4)
+         AP    PWK1(16),PWK2(16)
+         ZAP   D0001(4),PWK1(16)
 T0001    DS    0H
 * MOVE P2 -> R1
-         ZAP   PWK1(8),D0001(4)
-         UNPK  D0007(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),D0001(4)
+         UNPK  D0007(9),PWK1(16)   packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
 T0002    DS    0H
 * DISPLAY
@@ -40,15 +40,15 @@ T0002    DS    0H
          BALR  14,15
 T0003    DS    0H
 * ADD P3 -> P2
-         ZAP   PWK1(8),D0001(4)
-         ZAP   PWK2(8),D0002(4)
-         SRP   PWK2(8),1,0         align scale (left)
-         AP    PWK1(8),PWK2(8)
-         ZAP   D0001(4),PWK1(8)
+         ZAP   PWK1(16),D0001(4)
+         ZAP   PWK2(16),D0002(4)
+         SRP   PWK2(16),1,0        align scale (left)
+         AP    PWK1(16),PWK2(16)
+         ZAP   D0001(4),PWK1(16)
 T0004    DS    0H
 * MOVE P2 -> R3
-         ZAP   PWK1(8),D0001(4)
-         UNPK  D0009(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),D0001(4)
+         UNPK  D0009(9),PWK1(16)   packed -> zoned
          OI    D0009+8,X'F0'       unsigned: force an F zone
 T0005    DS    0H
 * DISPLAY
@@ -60,20 +60,20 @@ T0006    DS    0H
 * ADD B2 -> B1
          L     2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
+         ZAP   PWK1(16),DWK(8)
          L     2,D0004
          CVD   2,DWK               binary -> packed
-         ZAP   PWK2(8),DWK(8)
-         AP    PWK1(8),PWK2(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK2(16),DWK(8)
+         AP    PWK1(16),PWK2(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0003
 T0007    DS    0H
 * MOVE B1 -> R2
          L     2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         UNPK  D0008(9),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),DWK(8)
+         UNPK  D0008(9),PWK1(16)   packed -> zoned
          OI    D0008+8,X'F0'       unsigned: force an F zone
 T0008    DS    0H
 * DISPLAY
@@ -83,14 +83,14 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * SUBTRACT P1 -> Z1
-         PACK  PWK1(8),D0005(7)    zoned -> packed
-         ZAP   PWK2(8),D0000(4)
-         SP    PWK1(8),PWK2(8)
-         UNPK  D0005(7),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0005(7)   zoned -> packed
+         ZAP   PWK2(16),D0000(4)
+         SP    PWK1(16),PWK2(16)
+         UNPK  D0005(7),PWK1(16)   packed -> zoned
 T0010    DS    0H
 * MOVE Z1 -> R4
-         PACK  PWK1(8),D0005(7)    zoned -> packed
-         UNPK  D0010(9),PWK1(8)    packed -> zoned
+         PACK  PWK1(16),D0005(7)   zoned -> packed
+         UNPK  D0010(9),PWK1(16)   packed -> zoned
          OI    D0010+8,X'F0'       unsigned: force an F zone
 T0011    DS    0H
 * DISPLAY
@@ -100,24 +100,24 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * ADD 005 -> SC
-         ZAP   PWK1(8),D0006(2)
-         SRP   PWK1(8),1,0         align scale (left)
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         SRP   PWK1(8),63,0        align scale (right)
-         ZAP   D0006(2),PWK1(8)
+         ZAP   PWK1(16),D0006(2)
+         SRP   PWK1(16),1,0        align scale (left)
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         SRP   PWK1(16),63,0       align scale (right)
+         ZAP   D0006(2),PWK1(16)
 T0013    DS    0H
 * ADD 005 -> SC
-         ZAP   PWK1(8),D0006(2)
-         SRP   PWK1(8),1,0         align scale (left)
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         SRP   PWK1(8),63,0        align scale (right)
-         ZAP   D0006(2),PWK1(8)
+         ZAP   PWK1(16),D0006(2)
+         SRP   PWK1(16),1,0        align scale (left)
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         SRP   PWK1(16),63,0       align scale (right)
+         ZAP   D0006(2),PWK1(16)
 T0014    DS    0H
 * MOVE SC -> R5
-         ZAP   PWK1(8),D0006(2)
-         UNPK  D0011(4),PWK1(8)    packed -> zoned
+         ZAP   PWK1(16),D0006(2)
+         UNPK  D0011(4),PWK1(16)   packed -> zoned
          OI    D0011+3,X'F0'       unsigned: force an F zone
 T0015    DS    0H
 * DISPLAY
@@ -152,9 +152,9 @@ PARM0005 DC    A(DSPBUF)
 LEN0005  DC    H'4'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -165,7 +165,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'005'            numeric constants
+K0001    DC    PL16'005'           numeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

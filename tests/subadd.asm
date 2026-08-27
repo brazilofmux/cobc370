@@ -31,8 +31,8 @@ T0000    DS    0H
          USING LS0000,8
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     9,BL0000            base locator
          USING WSC0000,9
@@ -41,18 +41,18 @@ T0001    DS    0H
 * ADD 1000 -> WS-T
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   PWK2(8),K0001(8)    literal
-         AP    PWK1(8),PWK2(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   PWK2(16),K0001(16)  literal
+         AP    PWK1(16),PWK2(16)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0000
 T0002    DS    0H
 * MOVE WS-T -> OUT-VAL
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   PWK1(8),DWK(8)
-         ZAP   DWK(8),PWK1(8)
+         ZAP   PWK1(16),DWK(8)
+         ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          DROP  8
          L     8,PBL0001           parameter address
@@ -69,9 +69,9 @@ T0004    DS    0H
          BR    14                  return to caller
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -82,7 +82,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL8'1000'           numeric constants
+K0001    DC    PL16'1000'          numeric constants
 S0001    DC    CL4'DONE'           nonnumeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)

@@ -30,10 +30,10 @@ T0000    DS    0H
          ST    1,DB000+12          area address into the DECB
 T0001    DS    0H
 * MOVE 10303 -> WS-NOMKEY
-         ZAP   PWK1(8),K0001(8)    literal
+         ZAP   PWK1(16),K0001(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   D0008(6),PWK1(8)
+         ZAP   D0008(6),PWK1(16)
          OI    D0008+5,X'0F'       unsigned: force an F sign
 T0002    DS    0H
 * READ GLACCT
@@ -63,8 +63,8 @@ T0004    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(8),D0002(6)
-         UNPK  D0009(10),PWK1(8)   packed -> zoned
+         ZAP   PWK1(16),D0002(6)
+         UNPK  D0009(10),PWK1(16)  packed -> zoned
          OI    D0009+9,X'F0'       unsigned: force an F zone
 T0005    DS    0H
 * DISPLAY
@@ -91,10 +91,10 @@ T0007    DS    0H
 P0002    DS    0H
 T0008    DS    0H
 * MOVE 10301 -> WS-NOMKEY
-         ZAP   PWK1(8),K0002(8)    literal
+         ZAP   PWK1(16),K0002(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   D0008(6),PWK1(8)
+         ZAP   D0008(6),PWK1(16)
          OI    D0008+5,X'0F'       unsigned: force an F sign
 T0009    DS    0H
 * READ GLACCT
@@ -124,8 +124,8 @@ T0011    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(8),D0002(6)
-         UNPK  D0009(10),PWK1(8)   packed -> zoned
+         ZAP   PWK1(16),D0002(6)
+         UNPK  D0009(10),PWK1(16)  packed -> zoned
          OI    D0009+9,X'F0'       unsigned: force an F zone
 T0012    DS    0H
 * DISPLAY
@@ -152,10 +152,10 @@ T0014    DS    0H
 P0004    DS    0H
 T0015    DS    0H
 * MOVE 9999999 -> WS-NOMKEY
-         ZAP   PWK1(8),K0003(8)    literal
+         ZAP   PWK1(16),K0003(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   D0008(6),PWK1(8)
+         ZAP   D0008(6),PWK1(16)
          OI    D0008+5,X'0F'       unsigned: force an F sign
 T0016    DS    0H
 * READ GLACCT
@@ -185,8 +185,8 @@ T0018    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(8),D0002(6)
-         UNPK  D0009(10),PWK1(8)   packed -> zoned
+         ZAP   PWK1(16),D0002(6)
+         UNPK  D0009(10),PWK1(16)  packed -> zoned
          OI    D0009+9,X'F0'       unsigned: force an F zone
 T0019    DS    0H
 * DISPLAY
@@ -258,9 +258,9 @@ PARM0006 DC    A(DSPBUF)
 LEN0006  DC    H'12'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-PWK1     DS    PL8
-PWK2     DS    PL8
-EDSRC    DS    PL8                 ED source, exactly sized
+PWK1     DS    PL16
+PWK2     DS    PL16
+EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
@@ -273,9 +273,9 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=GLACCT,DSORG=IS,MACRF=(R),SYNAD=ISYNAD
-K0001    DC    PL8'10303'          numeric constants
-K0002    DC    PL8'10301'
-K0003    DC    PL8'9999999'
+K0001    DC    PL16'10303'         numeric constants
+K0002    DC    PL16'10301'
+K0003    DC    PL16'9999999'
 S0001    DC    CL4'GOT '           nonnumeric constants
 S0002    DC    CL1' '
 S0003    DC    CL10'MISS 10303'
