@@ -94,6 +94,14 @@ transactions and still returned RC=0000.
     bin/     the regression harness
     docs/    development log, differential-testing notes, VSAM design notes
 
+## License
+
+MIT. See `LICENSE`.
+
+The test fixtures under `tests/data/` are action cards from Jay Moseley's VSAMIO
+test suite, included so the tests stand alone; that package is his work and is
+not redistributed here.
+
 ## Credits
 
 Jay Moseley's VSAMIO package is the reference implementation the VSAM support is
