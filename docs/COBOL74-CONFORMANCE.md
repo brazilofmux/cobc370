@@ -206,22 +206,23 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Three slices in, the same histogram reads:
+Four slices in, the same histogram reads:
 
-     77   a SECTION in the Procedure Division
+     77   WRITE naming a record other than an FD's first
      25   an unimplemented SELECT clause
+     24   the USE statement -- declaratives
      22   a USAGE DISPLAY item past 16 digits
      12   BLOCK CONTAINS n CHARACTERS
-      9   the SIGN clause
 
 Each fix uncovers the next thing, and the count that matters is the one at the
 top of the list rather than the number that compile:
 
-    blocker                     start   after digits   after REDEFINES   now
-    more than 15 digits           126             22                22    22
-    group REDEFINES                 -             94                 0     0
-    literal continuation           20             20               112     0
-    a SECTION in Procedure Div      -              -                 -    77
+    blocker                      start   digits   REDEFINES   literals   now
+    more than 15 digits            126       22          22         22    22
+    group REDEFINES                  -       94           0          0     0
+    literal continuation            20       20         112          0     0
+    a SECTION in the Proc Div        -        -           -         77     0
+    WRITE of a non-first record      -        -           -          -    77
 
 Two of those had been sitting near the bottom of the list the whole time, only
 because most programs hit something else first.
@@ -304,6 +305,25 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### Procedure Division sections
+
+Section-names and section headers are Nucleus level 1. The DEFTLY corpus is
+written entirely in paragraphs, so nothing had ever asked for them.
+
+They cost little, because the existing machinery already had the shape. A
+`PERFORM` range ends by returning through a cell just before the next
+procedure's label, so a section only needs to say where its range ends: at the
+last paragraph before the next section header. One line in the resolution pass
+covers both `PERFORM SECT` and `PERFORM PARA THRU SECT`, since a `PERFORM`
+without `THRU` already resolves its range end to its own name.
+
+A segment-number on the header is accepted and ignored, which is a conforming
+choice: Segmentation has a null level, and the only thing a program can observe
+of it -- an independent segment back in its initial state -- is carried by
+`ALTER`, which this compiler does not implement. With every section resident
+and no altered `GO TO` to reset, the number says nothing about what the program
+does. `tests/sections.cbl` carries a `SECTION 50` header for that reason.
 
 ### Literal continuation
 

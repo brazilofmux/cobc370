@@ -583,10 +583,15 @@ static int rgroup_index(const char *n)
 
 /* Paragraphs, resolved after parsing so a PERFORM may name one that has not
  * been seen yet. */
-typedef struct { char name[31]; int is_range_end; } Para;
+typedef struct { char name[31]; int is_range_end; int is_section; } Para;
 #define MAXPARA 256
 static Para paras[MAXPARA];
 static int npara;
+
+/* The last procedure in the section that opens at i. A PERFORM of a section
+ * runs through everything up to the next section header, so this is where its
+ * range ends. */
+static int section_end(int i);
 
 static int para_index(const char *n)
 {
@@ -2376,12 +2381,30 @@ static void parse_one_statement(void)
         char nm[31];
         snprintf(nm, sizeof nm, "%s", tok.text);
         next();
+        int a_section = 0;
+        if (is("SECTION")) {
+            next();
+            /* A segment-number is accepted and ignored. Segmentation has a null
+             * level in the standard, and the only thing a program can observe
+             * of it -- an independent segment back in its initial state -- is
+             * carried by ALTER, which this compiler does not implement. With
+             * every section resident and no altered GO TO to reset, the number
+             * says nothing about what the program does. */
+            if (!is(".")) {
+                if (!is_numeric_literal(tok.text))
+                    die("a SECTION header takes only an optional segment-number");
+                next();
+            }
+            a_section = 1;
+        }
         if (is(".")) {
             next(); at_period = 1;
-            if (para_index(nm) >= 0) die("duplicate paragraph name");
+            if (para_index(nm) >= 0)
+                die(a_section ? "duplicate section name" : "duplicate paragraph name");
             if (npara >= MAXPARA) die("too many paragraphs");
             snprintf(paras[npara].name, sizeof paras[npara].name, "%s", nm);
             paras[npara].is_range_end = 0;
+            paras[npara].is_section = a_section;
             Stmt *st = new_stmt(ST_PARA);
             snprintf(st->para, sizeof st->para, "%s", nm);
             st->dst = npara++;
@@ -2445,9 +2468,23 @@ static void parse_procedure(void)
         if (a < 0) { char m[96]; snprintf(m, sizeof m, "PERFORM names an unknown paragraph '%s'", stmts[i].para); die(m); }
         if (b < 0) { char m[96]; snprintf(m, sizeof m, "PERFORM THRU names an unknown paragraph '%s'", stmts[i].thru); die(m); }
         if (b < a) die("PERFORM THRU runs backwards");
+        /* Naming a section means all of it. Without THRU the range end is the
+         * same name, so this one line covers PERFORM SECT and
+         * PERFORM PARA THRU SECT alike. */
+        if (paras[b].is_section) b = section_end(b);
         stmts[i].dst = a; stmts[i].src = b;
         paras[b].is_range_end = 1;
     }
+}
+
+static int section_end(int i)
+{
+    int j = i;
+    for (int k = i + 1; k < npara; k++) {
+        if (paras[k].is_section) break;
+        j = k;
+    }
+    return j;
 }
 
 /* ---- base locator cells -------------------------------------------------
