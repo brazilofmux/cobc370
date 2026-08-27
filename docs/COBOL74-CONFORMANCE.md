@@ -198,13 +198,26 @@ passes. `bin/cobc-ccvs` runs them through this front end.
 Almost nothing compiles yet, which was expected. The useful output is not a
 score but a histogram -- which single missing thing blocks the most programs:
 
-    126   more than 15 digits (see below)
+    126   more than 15 digits
      25   an unimplemented SELECT clause
      20   literal continuation
      20   an unrecognised Data Division entry
      13   BLOCK CONTAINS n CHARACTERS
       9   the SIGN clause
       6   the JUSTIFIED clause
+
+Two slices in, the same histogram reads:
+
+    112   literal continuation
+     25   an unimplemented SELECT clause
+     22   a USAGE DISPLAY item past 16 digits
+     12   BLOCK CONTAINS n CHARACTERS
+      9   the SIGN clause
+
+Each fix uncovers the next thing: the 126-program digit blocker fell to 22, a
+group `REDEFINES` bug worth 94 programs appeared behind it and is now fixed,
+and literal continuation -- which had been sitting at 20 because most programs
+hit something else first -- is now the top of the list at 112.
 
 Three of those are Nucleus **Level 1** requirements this map had missed:
 
@@ -250,6 +263,40 @@ records the right answer and says why.
 Six bugs have come out of differential testing against GnuCOBOL. This is the
 first one that was on the other side. `docs/DIFFERENTIAL-TESTING.md` has the
 table.
+
+### Group REDEFINES
+
+Behind the digit ceiling sat a second bug, worth 94 programs, and it was a
+false rejection rather than a missing feature:
+
+```cobol
+03 COMPUTED-A     PIC X(20).
+03 CM-18V0 REDEFINES COMPUTED-A.
+    04 COMPUTED-18V0  PIC -9(18).
+    04 FILLER         PIC X.
+03 FILLER PIC X(50).
+```
+
+The subordinates fill exactly 20 bytes, but the compiler said *"a REDEFINES may
+not be longer than the item it redefines"* -- and said it at the *following*
+`01`, several entries later.
+
+The REDEFINES state lived in two parse-local variables. An elementary
+redefinition retired them itself; a group redefinition never did, because it
+returns to the parser through the group path instead. So the bound stayed armed
+after the group closed, and the first sibling past it tripped a limit that
+should have been gone.
+
+The state now belongs to the item -- `redef_from` and `redef_cap` on the
+symbol -- and a group hands the cursor back when it closes, in one shared
+`close_group`. `enclosing_cap` recovers the bound of an outer redefinition when
+an inner one ends, so redefinitions nest.
+
+That also fixed something no test had reached: a group redefinition *shorter*
+than the item it covers. The cursor used to resume wherever the subordinates
+stopped, so the next sibling would have been laid down inside the redefined
+item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
+nested inside a redefining group, and the item after all of them.
 
 ### A bug rather than an absence
 
