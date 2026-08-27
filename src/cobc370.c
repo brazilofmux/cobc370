@@ -329,6 +329,7 @@ typedef struct {
     char thru[31];          /* PERFORM ... THRU */
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
+    int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
     int  lab3;              /* ST_SEARCH: the end label */
     struct Cond *cond2;     /* ST_SEARCH: the same operands compared with < */
     Node *dsub, *ssub;      /* subscripts on dst and src */
@@ -1202,7 +1203,12 @@ static void parse_data_division(void)
         if (files[i].vsam) {
             /* What is not implemented is refused by name, so the gap is
              * obvious rather than mysterious. */
-            if (files[i].access == 2) die("VSAM ACCESS IS DYNAMIC is not implemented yet");
+            if (files[i].access == 2 && files[i].org == 1 && files[i].key_sym < 0)
+                die("ACCESS IS DYNAMIC needs a RECORD KEY");
+            if (files[i].access == 2 && files[i].opened_io)
+                die("ACCESS IS DYNAMIC with OPEN I-O is not implemented yet -- "
+                    "browsing wants OPTCD=NSP and updating wants UPD, and one "
+                    "RPL cannot hold both");
             if (files[i].org == 2) {
                 /* An RRDS is addressed by record number. VSAM wants that as a
                  * fullword binary, which is what a COBOL RELATIVE KEY declared
@@ -1210,7 +1216,7 @@ static void parse_data_division(void)
                  * straight at the program's own field, with no conversion and
                  * nothing to keep in step. */
                 if (files[i].key_sym < 0 &&
-                    (files[i].access == 1 || files[i].has_start))
+                    (files[i].access != 0 || files[i].has_start))
                     die("a VSAM RRDS needs a RELATIVE KEY to be read by number");
                 if (files[i].key_sym >= 0) {
                     const Sym *k = &syms[files[i].key_sym];
@@ -1228,6 +1234,8 @@ static void parse_data_division(void)
                  * use one have nothing to use. */
                 if (files[i].key_sym >= 0)
                     die("a VSAM ESDS has no key, so no RECORD KEY");
+                /* VSAMIOS refuses DYNAMIC for an ESDS too, and for the same
+                 * reason: there is no key to read one by. */
                 if (files[i].access != 0)
                     die("a VSAM ESDS can only be ACCESS IS SEQUENTIAL");
                 if (files[i].has_start)
@@ -1898,9 +1906,17 @@ static void parse_one_statement(void)
         int fi = file_index(tok.text);
         if (fi < 0) die("READ names something that is not a file");
         next();
+        /* READ f NEXT is the sequential half of ACCESS IS DYNAMIC. Plain
+         * READ on the same file is the keyed half, which is why one carries
+         * AT END and the other INVALID KEY. */
+        int rnext = 0;
+        if (is("NEXT")) { rnext = 1; next(); }
         if (is("RECORD")) next();
+        if (rnext && files[fi].access != 2)
+            die("READ NEXT needs ACCESS IS DYNAMIC");
         Stmt *st = new_stmt(ST_READ);
         st->dst = fi;
+        st->read_next = rnext;
         if (is("INTO")) {
             /* READ f INTO x is READ f followed by MOVE record TO x, and the
              * move happens only when a record was actually read -- never on
@@ -3496,9 +3512,47 @@ static void generate(void)
                  * MVE. R15 is zero when a record came back; anything else is
                  * end of data or a failure, and both take the AT END path. */
                 char rn[10]; rpl_name(f, 0, rn, sizeof rn);
-                const VsFbk *rtab = f->access == 1 ? vs_read_dir : vs_read;
+                /* On a DYNAMIC file the two kinds of READ share one RPL,
+                 * because VSAM keeps position there and READ NEXT has to
+                 * carry on from wherever the keyed READ landed. So the
+                 * request type is set on it each time. Nothing to do for the
+                 * other access modes: their RPL was assembled saying it. */
+                int bykey = (f->access == 1) ||
+                            (f->access == 2 && !st->read_next);
+                char luser[16] = "";
+                if (f->access == 2) {
+                    /* NSP, not NUP. A direct request only leaves the RPL
+                     * positioned for a following sequential one if it is
+                     * asked to note where it got to -- without it READ NEXT
+                     * returns end of data immediately, which is a quiet way
+                     * to lose half of what DYNAMIC is for. */
+                    snprintf(b, sizeof b, "RPL=%s,OPTCD=(%s)", rn,
+                             bykey ? "DIR,NSP" : "SEQ");
+                    asm_line("", "MODCB", b, bykey ? "by key" : "next");
+                    /* A MODCB that fails must not look like end of data. It
+                     * takes the same branch the program wrote, but with a
+                     * status of its own and without decoding a feedback code
+                     * that describes some earlier request. */
+                    int lok = ++gen_edited_labels;
+                    snprintf(luser, sizeof luser, "G%04d", ++gen_edited_labels);
+                    char aok[16]; snprintf(aok, sizeof aok, "G%04d", lok);
+                    asm_line("", "LTR", "15,15", "");
+                    asm_line("", "BZ", aok, "");
+                    if (f->status_sym >= 0) {
+                        const Sym *st2 = &syms[f->status_sym];
+                        char fd[64];
+                        need_sym_base(st2);
+                        field_ref(st2, NULL, 2, 6, fd, sizeof fd);
+                        snprintf(b, sizeof b, "%s,=C'30'", fd);
+                        asm_line("", "MVC", b, "could not set the request type");
+                    }
+                    asm_line("", "B", luser, "");
+                    asm_line(aok, "DS", "0H", "");
+                    reset_bases();
+                }
+                const VsFbk *rtab = bykey ? vs_read_dir : vs_read;
                 snprintf(b, sizeof b, "RPL=%s", rn);
-                asm_line("", "GET", b, f->access == 1
+                asm_line("", "GET", b, bykey
                          ? "VSAM retrieval by key" : "VSAM sequential retrieval");
                 asm_line("", "LTR", "15,15", "got a record?");
                 asm_line("", "BNZ", le, "");
@@ -3510,10 +3564,10 @@ static void generate(void)
                     gen_move_alpha(t, NULL, &syms[f->rec_sym], NULL);
                 }
                 asm_line("", "B", lc, "");
-                asm_line(le, "DS", "0H",
-                         f->access == 1 ? "INVALID KEY" : "AT END");
+                asm_line(le, "DS", "0H", bykey ? "INVALID KEY" : "AT END");
                 reset_bases();
                 gen_vsam_status(f, rn, rtab);
+                if (luser[0]) { asm_line(luser, "DS", "0H", ""); reset_bases(); }
                 reset_bases();
                 break;
             }
@@ -4240,9 +4294,12 @@ static void generate(void)
              * by key. That is the whole of ACCESS IS SEQUENTIAL versus RANDOM,
              * and it is why a random READ has an INVALID KEY rather than an AT
              * END: there is no end to reach when you asked for one record. */
-            const char *seqdir = f->access == 1 ? "DIR" : "SEQ";
+            /* DYNAMIC is both, and the ACB has to say so. The RPL can only
+             * be one at a time, so it is set per request -- see the READ. */
+            const char *seqdir  = f->access == 1 ? "DIR" : "SEQ";
+            const char *macrfsd = f->access == 2 ? "SEQ,DIR" : seqdir;
             snprintf(b, sizeof b, "DDNAME=%s,MACRF=(%s,%s,%s)",
-                     f->ddname, keyadr, seqdir, macrf);
+                     f->ddname, keyadr, macrfsd, macrf);
             asm_line(f->label, "ACB", b, "VSAM access method control block");
 
             /* A direct request has to say which record it means. ARG is the
@@ -4269,7 +4326,7 @@ static void generate(void)
                     snprintf(rrncell, sizeof rrncell, "%sK", f->label);
                     snprintf(keyarg, sizeof keyarg, "ARG=%s,", rrncell);
                 }
-            } else if ((f->access == 1 || f->has_start) && f->key_sym >= 0) {
+            } else if ((f->access != 0 || f->has_start) && f->key_sym >= 0) {
                 const Sym *k = &syms[f->key_sym];
                 snprintf(keyarg, sizeof keyarg, "ARG=%s,KEYLEN=%d,",
                          k->label, k->bytes);
@@ -4289,7 +4346,7 @@ static void generate(void)
                 snprintf(second, sizeof second,
                          "AREALEN=%d,RECLEN=%d,%sOPTCD=(%s,%s,%s%s,MVE)",
                          f->reclen, f->reclen, keyarg, keyadr, seqdir,
-                         f->access == 1 ? "KEQ," : "",
+                         f->access != 0 ? "KEQ," : "",
                          pass ? "NUP" : optcd);
                 asm_cont(first, second);
             }

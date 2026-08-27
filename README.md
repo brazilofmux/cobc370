@@ -20,7 +20,7 @@ a 37-step monthly general-ledger batch run, reproduced byte-for-byte against the
 output of IBM's own compiler.** Generated modules are roughly half the size of
 ANS COBOL's for the same source.
 
-40 regression tests, all green.
+42 regression tests, all green.
 
 | area | supported |
 |---|---|
@@ -28,15 +28,15 @@ ANS COBOL's for the same source.
 | verbs | MOVE, arithmetic with GIVING/ROUNDED, IF, PERFORM (TIMES/UNTIL/VARYING/THRU), GO TO, SEARCH and SEARCH ALL, CALL, DISPLAY, ACCEPT |
 | QSAM | sequential read and write, blocked and unblocked |
 | ISAM | QISAM load and sequential read, BISAM random read |
-| **VSAM KSDS** | read, load, update in place, read/write by key, START |
+| **VSAM KSDS** | read, load, update in place, read/write by key, START, ACCESS IS DYNAMIC |
 | **VSAM ESDS** | read, load, update in place, extend |
-| **VSAM RRDS** | read, load, read/write by record number |
+| **VSAM RRDS** | read, load, read/write by record number, START |
 | reports | Report Writer: RD, page and control breaks, SUM |
 
-Known gaps, all deliberate: no `ACCESS IS DYNAMIC`, no ASA carriage control, no
-dynamic `CALL identifier`, and no equivalent of ANS COBOL's `ILBOERR0` -- on
-malformed packed data ANS diagnoses and this abends. See
-`docs/DEVELOPMENT-LOG.md`.
+Known gaps, all deliberate: no ASA carriage control, no dynamic
+`CALL identifier`, `ACCESS IS DYNAMIC` not combined with `OPEN I-O`, and no
+equivalent of ANS COBOL's `ILBOERR0` -- on malformed packed data ANS diagnoses
+and this abends. See `docs/DEVELOPMENT-LOG.md`.
 
 ## Building
 
@@ -78,9 +78,14 @@ independent implementation:
   source, or against GnuCOBOL where the construct is portable.
 - **VSAM tests** are checked against Jay Moseley's VSAMIO, an assembler engine
   that drives VSAM directly. ANS COBOL has no VSAM, so there is no other
-  reference. Twelve programs, and for every one that changes a cluster the
+  reference. Fourteen programs, and for every one that changes a cluster the
   contents are read back and compared as well -- messages matching is not
   enough when the point is what got written.
+
+  One test has no VSAMIO counterpart, and the README says so rather than
+  implying otherwise: VSAMIO cannot express `ACCESS IS DYNAMIC` in the sense
+  COBOL means it. That one is checked against cluster contents already verified
+  against VSAMIO. `docs/VSAM-PLAN.md`, slice 10.
 
 `docs/DIFFERENTIAL-TESTING.md` explains why this matters: six real bugs came out
 of running against production data and JCL that the unit tests could not have

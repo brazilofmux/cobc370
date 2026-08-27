@@ -362,22 +362,88 @@ had the key in place already.
 That it worked first time is the point. The machinery was built for a KSDS and
 carried across to a different organization untouched.
 
+## Slice 10: ACCESS IS DYNAMIC and RRDS START
+
+### RRDS START
+
+Nothing to build. `ORGANIZATION IS RELATIVE` already carried ARG, `START`
+already emitted `MODCB OPTCD=(KEQ|KGE)` and `POINT`, and the two met without
+help. Identical to RRDSSSEQ over the three positions VSAMIO actually executes.
+
+The fourth is more interesting. Asked to position at RRN 111 in a 100-record
+cluster, VSAMIO returns `VSIO-RETURN-CODE = 9999` with every VSAM code zero --
+its own validation rejected the number and it never asked VSAM at all. Native
+code does ask, and gets FILE STATUS `23`, which is what COBOL says a START that
+finds nothing should give. So there is no byte comparison to make for that case,
+and the oracle covers the three that VSAMIO executes.
+
+### ACCESS IS DYNAMIC, and how it is verified
+
+`DYNAMIC` is `MACRF=(KEY,SEQ,DIR,...)` on the ACB -- both, which is what the
+mode means -- with the RPL's `OPTCD` set per request, because position lives on
+the RPL and `READ NEXT` has to carry on from wherever the keyed `READ` landed.
+So the two share one RPL and each request says what it is:
+
+    MODCB RPL=FD000R,OPTCD=(DIR,NSP)    a keyed READ
+    MODCB RPL=FD000R,OPTCD=(SEQ)        a READ NEXT
+
+**NSP, not NUP.** The first attempt used NUP and every `READ NEXT` returned end
+of data immediately -- no error, no abend, just nothing, which is a quiet way to
+lose half of what DYNAMIC is for. A direct request only leaves the RPL
+positioned for a following sequential one if it is asked to *note the string
+position*. With NSP the walk works, including repositioning: the test reads slot
+29 by key and walks forward, then reads slot 10 by key and walks forward from
+there.
+
+That bug was briefly hidden by a second one worth recording. The MODCB's return
+code was tested and, on failure, branched to the same label as end-of-data --
+so a failed MODCB was indistinguishable from a file that had run out. It now
+takes the branch the program wrote but with a status of its own, and without
+decoding a feedback code that describes some earlier request.
+
+**There is no VSAMIO reference for this slice, and the reason is worth stating.**
+VSAMIOS opens DYNAMIC as `MACRF=(SEQ,DIR)` and then sets `OPTCD=(SEQ)` and never
+changes it. Its DYNAMIC is sequential access with a direct-capable ACB; it has
+no way to say "this GET is the keyed one". So the one thing COBOL's DYNAMIC
+exists for -- a keyed READ and a READ NEXT interleaved on a single open file --
+is not expressible through it.
+
+Verified instead against data whose correctness is already established.
+`ksdsnat.expected` is the cluster in key order, itself diffed against VSAMIO. A
+script checks that each keyed READ returns the record holding that key, and that
+each following READ NEXT returns the next record in key order:
+
+    2522284049  keyed read -> slot 29, correct
+          3 READ NEXT, each the following record in key order
+    0994201010  keyed read -> slot 10, correct
+          3 READ NEXT, each the following record in key order
+    9999999999  correctly not found
+
+The claim being tested is narrow -- that DYNAMIC dispatches each verb down the
+right path -- and the data it is tested against is not this compiler's word for
+anything.
+
+`OPEN I-O` with DYNAMIC is refused by name. Browsing wants `OPTCD=NSP` and
+updating wants `UPD`, one RPL cannot hold both, and a second RPL cannot stand in
+because position is exactly what would have to be shared.
+
 ## VSAM is complete
 
 | organization | patterns | verified against |
 |---|---|---|
 | KSDS | read, load, update in place, by key, START | KSDSREAD, KSDSLOAD, KSDSUPDT, KSDSRAND, KSDSSSEQ |
 | ESDS | read, load, update in place, extend | ESDSREAD, ESDSLOAD, ESDSUPDT, ESDSADDT |
-| RRDS | read, load, by record number | RRDSREAD, RRDSLODS, RRDSRAND |
+| RRDS | read, load, by record number, START | RRDSREAD, RRDSLODS, RRDSRAND, RRDSSSEQ |
+| KSDS | ACCESS IS DYNAMIC | no reference exists; see slice 10 |
 
 Twelve programs, every one diffed against Jay Moseley's VSAMIO on every
 regression run, and for each one that changes a cluster the contents are read
 back and compared as well -- messages matching is not enough when the point is
 what got written.
 
-What is left in VSAM is `ACCESS IS DYNAMIC` (READ NEXT interleaved with keyed
-READ), and RRDS `START`, which is `POINT` with a record number instead of a key.
-Neither needs machinery that does not already exist.
+Nothing is left in VSAM that a COBOL-74 program can ask for, except `OPEN I-O`
+combined with `ACCESS IS DYNAMIC`, which is refused by name for the reason given
+in slice 10.
 
 ## The rebuild, 2026-08-26 evening
 

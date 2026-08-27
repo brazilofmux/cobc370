@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnatd isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -26,9 +26,9 @@ TESTS=${*:-$ALL}
 # missing, in the order ALL declares.
 prereq_for() {
     case "$1" in
-        ksdsnat|ksdsnats|ksdsnatu|ksdsnatr) echo ksdsnatl ;;
+        ksdsnat|ksdsnats|ksdsnatu|ksdsnatr|ksdsnatx) echo ksdsnatl ;;
         esdsnatr|esdsnatu|esdsnata)         echo esdsnatl ;;
-        rrdsnatr|rrdsnatd)                  echo rrdsnatl ;;
+        rrdsnatr|rrdsnatd|rrdsnats)         echo rrdsnatl ;;
     esac
 }
 if [ $# -gt 0 ]; then
@@ -71,7 +71,7 @@ for t in $TESTS; do
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
         case "$t" in isamseq|isamrnd)
             printf '//GO.GLACCT DD  DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003\n' ;;
-        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr|ksdsnats)
+        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr|ksdsnats|ksdsnatx)
             # The VSAM trio is stateful and runs in this order: ksdsnatl loads
             # the cluster, ksdsnat reads back what it wrote, ksdsnatu updates
             # it in place, ksdsnatr adds and deletes by key. ksdsnats only
@@ -94,7 +94,7 @@ for t in $TESTS; do
             # it empties the cluster and the group is repeatable.
             printf '//GO.ESDSF01 DD  DSN=VSTEST.ESDS.CLUSTER,DISP=OLD\n' ;;
         esac
-        case "$t" in rrdsnatl|rrdsnatr|rrdsnatd)
+        case "$t" in rrdsnatl|rrdsnatr|rrdsnatd|rrdsnats)
             printf '//GO.RRDSF01 DD  DSN=VSTEST.RRDS.CLUSTER,DISP=OLD\n' ;;
         esac
         if [ "$t" = rrdsnatl ] || [ "$t" = esdsnatl ]; then
