@@ -69,9 +69,22 @@ against an independent implementation.
 
 ## Three gaps, smallest first
 
-**1. `ENTRY` with a list.** `ENTRY COBDISP,COBTERM,COBWRL,COBDATE` is rejected
-with *"Symbol longer than 8 characters"*. IFOX00 accepts the list. One `ENTRY`
-per line works, so this is a workaround rather than a blocker.
+**1. `ENTRY` with a list.** ~~`ENTRY COBDISP,COBTERM,COBWRL,COBDATE` is
+rejected with *"Symbol longer than 8 characters"*.~~ **Fixed upstream** in
+`f29813a`, seventeen minutes after it was reported. Verified here: the real
+`ENTRY` assembles, and the same module spelled with one `ENTRY` line and with
+four produces byte-identical decks.
+
+The fix went past the report. `EXTRN`/`WXTRN` shared a splitter capped at 8
+fields that dropped further symbols with no diagnostic -- a ten-symbol `EXTRN`
+gave 8 ESD entries and RC 0 -- and `ENTRY A,,B` would have reached the symbol
+table under the empty name, which is the unnamed private-code section, and
+fabricated a phantom PC entry. Both were found by reading the code around the
+reported bug, and both are fixed.
+
+**The preprocessing workaround is retired.** All 48 modules now go to `as370`
+as generated, with no `ENTRY` splitting, and `MP` is the only remaining
+diagnostic.
 
 **2. `MP` is not in the opcode table.** *"Undefined operation code"*. It is the
 only instruction in the whole corpus `as370` does not know -- `DP` and `MVO` are
