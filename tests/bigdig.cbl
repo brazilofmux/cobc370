@@ -49,11 +49,11 @@
 004900         MOVE 'NOTGT' TO FLAG.
 005000     DISPLAY FLAG.
 005050* The oracle is wrong on the next one, and this is the expected
-005060* value rather than GnuCOBOL's. GnuCOBOL 4.0-early-dev reports a
-005070* signed COMP-3 of exactly 18 digits as not less than zero. At 17
-005080* digits it is right, on a zoned 18 it is right, and comparing the
-005090* same item against the full literal is right -- only the compare
-005095* against zero at 18 packed digits is wrong.
+005060* value rather than GnuCOBOL's. GnuCOBOL trunk r5698 compares a
+005070* signed COMP-3 item against a LITERAL wrongly for some values --
+005080* 12, 15 and 18 significant digits among them. Against a COMP-3
+005090* item of the same width the answer is right, in the same run.
+005095* See docs/DIFFERENTIAL-TESTING.md.
 005100     IF N18 < 0
 005200         MOVE 'NEG  ' TO FLAG
 005300     ELSE

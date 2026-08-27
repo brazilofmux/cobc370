@@ -282,23 +282,35 @@ Every one required real data, real JCL, or real program size.
 An oracle is a second opinion, not an authority, and the seventh finding went
 the other way.
 
-`tests/bigdig.cbl` compares a signed `COMP-3` item against zero. GnuCOBOL
-4.0-early-dev answers wrongly, and only in one narrow place:
+GnuCOBOL trunk r5698 (4.0-early-dev) compares a signed `COMP-3` item against a
+**literal** wrongly for some values. The first sighting was in
+`tests/bigdig.cbl`, where an 18-digit negative packed item tested as not less
+than zero. Sweeping every width told a much broader story -- one field,
+`PIC S9(18) COMP-3`, and 36 values through the same `IF V < 0`:
 
-    PIC S9(16) COMP-3 VALUE -1234567890123456      < 0  ->  true    correct
-    PIC S9(17) COMP-3 VALUE -12345678901234567     < 0  ->  true    correct
-    PIC S9(18) COMP-3 VALUE -123456789012345678    < 0  ->  false   WRONG
-    PIC S9(18)        VALUE -123456789012345678    < 0  ->  true    correct
+    significant digits   1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18
+    all nines            . . . . . . . . .  .  .  X  .  .  X  .  .  X
+    123456789123...      . . . . . . . . .  .  X  X  .  .  X  .  .  X
 
-The value itself is fine: the same item compares equal to its own 18-digit
-literal and moves to an edited field correctly. It is the comparison against
-zero, at exactly 18 packed digits.
+`X` is a negative value reported as not negative. It is deterministic, it
+survives a rebuild from a fresh `svn update`, and it is not about the declared
+width: the same field gives right answers either side of each wrong one.
 
-cobc370 gets it right, so `bigdig.expected` records `NEG` and the test carries
-a comment saying that this line is deliberately not the oracle's answer.
+What makes it unarguable is that GnuCOBOL contradicts itself inside one run:
+
+    -000999999999999999   vs literal 0: NOT    vs S9(18) COMP-3 item: lt
+    -999999999999999999   vs literal 0: NOT    vs S9(18) COMP-3 item: lt
+    -123456789012345678   vs literal 0: NOT    vs S9(18) COMP-3 item: lt
+
+Same field, same value, same run. Comparing against a packed item of the same
+width is right; comparing against a literal -- or against a `COMP-3` item of a
+*different* width -- is wrong. `IS NEGATIVE` is right. `= 0` is right. It is
+the ordering comparisons against a differently-shaped operand that fail.
+
+cobc370 gets all 36 right, verified on the guest.
 
 The practice that matters here is the one that made it visible: when a
-comparison fails, find out *which* side is wrong before believing either. This
-one was found by narrowing until a single construct differed, then checking the
-neighbouring widths -- 16 and 17 digits packed, and 18 digits zoned -- until
-the wrong answer was surrounded by right ones.
+comparison fails, find out *which* side is wrong before believing either. The
+first characterisation of this -- "exactly 18 digits" -- was wrong, and only a
+full sweep showed 12 and 15 failing too. A single failing case tells you
+something disagrees; it does not tell you what the rule is.

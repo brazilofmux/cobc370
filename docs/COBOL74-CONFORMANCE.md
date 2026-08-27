@@ -241,21 +241,15 @@ In the corpus the 15-digit blocker went from **126 programs to 22**.
 ### An oracle that was wrong
 
 `tests/bigdig.expected` records one value that GnuCOBOL does not produce.
-GnuCOBOL 4.0-early-dev reports a signed `COMP-3` item of exactly 18 digits as
-**not less than zero**:
-
-    PIC S9(16) COMP-3 VALUE -1234567890123456      < 0  ->  true    correct
-    PIC S9(17) COMP-3 VALUE -12345678901234567     < 0  ->  true    correct
-    PIC S9(18) COMP-3 VALUE -123456789012345678    < 0  ->  false   WRONG
-    PIC S9(18)        VALUE -123456789012345678    < 0  ->  true    correct
-
-The same 18-digit packed item compares equal to its own literal, and moves to
-an edited field correctly, so the value is intact -- only the comparison
-against zero is wrong, and only when packed at the full 18 digits. cobc370
-says `NEG`, which is the answer, so the test records `NEG` and says why.
+GnuCOBOL trunk r5698 compares a signed `COMP-3` item against a literal wrongly
+for some values -- 12, 15 and 18 significant digits among them -- while
+comparing the same item against a same-width `COMP-3` item is right in the same
+run. cobc370 gets all 36 values of the sweep right on the guest, so the test
+records the right answer and says why.
 
 Six bugs have come out of differential testing against GnuCOBOL. This is the
-first one that was on the other side.
+first one that was on the other side. `docs/DIFFERENTIAL-TESTING.md` has the
+table.
 
 ### A bug rather than an absence
 
