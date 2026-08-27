@@ -346,6 +346,53 @@ Three things learned building it:
 `DEFINE USERCATALOG` writes to the master catalog and no earlier checkpoint
 covered it. All 20 volumes are in there.
 
+## The rebuild, 2026-08-26 evening
+
+`UCSVD001` is retired. `SVD001.*` now resolves through **`SYS1.UCAT.SVD`** on
+WORK03, named to TK5's own convention (`SYS1.UCAT.TK5`, `.TSO`, `.ICOM`).
+
+How it went:
+
+1. **Inventory, twice.** `LISTCAT CATALOG(UCSVD001) ALL` for names, volumes and
+   device types, and `IEHLIST LISTVTOC` on all four volumes for the physical
+   truth. 29 datasets each way, **0 discrepancies** -- so the old catalog's
+   *contents* were never wrong, only its structure.
+2. **New catalog + data space.** Not on SVD001: a volume has exactly one owner
+   and UCSVD001 owns it (`IDC3024I VOLUME OWNED BY ANOTHER CATALOG`).
+3. **29 `DEFINE NONVSAM`** generated from the inventory, one job, condition
+   code 0.
+4. **Repointed the alias.** `DELETE (SVD001) ALIAS` then
+   `DEFINE ALIAS (NAME(SVD001) RELATE(SYS1.UCAT.SVD))`.
+5. **Verified by allocation**, which is the only proof that counts: one IEFBR14
+   with 29 DD statements, every dataset by name alone. RC=0000.
+6. **Moved the last VSAM object out.** The KSDS fixture became
+   `VSTEST.KSDS.CLUSTER` in UCVSTEST alongside the ESDS and RRDS ones. The SVD
+   catalog now holds nothing but NONVSAM entries, so it never needs a
+   `DEFINE CLUSTER` -- the one operation this whole exercise was about.
+
+### DEFINE USERCATALOG on SVD004 crashed MVS
+
+Worth recording. The first attempt put the new catalog on SVD004 -- unowned,
+nearly empty, a perfectly ordinary 1772-cylinder 3380. It did not fail; it put
+the machine into a program interrupt loop:
+
+    HHC00803I Processor CP00: program interrupt loop PSW 00000000 40000000
+
+Hercules stopped the CPU. Restoring 20 volumes from the checkpoint took under a
+minute and `cckdcdsk64` passed on all of them afterwards. The same command
+against an empty 3390 work volume had succeeded twice earlier the same day, so
+the working theory is that VSAM catalog management on this system is fragile
+wherever an SVD volume is involved, and the way to live with it is to keep
+catalogs off those volumes.
+
+### What is left
+
+`UCSVD001` is still connected to the master catalog, unused, still owning
+SVD001 and its ageing data space. Disconnecting or deleting it would tidy that
+up and reclaim the space, and would be another catalog operation on a volume
+that has proved hostile to them. Nothing depends on it, so it can wait for
+someone who wants the space back.
+
 ## Why DEFINE breaks UCSVD001: it is the data space, not the catalog
 
 Tested directly. The catalog, the IDCAMS step and the cluster definition were

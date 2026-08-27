@@ -50,7 +50,7 @@ for t in $TESTS; do
             # cluster is defined REUSE, so the load empties it at OPEN OUTPUT
             # and the pair can be re-run any number of times without the
             # DELETE/DEFINE that once cost this system its user catalog.
-            printf '//GO.KSDSF01 DD  DSN=SVD001.VSTESTKS.CLUSTER,DISP=OLD\n' ;;
+            printf '//GO.KSDSF01 DD  DSN=VSTEST.KSDS.CLUSTER,DISP=OLD\n' ;;
         esac
         if [ "$t" = ksdsnatl ]; then
             printf '//GO.IMAGES  DD  DSN=SVD001.VSAMTEST.DATA,DISP=SHR\n'
