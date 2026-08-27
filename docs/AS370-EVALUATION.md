@@ -80,13 +80,62 @@ Every one of the 41 differences traces to exactly two things:
 
 So the claim is one bug away from being literally true.
 
+## Does it link, and does it run? Yes.
+
+Gap 3 sounds alarming and turns out not to matter. The object deck `as370`
+produced on the host was carried to the guest and link-edited by IBM's own
+IEWL:
+
+    IEBGENER  RC= 0000        the deck, off tape into a dataset
+    IEWL      RC= 0000        no diagnostics at all
+    HELLO FROM COBC. NO SYS1.COBLIB HERE.
+
+**The module ran.** IEWL resolves external references by *name*, so an LD entry
+naming the wrong owning CSECT costs nothing at link time. The bug is real and
+should be fixed -- it is what stops the object deck being byte-identical -- but
+it is cosmetic in effect, not semantic.
+
+`ld370` links correctly too, at least as far as can be seen from the host: it
+produced a 2341-byte load module from the same deck and resolved COBDISP and
+COBTERM to the right addresses (0002C0, 000338), by name, exactly as IEWL did.
+
+## What is still untested: getting ld370's module onto 3.8j
+
+Running `ld370`'s *own* load module was not achieved, and the obstacle is
+transport rather than the linker.
+
+- `-xmit` produces a TSO TRANSMIT/NETDATA file. The `RECEIVE` command on this
+  system rejects `INDDNAME(...)` and `NOVOLUME` through IKJPARS, has no HELP
+  member, and rejects `INDSNAME('...')` as invalid command syntax. Its actual
+  operands are undetermined.
+- `-iebcopy` produces an unloaded-PDS image, which IEBCOPY LOAD wants as
+  RECFM=VS. The host tape tooling here writes fixed-length records only, and
+  the file does not carry RDWs of its own.
+
+So `ld370` is unproven on this system, and nothing observed suggests it is at
+fault.
+
+### The transport lesson, which is general
+
+Binary reaches MVS 3.8j by **tape**, not FTP. The runbook's "text mode always,
+never binary" for FTPD is not a preference. What worked:
+
+    maketape INPUT: file VOLSER: X DATASET: D.NAME \
+             OUTPUT: t.aws LRECL: 80 BLOCK: 1 BINARY
+
+with a **standard label** -- `NLTAPE` discards the VOLSER and leaves MVS issuing
+a mount it cannot satisfy -- and a DD naming the label's dataset, or OPEN fails
+813-04 against the generated temp name. Cancelling a job that is mount-pending
+unloads the drive in Hercules, so the tape has to be re-mounted before the next
+attempt.
+
 ## Where this leaves us
 
-`as370` is close to usable and would be a real improvement to the build. It is
-blocked today on `MP`, which four tests need, and on gap 3, whose effect on
-linking is **untested** -- `ld370` has not been run and no linked module has
-been executed. Until that is done it is not known whether the wrong ESDID breaks
-resolution or merely looks wrong.
+`as370` is usable for this compiler's output today, bar one missing instruction.
+It is blocked on `MP`, which four tests need; gaps 1 and 3 have workarounds or
+no practical effect. Moving assembly to the host would cut the regression loop
+substantially and let a clone reach a linkable object deck with no mainframe at
+all -- MVS would be needed only to run.
 
 Licence note: cc370 is GPL-2.0 and this project is MIT. Invoking `as370` as an
 external tool is ordinary tool use and does not affect that, the same as
