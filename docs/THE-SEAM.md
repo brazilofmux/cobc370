@@ -42,6 +42,32 @@ The back end does not call the front end. It reads what the front end built:
 Those six arrays and one integer are the whole interface. A second back end
 would read the same things and emit something else.
 
+## What the back end actually emits
+
+Measured across the 48 generated modules, the S/370 back end uses **56 machine
+instructions** and nothing else:
+
+    A     AH    AP    AR    B     BAL   BALR  BCTR  BE    BH    BL    BNE
+    BNH   BNL   BNM   BNP   BNZ   BR    BZ    CH    CLC   CLI   CP    CR
+    CVB   CVD   DP    ED    EDMK  EX    IC    L     LA    LH    LM    LR
+    LTR   MH    MP    MVC   MVI   N     OI    PACK  S     SP    SR    SRA
+    SRP   ST    STCM  STH   STM   UNPK  XC    ZAP
+
+Most-used: `L` 1681, `LA` 1361, `MVC` 1238, `ST` 715, `BALR` 562, `B` 556,
+`SR` 471, `ZAP` 418.
+
+That is the whole requirement, covering the Report Writer, ISAM and all three
+VSAM organizations. None are privileged, none are I/O, and nothing falls
+outside the 1970s base set -- guaranteed by construction rather than by
+inspection, since every module is assembled by IFOX00 on a real guest as part
+of the test suite.
+
+Useful in two directions. It is the size of the target a second back end would
+have to hit, and roughly a third of the list is decimal arithmetic
+(`AP SP MP DP CP ZAP SRP PACK UNPK CVB CVD ED EDMK`) which a machine without
+packed decimal would have to synthesise rather than translate. That is where
+the real work of retargeting lives, not in the branches and loads.
+
 ## What the front end would have to give up
 
 Not everything above the line is innocent. Known leaks, worth knowing before
