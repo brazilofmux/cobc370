@@ -1,0 +1,232 @@
+# Where cobc370 sits against COBOL-74
+
+`LANGUAGE-SURVEY.md` is a map of *demand*: 21 verbs measured across the 30
+DEFTLY programs, and an explicit list of what those programs never use. It is
+the right map for reaching parity, and it is why parity came as fast as it did.
+
+This is the other map. It says where the compiler sits against the standard
+itself, so that going further is a set of bounded choices rather than an open
+grind. It is deliberately not a backlog: nothing here is a commitment, and
+several entries are things this project should probably never build.
+
+Source: ANSI X3.23-1974, read from FIPS PUB 21-1, the federal adoption
+carrying the full standard text.
+<https://nvlpubs.nist.gov/nistpubs/Legacy/FIPS/fipspub21-1.pdf>
+
+## The conformance space
+
+The standard defines a Nucleus and eleven functional processing modules. Each
+has two or three levels, and lower levels are proper subsets of higher ones
+within a module. Nine modules have a **null** level, meaning you may implement
+none of them and still conform.
+
+    module                          levels     shorthand
+    Nucleus                          1, 2      1 NUC 1,2   2 NUC 1,2
+    Table Handling                   1, 2      1 TBL 1,2   2 TBL 1,2
+    Sequential I-O                   1, 2      1 SEQ 1,2   2 SEQ 1,2
+    Relative I-O                  0, 1, 2      1 REL 0,2   2 REL 0,2
+    Indexed I-O                   0, 1, 2      1 INX 0,2   2 INX 0,2
+    Sort-Merge                    0, 1, 2      1 SRT 0,2   2 SRT 0,2
+    Report Writer                    0, 1      1 RPW 0,1
+    Segmentation                  0, 1, 2      1 SEG 0,2   2 SEG 0,2
+    Library                       0, 1, 2      1 LIB 0,2   2 LIB 0,2
+    Debug                         0, 1, 2      1 DEB 0,2   2 DEB 0,2
+    Inter-Program Communication   0, 1, 2      1 IPC 0,2   2 IPC 0,2
+    Communication                 0, 1, 2      1 COM 0,2   2 COM 0,2
+
+Two definitions bound the space:
+
+- **The minimum standard** is the low level of the Nucleus plus the low level
+  of Table Handling and Sequential I-O. Those are exactly the three modules
+  without a null level.
+- **Full American National Standard COBOL** is the highest level of the
+  Nucleus and all eleven modules.
+
+Report Writer is the odd one: a single real level, so there is no "Report
+Writer Level 2" to aspire to. The whole module is `1 RPW 0,1` or nothing.
+
+## Where cobc370 is
+
+The short version: **the compiler does not sit at a level.** It cuts a
+diagonal across the map, because it was built by demand. It implements several
+Level 2 elements while missing Level 1 elements of the same module. That is
+not a defect — it is what "pulled, not pushed" produces — but it does mean no
+conformance claim is currently available, not even the minimum standard.
+
+### Nucleus — below Level 1
+
+Present, and enough to compile the corpus: `ADD SUBTRACT MULTIPLY DIVIDE
+COMPUTE MOVE IF GO PERFORM STOP EXIT DISPLAY`, PICTURE with editing,
+REDEFINES, SIGN, SYNCHRONIZED, USAGE COMP/COMP-3/DISPLAY, VALUE, level 77 and
+88, relation and sign conditions, `AND`/`OR`/`NOT`.
+
+Missing from **Level 1**:
+
+    ACCEPT              never used by the corpus
+    ALTER               never used by the corpus
+    ENTER               never used by the corpus
+    INSPECT             never used by the corpus
+    class condition     IS NUMERIC / IS ALPHABETIC -- dies with a message
+    switch-status       SPECIAL-NAMES ... ON/OFF STATUS
+
+Six elements. The class condition is the only one that feels like an omission
+rather than a decision: `IS NUMERIC` is the natural way a program guards
+itself against the S0C7 that `pgmchk` exists to report.
+
+Already at **Level 2**, above a floor not yet reached: `COMPUTE` (Level 2, not
+1), qualification with `OF`/`IN`, level-88 condition-names, `PERFORM UNTIL`,
+`PERFORM VARYING`, nested `IF`, complex conditions, the full `01`-`49`
+level-number range.
+
+Missing from Level 2, beyond the Level 1 gaps: `STRING`, `UNSTRING`,
+`CORRESPONDING` on ADD/SUBTRACT/MOVE, level-66 `RENAMES` (which dies with a
+message), `PERFORM VARYING ... AFTER`.
+
+### Table Handling — below Level 1, with Level 2 features
+
+`OCCURS`, `INDEXED BY`, and three-level subscripting are there. `SEARCH` and
+`SEARCH ALL` are there — and both are **Level 2** elements.
+
+Missing from Level 1: the `SET` statement, and `USAGE IS INDEX`. This is the
+sharpest illustration of the diagonal: the module's Level 2 search facility
+works, while the Level 1 statement for moving an index does not exist.
+
+### Sequential I-O — Level 1 but for declaratives
+
+`SELECT`/`ASSIGN`/`ORGANIZATION`/`ACCESS`/`FILE STATUS`, FD with its clauses
+accepted, `OPEN CLOSE READ WRITE REWRITE`, `READ INTO`, `WRITE FROM`, `AT END`.
+
+Missing from Level 1: the `USE` statement — that is, declaratives — and
+`WRITE ... BEFORE/AFTER ADVANCING`. Vertical spacing is carried in the record
+as an ASA control character instead, which is what the corpus and the Report
+Writer path both do, but it is not the standard's spelling.
+
+Level 2 adds `LINAGE`, `OPTIONAL`, `RESERVE`, `SAME RECORD AREA`, `EXTEND`,
+`MULTIPLE FILE TAPE` — none present.
+
+### Relative I-O — most of Level 1, two Level 2 features, no declaratives
+
+RRDS through VSAM. `ORGANIZATION RELATIVE`, `ACCESS SEQUENTIAL/RANDOM`,
+`READ WRITE REWRITE DELETE`, `INVALID KEY`, `RELATIVE KEY`.
+
+Above the floor: `ACCESS DYNAMIC`, `READ NEXT` and `START` are all **Level 2**.
+
+Missing from Level 1: `USE`.
+
+### Indexed I-O — same shape
+
+ISAM and VSAM KSDS. `ORGANIZATION INDEXED`, `RECORD KEY`, `ACCESS
+SEQUENTIAL/RANDOM`, `READ WRITE REWRITE DELETE START`, `INVALID KEY`.
+
+Above the floor: `ACCESS DYNAMIC`, `READ NEXT`, `READ ... KEY IS`, `START` —
+Level 2.
+
+Missing from Level 1: `USE`. Missing from Level 2: `ALTERNATE RECORD KEY` with
+`DUPLICATES`.
+
+### Report Writer — a fraction of its only level
+
+Present: `REPORT IS` on the FD, `RD` with `PAGE LIMIT`, `HEADING`, `FIRST
+DETAIL`, `LAST DETAIL`, `CONTROL`; report groups of `TYPE DETAIL` and `TYPE
+PAGE HEADING`; `LINE NUMBER` absolute and `PLUS`; `COLUMN NUMBER`; `SOURCE`;
+`VALUE`; `GENERATE`, `INITIATE`, `TERMINATE`.
+
+Missing: `TYPE` for `REPORT HEADING`, `CONTROL HEADING`, `CONTROL FOOTING`,
+`PAGE FOOTING`, `REPORT FOOTING`; the `SUM` clause and sum counters, with
+subtotalling, crossfooting and rolling forward; `NEXT GROUP`; `GROUP
+INDICATE`; `CODE`; `SUPPRESS`; `USE BEFORE REPORTING`; `LINE-COUNTER` and
+`PAGE-COUNTER` as referenceable special registers.
+
+The absent half is the half that computes. What exists is a page manager.
+
+### Inter-Program Communication — Level 1 but for EXIT PROGRAM
+
+`LINKAGE SECTION`, `PROCEDURE DIVISION USING`, `CALL 'literal' USING` all
+work, and the call round trip is a regression test.
+
+Missing from Level 1: `EXIT PROGRAM`, which dies with a message. Subprograms
+return via `GOBACK`, which is an IBM extension and **not in the 1974 standard
+at all**.
+
+Missing from Level 2: `CALL identifier` and `CANCEL`. Worth flagging, because
+the source comment at the `CALL` site says ANS COBOL has no `CALL identifier`.
+That is true of IBM's ANS COBOL, and false of the standard: `2 IPC 0,2` lists
+`The CALL statement ... identifier` explicitly. A demand-shaped map could not
+have caught that; this is the kind of thing the standard-shaped one is for.
+
+### Null — nothing implemented
+
+`Sort-Merge`, `Segmentation`, `Library` (no `COPY`), `Debug`, `Communication`.
+
+All five have a null level, so all five are conforming choices. `COPY` is the
+only one with an obvious pull behind it.
+
+## What would reach the minimum standard
+
+The minimum standard is `1 NUC` + `1 TBL` + `1 SEQ`. Against today:
+
+    Nucleus         ACCEPT, ALTER, ENTER, INSPECT, class conditions,
+                    switch-status conditions
+    Table Handling  SET, USAGE IS INDEX
+    Sequential I-O  USE (declaratives), WRITE ... ADVANCING
+
+Eleven elements. Several are small; `INSPECT` and declaratives are not. That
+is the whole distance to a claim the project can actually make, and it is
+worth knowing that it is eleven and not a hundred.
+
+## Testing it
+
+**Obtainable today: CCVS-85.** The NIST COBOL-85 validation suite is public
+domain — `newcob.val`, 512 test programs plus copy members and data files
+delimited by `*HEADER`, extracted with `EXEC85`.
+<https://github.com/Zaneham/nist-cobol85-test-suite>
+
+It is the wrong standard year, but it is organised by the *same* map: test
+names encode module and level (`NC211A` is Nucleus level 2, `SG102A` is
+Segmentation level 1). So the level-1 tests of the modules claimed here can be
+run selectively, and failures triaged into "genuinely missing" versus
+"COBOL-85 semantics that '74 did not have."
+
+**CCVS-74 itself: identified, not obtained.** Reported catalogue identifiers
+are NTIS `AD/A-036 173` / DTIC `ADA036173`, "COBOL Compiler Validation System,
+1974. Version 3.0" — audit routines plus an executive routine that resolved
+implementor-defined names and generated the JCL, distributed on 9-track tape.
+*These identifiers are second-hand and not verified here:* DTIC returns 403 to
+scripted fetches and the search results do not surface the record directly.
+What is confirmed is the shape — NTIS catalogues sibling items such as
+`ADA024914`, "HYPO-COBOL Compiler Validation System (HCCVS) - Population File
+(Tape)", as tape products rather than reports.
+
+If it is ever wanted, the realistic routes are the vintage mainframe
+preservation community and a direct NTIS media request, not a download.
+
+## What this map is not
+
+It is not a plan. Reading it, the honest conclusions are that Sort-Merge,
+Debug and Communication should probably stay at null forever; that Segmentation
+is nearly free if it is ever wanted (see below); that `COPY` and declaratives
+are the two absences most likely to be *pulled* by a real program; and that
+the eleven-element gap to the minimum standard is worth closing mostly because
+it is small enough to close.
+
+### A note on Segmentation and W^X
+
+Segmentation is described as specifying "object program overlay requirements,"
+which sounds like it needs writable code. It does not. Every rule in Section
+IX is written in terms of *state*: an independent segment is in its initial
+state on first entry and under three enumerated conditions, and in its
+last-used state otherwise; a fixed overlayable segment is "always made
+available in its last used state"; and §2.4 leaves the mechanism entirely to
+the implementor.
+
+So a conforming implementation may keep everything resident and satisfy the
+standard by re-initializing an independent segment's state at the qualifying
+entries. In COBOL-74 the carrier of that state is `ALTER` — an altered `GO TO`
+reverting to its original target is what "initial state" observably means for
+a procedure. Without `ALTER`, an independent segment has no observable state,
+and Segmentation reduces to accepting `SECTION` segment-numbers and honouring
+the Level 1 rule that sections sharing a number be contiguous in the source.
+
+This matters for a hypothetical second backend on a W^X target, where code
+cannot be overwritten at all: the inability to overlay does not, by itself,
+put Segmentation out of reach.

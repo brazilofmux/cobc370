@@ -113,7 +113,9 @@ transactions and still returned RC=0000.
     src/     the compiler: one C file, plus a Ragel scanner for PICTURE
     tests/   50 COBOL programs and their oracles
     bin/     the regression harness
-    docs/    development log, differential-testing notes, VSAM design notes
+    docs/    development log, differential-testing notes, VSAM design notes,
+             and COBOL74-CONFORMANCE.md -- where this compiler sits against
+             the twelve modules of ANSI X3.23-1974
 
 ## License
 
