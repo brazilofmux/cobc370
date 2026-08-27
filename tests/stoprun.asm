@@ -17,6 +17,8 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
+         SPIE  COBSPIE,((1,15))    report program checks by line
+T0000    DS    0H
 * STOP RUN
          L     13,4(13)            restore caller's save area
          LM    14,12,12(13)        restore caller's registers
@@ -25,6 +27,63 @@ COBBEG   EQU   *
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 SAVEAREA DS    18F
+* program-check exit: report the source line, then let it abend
+COBSPIE  DS    0H
+         USING COBSPIE,15
+         STM   14,12,SPIEREGS      R15 is our base on entry
+         LR    9,15                keep a base across the WTO
+         DROP  15
+         USING COBSPIE,9
+         LR    10,1                the PIE
+*  the interruption code, as the digit people know it
+         SR    7,7
+         IC    7,7(,10)            low byte of the interruption code
+         N     7,SPIE15
+         LA    7,SPIEHEX(7)
+         MVC   SPIECODE(1),0(7)
+*  the interrupt address, as an offset into this module
+         L     2,8(,10)            second word of the old PSW
+         N     2,SPIEADR           leaves the instruction address
+         S     2,SPIEBEG           relative to the entry point
+*  the last table entry at or before it names the statement
+         L     3,SPIETAB
+         LH    4,SPIENUM
+         SR    5,5                 no line yet
+SPIELOOP LTR   4,4
+         BZ    SPIEFND
+         LH    6,0(,3)             this statement's offset
+         CR    6,2
+         BH    SPIEFND             past it: the previous one is the ans
+         LH    5,2(,3)
+         LA    3,4(,3)
+         BCTR  4,0
+         B     SPIELOOP
+SPIEFND  CVD   5,SPIEDW
+         UNPK  SPIELINE(5),SPIEDW+5(3)
+         OI    SPIELINE+4,X'F0'
+         WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
+*  cancel the exit and back up to the failing instruction,
+*  so the abend happens for real -- same code, same dump
+         SR    2,2
+         IC    2,7(,10)            the interruption code
+         A     2,SPIE3000
+         ABEND (2),DUMP
+SPIEHEX  DC    C'0123456789ABCDEF'
+SPIE15   DC    F'15'
+SPIE3000 DC    F'3000'
+SPIEADR  DC    X'00FFFFFF'
+SPIEBEG  DC    A(COBBEG)
+SPIETAB  DC    A(SPIELTB)
+SPIENUM  DC    H'1'                statements in the table
+SPIEREGS DS    15F
+SPIEDW   DS    D
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+               MF=L
+SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
+SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+* statement offsets, ascending, paired with source lines
+SPIELTB  DS    0H
+         DC    AL2(T0000-COBBEG),AL2(7)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

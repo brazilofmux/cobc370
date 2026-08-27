@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="pgmchk ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -146,11 +146,24 @@ for t in $TESTS; do
     # asynchronously, so a previous job's output can land after the offset mark
     # for this one -- grepping for any abend anywhere then reports a stale
     # failure against a job that actually succeeded.
-    res=$(grep -oE 'PGM=\*\.DD +(RC= [0-9]+|AB S[0-9A-F]+)' "$WORK/$t.out" | tail -1)
-    case "$res" in
-        *"RC= 0000") ;;
-        "")          say "  $t: no GO step"; fail=$((fail+1)); continue ;;
-        *)           say "  $t: ${res##*DD }"; fail=$((fail+1)); continue ;;
+    res=$(grep -oE 'PGM=\*\.DD +(RC= [0-9]+|AB [SU][0-9A-F]+)' "$WORK/$t.out" | tail -1)
+    # One test is supposed to fail: pgmchk feeds an ADD a field holding 'ABC'
+    # and exists to prove the program-check exit names the right line. It ends
+    # U3007 -- 3000 plus the interruption code -- and anything else is wrong,
+    # including running to completion.
+    case "$t" in
+        pgmchk)
+            case "$res" in
+                *"AB U3007") ;;
+                *) say "  $t: expected AB U3007, got '${res##*DD }'"
+                   fail=$((fail+1)); continue ;;
+            esac ;;
+        *)
+            case "$res" in
+                *"RC= 0000") ;;
+                "")          say "  $t: no GO step"; fail=$((fail+1)); continue ;;
+                *)           say "  $t: ${res##*DD }"; fail=$((fail+1)); continue ;;
+            esac ;;
     esac
 
     if [ -f "$TDIR/$t.expected" ]; then

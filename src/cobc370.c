@@ -330,6 +330,7 @@ typedef struct {
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
     int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
+    int  line;              /* the source line, for the program-check table */
     int  lab3;              /* ST_SEARCH: the end label */
     struct Cond *cond2;     /* ST_SEARCH: the same operands compared with < */
     Node *dsub, *ssub;      /* subscripts on dst and src */
@@ -1456,6 +1457,7 @@ static Stmt *new_stmt(int op)
     Stmt *st = &stmts[nstmt++];
     memset(st, 0, sizeof *st);
     st->op = op; st->dst = st->src = -1; st->vary_sym = -1;
+    st->line = tok.line;
     return st;
 }
 
@@ -2500,6 +2502,16 @@ static void gen_rescale(const char *wk, int from, int to)
  * extra selector is inserted for it, and the field takes the tail of the
  * result. IKFCBL00 always allowed two extra; computing it exactly is 0 or 1.
  */
+/* Program-check reporting. A program that fails on bad packed data abends
+ * S0C7 and says nothing about where -- true of ANS COBOL as well, which was
+ * measured rather than assumed. A label per statement plus a table mapping
+ * those labels to source lines lets a SPIE exit turn the interrupt address
+ * into something a programmer can act on. */
+#define MAXLINETAB 4096
+static struct { int line; } linetab[MAXLINETAB];
+static int nlinetab;
+static int gen_lines = 1;      /* -s turns it off */
+
 static int gen_edited_labels;
 
 /* Set a file's FILE STATUS from R15 after a VSAM request.
@@ -3350,6 +3362,7 @@ static void generate(void)
     asm_line("", "LA", "0,SAVEAREA", "");
     asm_line("", "ST", "0,8(13)", "forward chain from caller");
     asm_line("", "LR", "13,0", "our save area is now current");
+
     if (nusing) {
         /* OS/360 linkage: R1 points at a list of fullword addresses, one per
          * argument, and R1 has survived the entry sequence untouched. Each is
@@ -3364,11 +3377,31 @@ static void generate(void)
             asm_line("", "ST", b2, syms[using_parm[k]].name);
         }
     }
+    if (gen_lines) {
+        /* Armed for every program interruption there is, and armed *here*:
+         * the SPIE macro works through R1, which on entry to a subprogram is
+         * the caller's parameter list. Arming before picking that up cost the
+         * CALL roundtrip an S0C4 -- the linkage section had been filled from
+         * whatever SPIE left behind. */
+        asm_line("", "SPIE", "COBSPIE,((1,15))", "report program checks by line");
+    }
 
     int ndlit = 0, cur_para = -1, nret = 0;
     genlabel = nlabel;
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
+        /* One label per statement, so a program check can be reported as a
+         * line number rather than an address. The label costs nothing in the
+         * object; the table it feeds is emitted at the end and is what the
+         * SPIE exit walks. */
+        if (gen_lines && st->line > 0 && nlinetab < MAXLINETAB &&
+            st->op != ST_LABEL && st->op != ST_PARA) {
+            char sl[16];
+            snprintf(sl, sizeof sl, "T%04d", nlinetab);
+            asm_line(sl, "DS", "0H", "");
+            linetab[nlinetab].line = st->line;
+            nlinetab++;
+        }
         if (st->op == ST_PARA && cur_para >= 0 && paras[cur_para].is_range_end) {
             char x[16], f[16];
             snprintf(x, sizeof x, "X%04d", cur_para); snprintf(f, sizeof f, "F%04d", cur_para);
@@ -4492,6 +4525,90 @@ static void generate(void)
         if (anyvsam) asm_line("VSFB", "DS", "F", "VSAM SHOWCB feedback word");
     }
     asm_line("SAVEAREA", "DS", "18F", "");
+    if (gen_lines && nlinetab) {
+        /* A program check reports an address; a programmer wants a line. The
+         * exit turns one into the other and then lets the abend happen for
+         * real, so the completion code and the dump are exactly what they
+         * would have been.
+         *
+         * R15 addresses the exit on entry, which is what makes this possible
+         * without a base register of its own -- there is nowhere to save one
+         * until you have one. */
+        asm_comment(" program-check exit: report the source line, then let it abend");
+        asm_line("COBSPIE", "DS", "0H", "");
+        asm_line("", "USING", "COBSPIE,15", "");
+        asm_line("", "STM", "14,12,SPIEREGS", "R15 is our base on entry");
+        asm_line("", "LR", "9,15", "keep a base across the WTO");
+        asm_line("", "DROP", "15", "");
+        asm_line("", "USING", "COBSPIE,9", "");
+        asm_line("", "LR", "10,1", "the PIE");
+        asm_comment("  the interruption code, as the digit people know it");
+        asm_line("", "SR", "7,7", "");
+        asm_line("", "IC", "7,7(,10)", "low byte of the interruption code");
+        asm_line("", "N", "7,SPIE15", "");
+        asm_line("", "LA", "7,SPIEHEX(7)", "");
+        asm_line("", "MVC", "SPIECODE(1),0(7)", "");
+        asm_comment("  the interrupt address, as an offset into this module");
+        asm_line("", "L", "2,8(,10)", "second word of the old PSW");
+        asm_line("", "N", "2,SPIEADR", "leaves the instruction address");
+        asm_line("", "S", "2,SPIEBEG", "relative to the entry point");
+        asm_comment("  the last table entry at or before it names the statement");
+        asm_line("", "L", "3,SPIETAB", "");
+        asm_line("", "LH", "4,SPIENUM", "");
+        asm_line("", "SR", "5,5", "no line yet");
+        asm_line("SPIELOOP", "LTR", "4,4", "");
+        asm_line("", "BZ", "SPIEFND", "");
+        asm_line("", "LH", "6,0(,3)", "this statement's offset");
+        asm_line("", "CR", "6,2", "");
+        asm_line("", "BH", "SPIEFND", "past it: the previous one is the answer");
+        asm_line("", "LH", "5,2(,3)", "");
+        asm_line("", "LA", "3,4(,3)", "");
+        asm_line("", "BCTR", "4,0", "");
+        asm_line("", "B", "SPIELOOP", "");
+        asm_line("SPIEFND", "CVD", "5,SPIEDW", "");
+        asm_line("", "UNPK", "SPIELINE(5),SPIEDW+5(3)", "");
+        asm_line("", "OI", "SPIELINE+4,X'F0'", "");
+        asm_line("", "WTO", "MF=(E,SPIEWTO)", "into the job log, beside the abend");
+        asm_comment("  cancel the exit and back up to the failing instruction,");
+        asm_comment("  so the abend happens for real -- same code, same dump");
+        /* Then end the task, with a code that names the interrupt: 3000
+         * plus the program interruption code, so a data exception is U3007.
+         *
+         * The tidier ending would keep S0C7 itself -- back the resume
+         * address up by the instruction length, cancel SPIE, and let the
+         * instruction check again for real. That was tried both before and
+         * after the cancel and neither worked: the program carried on and
+         * returned a meaningless code instead of abending. Under 3.8j the
+         * PIE's PSW does not appear to steer the resume. An explicit ABEND
+         * is deterministic, and the message above names the real code, which
+         * is the part a programmer needs. -s turns all of this off and
+         * restores a bare S0C7. */
+        asm_line("", "SR", "2,2", "");
+        asm_line("", "IC", "2,7(,10)", "the interruption code");
+        asm_line("", "A", "2,SPIE3000", "");
+        asm_line("", "ABEND", "(2),DUMP", "");
+        asm_line("SPIEHEX", "DC", "C'0123456789ABCDEF'", "");
+        asm_line("SPIE15", "DC", "F'15'", "");
+        asm_line("SPIE3000", "DC", "F'3000'", "");
+        asm_line("SPIEADR", "DC", "X'00FFFFFF'", "");
+        asm_line("SPIEBEG", "DC", "A(COBBEG)", "");
+        asm_line("SPIETAB", "DC", "A(SPIELTB)", "");
+        char nb[24]; snprintf(nb, sizeof nb, "H'%d'", nlinetab);
+        asm_line("SPIENUM", "DC", nb, "statements in the table");
+        asm_line("SPIEREGS", "DS", "15F", "");
+        asm_line("SPIEDW", "DS", "D", "");
+        asm_cont("SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',",
+                 "MF=L");
+        asm_line("SPIECODE", "EQU", "SPIEWTO+29,1", "the 0C? digit, patched above");
+        asm_line("SPIELINE", "EQU", "SPIEWTO+46,5", "the line number, likewise");
+        asm_comment(" statement offsets, ascending, paired with source lines");
+        asm_line("SPIELTB", "DS", "0H", "");
+        for (int i = 0; i < nlinetab; i++) {
+            char t[64];
+            snprintf(t, sizeof t, "AL2(T%04d-COBBEG),AL2(%d)", i, linetab[i].line);
+            asm_line("", "DC", t, "");
+        }
+    }
 
     /* ---- COBWS: WORKING-STORAGE and the file records ----
      * A separate CSECT so its size never competes with code addressability.
@@ -4682,9 +4799,11 @@ int main(int argc, char **argv)
     const char *in = NULL, *outname = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) outname = argv[++i];
+        else if (!strcmp(argv[i], "-s")) gen_lines = 0;
         else in = argv[i];
     }
-    if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm]\n"); return 2; }
+    if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s]\n"
+                       "  -s  strip the line table and program-check exit\n"); return 2; }
 
     src.fp = fopen(in, "r");
     if (!src.fp) { perror(in); return 2; }

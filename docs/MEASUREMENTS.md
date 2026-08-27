@@ -66,16 +66,47 @@ Most programs are modestly smaller here (0.87–0.92x) or half. **GL030 and GL03
 are the outliers**: IKFCBL00 generates about 30K where cobc370 generates about
 5K for the same source. Why those two specifically is not established.
 
-### The one genuine gap
+### The gap that was claimed here, and was not real
 
-`ILBOERR0` — 556 bytes of runtime error handling — is link-edited into ANS's
-GL030 and GL036 and called from the program. **cobc370 has no equivalent.**
+**Retracted.** This section used to say that `ILBOERR0` — 556 bytes linked into
+ANS's GL030 and GL036 — meant ANS COBOL diagnoses bad numeric data where
+cobc370 would "most likely take an S0C7 with no explanation". That was inferred
+from a module map and never tested. It is wrong.
 
-That is a real behavioural difference, not a size trick. Where a runtime fault
-occurs — invalid data in a numeric field, say — ANS COBOL routes to a diagnostic
-routine, while generated cobc370 code would most likely take an S0C7 with no
-explanation. On clean data there is no difference. On dirty data ANS tells you
-what happened and this compiler does not.
+Tested since, with the same program compiled both ways: a `PIC S9(5) COMP-3`
+field redefined over `'ABC'` and then added to. **Both abend S0C7, at the same
+point, having printed the same preceding DISPLAY.** ANS COBOL says nothing
+about the field, the statement or the line, and `ILBOERR0` is not even linked
+into the module that does it. Whatever pulls that routine in, a data exception
+is not it.
+
+The lesson is the one the differential-testing note already makes: a module map
+tells you what was linked, not what runs. Reading behaviour out of a link map is
+the same kind of mistake as reading it out of source.
+
+### What was actually missing, and now is not
+
+Neither compiler told you *where*. `cobc370` now does:
+
+    COBC370: PROGRAM CHECK 0C7 AT SOURCE LINE 00012
+
+A label per statement and a table pairing those labels with source lines let a
+SPIE exit turn the interrupt address into a line number. The cost is about four
+bytes per statement plus a 250-byte exit; `-s` removes both and restores a bare
+S0C7.
+
+Two things are worth knowing about it. The completion code becomes **U3007** —
+3000 plus the program interruption code — rather than S0C7, because the tidier
+ending was tried and does not work: backing the resume address up by the
+instruction length and cancelling SPIE, so the instruction checks again for
+real, was attempted both before and after the cancel and in both cases the
+program simply carried on and returned a meaningless code. Under 3.8j the PIE's
+PSW does not appear to steer the resume. The message names the real code, which
+is the part a programmer needs.
+
+And the message goes to the **job log**, not SYSOUT, because WTO needs no DCB
+and is safe from an interrupt exit — which also puts it next to the `IEF472I`
+that reports the abend.
 
 Smaller modules *and* slightly more CPU is not a contradiction: the generated
 code does more work per operation, particularly round-tripping through packed

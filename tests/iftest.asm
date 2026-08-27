@@ -18,8 +18,10 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
+         SPIE  COBSPIE,((1,15))    report program checks by line
 * MAIN-PARA.
 P0000    DS    0H
+T0000    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -31,17 +33,21 @@ P0000    DS    0H
          ZAP   WK1(16),DWK(8)
          CP    WK0(16),WK1(16)     numeric compare
          BNL   L0001
+T0001    DS    0H
 * MOVE LESS   -> OUT-MSG
          MVC   D0006(6),S0001      literal move, space padded
+T0002    DS    0H
          B     L0002
          DROP  8
 L0001    DS    0H
+T0003    DS    0H
 * MOVE NOTLES -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0002      literal move, space padded
          DROP  8
 L0002    DS    0H
+T0004    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -49,6 +55,7 @@ L0002    DS    0H
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
+T0005    DS    0H
 * IF
          L     2,D0000
          CVD   2,DWK               binary -> packed
@@ -64,17 +71,21 @@ L0002    DS    0H
          ZAP   WK1(16),K0001(8)    literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0003
+T0006    DS    0H
 * MOVE ANDOK  -> OUT-MSG
          MVC   D0006(6),S0003      literal move, space padded
+T0007    DS    0H
          B     L0004
          DROP  8
 L0003    DS    0H
+T0008    DS    0H
 * MOVE ANDBAD -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0004      literal move, space padded
          DROP  8
 L0004    DS    0H
+T0009    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -82,6 +93,7 @@ L0004    DS    0H
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
+T0010    DS    0H
 * IF
          L     2,D0000
          CVD   2,DWK               binary -> packed
@@ -96,17 +108,21 @@ L0004    DS    0H
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0005
 L0019    DS    0H
+T0011    DS    0H
 * MOVE OROK   -> OUT-MSG
          MVC   D0006(6),S0005      literal move, space padded
+T0012    DS    0H
          B     L0006
          DROP  8
 L0005    DS    0H
+T0013    DS    0H
 * MOVE ORBAD  -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0006      literal move, space padded
          DROP  8
 L0006    DS    0H
+T0014    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -114,20 +130,25 @@ L0006    DS    0H
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
+T0015    DS    0H
 * IF
          CLC   D0003(3),S0007      alphanumeric compare
          BNE   L0007
+T0016    DS    0H
 * MOVE STREQ  -> OUT-MSG
          MVC   D0006(6),S0008      literal move, space padded
+T0017    DS    0H
          B     L0008
          DROP  8
 L0007    DS    0H
+T0018    DS    0H
 * MOVE STRNE  -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0009      literal move, space padded
          DROP  8
 L0008    DS    0H
+T0019    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -135,20 +156,25 @@ L0008    DS    0H
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
+T0020    DS    0H
 * IF
          CLC   D0004(1),S0010      alphanumeric compare
          BNE   L0009
+T0021    DS    0H
 * MOVE EOFYES -> OUT-MSG
          MVC   D0006(6),S0011      literal move, space padded
+T0022    DS    0H
          B     L0010
          DROP  8
 L0009    DS    0H
+T0023    DS    0H
 * MOVE EOFNO  -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0012      literal move, space padded
          DROP  8
 L0010    DS    0H
+T0024    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -156,22 +182,28 @@ L0010    DS    0H
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
+T0025    DS    0H
 * MOVE Y -> EOF-FLAG
          MVC   D0004(1),S0010      literal move, space padded
+T0026    DS    0H
 * IF
          CLC   D0004(1),S0010      alphanumeric compare
          BNE   L0011
+T0027    DS    0H
 * MOVE EOFYES -> OUT-MSG
          MVC   D0006(6),S0011      literal move, space padded
+T0028    DS    0H
          B     L0012
          DROP  8
 L0011    DS    0H
+T0029    DS    0H
 * MOVE EOFNO  -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0012      literal move, space padded
          DROP  8
 L0012    DS    0H
+T0030    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -179,23 +211,28 @@ L0012    DS    0H
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
+T0031    DS    0H
 * IF
          ZAP   WK0(16),D0002(4)
          ZAP   WK1(16),K0001(8)    literal
          SRP   WK1(16),2,0         align scale (left)
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0013
+T0032    DS    0H
 * MOVE NONZER -> OUT-MSG
          MVC   D0006(6),S0013      literal move, space padded
+T0033    DS    0H
          B     L0014
          DROP  8
 L0013    DS    0H
+T0034    DS    0H
 * MOVE ISZERO -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0014      literal move, space padded
          DROP  8
 L0014    DS    0H
+T0035    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -203,6 +240,7 @@ L0014    DS    0H
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
+T0036    DS    0H
 * IF
          L     2,D0000
          CVD   2,DWK               binary -> packed
@@ -212,6 +250,7 @@ L0014    DS    0H
          ZAP   WK1(16),DWK(8)
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0015
+T0037    DS    0H
 * IF
          L     2,D0001
          CVD   2,DWK               binary -> packed
@@ -219,25 +258,31 @@ L0014    DS    0H
          ZAP   WK1(16),K0001(8)    literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0016
+T0038    DS    0H
 * MOVE NEST1  -> OUT-MSG
          MVC   D0006(6),S0015      literal move, space padded
+T0039    DS    0H
          B     L0017
          DROP  8
 L0016    DS    0H
+T0040    DS    0H
 * MOVE NEST2  -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0016      literal move, space padded
          DROP  8
 L0017    DS    0H
+T0041    DS    0H
          B     L0018
 L0015    DS    0H
+T0042    DS    0H
 * MOVE NEST3  -> OUT-MSG
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(6),S0017      literal move, space padded
          DROP  8
 L0018    DS    0H
+T0043    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -245,6 +290,7 @@ L0018    DS    0H
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
+T0044    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -317,6 +363,107 @@ S0017    DC    CL6'NEST3 '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
+* program-check exit: report the source line, then let it abend
+COBSPIE  DS    0H
+         USING COBSPIE,15
+         STM   14,12,SPIEREGS      R15 is our base on entry
+         LR    9,15                keep a base across the WTO
+         DROP  15
+         USING COBSPIE,9
+         LR    10,1                the PIE
+*  the interruption code, as the digit people know it
+         SR    7,7
+         IC    7,7(,10)            low byte of the interruption code
+         N     7,SPIE15
+         LA    7,SPIEHEX(7)
+         MVC   SPIECODE(1),0(7)
+*  the interrupt address, as an offset into this module
+         L     2,8(,10)            second word of the old PSW
+         N     2,SPIEADR           leaves the instruction address
+         S     2,SPIEBEG           relative to the entry point
+*  the last table entry at or before it names the statement
+         L     3,SPIETAB
+         LH    4,SPIENUM
+         SR    5,5                 no line yet
+SPIELOOP LTR   4,4
+         BZ    SPIEFND
+         LH    6,0(,3)             this statement's offset
+         CR    6,2
+         BH    SPIEFND             past it: the previous one is the ans
+         LH    5,2(,3)
+         LA    3,4(,3)
+         BCTR  4,0
+         B     SPIELOOP
+SPIEFND  CVD   5,SPIEDW
+         UNPK  SPIELINE(5),SPIEDW+5(3)
+         OI    SPIELINE+4,X'F0'
+         WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
+*  cancel the exit and back up to the failing instruction,
+*  so the abend happens for real -- same code, same dump
+         SR    2,2
+         IC    2,7(,10)            the interruption code
+         A     2,SPIE3000
+         ABEND (2),DUMP
+SPIEHEX  DC    C'0123456789ABCDEF'
+SPIE15   DC    F'15'
+SPIE3000 DC    F'3000'
+SPIEADR  DC    X'00FFFFFF'
+SPIEBEG  DC    A(COBBEG)
+SPIETAB  DC    A(SPIELTB)
+SPIENUM  DC    H'45'               statements in the table
+SPIEREGS DS    15F
+SPIEDW   DS    D
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+               MF=L
+SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
+SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+* statement offsets, ascending, paired with source lines
+SPIELTB  DS    0H
+         DC    AL2(T0000-COBBEG),AL2(15)
+         DC    AL2(T0001-COBBEG),AL2(15)
+         DC    AL2(T0002-COBBEG),AL2(17)
+         DC    AL2(T0003-COBBEG),AL2(17)
+         DC    AL2(T0004-COBBEG),AL2(18)
+         DC    AL2(T0005-COBBEG),AL2(20)
+         DC    AL2(T0006-COBBEG),AL2(20)
+         DC    AL2(T0007-COBBEG),AL2(22)
+         DC    AL2(T0008-COBBEG),AL2(22)
+         DC    AL2(T0009-COBBEG),AL2(23)
+         DC    AL2(T0010-COBBEG),AL2(25)
+         DC    AL2(T0011-COBBEG),AL2(25)
+         DC    AL2(T0012-COBBEG),AL2(27)
+         DC    AL2(T0013-COBBEG),AL2(27)
+         DC    AL2(T0014-COBBEG),AL2(28)
+         DC    AL2(T0015-COBBEG),AL2(30)
+         DC    AL2(T0016-COBBEG),AL2(30)
+         DC    AL2(T0017-COBBEG),AL2(32)
+         DC    AL2(T0018-COBBEG),AL2(32)
+         DC    AL2(T0019-COBBEG),AL2(33)
+         DC    AL2(T0020-COBBEG),AL2(35)
+         DC    AL2(T0021-COBBEG),AL2(35)
+         DC    AL2(T0022-COBBEG),AL2(37)
+         DC    AL2(T0023-COBBEG),AL2(37)
+         DC    AL2(T0024-COBBEG),AL2(38)
+         DC    AL2(T0025-COBBEG),AL2(39)
+         DC    AL2(T0026-COBBEG),AL2(41)
+         DC    AL2(T0027-COBBEG),AL2(41)
+         DC    AL2(T0028-COBBEG),AL2(43)
+         DC    AL2(T0029-COBBEG),AL2(43)
+         DC    AL2(T0030-COBBEG),AL2(44)
+         DC    AL2(T0031-COBBEG),AL2(46)
+         DC    AL2(T0032-COBBEG),AL2(46)
+         DC    AL2(T0033-COBBEG),AL2(48)
+         DC    AL2(T0034-COBBEG),AL2(48)
+         DC    AL2(T0035-COBBEG),AL2(49)
+         DC    AL2(T0036-COBBEG),AL2(51)
+         DC    AL2(T0037-COBBEG),AL2(52)
+         DC    AL2(T0038-COBBEG),AL2(52)
+         DC    AL2(T0039-COBBEG),AL2(54)
+         DC    AL2(T0040-COBBEG),AL2(54)
+         DC    AL2(T0041-COBBEG),AL2(56)
+         DC    AL2(T0042-COBBEG),AL2(56)
+         DC    AL2(T0043-COBBEG),AL2(57)
+         DC    AL2(T0044-COBBEG),AL2(58)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

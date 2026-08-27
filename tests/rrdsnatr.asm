@@ -18,23 +18,28 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
+         SPIE  COBSPIE,((1,15))    report program checks by line
 * 000-INITIATE.
 P0000    DS    0H
+T0000    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(32),S0001
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
+T0001    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(32),S0002
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
+T0002    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
+T0003    DS    0H
 * OPEN INPUT RRDS-FILE
          OPEN  (FD000)             VSAM ACB
          LTR   15,15               VSAM request succeeded?
@@ -52,6 +57,7 @@ G0002    DS    0H
          DROP  8
 * 010-PROCESS.
 P0001    DS    0H
+T0004    DS    0H
 * PERFORM 110-PROCESS-DATA THRU 119-EXIT
 L0004    DS    0H
          L     8,BL0000            base locator
@@ -69,6 +75,7 @@ R0001    DS    0H
 L0005    DS    0H
 * 020-TERMINATE.
 P0002    DS    0H
+T0005    DS    0H
 * CLOSE RRDS-FILE
          CLOSE (FD000)
          LTR   15,15               VSAM request succeeded?
@@ -84,6 +91,7 @@ G0003    DS    0H
          MVC   D0001(2),=C'00'
 G0004    DS    0H
          DROP  8
+T0006    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -93,6 +101,7 @@ G0004    DS    0H
          BR    14                  return to caller
 * 110-PROCESS-DATA.
 P0003    DS    0H
+T0007    DS    0H
 * READ RRDS-FILE
          GET   RPL=FD000R          VSAM sequential retrieval
          LTR   15,15               got a record?
@@ -143,28 +152,33 @@ G0008    DS    0H
          MVC   D0001(2),=C'00'
 G0009    DS    0H
          DROP  8
+T0008    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(1),S0004      literal move, space padded
          DROP  8
 L0002    DS    0H
+T0009    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0002(1),S0004      alphanumeric compare
          BE    L0003
+T0010    DS    0H
 * ADD 1 -> RECORD-COUNTER
          PACK  PWK1(8),D0004(8)    zoned -> packed
          ZAP   PWK2(8),K0001(8)    literal
          AP    PWK1(8),PWK2(8)
          UNPK  D0004(8),PWK1(8)    packed -> zoned
+T0011    DS    0H
 * MOVE RECORD-COUNTER -> COUNTER-EDIT
          PACK  PWK1(8),D0004(8)    zoned -> packed
          ZAP   EDSRC(5),PWK1(8)    source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0005(10),EDWK+2    the edited result
+T0012    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),D0005
          MVC   DSPBUF+10(2),S0005
@@ -176,6 +190,7 @@ L0002    DS    0H
 L0003    DS    0H
 * 119-EXIT.
 P0004    DS    0H
+T0013    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0004
@@ -228,6 +243,76 @@ BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
 SAVEAREA DS    18F
+* program-check exit: report the source line, then let it abend
+COBSPIE  DS    0H
+         USING COBSPIE,15
+         STM   14,12,SPIEREGS      R15 is our base on entry
+         LR    9,15                keep a base across the WTO
+         DROP  15
+         USING COBSPIE,9
+         LR    10,1                the PIE
+*  the interruption code, as the digit people know it
+         SR    7,7
+         IC    7,7(,10)            low byte of the interruption code
+         N     7,SPIE15
+         LA    7,SPIEHEX(7)
+         MVC   SPIECODE(1),0(7)
+*  the interrupt address, as an offset into this module
+         L     2,8(,10)            second word of the old PSW
+         N     2,SPIEADR           leaves the instruction address
+         S     2,SPIEBEG           relative to the entry point
+*  the last table entry at or before it names the statement
+         L     3,SPIETAB
+         LH    4,SPIENUM
+         SR    5,5                 no line yet
+SPIELOOP LTR   4,4
+         BZ    SPIEFND
+         LH    6,0(,3)             this statement's offset
+         CR    6,2
+         BH    SPIEFND             past it: the previous one is the ans
+         LH    5,2(,3)
+         LA    3,4(,3)
+         BCTR  4,0
+         B     SPIELOOP
+SPIEFND  CVD   5,SPIEDW
+         UNPK  SPIELINE(5),SPIEDW+5(3)
+         OI    SPIELINE+4,X'F0'
+         WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
+*  cancel the exit and back up to the failing instruction,
+*  so the abend happens for real -- same code, same dump
+         SR    2,2
+         IC    2,7(,10)            the interruption code
+         A     2,SPIE3000
+         ABEND (2),DUMP
+SPIEHEX  DC    C'0123456789ABCDEF'
+SPIE15   DC    F'15'
+SPIE3000 DC    F'3000'
+SPIEADR  DC    X'00FFFFFF'
+SPIEBEG  DC    A(COBBEG)
+SPIETAB  DC    A(SPIELTB)
+SPIENUM  DC    H'14'               statements in the table
+SPIEREGS DS    15F
+SPIEDW   DS    D
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+               MF=L
+SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
+SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+* statement offsets, ascending, paired with source lines
+SPIELTB  DS    0H
+         DC    AL2(T0000-COBBEG),AL2(25)
+         DC    AL2(T0001-COBBEG),AL2(26)
+         DC    AL2(T0002-COBBEG),AL2(27)
+         DC    AL2(T0003-COBBEG),AL2(28)
+         DC    AL2(T0004-COBBEG),AL2(30)
+         DC    AL2(T0005-COBBEG),AL2(32)
+         DC    AL2(T0006-COBBEG),AL2(33)
+         DC    AL2(T0007-COBBEG),AL2(36)
+         DC    AL2(T0008-COBBEG),AL2(36)
+         DC    AL2(T0009-COBBEG),AL2(38)
+         DC    AL2(T0010-COBBEG),AL2(38)
+         DC    AL2(T0011-COBBEG),AL2(39)
+         DC    AL2(T0012-COBBEG),AL2(40)
+         DC    AL2(T0013-COBBEG),AL2(42)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

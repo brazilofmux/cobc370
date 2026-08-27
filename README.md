@@ -34,9 +34,24 @@ ANS COBOL's for the same source.
 | reports | Report Writer: RD, page and control breaks, SUM |
 
 Known gaps, all deliberate: no ASA carriage control, no dynamic
-`CALL identifier`, `ACCESS IS DYNAMIC` not combined with `OPEN I-O`, and no
-equivalent of ANS COBOL's `ILBOERR0` -- on malformed packed data ANS diagnoses
-and this abends. See `docs/DEVELOPMENT-LOG.md`.
+`CALL identifier`, and `ACCESS IS DYNAMIC` not combined with `OPEN I-O`. See
+`docs/DEVELOPMENT-LOG.md`.
+
+## When a program checks
+
+A program that hits bad packed data abends S0C7 and says nothing about where.
+That is true of IBM's ANS COBOL too -- measured, not assumed. This one says:
+
+    COBC370: PROGRAM CHECK 0C7 AT SOURCE LINE 00012
+
+A label per statement and a table pairing them with source lines let a SPIE exit
+turn the interrupt address into a line number. It costs about four bytes per
+statement plus a 250-byte exit, and the message goes to the job log, beside the
+`IEF472I` that reports the abend. The completion code becomes U3007 -- 3000 plus
+the interruption code -- and `docs/MEASUREMENTS.md` explains why it is not
+S0C7 and what was tried.
+
+`cobc370 -s program.cbl` removes all of it.
 
 ## Building
 

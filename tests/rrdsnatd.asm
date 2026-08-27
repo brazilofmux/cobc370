@@ -18,25 +18,31 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
+         SPIE  COBSPIE,((1,15))    report program checks by line
 * 000-INITIATE.
 P0000    DS    0H
+T0000    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(34),S0001
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
+T0001    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(34),S0002
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
+T0002    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
+T0003    DS    0H
 * OPEN INPUT RECORD-IMAGES
          OPEN  (FD000,INPUT)
+T0004    DS    0H
 * OPEN I-O RRDS-FILE
          OPEN  (FD001)             VSAM ACB
          LTR   15,15               VSAM request succeeded?
@@ -52,23 +58,27 @@ G0001    DS    0H
          MVC   D0010(2),=C'00'
 G0002    DS    0H
          DROP  8
+T0005    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0010(2),S0004      alphanumeric compare
          BE    L0001
+T0006    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(31),S0005
          MVC   DSPBUF+31(2),D0010
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
+T0007    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          MVC   D0011(1),S0006      literal move, space padded
          DROP  8
 L0001    DS    0H
 * 010-PROCESS.
 P0001    DS    0H
+T0008    DS    0H
 * PERFORM 110-PROCESS-UPDATES THRU 119-EXIT
 L0027    DS    0H
          L     8,BL0000            base locator
@@ -86,8 +96,10 @@ R0001    DS    0H
 L0028    DS    0H
 * 020-TERMINATE.
 P0002    DS    0H
+T0009    DS    0H
 * CLOSE RECORD-IMAGES
          CLOSE (FD000)
+T0010    DS    0H
 * CLOSE RRDS-FILE
          CLOSE (FD001)
          LTR   15,15               VSAM request succeeded?
@@ -103,6 +115,7 @@ G0003    DS    0H
          MVC   D0010(2),=C'00'
 G0004    DS    0H
          DROP  8
+T0011    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -112,6 +125,7 @@ G0004    DS    0H
          BR    14                  return to caller
 * 110-PROCESS-UPDATES.
 P0003    DS    0H
+T0012    DS    0H
 * READ RECORD-IMAGES
          LA    1,L0002             this READ's AT END
          STCM  1,7,FD000+33        into DCBEODAD
@@ -121,17 +135,20 @@ P0003    DS    0H
          B     L0003
 L0002    DS    0H                  AT END
          DROP  8
+T0013    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0011(1),S0006      literal move, space padded
          DROP  8
 L0003    DS    0H
+T0014    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0011(1),S0006      alphanumeric compare
          BE    L0004
+T0015    DS    0H
 * PERFORM 111-DISPATCH THRU 112-EXIT
          LA    15,R0002            return here
          ST    15,X0006            into the range's exit cell
@@ -143,6 +160,7 @@ R0002    DS    0H
 L0004    DS    0H
 * 119-EXIT.
 P0004    DS    0H
+T0016    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0004
@@ -150,11 +168,13 @@ P0004    DS    0H
 F0004    DS    0H                  fall-through when not performed
 * 111-DISPATCH.
 P0005    DS    0H
+T0017    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0001(1),S0007      alphanumeric compare
          BNE   L0005
+T0018    DS    0H
 * PERFORM 120-ADD-PROCESS THRU 129-EXIT
          LA    15,R0003            return here
          ST    15,X0008            into the range's exit cell
@@ -164,11 +184,13 @@ R0003    DS    0H
          LA    15,F0008            restore fall-through
          ST    15,X0008
 L0005    DS    0H
+T0019    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0001(1),S0008      alphanumeric compare
          BNE   L0006
+T0020    DS    0H
 * PERFORM 130-CHANGE-PROCESS THRU 139-EXIT
          LA    15,R0004            return here
          ST    15,X0010            into the range's exit cell
@@ -178,11 +200,13 @@ R0004    DS    0H
          LA    15,F0010            restore fall-through
          ST    15,X0010
 L0006    DS    0H
+T0021    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0001(1),S0009      alphanumeric compare
          BNE   L0007
+T0022    DS    0H
 * PERFORM 140-DELETE-PROCESS THRU 149-EXIT
          LA    15,R0005            return here
          ST    15,X0014            into the range's exit cell
@@ -194,6 +218,7 @@ R0005    DS    0H
 L0007    DS    0H
 * 112-EXIT.
 P0006    DS    0H
+T0023    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0006
@@ -201,17 +226,20 @@ P0006    DS    0H
 F0006    DS    0H                  fall-through when not performed
 * 120-ADD-PROCESS.
 P0007    DS    0H
+T0024    DS    0H
 * MOVE RI-IMAGE -> RRDS-RECORD
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0004(78),D0003     alphanumeric move
          MVI   D0004+78,C' '       space fill the remainder
          MVC   D0004+79(1),D0004+78
+T0025    DS    0H
 * MOVE RRK-LOW -> WS-RRN
          PACK  PWK1(8),D0007(3)    zoned -> packed
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          ST    2,D0009
+T0026    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
@@ -220,6 +248,7 @@ P0007    DS    0H
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
+T0027    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),D0017
          MVC   DSPBUF+10(10),S0010
@@ -227,8 +256,10 @@ P0007    DS    0H
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
+T0028    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
          MVC   D0015(1),S0011      literal move, space padded
+T0029    DS    0H
 * WRITE RRDS-RECORD
          PUT   RPL=FD001N          VSAM insert by key
          LTR   15,15               stored?
@@ -309,17 +340,20 @@ G0010    DS    0H
          MVC   D0010(2),=C'00'
 G0011    DS    0H
          DROP  8
+T0030    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0015(1),S0006      literal move, space padded
          DROP  8
 L0009    DS    0H
+T0031    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0015(1),S0006      alphanumeric compare
          BE    L0010
+T0032    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(27),S0012
          LA    1,PARM0006
@@ -327,6 +361,7 @@ L0009    DS    0H
          BALR  14,15
          DROP  8
 L0010    DS    0H
+T0033    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -334,6 +369,7 @@ L0010    DS    0H
          BNE   L0011
          CLC   D0010(2),S0013      alphanumeric compare
          BNE   L0011
+T0034    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(40),S0014
          LA    1,PARM0007
@@ -341,6 +377,7 @@ L0010    DS    0H
          BALR  14,15
          DROP  8
 L0011    DS    0H
+T0035    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -348,6 +385,7 @@ L0011    DS    0H
          BNE   L0012
          CLC   D0010(2),S0013      alphanumeric compare
          BE    L0012
+T0036    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(28),S0015
          MVC   DSPBUF+28(2),D0010
@@ -356,6 +394,7 @@ L0011    DS    0H
          BALR  14,15
          DROP  8
 L0012    DS    0H
+T0037    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
          LA    1,PARM0009
@@ -363,6 +402,7 @@ L0012    DS    0H
          BALR  14,15
 * 129-EXIT.
 P0008    DS    0H
+T0038    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0008
@@ -370,6 +410,7 @@ P0008    DS    0H
 F0008    DS    0H                  fall-through when not performed
 * 130-CHANGE-PROCESS.
 P0009    DS    0H
+T0039    DS    0H
 * PERFORM 150-READ-RECORD THRU 159-EXIT
          LA    15,R0006            return here
          ST    15,X0018            into the range's exit cell
@@ -377,11 +418,13 @@ P0009    DS    0H
 R0006    DS    0H
          LA    15,F0018            restore fall-through
          ST    15,X0018
+T0040    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0013(1),S0006      alphanumeric compare
          BE    L0013
+T0041    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
@@ -390,12 +433,14 @@ R0006    DS    0H
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
+T0042    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),D0017
          MVC   DSPBUF+10(21),S0016
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
+T0043    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
          LA    1,PARM0011
@@ -403,11 +448,13 @@ R0006    DS    0H
          BALR  14,15
          DROP  8
 L0013    DS    0H
+T0044    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0013(1),S0006      alphanumeric compare
          BNE   L0014
+T0045    DS    0H
 * PERFORM 132-DO-CHANGE THRU 133-EXIT
          LA    15,R0007            return here
          ST    15,X0012            into the range's exit cell
@@ -419,6 +466,7 @@ R0007    DS    0H
 L0014    DS    0H
 * 139-EXIT.
 P0010    DS    0H
+T0046    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0010
@@ -426,6 +474,7 @@ P0010    DS    0H
 F0010    DS    0H                  fall-through when not performed
 * 132-DO-CHANGE.
 P0011    DS    0H
+T0047    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -436,6 +485,7 @@ P0011    DS    0H
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
+T0048    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),D0017
          MVC   DSPBUF+10(2),S0017
@@ -443,17 +493,21 @@ P0011    DS    0H
          LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
+T0049    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(35),S0018
          LA    1,PARM0013
          L     15,VDISP
          BALR  14,15
+T0050    DS    0H
 * MOVE RI-IMAGE -> RRDS-RECORD
          MVC   D0004(78),D0003     alphanumeric move
          MVI   D0004+78,C' '       space fill the remainder
          MVC   D0004+79(1),D0004+78
+T0051    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
          MVC   D0015(1),S0011      literal move, space padded
+T0052    DS    0H
 * REWRITE RRDS-RECORD
          PUT   RPL=FD001R          put the held record back
          LTR   15,15               done?
@@ -534,17 +588,20 @@ G0020    DS    0H
          MVC   D0010(2),=C'00'
 G0021    DS    0H
          DROP  8
+T0053    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0015(1),S0006      literal move, space padded
          DROP  8
 L0016    DS    0H
+T0054    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0015(1),S0006      alphanumeric compare
          BE    L0017
+T0055    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
@@ -553,6 +610,7 @@ L0016    DS    0H
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
+T0056    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),D0017
          MVC   DSPBUF+10(2),S0017
@@ -560,6 +618,7 @@ L0016    DS    0H
          LA    1,PARM0014
          L     15,VDISP
          BALR  14,15
+T0057    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(34),S0019
          LA    1,PARM0015
@@ -567,11 +626,13 @@ L0016    DS    0H
          BALR  14,15
          DROP  8
 L0017    DS    0H
+T0058    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0015(1),S0006      alphanumeric compare
          BNE   L0018
+T0059    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(30),S0020
          MVC   DSPBUF+30(2),D0010
@@ -580,6 +641,7 @@ L0017    DS    0H
          BALR  14,15
          DROP  8
 L0018    DS    0H
+T0060    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
          LA    1,PARM0017
@@ -587,6 +649,7 @@ L0018    DS    0H
          BALR  14,15
 * 133-EXIT.
 P0012    DS    0H
+T0061    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0012
@@ -594,6 +657,7 @@ P0012    DS    0H
 F0012    DS    0H                  fall-through when not performed
 * 140-DELETE-PROCESS.
 P0013    DS    0H
+T0062    DS    0H
 * PERFORM 150-READ-RECORD THRU 159-EXIT
          LA    15,R0008            return here
          ST    15,X0018            into the range's exit cell
@@ -601,11 +665,13 @@ P0013    DS    0H
 R0008    DS    0H
          LA    15,F0018            restore fall-through
          ST    15,X0018
+T0063    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0013(1),S0006      alphanumeric compare
          BE    L0019
+T0064    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     2,D0009
          CVD   2,DWK               binary -> packed
@@ -614,12 +680,14 @@ R0008    DS    0H
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
+T0065    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),D0017
          MVC   DSPBUF+10(21),S0016
          LA    1,PARM0018
          L     15,VDISP
          BALR  14,15
+T0066    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
          LA    1,PARM0019
@@ -627,11 +695,13 @@ R0008    DS    0H
          BALR  14,15
          DROP  8
 L0019    DS    0H
+T0067    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0013(1),S0006      alphanumeric compare
          BNE   L0020
+T0068    DS    0H
 * PERFORM 142-DO-DELETE THRU 143-EXIT
          LA    15,R0009            return here
          ST    15,X0016            into the range's exit cell
@@ -643,6 +713,7 @@ R0009    DS    0H
 L0020    DS    0H
 * 149-EXIT.
 P0014    DS    0H
+T0069    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0014
@@ -650,6 +721,7 @@ P0014    DS    0H
 F0014    DS    0H                  fall-through when not performed
 * 142-DO-DELETE.
 P0015    DS    0H
+T0070    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -660,6 +732,7 @@ P0015    DS    0H
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0017(10),EDWK+2    the edited result
+T0071    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),D0017
          MVC   DSPBUF+10(2),S0017
@@ -667,13 +740,16 @@ P0015    DS    0H
          LA    1,PARM0020
          L     15,VDISP
          BALR  14,15
+T0072    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(35),S0021
          LA    1,PARM0021
          L     15,VDISP
          BALR  14,15
+T0073    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
          MVC   D0015(1),S0011      literal move, space padded
+T0074    DS    0H
 * DELETE RRDS-FILE
          ERASE RPL=FD001R          erase the held record
          LTR   15,15               done?
@@ -754,17 +830,20 @@ G0030    DS    0H
          MVC   D0010(2),=C'00'
 G0031    DS    0H
          DROP  8
+T0075    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0015(1),S0006      literal move, space padded
          DROP  8
 L0022    DS    0H
+T0076    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0015(1),S0006      alphanumeric compare
          BE    L0023
+T0077    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(20),S0022
          LA    1,PARM0022
@@ -772,11 +851,13 @@ L0022    DS    0H
          BALR  14,15
          DROP  8
 L0023    DS    0H
+T0078    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0015(1),S0006      alphanumeric compare
          BNE   L0024
+T0079    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(29),S0023
          MVC   DSPBUF+29(2),D0010
@@ -785,6 +866,7 @@ L0023    DS    0H
          BALR  14,15
          DROP  8
 L0024    DS    0H
+T0080    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
          LA    1,PARM0024
@@ -792,6 +874,7 @@ L0024    DS    0H
          BALR  14,15
 * 143-EXIT.
 P0016    DS    0H
+T0081    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0016
@@ -799,19 +882,23 @@ P0016    DS    0H
 F0016    DS    0H                  fall-through when not performed
 * 150-READ-RECORD.
 P0017    DS    0H
+T0082    DS    0H
 * MOVE RI-IMAGE -> RRDS-RECORD
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0004(78),D0003     alphanumeric move
          MVI   D0004+78,C' '       space fill the remainder
          MVC   D0004+79(1),D0004+78
+T0083    DS    0H
 * MOVE RRK-LOW -> WS-RRN
          PACK  PWK1(8),D0007(3)    zoned -> packed
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          ST    2,D0009
+T0084    DS    0H
 * MOVE Y -> FOUND-SWITCH
          MVC   D0013(1),S0006      literal move, space padded
+T0085    DS    0H
 * READ RRDS-FILE
          GET   RPL=FD001R          VSAM retrieval by key
          LTR   15,15               got a record?
@@ -860,6 +947,7 @@ G0038    DS    0H
          MVC   D0010(2),=C'00'
 G0039    DS    0H
          DROP  8
+T0086    DS    0H
 * MOVE N -> FOUND-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -868,6 +956,7 @@ G0039    DS    0H
 L0026    DS    0H
 * 159-EXIT.
 P0018    DS    0H
+T0087    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0018
@@ -1008,6 +1097,150 @@ BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
 SAVEAREA DS    18F
+* program-check exit: report the source line, then let it abend
+COBSPIE  DS    0H
+         USING COBSPIE,15
+         STM   14,12,SPIEREGS      R15 is our base on entry
+         LR    9,15                keep a base across the WTO
+         DROP  15
+         USING COBSPIE,9
+         LR    10,1                the PIE
+*  the interruption code, as the digit people know it
+         SR    7,7
+         IC    7,7(,10)            low byte of the interruption code
+         N     7,SPIE15
+         LA    7,SPIEHEX(7)
+         MVC   SPIECODE(1),0(7)
+*  the interrupt address, as an offset into this module
+         L     2,8(,10)            second word of the old PSW
+         N     2,SPIEADR           leaves the instruction address
+         S     2,SPIEBEG           relative to the entry point
+*  the last table entry at or before it names the statement
+         L     3,SPIETAB
+         LH    4,SPIENUM
+         SR    5,5                 no line yet
+SPIELOOP LTR   4,4
+         BZ    SPIEFND
+         LH    6,0(,3)             this statement's offset
+         CR    6,2
+         BH    SPIEFND             past it: the previous one is the ans
+         LH    5,2(,3)
+         LA    3,4(,3)
+         BCTR  4,0
+         B     SPIELOOP
+SPIEFND  CVD   5,SPIEDW
+         UNPK  SPIELINE(5),SPIEDW+5(3)
+         OI    SPIELINE+4,X'F0'
+         WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
+*  cancel the exit and back up to the failing instruction,
+*  so the abend happens for real -- same code, same dump
+         SR    2,2
+         IC    2,7(,10)            the interruption code
+         A     2,SPIE3000
+         ABEND (2),DUMP
+SPIEHEX  DC    C'0123456789ABCDEF'
+SPIE15   DC    F'15'
+SPIE3000 DC    F'3000'
+SPIEADR  DC    X'00FFFFFF'
+SPIEBEG  DC    A(COBBEG)
+SPIETAB  DC    A(SPIELTB)
+SPIENUM  DC    H'88'               statements in the table
+SPIEREGS DS    15F
+SPIEDW   DS    D
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+               MF=L
+SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
+SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+* statement offsets, ascending, paired with source lines
+SPIELTB  DS    0H
+         DC    AL2(T0000-COBBEG),AL2(42)
+         DC    AL2(T0001-COBBEG),AL2(43)
+         DC    AL2(T0002-COBBEG),AL2(44)
+         DC    AL2(T0003-COBBEG),AL2(45)
+         DC    AL2(T0004-COBBEG),AL2(46)
+         DC    AL2(T0005-COBBEG),AL2(48)
+         DC    AL2(T0006-COBBEG),AL2(48)
+         DC    AL2(T0007-COBBEG),AL2(49)
+         DC    AL2(T0008-COBBEG),AL2(51)
+         DC    AL2(T0009-COBBEG),AL2(53)
+         DC    AL2(T0010-COBBEG),AL2(54)
+         DC    AL2(T0011-COBBEG),AL2(55)
+         DC    AL2(T0012-COBBEG),AL2(58)
+         DC    AL2(T0013-COBBEG),AL2(58)
+         DC    AL2(T0014-COBBEG),AL2(60)
+         DC    AL2(T0015-COBBEG),AL2(60)
+         DC    AL2(T0016-COBBEG),AL2(62)
+         DC    AL2(T0017-COBBEG),AL2(65)
+         DC    AL2(T0018-COBBEG),AL2(65)
+         DC    AL2(T0019-COBBEG),AL2(67)
+         DC    AL2(T0020-COBBEG),AL2(67)
+         DC    AL2(T0021-COBBEG),AL2(69)
+         DC    AL2(T0022-COBBEG),AL2(69)
+         DC    AL2(T0023-COBBEG),AL2(71)
+         DC    AL2(T0024-COBBEG),AL2(73)
+         DC    AL2(T0025-COBBEG),AL2(74)
+         DC    AL2(T0026-COBBEG),AL2(75)
+         DC    AL2(T0027-COBBEG),AL2(76)
+         DC    AL2(T0028-COBBEG),AL2(77)
+         DC    AL2(T0029-COBBEG),AL2(79)
+         DC    AL2(T0030-COBBEG),AL2(79)
+         DC    AL2(T0031-COBBEG),AL2(81)
+         DC    AL2(T0032-COBBEG),AL2(81)
+         DC    AL2(T0033-COBBEG),AL2(83)
+         DC    AL2(T0034-COBBEG),AL2(83)
+         DC    AL2(T0035-COBBEG),AL2(85)
+         DC    AL2(T0036-COBBEG),AL2(85)
+         DC    AL2(T0037-COBBEG),AL2(86)
+         DC    AL2(T0038-COBBEG),AL2(88)
+         DC    AL2(T0039-COBBEG),AL2(90)
+         DC    AL2(T0040-COBBEG),AL2(92)
+         DC    AL2(T0041-COBBEG),AL2(92)
+         DC    AL2(T0042-COBBEG),AL2(93)
+         DC    AL2(T0043-COBBEG),AL2(94)
+         DC    AL2(T0044-COBBEG),AL2(96)
+         DC    AL2(T0045-COBBEG),AL2(96)
+         DC    AL2(T0046-COBBEG),AL2(98)
+         DC    AL2(T0047-COBBEG),AL2(100)
+         DC    AL2(T0048-COBBEG),AL2(101)
+         DC    AL2(T0049-COBBEG),AL2(102)
+         DC    AL2(T0050-COBBEG),AL2(103)
+         DC    AL2(T0051-COBBEG),AL2(104)
+         DC    AL2(T0052-COBBEG),AL2(106)
+         DC    AL2(T0053-COBBEG),AL2(106)
+         DC    AL2(T0054-COBBEG),AL2(108)
+         DC    AL2(T0055-COBBEG),AL2(108)
+         DC    AL2(T0056-COBBEG),AL2(109)
+         DC    AL2(T0057-COBBEG),AL2(110)
+         DC    AL2(T0058-COBBEG),AL2(112)
+         DC    AL2(T0059-COBBEG),AL2(112)
+         DC    AL2(T0060-COBBEG),AL2(113)
+         DC    AL2(T0061-COBBEG),AL2(115)
+         DC    AL2(T0062-COBBEG),AL2(117)
+         DC    AL2(T0063-COBBEG),AL2(119)
+         DC    AL2(T0064-COBBEG),AL2(119)
+         DC    AL2(T0065-COBBEG),AL2(120)
+         DC    AL2(T0066-COBBEG),AL2(121)
+         DC    AL2(T0067-COBBEG),AL2(123)
+         DC    AL2(T0068-COBBEG),AL2(123)
+         DC    AL2(T0069-COBBEG),AL2(125)
+         DC    AL2(T0070-COBBEG),AL2(127)
+         DC    AL2(T0071-COBBEG),AL2(128)
+         DC    AL2(T0072-COBBEG),AL2(129)
+         DC    AL2(T0073-COBBEG),AL2(130)
+         DC    AL2(T0074-COBBEG),AL2(132)
+         DC    AL2(T0075-COBBEG),AL2(132)
+         DC    AL2(T0076-COBBEG),AL2(134)
+         DC    AL2(T0077-COBBEG),AL2(134)
+         DC    AL2(T0078-COBBEG),AL2(136)
+         DC    AL2(T0079-COBBEG),AL2(136)
+         DC    AL2(T0080-COBBEG),AL2(137)
+         DC    AL2(T0081-COBBEG),AL2(139)
+         DC    AL2(T0082-COBBEG),AL2(141)
+         DC    AL2(T0083-COBBEG),AL2(142)
+         DC    AL2(T0084-COBBEG),AL2(143)
+         DC    AL2(T0085-COBBEG),AL2(145)
+         DC    AL2(T0086-COBBEG),AL2(145)
+         DC    AL2(T0087-COBBEG),AL2(147)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

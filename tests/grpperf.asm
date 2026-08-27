@@ -18,8 +18,10 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
+         SPIE  COBSPIE,((1,15))    report program checks by line
 * MAIN-PARA.
 P0000    DS    0H
+T0000    DS    0H
 * PERFORM ADD-PARA THRU ADD-EXIT
          LA    15,R0001            return here
          ST    15,X0002            into the range's exit cell
@@ -27,6 +29,7 @@ P0000    DS    0H
 R0001    DS    0H
          LA    15,F0002            restore fall-through
          ST    15,X0002
+T0001    DS    0H
 * PERFORM ADD-PARA THRU ADD-EXIT
          LA    15,R0002            return here
          ST    15,X0002            into the range's exit cell
@@ -34,6 +37,7 @@ R0001    DS    0H
 R0002    DS    0H
          LA    15,F0002            restore fall-through
          ST    15,X0002
+T0002    DS    0H
 * PERFORM ADD-PARA THRU ADD-EXIT
          LA    15,R0003            return here
          ST    15,X0002            into the range's exit cell
@@ -41,26 +45,32 @@ R0002    DS    0H
 R0003    DS    0H
          LA    15,F0002            restore fall-through
          ST    15,X0002
+T0003    DS    0H
 * MOVE CUSTOMER-REC -> SAVE-REC
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0004(16),D0000     alphanumeric move
+T0004    DS    0H
 * MOVE SAVE-NAME -> OUT-NAME
          MVC   D0009(9),D0005      alphanumeric move
+T0005    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(9),D0009
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
+T0006    DS    0H
 * MOVE SAVE-BAL -> OUT-NUM
          ZAP   PWK1(8),D0007(4)
          UNPK  D0011(7),PWK1(8)    packed -> zoned
          OI    D0011+6,X'F0'       unsigned: force an F zone
+T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),D0011
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
+T0008    DS    0H
 * MOVE COUNTER -> OUT-NUM
          LH    2,D0008
          CVD   2,DWK               binary -> packed
@@ -68,11 +78,13 @@ R0003    DS    0H
          SRP   PWK1(8),2,0         align scale (left)
          UNPK  D0011(7),PWK1(8)    packed -> zoned
          OI    D0011+6,X'F0'       unsigned: force an F zone
+T0009    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),D0011
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
+T0010    DS    0H
 * PERFORM SHOW-PARA
          LA    15,R0004            return here
          ST    15,X0003            into the range's exit cell
@@ -81,6 +93,7 @@ R0004    DS    0H
          DROP  8
          LA    15,F0003            restore fall-through
          ST    15,X0003
+T0011    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -90,6 +103,7 @@ R0004    DS    0H
          BR    14                  return to caller
 * ADD-PARA.
 P0001    DS    0H
+T0012    DS    0H
 * ADD 1 -> COUNTER
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -101,6 +115,7 @@ P0001    DS    0H
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          STH   2,D0008
+T0013    DS    0H
 * ADD 1050 -> CUST-BAL
          ZAP   PWK1(8),D0003(4)
          ZAP   PWK2(8),K0002(8)    literal
@@ -109,6 +124,7 @@ P0001    DS    0H
          DROP  8
 * ADD-EXIT.
 P0002    DS    0H
+T0014    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0002
@@ -116,10 +132,12 @@ P0002    DS    0H
 F0002    DS    0H                  fall-through when not performed
 * SHOW-PARA.
 P0003    DS    0H
+T0015    DS    0H
 * MOVE CUST-CODE -> OUT-CODE
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0010(3),D0002      alphanumeric move
+T0016    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(3),D0010
          LA    1,PARM0004
@@ -166,6 +184,79 @@ K0002    DC    PL8'1050'
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
+* program-check exit: report the source line, then let it abend
+COBSPIE  DS    0H
+         USING COBSPIE,15
+         STM   14,12,SPIEREGS      R15 is our base on entry
+         LR    9,15                keep a base across the WTO
+         DROP  15
+         USING COBSPIE,9
+         LR    10,1                the PIE
+*  the interruption code, as the digit people know it
+         SR    7,7
+         IC    7,7(,10)            low byte of the interruption code
+         N     7,SPIE15
+         LA    7,SPIEHEX(7)
+         MVC   SPIECODE(1),0(7)
+*  the interrupt address, as an offset into this module
+         L     2,8(,10)            second word of the old PSW
+         N     2,SPIEADR           leaves the instruction address
+         S     2,SPIEBEG           relative to the entry point
+*  the last table entry at or before it names the statement
+         L     3,SPIETAB
+         LH    4,SPIENUM
+         SR    5,5                 no line yet
+SPIELOOP LTR   4,4
+         BZ    SPIEFND
+         LH    6,0(,3)             this statement's offset
+         CR    6,2
+         BH    SPIEFND             past it: the previous one is the ans
+         LH    5,2(,3)
+         LA    3,4(,3)
+         BCTR  4,0
+         B     SPIELOOP
+SPIEFND  CVD   5,SPIEDW
+         UNPK  SPIELINE(5),SPIEDW+5(3)
+         OI    SPIELINE+4,X'F0'
+         WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
+*  cancel the exit and back up to the failing instruction,
+*  so the abend happens for real -- same code, same dump
+         SR    2,2
+         IC    2,7(,10)            the interruption code
+         A     2,SPIE3000
+         ABEND (2),DUMP
+SPIEHEX  DC    C'0123456789ABCDEF'
+SPIE15   DC    F'15'
+SPIE3000 DC    F'3000'
+SPIEADR  DC    X'00FFFFFF'
+SPIEBEG  DC    A(COBBEG)
+SPIETAB  DC    A(SPIELTB)
+SPIENUM  DC    H'17'               statements in the table
+SPIEREGS DS    15F
+SPIEDW   DS    D
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+               MF=L
+SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
+SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+* statement offsets, ascending, paired with source lines
+SPIELTB  DS    0H
+         DC    AL2(T0000-COBBEG),AL2(19)
+         DC    AL2(T0001-COBBEG),AL2(20)
+         DC    AL2(T0002-COBBEG),AL2(21)
+         DC    AL2(T0003-COBBEG),AL2(22)
+         DC    AL2(T0004-COBBEG),AL2(23)
+         DC    AL2(T0005-COBBEG),AL2(24)
+         DC    AL2(T0006-COBBEG),AL2(25)
+         DC    AL2(T0007-COBBEG),AL2(26)
+         DC    AL2(T0008-COBBEG),AL2(27)
+         DC    AL2(T0009-COBBEG),AL2(28)
+         DC    AL2(T0010-COBBEG),AL2(29)
+         DC    AL2(T0011-COBBEG),AL2(30)
+         DC    AL2(T0012-COBBEG),AL2(32)
+         DC    AL2(T0013-COBBEG),AL2(33)
+         DC    AL2(T0014-COBBEG),AL2(35)
+         DC    AL2(T0015-COBBEG),AL2(37)
+         DC    AL2(T0016-COBBEG),AL2(38)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

@@ -18,8 +18,10 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
+         SPIE  COBSPIE,((1,15))    report program checks by line
 * MAIN-PARA.
 P0000    DS    0H
+T0000    DS    0H
 * MOVE 1 -> WS-IDX
          ZAP   PWK1(8),K0001(8)    literal
          ZAP   DWK(8),PWK1(8)
@@ -30,6 +32,7 @@ P0000    DS    0H
          DROP  8
 * FILL-LOOP.
 P0001    DS    0H
+T0001    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -39,10 +42,12 @@ P0001    DS    0H
          ZAP   WK1(16),K0002(8)    literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0001
+T0002    DS    0H
 * GO TO FILL-DONE
          B     P0002
          DROP  8
 L0001    DS    0H
+T0003    DS    0H
 * COMPUTE YT-DEBITS = ...
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -59,6 +64,7 @@ L0001    DS    0H
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
          ZAP   0(5,6),PWK1(8)
+T0004    DS    0H
 * COMPUTE YT-CREDITS = ...
          LH    2,D0006
          CVD   2,DWK               binary -> packed
@@ -73,6 +79,7 @@ L0001    DS    0H
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
          ZAP   0(5,6),PWK1(8)
+T0005    DS    0H
 * ADD 1 -> WS-IDX
          LH    2,D0006
          CVD   2,DWK               binary -> packed
@@ -82,11 +89,13 @@ L0001    DS    0H
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          STH   2,D0006
+T0006    DS    0H
 * GO TO FILL-LOOP
          B     P0001
          DROP  8
 * FILL-DONE.
 P0002    DS    0H
+T0007    DS    0H
 * MOVE 3 -> WS-IDX
          ZAP   PWK1(8),K0005(8)    literal
          ZAP   DWK(8),PWK1(8)
@@ -94,6 +103,7 @@ P0002    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          STH   2,D0006
+T0008    DS    0H
 * MOVE YT-DEBITS -> OUT-NUM
          LH    7,D0006             subscript
          BCTR  7,0                 subscript-1
@@ -102,11 +112,13 @@ P0002    DS    0H
          ZAP   PWK1(8),0(5,7)
          UNPK  D0007(9),PWK1(8)    packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
+T0009    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(9),D0007
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
+T0010    DS    0H
 * MOVE YT-CREDITS -> OUT-NUM
          LH    7,D0006             subscript
          BCTR  7,0                 subscript-1
@@ -115,11 +127,13 @@ P0002    DS    0H
          ZAP   PWK1(8),0(5,7)
          UNPK  D0007(9),PWK1(8)    packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
+T0011    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(9),D0007
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
+T0012    DS    0H
 * MOVE YT-DEBITS -> OUT-NUM
          LA    7,4                 subscript-1
          MH    7,H0001             times element size
@@ -127,11 +141,13 @@ P0002    DS    0H
          ZAP   PWK1(8),0(5,7)
          UNPK  D0007(9),PWK1(8)    packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
+T0013    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(9),D0007
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
+T0014    DS    0H
 * COMPUTE OUT-NUM = ...
          LA    7,1                 subscript-1
          MH    7,H0001             times element size
@@ -145,11 +161,13 @@ P0002    DS    0H
          ZAP   PWK1(8),WK0(16)
          UNPK  D0007(9),PWK1(8)    packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
+T0015    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(9),D0007
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
+T0016    DS    0H
 * MOVE 12 -> MD-ENTRY
          ZAP   PWK1(8),K0006(8)    literal
          ZAP   DWK(8),PWK1(8)
@@ -158,6 +176,7 @@ P0002    DS    0H
          MH    6,H0002             times element size
          LA    6,D0005(6)          element address
          STH   2,0(,6)
+T0017    DS    0H
 * MOVE 31 -> MD-ENTRY
          ZAP   PWK1(8),K0007(8)    literal
          ZAP   DWK(8),PWK1(8)
@@ -166,6 +185,7 @@ P0002    DS    0H
          MH    6,H0002             times element size
          LA    6,D0005(6)          element address
          STH   2,0(,6)
+T0018    DS    0H
 * MOVE MD-ENTRY -> OUT-SMALL
          LA    7,11                subscript-1
          MH    7,H0002             times element size
@@ -175,11 +195,13 @@ P0002    DS    0H
          ZAP   PWK1(8),DWK(8)
          UNPK  D0008(4),PWK1(8)    packed -> zoned
          OI    D0008+3,X'F0'       unsigned: force an F zone
+T0019    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),D0008
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
+T0020    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -232,6 +254,83 @@ H0002    DC    H'2'
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
+* program-check exit: report the source line, then let it abend
+COBSPIE  DS    0H
+         USING COBSPIE,15
+         STM   14,12,SPIEREGS      R15 is our base on entry
+         LR    9,15                keep a base across the WTO
+         DROP  15
+         USING COBSPIE,9
+         LR    10,1                the PIE
+*  the interruption code, as the digit people know it
+         SR    7,7
+         IC    7,7(,10)            low byte of the interruption code
+         N     7,SPIE15
+         LA    7,SPIEHEX(7)
+         MVC   SPIECODE(1),0(7)
+*  the interrupt address, as an offset into this module
+         L     2,8(,10)            second word of the old PSW
+         N     2,SPIEADR           leaves the instruction address
+         S     2,SPIEBEG           relative to the entry point
+*  the last table entry at or before it names the statement
+         L     3,SPIETAB
+         LH    4,SPIENUM
+         SR    5,5                 no line yet
+SPIELOOP LTR   4,4
+         BZ    SPIEFND
+         LH    6,0(,3)             this statement's offset
+         CR    6,2
+         BH    SPIEFND             past it: the previous one is the ans
+         LH    5,2(,3)
+         LA    3,4(,3)
+         BCTR  4,0
+         B     SPIELOOP
+SPIEFND  CVD   5,SPIEDW
+         UNPK  SPIELINE(5),SPIEDW+5(3)
+         OI    SPIELINE+4,X'F0'
+         WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
+*  cancel the exit and back up to the failing instruction,
+*  so the abend happens for real -- same code, same dump
+         SR    2,2
+         IC    2,7(,10)            the interruption code
+         A     2,SPIE3000
+         ABEND (2),DUMP
+SPIEHEX  DC    C'0123456789ABCDEF'
+SPIE15   DC    F'15'
+SPIE3000 DC    F'3000'
+SPIEADR  DC    X'00FFFFFF'
+SPIEBEG  DC    A(COBBEG)
+SPIETAB  DC    A(SPIELTB)
+SPIENUM  DC    H'21'               statements in the table
+SPIEREGS DS    15F
+SPIEDW   DS    D
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+               MF=L
+SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
+SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+* statement offsets, ascending, paired with source lines
+SPIELTB  DS    0H
+         DC    AL2(T0000-COBBEG),AL2(16)
+         DC    AL2(T0001-COBBEG),AL2(18)
+         DC    AL2(T0002-COBBEG),AL2(18)
+         DC    AL2(T0003-COBBEG),AL2(19)
+         DC    AL2(T0004-COBBEG),AL2(20)
+         DC    AL2(T0005-COBBEG),AL2(21)
+         DC    AL2(T0006-COBBEG),AL2(22)
+         DC    AL2(T0007-COBBEG),AL2(24)
+         DC    AL2(T0008-COBBEG),AL2(25)
+         DC    AL2(T0009-COBBEG),AL2(26)
+         DC    AL2(T0010-COBBEG),AL2(27)
+         DC    AL2(T0011-COBBEG),AL2(28)
+         DC    AL2(T0012-COBBEG),AL2(29)
+         DC    AL2(T0013-COBBEG),AL2(30)
+         DC    AL2(T0014-COBBEG),AL2(31)
+         DC    AL2(T0015-COBBEG),AL2(32)
+         DC    AL2(T0016-COBBEG),AL2(33)
+         DC    AL2(T0017-COBBEG),AL2(34)
+         DC    AL2(T0018-COBBEG),AL2(35)
+         DC    AL2(T0019-COBBEG),AL2(36)
+         DC    AL2(T0020-COBBEG),AL2(37)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

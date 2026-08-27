@@ -18,8 +18,10 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
+         SPIE  COBSPIE,((1,15))    report program checks by line
 * MAIN-PARA.
 P0000    DS    0H
+T0000    DS    0H
 * PERFORM FILL-PARA THRU FILL-EXIT
          ZAP   WK0(16),K0001(8)    literal
          ZAP   PWK1(8),WK0(16)
@@ -59,6 +61,7 @@ R0001    DS    0H
          B     L0002
 L0003    DS    0H
          DROP  8
+T0001    DS    0H
 * MOVE WS-IDX -> OUT-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -67,21 +70,25 @@ L0003    DS    0H
          ZAP   PWK1(8),DWK(8)
          UNPK  D0008(7),PWK1(8)    packed -> zoned
          OI    D0008+6,X'F0'       unsigned: force an F zone
+T0002    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),D0008
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
+T0003    DS    0H
 * MOVE 0 -> WS-TOT
          ZAP   PWK1(8),K0003(8)    literal
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          ST    2,D0004
+T0004    DS    0H
 * MOVE 1 -> WS-IDX
          ZAP   PWK1(8),K0001(8)    literal
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          STH   2,D0003
+T0005    DS    0H
 * PERFORM SUM-PARA THRU SUM-EXIT
 L0004    DS    0H
          DROP  8
@@ -112,6 +119,7 @@ R0002    DS    0H
          ST    15,X0004
          B     L0004
 L0005    DS    0H
+T0006    DS    0H
 * MOVE WS-TOT -> OUT-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -120,16 +128,19 @@ L0005    DS    0H
          ZAP   PWK1(8),DWK(8)
          UNPK  D0008(7),PWK1(8)    packed -> zoned
          OI    D0008+6,X'F0'       unsigned: force an F zone
+T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),D0008
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
+T0008    DS    0H
 * MOVE 0 -> WS-CNT
          ZAP   PWK1(8),K0003(8)    literal
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          STH   2,D0005
+T0009    DS    0H
 * PERFORM EOF-PARA THRU EOF-EXIT
 L0006    DS    0H
          DROP  8
@@ -146,6 +157,7 @@ R0003    DS    0H
          ST    15,X0006
          B     L0006
 L0007    DS    0H
+T0010    DS    0H
 * MOVE WS-CNT -> OUT-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -154,16 +166,19 @@ L0007    DS    0H
          ZAP   PWK1(8),DWK(8)
          UNPK  D0008(7),PWK1(8)    packed -> zoned
          OI    D0008+6,X'F0'       unsigned: force an F zone
+T0011    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),D0008
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
+T0012    DS    0H
 * MOVE 0 -> WS-CNT
          ZAP   PWK1(8),K0003(8)    literal
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          STH   2,D0005
+T0013    DS    0H
 * PERFORM BUMP-PARA THRU BUMP-EXIT
          ZAP   WK0(16),K0005(8)    literal
          ZAP   DWK(8),WK0(16)
@@ -185,6 +200,7 @@ R0004    DS    0H
          STH   2,PT014
          B     L0008
 L0009    DS    0H
+T0014    DS    0H
 * MOVE WS-CNT -> OUT-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -193,16 +209,19 @@ L0009    DS    0H
          ZAP   PWK1(8),DWK(8)
          UNPK  D0008(7),PWK1(8)    packed -> zoned
          OI    D0008+6,X'F0'       unsigned: force an F zone
+T0015    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),D0008
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
+T0016    DS    0H
 * MOVE 0 -> WS-CNT
          ZAP   PWK1(8),K0003(8)    literal
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          STH   2,D0005
+T0017    DS    0H
 * PERFORM BUMP-PARA THRU BUMP-EXIT
 L0010    DS    0H
          DROP  8
@@ -223,6 +242,7 @@ R0005    DS    0H
          ST    15,X0008
          B     L0010
 L0011    DS    0H
+T0018    DS    0H
 * MOVE WS-CNT -> OUT-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -231,11 +251,13 @@ L0011    DS    0H
          ZAP   PWK1(8),DWK(8)
          UNPK  D0008(7),PWK1(8)    packed -> zoned
          OI    D0008+6,X'F0'       unsigned: force an F zone
+T0019    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),D0008
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
+T0020    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -246,6 +268,7 @@ L0011    DS    0H
          DROP  8
 * FILL-PARA.
 P0001    DS    0H
+T0021    DS    0H
 * MOVE WS-IDX -> ENT-YEAR
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -262,6 +285,7 @@ P0001    DS    0H
          DROP  8
 * FILL-EXIT.
 P0002    DS    0H
+T0022    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0002
@@ -269,6 +293,7 @@ P0002    DS    0H
 F0002    DS    0H                  fall-through when not performed
 * SUM-PARA.
 P0003    DS    0H
+T0023    DS    0H
 * ADD ENT-YEAR -> WS-TOT
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -286,6 +311,7 @@ P0003    DS    0H
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          ST    2,D0004
+T0024    DS    0H
 * ADD 1 -> WS-IDX
          LH    2,D0003
          CVD   2,DWK               binary -> packed
@@ -298,6 +324,7 @@ P0003    DS    0H
          DROP  8
 * SUM-EXIT.
 P0004    DS    0H
+T0025    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0004
@@ -305,6 +332,7 @@ P0004    DS    0H
 F0004    DS    0H                  fall-through when not performed
 * EOF-PARA.
 P0005    DS    0H
+T0026    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -316,6 +344,7 @@ P0005    DS    0H
          ZAP   DWK(8),PWK1(8)
          CVB   2,DWK               packed -> binary
          STH   2,D0005
+T0027    DS    0H
 * IF
          LH    2,D0005
          CVD   2,DWK               binary -> packed
@@ -323,12 +352,14 @@ P0005    DS    0H
          ZAP   WK1(16),K0006(8)    literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0001
+T0028    DS    0H
 * MOVE Y -> EOF-FLAG
          MVC   D0006(1),S0001      literal move, space padded
          DROP  8
 L0001    DS    0H
 * EOF-EXIT.
 P0006    DS    0H
+T0029    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0006
@@ -336,6 +367,7 @@ P0006    DS    0H
 F0006    DS    0H                  fall-through when not performed
 * BUMP-PARA.
 P0007    DS    0H
+T0030    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -350,6 +382,7 @@ P0007    DS    0H
          DROP  8
 * BUMP-EXIT.
 P0008    DS    0H
+T0031    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0008
@@ -404,6 +437,94 @@ S0001    DC    CL1'Y'              nonnumeric constants
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
+* program-check exit: report the source line, then let it abend
+COBSPIE  DS    0H
+         USING COBSPIE,15
+         STM   14,12,SPIEREGS      R15 is our base on entry
+         LR    9,15                keep a base across the WTO
+         DROP  15
+         USING COBSPIE,9
+         LR    10,1                the PIE
+*  the interruption code, as the digit people know it
+         SR    7,7
+         IC    7,7(,10)            low byte of the interruption code
+         N     7,SPIE15
+         LA    7,SPIEHEX(7)
+         MVC   SPIECODE(1),0(7)
+*  the interrupt address, as an offset into this module
+         L     2,8(,10)            second word of the old PSW
+         N     2,SPIEADR           leaves the instruction address
+         S     2,SPIEBEG           relative to the entry point
+*  the last table entry at or before it names the statement
+         L     3,SPIETAB
+         LH    4,SPIENUM
+         SR    5,5                 no line yet
+SPIELOOP LTR   4,4
+         BZ    SPIEFND
+         LH    6,0(,3)             this statement's offset
+         CR    6,2
+         BH    SPIEFND             past it: the previous one is the ans
+         LH    5,2(,3)
+         LA    3,4(,3)
+         BCTR  4,0
+         B     SPIELOOP
+SPIEFND  CVD   5,SPIEDW
+         UNPK  SPIELINE(5),SPIEDW+5(3)
+         OI    SPIELINE+4,X'F0'
+         WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
+*  cancel the exit and back up to the failing instruction,
+*  so the abend happens for real -- same code, same dump
+         SR    2,2
+         IC    2,7(,10)            the interruption code
+         A     2,SPIE3000
+         ABEND (2),DUMP
+SPIEHEX  DC    C'0123456789ABCDEF'
+SPIE15   DC    F'15'
+SPIE3000 DC    F'3000'
+SPIEADR  DC    X'00FFFFFF'
+SPIEBEG  DC    A(COBBEG)
+SPIETAB  DC    A(SPIELTB)
+SPIENUM  DC    H'32'               statements in the table
+SPIEREGS DS    15F
+SPIEDW   DS    D
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+               MF=L
+SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
+SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+* statement offsets, ascending, paired with source lines
+SPIELTB  DS    0H
+         DC    AL2(T0000-COBBEG),AL2(16)
+         DC    AL2(T0001-COBBEG),AL2(18)
+         DC    AL2(T0002-COBBEG),AL2(19)
+         DC    AL2(T0003-COBBEG),AL2(20)
+         DC    AL2(T0004-COBBEG),AL2(21)
+         DC    AL2(T0005-COBBEG),AL2(22)
+         DC    AL2(T0006-COBBEG),AL2(24)
+         DC    AL2(T0007-COBBEG),AL2(25)
+         DC    AL2(T0008-COBBEG),AL2(26)
+         DC    AL2(T0009-COBBEG),AL2(27)
+         DC    AL2(T0010-COBBEG),AL2(28)
+         DC    AL2(T0011-COBBEG),AL2(29)
+         DC    AL2(T0012-COBBEG),AL2(30)
+         DC    AL2(T0013-COBBEG),AL2(31)
+         DC    AL2(T0014-COBBEG),AL2(32)
+         DC    AL2(T0015-COBBEG),AL2(33)
+         DC    AL2(T0016-COBBEG),AL2(34)
+         DC    AL2(T0017-COBBEG),AL2(35)
+         DC    AL2(T0018-COBBEG),AL2(36)
+         DC    AL2(T0019-COBBEG),AL2(37)
+         DC    AL2(T0020-COBBEG),AL2(38)
+         DC    AL2(T0021-COBBEG),AL2(40)
+         DC    AL2(T0022-COBBEG),AL2(42)
+         DC    AL2(T0023-COBBEG),AL2(44)
+         DC    AL2(T0024-COBBEG),AL2(45)
+         DC    AL2(T0025-COBBEG),AL2(47)
+         DC    AL2(T0026-COBBEG),AL2(49)
+         DC    AL2(T0027-COBBEG),AL2(50)
+         DC    AL2(T0028-COBBEG),AL2(50)
+         DC    AL2(T0029-COBBEG),AL2(52)
+         DC    AL2(T0030-COBBEG),AL2(54)
+         DC    AL2(T0031-COBBEG),AL2(56)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
