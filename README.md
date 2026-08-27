@@ -17,14 +17,15 @@ in.
 
 Verified by compiling a real production workload: **18 COBOL programs making up
 a 37-step monthly general-ledger batch run, reproduced byte-for-byte against the
-output of IBM's own compiler.** Generated modules are roughly half the size of
+output of IBM's own compiler.** The corpus those came from is 30 programs, and
+all 30 compile. Generated modules are roughly half the size of
 ANS COBOL's for the same source.
 
-43 regression tests, all green.
+45 regression tests, all green.
 
 | area | supported |
 |---|---|
-| data | DISPLAY, COMP, COMP-3, edited pictures, REDEFINES, OCCURS, INDEXED BY, 88 levels, qualification |
+| data | DISPLAY, COMP, COMP-3, edited pictures, REDEFINES, OCCURS, INDEXED BY, 88 levels, qualification, CURRENT-DATE |
 | verbs | MOVE, arithmetic with GIVING/ROUNDED, IF, PERFORM (TIMES/UNTIL/VARYING/THRU), GO TO, SEARCH and SEARCH ALL, CALL, DISPLAY, ACCEPT |
 | QSAM | sequential read and write, blocked and unblocked |
 | ISAM | QISAM load and sequential read, BISAM random read |

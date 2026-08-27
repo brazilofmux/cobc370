@@ -1453,6 +1453,47 @@ run, and each one that writes has its cluster read back and compared too.
 Remaining: ACCESS IS DYNAMIC and RRDS START, neither needing machinery that
 does not already exist.
 
+## Slice 37: CURRENT-DATE, and a literal MOVE that had regressed
+
+Both pulled by the same program. JERM was the last of the 30-program corpus
+that would not compile, and it needed two things.
+
+**`MOVE '20' TO TS-CC`, where TS-CC is `PIC 99`.** An alphanumeric literal into
+a numeric item: COBOL takes the characters as the digits and aligns on the
+decimal point, which for an integer means right-aligned, zero filled or
+truncated on the left. Being a literal, the whole thing is worked out at
+compile time and moved as one constant -- `MOVE '20' TO PIC 9(5)` assembles
+`DC CL5'00020'`.
+
+This was a regression, and mine. It compiled until quoted literals were
+correctly typed as alphanumeric rather than numeric; before that `'20'` was
+being parsed as the *numeric* literal 20 and taking the numeric path by
+accident. The typing fix was right -- it unblocked every FILE STATUS
+comparison -- but it broke a legal construct that real code uses, and the
+answer was to support the construct rather than undo the fix.
+
+**`CURRENT-DATE`.** The OS/VS COBOL special register: eight characters of
+MM/DD/YY. Declared as an ordinary symbol at the head of WORKING-STORAGE rather
+than special-cased in the resolver, so it addresses, moves and compares like
+anything else, and its PICTURE goes through `pic_analyse` so there is no second
+path to keep in step. It is only created when the source mentions it, decided
+by one scan of the file -- cheaper than looking ahead in the parser, and a
+false positive from a comment costs eight bytes.
+
+`TIME DEC` hands the date back as packed `00YYDDDF`, which is Julian, so
+`COBDATE` walks the day of year into a month and a day. Leap years are `YY AND
+3`, which is the whole rule between 1901 and 2099.
+
+It is filled **once, on entry**, where ANS COBOL refreshes the register at every
+reference. For a batch report that is arguably the better answer -- every page
+carries the same date even if the run crosses midnight -- but it is a
+difference, and worth knowing rather than assuming.
+
+The test cannot have a fixed oracle, since the answer changes daily. It checks
+its own result instead and reports only whether it is well formed.
+
+**The corpus is now 30 of 30.**
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

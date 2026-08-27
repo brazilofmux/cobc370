@@ -465,6 +465,12 @@ static int lookup(const char *n)
     return -1;
 }
 
+/* CURRENT-DATE is a special register, not something the program declares: an
+ * 8-character MM/DD/YY filled from the system clock. It is only created when
+ * the source actually mentions it, so programs that do not pay nothing. */
+static int uses_curdate;
+static int curdate_sym = -1;
+
 static int need_sym(const char *n)
 {
     int i = lookup(n);
@@ -738,12 +744,38 @@ static void parse_report_section(void)
     }
 }
 
+/* CURRENT-DATE lives at the head of WORKING-STORAGE. Declaring it as an
+ * ordinary symbol rather than special-casing the resolver means it addresses,
+ * moves and compares like anything else, and its PICTURE goes through
+ * pic_analyse so there is no second path to keep in step. */
+static void make_curdate(int *cursor)
+{
+    if (!uses_curdate || curdate_sym >= 0) return;
+    Sym *sy = &syms[nsym];
+    memset(sy, 0, sizeof *sy);
+    snprintf(sy->name, sizeof sy->name, "CURRENT-DATE");
+    snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
+    PicInfo pi;
+    if (pic_analyse("X(8)", &pi) < 0) die(pi.err);
+    sy->is_alpha = pi.is_alpha;
+    sy->bytes = pi.bytes;
+    sy->elem  = sy->bytes;
+    sy->usage = U_DISPLAY;
+    sy->level = 1;
+    sy->offset = *cursor;
+    *cursor += sy->bytes;
+    if (*cursor > wslen) wslen = *cursor;
+    curdate_sym = nsym;
+    nsym++;
+}
+
 static void parse_data_division(void)
 {
     if (!is("DATA")) return;
     next(); expect("DIVISION"); expect(".");
+    int opened_ws = 0;
     if (is("FILE")) { next(); expect("SECTION"); expect("."); }
-    else if (is("WORKING-STORAGE")) { next(); expect("SECTION"); expect("."); }
+    else if (is("WORKING-STORAGE")) { next(); expect("SECTION"); expect("."); opened_ws = 1; }
     else if (is("LINKAGE")) { next(); expect("SECTION"); expect("."); }
     else { while (!tok.eof && !is("PROCEDURE")) next(); return; }
     int cur_file = -1;
@@ -753,6 +785,10 @@ static void parse_data_division(void)
     int stack[32], sp = 0;
     int redef_resume = -1, redef_limit = -1;
     int cursor = 0;
+    /* Share the real cursor, so the register claims storage nothing else can
+     * also claim -- the offset drives base-locator addressing, not just the
+     * order the DCs come out in. */
+    if (opened_ws) make_curdate(&cursor);
 
     int in_linkage = is("LINKAGE") || 0;
     while (!tok.eof && !is("PROCEDURE")) {
@@ -779,8 +815,10 @@ static void parse_data_division(void)
             }
             if (cursor > wslen) wslen = cursor;
             cur_file = -1;
+            make_curdate(&cursor);
             continue;
         }
+
         if (is("REPORT")) {
             next(); expect("SECTION"); expect(".");
             while (sp > 0) {
@@ -2512,6 +2550,7 @@ static struct { int line; } linetab[MAXLINETAB];
 static int nlinetab;
 static int gen_lines = 1;      /* -s turns it off */
 
+
 static int gen_edited_labels;
 
 /* Set a file's FILE STATUS from R15 after a VSAM request.
@@ -3042,7 +3081,7 @@ static void emit_runtime(void)
     asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
-    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -3094,6 +3133,65 @@ static void emit_runtime(void)
     asm_line("", "LM", "14,12,12(13)", "");
     asm_line("", "SR", "15,15", "");
     asm_line("", "BR", "14", "");
+    asm_comment("");
+    asm_comment(" COBDATE -- fill an 8-byte field with MM/DD/YY.");
+    asm_comment("   R1 -> the field.  TIME DEC hands back the date as packed");
+    asm_comment("   00YYDDDF, which is Julian, so the day of year has to be");
+    asm_comment("   walked into a month and a day.");
+    asm_comment("");
+    asm_line("COBDATE", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE4+4", "");
+    asm_line("", "LA", "11,RTSAVE4", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "LR", "2,1", "the field, before TIME takes R1");
+    asm_line("", "TIME", "DEC", "R0 = HHMMSSth, R1 = 00YYDDDF");
+    asm_line("", "ST", "1,DTPACK", "");
+    asm_line("", "UNPK", "DTZONE(7),DTPACK(4)", "'00YYDDD'");
+    asm_line("", "OI", "DTZONE+6,X'F0'", "");
+    asm_line("", "PACK", "DTDW(8),DTZONE+4(3)", "");
+    asm_line("", "CVB", "3,DTDW", "day of the year");
+    asm_line("", "PACK", "DTDW(8),DTZONE+2(2)", "");
+    asm_line("", "CVB", "4,DTDW", "the year");
+    asm_line("", "N", "4,DTF3", "zero if a leap year -- 1901-2099, so");
+    asm_comment("                             mod 4 is the whole rule");
+    asm_line("", "LA", "5,1", "month");
+    asm_line("", "LA", "6,DTMON", "");
+    asm_line("DT010", "SR", "7,7", "");
+    asm_line("", "IC", "7,0(0,6)", "days in this month");
+    asm_line("", "CH", "5,DTH2", "February?");
+    asm_line("", "BNE", "DT020", "");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BNZ", "DT020", "");
+    asm_line("", "LA", "7,1(0,7)", "29 this year");
+    asm_line("DT020", "CR", "3,7", "");
+    asm_line("", "BNH", "DT030", "the day falls in this month");
+    asm_line("", "SR", "3,7", "");
+    asm_line("", "LA", "5,1(0,5)", "");
+    asm_line("", "LA", "6,1(0,6)", "");
+    asm_line("", "B", "DT010", "");
+    asm_line("DT030", "CVD", "5,DTDW", "");
+    asm_line("", "UNPK", "0(2,2),DTDW+6(2)", "MM");
+    asm_line("", "OI", "1(2),X'F0'", "");
+    asm_line("", "MVI", "2(2),C'/'", "");
+    asm_line("", "CVD", "3,DTDW", "");
+    asm_line("", "UNPK", "3(2,2),DTDW+6(2)", "DD");
+    asm_line("", "OI", "4(2),X'F0'", "");
+    asm_line("", "MVI", "5(2),C'/'", "");
+    asm_line("", "MVC", "6(2,2),DTZONE+2", "YY, already zoned");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("DTMON", "DC", "AL1(31,28,31,30,31,30,31,31,30,31,30,31)", "");
+    asm_line("DTF3", "DC", "F'3'", "");
+    asm_line("DTH2", "DC", "H'2'", "");
+    asm_line("DTPACK", "DS", "F", "");
+    asm_line("DTZONE", "DS", "CL8", "");
+    asm_line("DTDW", "DS", "D", "");
+    asm_line("RTSAVE4", "DS", "18F", "");
     asm_comment("");
     asm_comment(" COBWRL -- advance the paper and write one report line.");
     asm_comment("   R1 -> A(dcb), A(current line), A(target line), A(buffer)");
@@ -3376,6 +3474,22 @@ static void generate(void)
             snprintf(b2, sizeof b2, "0,PBL%04d", syms[using_parm[k]].link_area);
             asm_line("", "ST", b2, syms[using_parm[k]].name);
         }
+    }
+    if (curdate_sym >= 0) {
+        /* Filled once, on entry. ANS COBOL refreshes the register at every
+         * reference; this does not, which for a batch report is arguably the
+         * better answer -- every page carries the same date even if the run
+         * crosses midnight. Worth knowing rather than assuming. */
+        const Sym *cd = &syms[curdate_sym];
+        char fr[64];
+        asm_comment(" CURRENT-DATE, from the system clock");
+        need_sym_base(cd);
+        field_ref_m(cd, NULL, FR_RX, cd->bytes, 6, fr, sizeof fr);
+        snprintf(b, sizeof b, "1,%s", fr);
+        asm_line("", "LA", b, "");
+        asm_line("", "L", "15,VDATE", "");
+        asm_line("", "BALR", "14,15", "");
+        reset_bases();
     }
     if (gen_lines) {
         /* Armed for every program interruption there is, and armed *here*:
@@ -4060,10 +4174,46 @@ static void generate(void)
                     }
                     break;
                 }
+                if (st->imm == 2 && !(d->is_alpha || d->is_group)) {
+                    /* An alphanumeric literal into a numeric item. COBOL takes
+                     * the characters as the digits and aligns on the decimal
+                     * point, which for an integer means right-aligned, zero
+                     * filled or truncated on the left -- the same rule the
+                     * item-to-item path below implements. Being a literal, the
+                     * whole thing can be worked out here and moved as one
+                     * constant.
+                     *
+                     * This is legal ANS COBOL and real programs do it. It
+                     * stopped compiling when quoted literals were correctly
+                     * typed as alphanumeric rather than numeric, which is what
+                     * MOVE '20' TO a PIC 99 had been relying on. */
+                    if (d->usage != U_DISPLAY || d->is_signed || d->scale != 0 ||
+                        d->edited)
+                        die("MOVE of a nonnumeric literal to that numeric item "
+                            "is not implemented yet -- only an unsigned display "
+                            "integer");
+                    for (int k = 0; k < st->immscale; k++)
+                        if (!isdigit((unsigned char)st->immdigits[k]))
+                            die("MOVE of a nonnumeric literal to a numeric item "
+                                "needs the literal to be all digits");
+                    int dn = st->dsub ? d->elem : d->bytes;
+                    int sn = st->immscale;
+                    if (dn > 256) die("MVC is limited to 256 bytes");
+                    char pad[MAXTOK];
+                    if (sn >= dn) memcpy(pad, st->immdigits + (sn - dn), dn);
+                    else {
+                        memset(pad, '0', dn - sn);
+                        memcpy(pad + dn - sn, st->immdigits, sn);
+                    }
+                    const char *sl = intern_str(pad, dn, dn);
+                    char fd[64];
+                    need_sym_base(d);
+                    field_ref(d, st->dsub, dn, 6, fd, sizeof fd);
+                    snprintf(b, sizeof b, "%s,%s", fd, sl);
+                    asm_line("", "MVC", b, "literal digits, right aligned");
+                    break;
+                }
                 if (st->imm == 2) {
-                    if (!(d->is_alpha || d->is_group))
-                        die("MOVE of a nonnumeric literal to a numeric item is "
-                            "not implemented yet");
                     int dn = st->dsub ? d->elem : d->bytes;
                     if (dn > 256) die("MVC is limited to 256 bytes");
                     const char *sl = intern_str(st->immdigits, st->immscale, dn);
@@ -4242,6 +4392,9 @@ static void generate(void)
         asm_line("VDISP", "DC", "V(COBDISP)", "");
         asm_line("VTERM", "DC", "V(COBTERM)", "");
     }
+    /* Outside the DISPLAY guard: a program may want the date and print
+     * nothing. */
+    if (curdate_sym >= 0) asm_line("VDATE", "DC", "V(COBDATE)", "");
     ndlit = 0;
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
@@ -4801,6 +4954,18 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "-o") && i + 1 < argc) outname = argv[++i];
         else if (!strcmp(argv[i], "-s")) gen_lines = 0;
         else in = argv[i];
+    }
+    /* One look at the source decides whether the CURRENT-DATE register is
+     * worth creating. Cheaper than looking ahead in the parser, and a false
+     * positive from a comment costs eight bytes. */
+    if (in) {
+        FILE *scan = fopen(in, "r");
+        if (scan) {
+            char ln[512];
+            while (fgets(ln, sizeof ln, scan))
+                if (strstr(ln, "CURRENT-DATE")) { uses_curdate = 1; break; }
+            fclose(scan);
+        }
     }
     if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s]\n"
                        "  -s  strip the line table and program-check exit\n"); return 2; }

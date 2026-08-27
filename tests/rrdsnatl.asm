@@ -485,7 +485,7 @@ D0008    DC    CL10' '             COUNTER-EDIT edited, 10 chars
 * Not reentrant: MVS 3.8j batch does not require it.
 *---------------------------------------------------------------
 COBRT    CSECT
-         ENTRY COBDISP,COBTERM,COBWRL
+         ENTRY COBDISP,COBTERM,COBWRL,COBDATE
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -537,6 +537,65 @@ COBT010  L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
+*
+* COBDATE -- fill an 8-byte field with MM/DD/YY.
+*   R1 -> the field.  TIME DEC hands back the date as packed
+*   00YYDDDF, which is Julian, so the day of year has to be
+*   walked into a month and a day.
+*
+COBDATE  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE4+4
+         LA    11,RTSAVE4
+         ST    11,8(13)
+         LR    13,11
+         LR    2,1                 the field, before TIME takes R1
+         TIME  DEC                 R0 = HHMMSSth, R1 = 00YYDDDF
+         ST    1,DTPACK
+         UNPK  DTZONE(7),DTPACK(4)  '00YYDDD'
+         OI    DTZONE+6,X'F0'
+         PACK  DTDW(8),DTZONE+4(3)
+         CVB   3,DTDW              day of the year
+         PACK  DTDW(8),DTZONE+2(2)
+         CVB   4,DTDW              the year
+         N     4,DTF3              zero if a leap year -- 1901-2099, so
+*                             mod 4 is the whole rule
+         LA    5,1                 month
+         LA    6,DTMON
+DT010    SR    7,7
+         IC    7,0(0,6)            days in this month
+         CH    5,DTH2              February?
+         BNE   DT020
+         LTR   4,4
+         BNZ   DT020
+         LA    7,1(0,7)            29 this year
+DT020    CR    3,7
+         BNH   DT030               the day falls in this month
+         SR    3,7
+         LA    5,1(0,5)
+         LA    6,1(0,6)
+         B     DT010
+DT030    CVD   5,DTDW
+         UNPK  0(2,2),DTDW+6(2)    MM
+         OI    1(2),X'F0'
+         MVI   2(2),C'/'
+         CVD   3,DTDW
+         UNPK  3(2,2),DTDW+6(2)    DD
+         OI    4(2),X'F0'
+         MVI   5(2),C'/'
+         MVC   6(2,2),DTZONE+2     YY, already zoned
+         L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+DTMON    DC    AL1(31,28,31,30,31,30,31,31,30,31,30,31)
+DTF3     DC    F'3'
+DTH2     DC    H'2'
+DTPACK   DS    F
+DTZONE   DS    CL8
+DTDW     DS    D
+RTSAVE4  DS    18F
 *
 * COBWRL -- advance the paper and write one report line.
 *   R1 -> A(dcb), A(current line), A(target line), A(buffer)
