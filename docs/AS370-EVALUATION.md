@@ -144,7 +144,7 @@ actually in. Minimal reproduction:
 
 `as370` records `MYENTRY`'s owning CSECT as 1; IFOX00 records 2.
 
-## On "byte-identical to IFOX00": now true
+## On "byte-identical to IFOX00": true for one module
 
 Measured twice on the same module -- `as370` on the host against IFOX00 on the
 guest, its `SYSGO` kept and pulled off the volume with `dasdseq`:
@@ -161,7 +161,9 @@ remain decode as:
 Translator identification and version, same Julian date -- the field that
 *should* differ. Claiming to be IFOX00 would be worse than not matching.
 
-So the claim holds, on the only genuine oracle available for this shape.
+So the claim holds for `hello` -- but one module is one module. See
+"The whole corpus" below for what happened when the same comparison was run
+against all 48.
 
 ### The three fixes behind that
 
@@ -281,3 +283,41 @@ Licence note: cc370 is GPL-2.0 and this project is MIT. Invoking `as370` as an
 external tool is ordinary tool use and does not affect that, the same as
 compiling with GCC. Vendoring any of its source would be a different matter and
 is not proposed.
+
+## The whole corpus
+
+2026-08-27, after #53 step 2 (PR #60) landed. The same comparison, but all 48
+test modules instead of one: `as370` at `430f32d` on the host, IFOX00 on the
+guest, `SYSGO` to a catalogued PDS pulled off the volume with `dasdpdsu`.
+
+     3 of 48   identical apart from the END translator identification
+    45 of 48   differ
+
+The methodology is sound -- today's IFOX00 `hello` deck is byte-identical to
+the one extracted by the earlier, entirely different route.
+
+The sharpest symptom is CSECT origin alignment. `COBRT` is the same runtime
+source in all 46 modules containing it. IFOX00 gives it length 1140 in every
+one; `as370` gives it sixteen distinct lengths between 1052 and 1150, decided
+by what precedes it in the file:
+
+    litmove   COBWS ends at 0x3A5
+              ifox  COBRT origin 0x3A8  len 1140    rounded to a doubleword
+              as370 COBRT origin 0x3A5  len 1143    slack absorbed inward
+
+    arith     ifox  COBRT origin 0x580  len 1140
+              as370 COBRT origin 0x57C  len 1136    four early, four short
+
+A section's contents should not depend on the size of the section before it.
+Ruled out first: `DS`/`DC` sizing (correct since #53) and reference resolution
+(the listing prints the pre-alignment position, but the instruction generated
+uses the aligned displacement -- which is why these modules run). One residual
+is uncharacterised: `ksdsnatr`'s first CSECT differs with nothing in front of
+it, diverging at a `ST 13`/`LA 0` pair exactly 12 bytes apart.
+
+Filed as cc370 #61, with all 96 decks:
+<https://gist.github.com/brazilofmux/65f1534c15187295e81b2271fa9f83d7>
+
+Nothing here has broken a build. `ld370` links these modules and they run. It
+matters because "byte-identical" was a claim about an oracle, and at corpus
+scale the oracle disagrees.
