@@ -99,21 +99,40 @@ it is cosmetic in effect, not semantic.
 produced a 2341-byte load module from the same deck and resolved COBDISP and
 COBTERM to the right addresses (0002C0, 000338), by name, exactly as IEWL did.
 
-## What is still untested: getting ld370's module onto 3.8j
+## The whole chain, on the host
 
-Running `ld370`'s *own* load module was not achieved, and the obstacle is
-transport rather than the linker.
+`ld370`'s own load module runs. The complete build happens on the Mac and MVS
+is needed only to execute:
 
-- `-xmit` produces a TSO TRANSMIT/NETDATA file. The `RECEIVE` command on this
-  system rejects `INDDNAME(...)` and `NOVOLUME` through IKJPARS, has no HELP
-  member, and rejects `INDSNAME('...')` as invalid command syntax. Its actual
-  operands are undetermined.
-- `-iebcopy` produces an unloaded-PDS image, which IEBCOPY LOAD wants as
-  RECFM=VS. The host tape tooling here writes fixed-length records only, and
-  the file does not carry RDWs of its own.
+| step | where | whose |
+|---|---|---|
+| `cobc370` COBOL to S/370 assembler | host | this project |
+| `as370` assembler to object deck | host | cc370 |
+| `ld370` object deck to load module + XMIT | host | cc370 |
+| `RECV370` XMIT into a load library | guest | RECVXMIT |
+| execute | guest | |
 
-So `ld370` is unproven on this system, and nothing observed suggests it is at
-fault.
+    LDGO       S1                  IEBGENER  RC= 0000
+    LDGO       S2                  RECV370   RC= 0000
+    LDGO       S3                  HELLO     RC= 0000
+
+    HELLO FROM COBC. NO SYS1.COBLIB HERE.
+    SECOND LINE, WITH A QUOTE: DON'T PANIC.
+
+**No IFOX00 and no IEWL were involved.**
+
+Two things stood in the way, and neither was `ld370`.
+
+**It is not a TSO `RECEIVE`.** MVS 3.8j has no such command; what TK5 ships is
+Larry Belmontes' RECVXMIT package, whose receiver is a *batch program*,
+`PGM=RECV370`, taking `XMITIN` and `SYSUT2`. Every `RECEIVE` operand tried
+against IKJPARS was rejected because the command being invoked was something
+else entirely. The readme in `Packages/RECVXMIT_V0R9M02.zip` carries the proc.
+
+**Then S047.** `RECV370` is APF-authorized, and coding an explicit
+`//STEPLIB DD DSN=SYS2.LINKLIB` de-authorizes the step -- an unauthorized
+concatenation poisons the whole task. Dropping the STEPLIB and letting the
+linklist find it is the fix.
 
 ### The transport lesson, which is general
 
@@ -131,11 +150,14 @@ attempt.
 
 ## Where this leaves us
 
-`as370` is usable for this compiler's output today, bar one missing instruction.
-It is blocked on `MP`, which four tests need; gaps 1 and 3 have workarounds or
-no practical effect. Moving assembly to the host would cut the regression loop
-substantially and let a clone reach a linkable object deck with no mainframe at
-all -- MVS would be needed only to run.
+The toolchain works for this compiler's output today, bar one missing
+instruction. `MP` blocks four tests; gaps 1 and 3 have workarounds or no
+practical effect, and gap 3 in particular costs nothing at link time.
+
+Moving assembly and link-edit to the host would cut the regression loop
+substantially -- a JES round trip per test becomes milliseconds -- and let a
+clone reach a runnable load module with no mainframe at all. MVS would be
+needed only to run the result, which is the one thing it must be there for.
 
 Licence note: cc370 is GPL-2.0 and this project is MIT. Invoking `as370` as an
 external tool is ordinary tool use and does not affect that, the same as
