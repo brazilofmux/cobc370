@@ -1395,6 +1395,27 @@ by key, and browse from a key, all checked against VSAMIO on every regression
 run. ESDS and RRDS are next and both are narrower: ESDS addresses by RBA with
 no key at all, RRDS by record number.
 
+## Slice 34: VSAM, ESDS
+
+`ORGANIZATION IS SEQUENTIAL` on a VSAM file emits `ADR` in place of `KEY` in
+both MACRF and OPTCD, with no ARG, no KEYLEN and no KEQ -- an entry-sequenced
+dataset finds records by where they are, not by what is in them. The clauses
+that would name a key are refused by name: RECORD KEY, ACCESS other than
+SEQUENTIAL, START. `DELETE` is refused as well, because entry sequence is fixed
+once written.
+
+`OPEN EXTEND` came with it. For an ESDS that is the whole difference between
+Jay's ESDSLOAD and ESDSADDT, which are otherwise the same program: OUT covers
+everything that writes, and RST separates creating a file from adding to one.
+
+Verified against all four VSAMIO ESDS programs: identical output from each, and
+an identical cluster left behind -- 115 records, 100 loaded, 8 rewritten in
+place, 15 appended.
+
+The fixtures for this live in a user catalog of their own (`UCVSTEST` on
+WORK01, reached through the `VSTEST` alias), not in the user's catalog, where
+DEFINE CLUSTER has proved unsafe. See `doc/VSAM-PLAN.md`.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

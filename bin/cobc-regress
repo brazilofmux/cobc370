@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 pass=0; fail=0
 
@@ -54,6 +54,24 @@ for t in $TESTS; do
         esac
         if [ "$t" = ksdsnatl ]; then
             printf '//GO.IMAGES  DD  DSN=SVD001.VSAMTEST.DATA,DISP=SHR\n'
+        fi
+        case "$t" in esdsnatl|esdsnatr|esdsnatu|esdsnata)
+            # The ESDS fixtures live in UCVSTEST on WORK01, reached through
+            # the VSTEST alias in the master catalog -- never in the user's
+            # own catalog, where DEFINE CLUSTER has a habit of being fatal.
+            # Order is load, read, update, extend: the load is REUSE/RST so
+            # it empties the cluster and the group is repeatable.
+            printf '//GO.ESDSF01 DD  DSN=VSTEST.ESDS.CLUSTER,DISP=OLD\n' ;;
+        esac
+        if [ "$t" = esdsnatl ]; then
+            printf '//GO.IMAGES  DD  DSN=SVD001.VSAMTEST.DATA,DISP=SHR\n'
+        fi
+        if [ "$t" = esdsnata ]; then
+            printf '//GO.CARDIN  DD  *\n'
+            sed -n '/^\/\/SYSIN    DD  \*/,/^\/\*/p' \
+                "$HOME/majesty/mvs/SVD001.VSAMIO.CNTL/VSTESTE5" \
+                | grep -av '^//' | grep -av '^/\*' | cut -c1-72
+            printf '/*\n'
         fi
         if [ "$t" = ksdsnatr ]; then
             # The action cards are Jay's, taken from VSTESTK5 so both sides

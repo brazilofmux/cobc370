@@ -266,6 +266,58 @@ works and is checked against VSAMIO on every regression run:
 ESDS and RRDS are next, and both are narrower than any of the above: ESDS is
 ADR addressing with no key at all, RRDS is a record number in place of one.
 
+## Slice 7: ESDS, DONE
+
+`esdsnatl`, `esdsnatr`, `esdsnatu` and `esdsnata` -- ESDSLOAD, ESDSREAD,
+ESDSUPDT and ESDSADDT written against native VSAM -- match the VSAMIO versions
+line for line, and the cluster the four of them leave behind is byte for byte
+the one VSAMIO's four leave behind: 115 records, 100 loaded, 8 rewritten in
+place, 15 appended.
+
+An entry-sequenced dataset has no key. Records are found by where they are, not
+by what is in them, so:
+
+- `ADR` replaces `KEY` in both MACRF and OPTCD, and there is no ARG, no KEYLEN
+  and no KEQ.
+- The clauses that would name a key are refused **by name** rather than by
+  silence: RECORD KEY, ACCESS other than SEQUENTIAL, START.
+- `DELETE` is refused too. Entry sequence is fixed once written; there is no
+  ERASE for an ESDS, and saying so at compile time beats an abend.
+
+`OPEN EXTEND` arrived with it, because for an ESDS that is the entire difference
+between ESDSLOAD and ESDSADDT, which are otherwise the same program. OUT covers
+everything that writes; RST is what separates creating a file from adding to
+one.
+
+## The fixture catalog, which is what actually unblocked this
+
+Three of four `DEFINE CLUSTER`s against UCSVD001 took that catalog offline, each
+reporting condition code 0 first. Rather than keep rolling those dice on the
+user's own catalog, the test fixtures now live in one of their own:
+
+    DEFINE USERCATALOG (NAME(UCVSTEST) VOLUME(WORK01) CYLINDERS(5 1) FILE(dd))
+    DEFINE ALIAS (NAME(VSTEST) RELATE(UCVSTEST))
+    DEFINE SPACE (FILE(dd) VOLUMES(WORK01) CYLINDERS(30 5)) CATALOG(UCVSTEST)
+    DEFINE CLUSTER (NAME(VSTEST.ESDS.CLUSTER) ... REUSE) CATALOG(UCVSTEST)
+
+Three things learned building it:
+
+- **A catalog is not a data space.** The first DEFINE CLUSTER failed with
+  `IDC3025I INSUFFICIENT SUBALLOCATION DATA SPACE`. `DEFINE USERCATALOG`
+  creates a data space for the catalog's own records; clusters are suballocated
+  out of a separate one, which has to be defined against the volume and owned
+  by the catalog.
+- **The alias does the routing.** With `VSTEST` related to UCVSTEST in the
+  master catalog, ordinary JCL reaches `VSTEST.ESDS.CLUSTER` with no STEPCAT at
+  all. Only IDCAMS jobs that *define* into it need one.
+- **The failure was clean.** RC=12, a diagnostic, and a catalog still standing.
+  That is the entire point of the exercise: the same mistake against UCSVD001
+  would have cost a DASD restore.
+
+`tk5cat.391` was cloned into `dasd.checkpoint-precat/` before any of this, since
+`DEFINE USERCATALOG` writes to the master catalog and no earlier checkpoint
+covered it. All 20 volumes are in there.
+
 ## DEFINE CLUSTER against UCSVD001 is not safe, and that is now the finding
 
 Three of four `DEFINE CLUSTER` commands issued against the SVD001 user catalog
