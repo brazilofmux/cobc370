@@ -127,6 +127,10 @@ that so a later completeness sweep cannot quietly add them.
 
 **48 assembling is a count of silence, not of correctness.** See below.
 
+**3. LD entries name the wrong control section.** **Fixed upstream** in
+`766cf76`, and it reached further than reported -- see "byte-identical to
+IFOX00" below. Original report follows.
+
 **3. LD entries name the wrong control section.** In a module with more than one
 CSECT, an `ENTRY`'s ESD item carries ESDID 1 rather than the CSECT the label is
 actually in. Minimal reproduction:
@@ -140,23 +144,41 @@ actually in. Minimal reproduction:
 
 `as370` records `MYENTRY`'s owning CSECT as 1; IFOX00 records 2.
 
-## On "byte-identical to IFOX00"
+## On "byte-identical to IFOX00": now true
 
-Close, and closer than expected. The same source was assembled both ways -- by
-`as370` on the host and by IFOX00 on the guest, its `SYSGO` kept and extracted
-with `dasdseq` -- and the decks compared:
+Measured twice on the same module -- `as370` on the host against IFOX00 on the
+guest, its `SYSGO` kept and pulled off the volume with `dasdseq`:
 
-    2,519 of 2,560 bytes match          (a 32-card module)
+    before cc370 #58:   41 of 2560 bytes differ, across ESD, RLD and END
+    after  cc370 #58:   12 of 2560 bytes differ, all on the END card
 
-Every one of the 41 differences traces to exactly two things:
+All 31 other cards are byte-identical, ESD and RLD included. The twelve that
+remain decode as:
 
-- **gap 3 above**, which perturbs the ESD cards and, through them, the RLD
-  cards that reference those ESDIDs;
-- the **END card's translator-identification field**, where `as370` stamps
-  `ASM3...` and IFOX00 stamps its own version. That one arguably *should*
-  differ -- claiming to be IFOX00 would be worse than not.
+    IFOX00:  15741SC103 020126239
+    as370:   ASM370     010026239
 
-So the claim is one bug away from being literally true.
+Translator identification and version, same Julian date -- the field that
+*should* differ. Claiming to be IFOX00 would be worse than not matching.
+
+So the claim holds, on the only genuine oracle available for this shape.
+
+### The three fixes behind that
+
+- **#50** `ENTRY` with a symbol list. Fixed `f29813a`.
+- **#51** `MP`, one of thirty opcodes missing against IFOX00's `genop.asm`.
+  Fixed `78dda35`.
+- **#52** a symbol's owning section not consulted, in the ESD, the RLD *and*
+  the END card. Fixed `766cf76`.
+
+The third was reported here as cosmetic, on the evidence that IEWL linked the
+deck at RC=0000 and the module ran. That evidence was real and the conclusion
+did not follow: within a single assembly the sections move together, so the
+wrong ESDID happened not to matter *in that module*. The wrong value varied
+with where the adcon sat rather than with its target -- and on the END card it
+would have moved the entry point itself. None of this compiler's 48 modules is
+exposed to that, because they all emit a bare `END` and the program CSECT is
+always first, but it was checked rather than assumed.
 
 ## Does it link, and does it run? Yes.
 
