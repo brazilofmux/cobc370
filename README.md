@@ -20,7 +20,7 @@ a 37-step monthly general-ledger batch run, reproduced byte-for-byte against the
 output of IBM's own compiler.** Generated modules are roughly half the size of
 ANS COBOL's for the same source.
 
-42 regression tests, all green.
+43 regression tests, all green.
 
 | area | supported |
 |---|---|
@@ -110,7 +110,7 @@ transactions and still returned RC=0000.
 ## Layout
 
     src/     the compiler: one C file, plus a Ragel scanner for PICTURE
-    tests/   47 COBOL programs and their oracles
+    tests/   50 COBOL programs and their oracles
     bin/     the regression harness
     docs/    development log, differential-testing notes, VSAM design notes
 
