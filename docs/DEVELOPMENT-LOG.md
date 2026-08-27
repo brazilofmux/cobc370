@@ -1435,6 +1435,24 @@ Verified against RRDSLODS and RRDSREAD: identical output, 100 records each way.
 sequential. What is left in VSAM is RRDS by record number, and ACCESS IS
 DYNAMIC.
 
+## Slice 36: VSAM, RRDS by record number
+
+`ACCESS IS RANDOM` on a RELATIVE file. Nothing new had to be built: RANDOM
+already meant DIR, RELATIVE KEY already supplied ARG, the two-RPL split for
+insert-versus-update came from the KSDS, and the feedback tables already knew 8
+is a duplicate and 16 is not-found. The only COBOL-level difference is that the
+record number is moved out of the record first, where a KSDS has its key in
+place already.
+
+Matched RRDSRAND byte for byte on the first run, and left an identical cluster:
+102 slots, 3 written by number, 2 rewritten, 1 erased.
+
+**VSAM is complete.** KSDS across five access patterns, ESDS across four, RRDS
+across three -- twelve programs, each diffed against VSAMIO on every regression
+run, and each one that writes has its cluster read back and compared too.
+Remaining: ACCESS IS DYNAMIC and RRDS START, neither needing machinery that
+does not already exist.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

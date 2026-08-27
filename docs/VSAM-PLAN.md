@@ -346,6 +346,39 @@ Three things learned building it:
 `DEFINE USERCATALOG` writes to the master catalog and no earlier checkpoint
 covered it. All 20 volumes are in there.
 
+## Slice 9: RRDS by record number -- VSAM is finished
+
+`rrdsnatd` -- RRDSRAND written against native VSAM -- matched the VSAMIO
+version byte for byte on the first run, and the cluster the two leave behind is
+identical: 102 slots, 3 written by number, 2 rewritten, 1 erased.
+
+Nothing new had to be built. `ACCESS IS RANDOM` already meant DIR, the RELATIVE
+KEY already supplied ARG, the two-RPL split for insert-versus-update was already
+there from the KSDS, and the feedback tables already said 8 is a duplicate and
+16 is not-found. The one COBOL-level difference is where the number comes from:
+`MOVE RRK-LOW TO WS-RRN` takes it out of the record, where a KSDS would have
+had the key in place already.
+
+That it worked first time is the point. The machinery was built for a KSDS and
+carried across to a different organization untouched.
+
+## VSAM is complete
+
+| organization | patterns | verified against |
+|---|---|---|
+| KSDS | read, load, update in place, by key, START | KSDSREAD, KSDSLOAD, KSDSUPDT, KSDSRAND, KSDSSSEQ |
+| ESDS | read, load, update in place, extend | ESDSREAD, ESDSLOAD, ESDSUPDT, ESDSADDT |
+| RRDS | read, load, by record number | RRDSREAD, RRDSLODS, RRDSRAND |
+
+Twelve programs, every one diffed against Jay Moseley's VSAMIO on every
+regression run, and for each one that changes a cluster the contents are read
+back and compared as well -- messages matching is not enough when the point is
+what got written.
+
+What is left in VSAM is `ACCESS IS DYNAMIC` (READ NEXT interleaved with keyed
+READ), and RRDS `START`, which is `POINT` with a record number instead of a key.
+Neither needs machinery that does not already exist.
+
 ## The rebuild, 2026-08-26 evening
 
 `UCSVD001` is retired. `SVD001.*` now resolves through **`SYS1.UCAT.SVD`** on
