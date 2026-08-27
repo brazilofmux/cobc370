@@ -7,12 +7,13 @@
 # because allocation happens at step start and the dataset does not exist yet.
 set -u
 . "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
-CC="$(cd "$(dirname "$0")/../cobol/cc" && pwd)"
+CC="$(cd "$(dirname "$0")/../src" && pwd)"
+TDIR="$(cd "$(dirname "$0")/../tests" && pwd)"
 WORK=${TMPDIR:-/tmp}/cobc-isam; mkdir -p "$WORK"
 DSN=SVD001.TESTIDX
 
-"$CC/cobc370" "$CC/tests/isamload.cbl" > "$CC/tests/isamload.asm" || die "isamload did not compile"
-"$CC/cobc370" "$CC/tests/isamrd2.cbl"  > "$CC/tests/isamrd2.asm"  || die "isamrd2 did not compile"
+"$CC/cobc370" "$TDIR/isamload.cbl" > "$TDIR/isamload.asm" || die "isamload did not compile"
+"$CC/cobc370" "$TDIR/isamrd2.cbl"  > "$TDIR/isamrd2.asm"  || die "isamrd2 did not compile"
 
 {
 cat <<EOF
@@ -27,7 +28,7 @@ cat <<EOF
 //S2      EXEC ASMFCLG
 //ASM.SYSIN DD  *
 EOF
-cat "$CC/tests/isamload.asm"
+cat "$TDIR/isamload.asm"
 cat <<EOF
 /*
 //GO.SYSOUT  DD  SYSOUT=Z
@@ -51,7 +52,7 @@ cat <<EOF
 //S3      EXEC ASMFCLG
 //ASM.SYSIN DD  *
 EOF
-cat "$CC/tests/isamrd2.asm"
+cat "$TDIR/isamrd2.asm"
 cat <<EOF
 /*
 //LKED.SYSLMOD DD DSN=&&GOSET2(GO),UNIT=SYSDA,
@@ -68,10 +69,10 @@ cat <<EOF
 EOF
 } > "$WORK/roundtrip.jcl"
 
-"$(dirname "$0")/tk5-run" "$WORK/roundtrip.jcl" "$WORK/roundtrip.out" >/dev/null 2>&1
+run_deck "$WORK/roundtrip.jcl" "$WORK/roundtrip.out"
 grep -a "^DESCIDX LOADED\|^BACK \|^DUPLICATE" "$WORK/roundtrip.out" > "$WORK/got.txt"
 
-exp="$CC/tests/isamroundtrip.expected"
+exp="$TDIR/isamroundtrip.expected"
 if [ ! -r "$exp" ]; then
     cp "$WORK/got.txt" "$exp"; say "recorded oracle -> $exp"; exit 0
 fi

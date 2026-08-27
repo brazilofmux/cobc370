@@ -7,11 +7,12 @@
 # its object fed to the caller's link-edit step.
 set -u
 . "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
-CC="$(cd "$(dirname "$0")/../cobol/cc" && pwd)"
+CC="$(cd "$(dirname "$0")/../src" && pwd)"
+TDIR="$(cd "$(dirname "$0")/../tests" && pwd)"
 WORK=${TMPDIR:-/tmp}/cobc-call; mkdir -p "$WORK"
 
-"$CC/cobc370" "$CC/tests/subadd.cbl"   -o "$CC/tests/subadd.asm"   || die "subadd did not compile"
-"$CC/cobc370" "$CC/tests/maincall.cbl" -o "$CC/tests/maincall.asm" || die "maincall did not compile"
+"$CC/cobc370" "$TDIR/subadd.cbl"   -o "$TDIR/subadd.asm"   || die "subadd did not compile"
+"$CC/cobc370" "$TDIR/maincall.cbl" -o "$TDIR/maincall.asm" || die "maincall did not compile"
 
 {
 cat <<'EOF'
@@ -26,7 +27,7 @@ cat <<'EOF'
 //             SPACE=(80,(200,50))
 //ASM.SYSIN DD  *
 EOF
-cat "$CC/tests/subadd.asm"
+cat "$TDIR/subadd.asm"
 cat <<'EOF'
 /*
 //* 2. assemble the caller, and feed the subprogram's object to the linker
@@ -34,7 +35,7 @@ cat <<'EOF'
 //S2      EXEC ASMFCLG
 //ASM.SYSIN DD  *
 EOF
-cat "$CC/tests/maincall.asm"
+cat "$TDIR/maincall.asm"
 cat <<'EOF'
 /*
 //LKED.SYSIN DD  DSN=&&SUBOBJ,DISP=(OLD,DELETE)
@@ -42,10 +43,10 @@ cat <<'EOF'
 EOF
 } > "$WORK/calltest.jcl"
 
-"$(dirname "$0")/tk5-run" "$WORK/calltest.jcl" "$WORK/calltest.out" >/dev/null 2>&1
+run_deck "$WORK/calltest.jcl" "$WORK/calltest.out"
 grep -a "^RESULT" "$WORK/calltest.out" > "$WORK/got.txt"
 
-exp="$CC/tests/callroundtrip.expected"
+exp="$TDIR/callroundtrip.expected"
 if [ ! -r "$exp" ]; then cp "$WORK/got.txt" "$exp"; say "recorded oracle -> $exp"; exit 0; fi
 if diff -q "$exp" "$WORK/got.txt" >/dev/null; then
     say "call roundtrip: ok (separate compile, linked, parameters both ways)"

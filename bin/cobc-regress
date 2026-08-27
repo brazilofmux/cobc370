@@ -10,11 +10,11 @@
 #   cobc-regress arith      run one
 set -u
 . "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
-CC="$(cd "$(dirname "$0")/../cobol/cc" && pwd)"
+CC="$(cd "$(dirname "$0")/../src" && pwd)"
+TDIR="$(cd "$(dirname "$0")/../tests" && pwd)"
 WORK=${TMPDIR:-/tmp}/cobc-regress
 mkdir -p "$WORK"
 
-herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
 ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnatd isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
@@ -22,11 +22,11 @@ TESTS=${*:-$ALL}
 pass=0; fail=0
 
 for t in $TESTS; do
-    [ -f "$CC/tests/$t.cbl" ] || { say "$t: no such test"; fail=$((fail+1)); continue; }
-    ( cd "$CC" && ./cobc370 "tests/$t.cbl" -o "tests/$t.asm" ) || { say "$t: COMPILE FAILED"; fail=$((fail+1)); continue; }
+    [ -f "$TDIR/$t.cbl" ] || { say "$t: no such test"; fail=$((fail+1)); continue; }
+    "$CC/cobc370" "$TDIR/$t.cbl" -o "$TDIR/$t.asm" || { say "$t: COMPILE FAILED"; fail=$((fail+1)); continue; }
 
     # column 72 is the continuation flag, never spare room
-    if awk 'length($0)>72 || (length($0)==72 && substr($0,72,1)!="X")' "$CC/tests/$t.asm" | grep -q .; then
+    if awk 'length($0)>72 || (length($0)==72 && substr($0,72,1)!="X")' "$TDIR/$t.asm" | grep -q .; then
         say "$t: COLUMN 72 VIOLATION"; fail=$((fail+1)); continue
     fi
 
@@ -36,7 +36,7 @@ for t in $TESTS; do
         printf '//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),\n'
         printf '//             USER=HERC01,PASSWORD=@HERC01PW@\n'
         printf '//ASM      EXEC ASMFCLG\n//ASM.SYSIN DD  *\n'
-        cat "$CC/tests/$t.asm"
+        cat "$TDIR/$t.asm"
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
         case "$t" in isamseq|isamrnd)
             printf '//GO.GLACCT DD  DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003\n' ;;
@@ -71,28 +71,17 @@ for t in $TESTS; do
         fi
         if [ "$t" = esdsnata ]; then
             printf '//GO.CARDIN  DD  *\n'
-            sed -n '/^\/\/SYSIN    DD  \*/,/^\/\*/p' \
-                "$HOME/majesty/mvs/SVD001.VSAMIO.CNTL/VSTESTE5" \
-                | grep -av '^//' | grep -av '^/\*' | cut -c1-72
+            cat "$TDIR/data/esds-extend.txt"
             printf '/*\n'
         fi
         if [ "$t" = rrdsnatd ]; then
-            # Same action cards as the KSDS random test, but keyed on the
-            # last three digits as a record number rather than on the whole
-            # ten as a key.
             printf '//GO.CARDIN  DD  *\n'
-            sed -n '/^\/\/SYSIN    DD  \*/,/^\/\*/p' \
-                "$HOME/majesty/mvs/SVD001.VSAMIO.CNTL/VSTESTR6" \
-                | grep -E '^[ACD] ' | cut -c1-72
+            cat "$TDIR/data/rrds-actions.txt"
             printf '/*\n'
         fi
         if [ "$t" = ksdsnatr ]; then
-            # The action cards are Jay's, taken from VSTESTK5 so both sides
-            # see exactly the same input -- including its truncation at 72.
             printf '//GO.CARDIN  DD  *\n'
-            sed -n '/^\/\/SYSIN    DD  \*/,/^\/\*/p' \
-                "$HOME/majesty/mvs/SVD001.VSAMIO.CNTL/VSTESTK5" \
-                | grep -E '^[ACD] ' | cut -c1-72
+            cat "$TDIR/data/ksds-actions.txt"
             printf '/*\n'
         fi
         if [ "$t" = rpttest ]; then printf '//GO.PROUT   DD  SYSOUT=Z\n'; fi
@@ -113,7 +102,7 @@ for t in $TESTS; do
         fi
     } > "$WORK/$t.jcl.new" && mv "$WORK/$t.jcl.new" "$WORK/$t.jcl"
 
-    "$(dirname "$0")/tk5-run" "$WORK/$t.jcl" "$WORK/$t.out" >/dev/null 2>&1
+    run_deck "$WORK/$t.jcl" "$WORK/$t.out"
     # check the assembler first: an assembly error otherwise surfaces later as
     # a bewildering abend rather than as the diagnostic it is
     arc=$(grep -oE 'IFOX00    RC= [0-9]+' "$WORK/$t.out" | tail -1 | grep -oE '[0-9]+$')
@@ -133,10 +122,10 @@ for t in $TESTS; do
         *)           say "  $t: ${res##*DD }"; fail=$((fail+1)); continue ;;
     esac
 
-    if [ -f "$CC/tests/$t.expected" ]; then
+    if [ -f "$TDIR/$t.expected" ]; then
         # The expected lines must appear consecutively; JES2 separator pages
         # are full of block letters that match almost any loose pattern.
-        if python3 - "$CC/tests/$t.expected" "$WORK/$t.out" <<'PY'
+        if python3 - "$TDIR/$t.expected" "$WORK/$t.out" <<'PY'
 import sys
 # Blank lines are carriage control, not content: a report pads to its page
 # boundary on one side and ejects on the other. Compare the content.

@@ -1,0 +1,3 @@
+# build products
+src/cobc370
+src/*.o
