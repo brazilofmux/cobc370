@@ -29,14 +29,43 @@ no use here regardless of what else it does.
 
 **It expands them.** `SYS1.MACLIB` came off the TK5 volume with `dasdpdsu` (747
 members, MVS down), `as370` was pointed at it with `-I`, and all 48 generated
-modules went through:
+modules went through: 44 produced no diagnostic, 4 were flagged for the same
+missing instruction. Every VSAM module is among the 44.
 
-| | |
-|---|---|
-| assembled clean | **44** |
-| flagged | 4, all for the same missing instruction |
+> **Corrected 2026-08-27.** "44 assembled clean" was the wrong claim, and the
+> distinction matters: they assembled *without diagnostics*, which is not the
+> same as correctly. See "The number that was wrong" below. The honest figure
+> is **2**.
 
-Every VSAM module is in the clean 44.
+## The number that was wrong
+
+Reporting the missing `MP` upstream produced a finding worth more than the bug
+did. Mike Grossmann looked before fixing and found that the DC/DS handler has no
+default branch, so the types `P Z E L S Q` **assemble to zero bytes with no
+diagnostic** and never advance the location counter. Every symbol after one of
+them in the same CSECT shifts.
+
+That reaches directly into the figure above. Counting what this compiler emits
+across the 48 modules:
+
+    H 2552    A 1608    C  881
+    P  659  <-- zero bytes
+    X  556    F  513    D  140    V   94
+    Z   16  <-- zero bytes
+
+**46 of the 48 contain `P` or `Z`.** Only `hello` and `stoprun` do not. So of
+the 44 that produced no diagnostic, 42 were quietly wrong -- which is a worse
+outcome than the four that failed loudly.
+
+And it narrows the end-to-end result below: the module that was link-edited and
+executed is `hello`, one of those two. The chain does work; the sample did not
+touch this bug. That was luck rather than coverage, and it is worth saying so.
+
+The general lesson is the one this project keeps relearning. *Assembled without
+complaint* is not *assembled correctly*, in the same way that *ran to
+completion* is not *produced the right answer*, and *linked* is not *resolved to
+the right addresses*. Each time, the only thing that settled it was comparing
+against an independent implementation.
 
 ## Three gaps, smallest first
 
@@ -90,10 +119,28 @@ IEWL:
     IEWL      RC= 0000        no diagnostics at all
     HELLO FROM COBC. NO SYS1.COBLIB HERE.
 
-**The module ran.** IEWL resolves external references by *name*, so an LD entry
-naming the wrong owning CSECT costs nothing at link time. The bug is real and
-should be fixed -- it is what stops the object deck being byte-identical -- but
-it is cosmetic in effect, not semantic.
+**The module ran.** IEWL resolves external references by *name*, so the wrong
+owning CSECT on an LD entry cost nothing *for this module*.
+
+> **Corrected 2026-08-27.** This originally concluded "cosmetic in effect, not
+> semantic", and that was over-read from one sample. Mike Grossmann showed the
+> same root cause -- a symbol's owning section not being consulted -- reaches
+> the RLD as well. An ordinary label carries no ESDID of its own, so a
+> relocation targeting one falls back to the *current* section:
+>
+>     FIRST    CSECT
+>     PTR      DC    A(LBL2)
+>     SECOND   CSECT
+>     LBL2     DS    0H
+>
+> emits `R=1 P=1` where IFOX00 records `R=2`. That is a wrong relocation ESDID,
+> not a naming detail. It stayed invisible in both corpora because every
+> cross-section adcon in them targets a CSECT name, which does have an ESDID.
+>
+> The evidence was already here: the 41 differing bytes were reported as "this
+> field, the RLD entries that reference the affected ESDIDs, and the END card
+> IDR". The RLD entries were in that sentence and were read as a consequence of
+> the ESD rather than as a second instance of the same fault.
 
 `ld370` links correctly too, at least as far as can be seen from the host: it
 produced a 2341-byte load module from the same deck and resolved COBDISP and
