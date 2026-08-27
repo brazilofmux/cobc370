@@ -19,6 +19,37 @@ mkdir -p "$WORK"
 
 ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnatd isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
+
+# The VSAM tests share a cluster and depend on the one that loads it: asking
+# for ksdsnat alone gets a cluster holding whatever the last run left, and a
+# confusing diff rather than a useful one. Pull the loader in when it is
+# missing, in the order ALL declares.
+prereq_for() {
+    case "$1" in
+        ksdsnat|ksdsnats|ksdsnatu|ksdsnatr) echo ksdsnatl ;;
+        esdsnatr|esdsnatu|esdsnata)         echo esdsnatl ;;
+        rrdsnatr|rrdsnatd)                  echo rrdsnatl ;;
+    esac
+}
+if [ $# -gt 0 ]; then
+    want=""
+    for t in $TESTS; do
+        p=$(prereq_for "$t")
+        case " $want $TESTS " in
+            *" $p "*) ;;
+            *) [ -n "$p" ] && { want="$want $p"; say "  (adding $p: $t reads what it loads)"; } ;;
+        esac
+    done
+    if [ -n "$want" ]; then
+        ordered=""
+        for t in $ALL; do
+            case " $want $TESTS " in
+                *" $t "*) ordered="$ordered $t" ;;
+            esac
+        done
+        TESTS=$ordered
+    fi
+fi
 pass=0; fail=0
 
 for t in $TESTS; do
