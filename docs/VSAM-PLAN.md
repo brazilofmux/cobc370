@@ -346,6 +346,55 @@ Three things learned building it:
 `DEFINE USERCATALOG` writes to the master catalog and no earlier checkpoint
 covered it. All 20 volumes are in there.
 
+## Why DEFINE breaks UCSVD001: it is the data space, not the catalog
+
+Tested directly. The catalog, the IDCAMS step and the cluster definition were
+held identical; only the data space the cluster was suballocated from changed.
+
+| data space suballocated from | DEFINE CLUSTERs | catalog afterwards |
+|---|---|---|
+| fresh, 30 cyl on WORK02, owned by UCSVD001 | 3 consecutive | healthy every time |
+| the existing one on SVD001 | 1 | broken |
+
+Every define reported `IDC0508I ... ALLOCATION STATUS ... IS 0` and condition
+code 0 first, including the one that killed it.
+
+That matches everything seen earlier. Defines into fresh space -- the UCVSTEST
+fixtures on WORK01, and its own catalog space -- have never failed. Defines into
+`Z9999994.VSAMDSPC.TDDB671E.TC490858` on SVD001, created in 2021, have failed
+four times in five.
+
+### The volumes are not damaged
+
+`cckdcdsk64 -ro -3` -- Hercules' own chkdsk, the most thorough level -- passes
+on all 19 volumes with rc=0. It also passes on the *broken* image, which still
+lists the same VTOC entries as the good one. So the fault is not in the medium,
+not in the tracks, and not in the VTOC. It is inside the catalog's own records,
+in a control interval that reads back perfectly as blocks and is nonsense as a
+catalog -- which is exactly why an IPL never cleared it.
+
+Nothing on the guest can see this. `IEHLIST LISTVTOC` checks the VTOC and was
+clean throughout; `IEHDASDR ANALYZE` looks for media faults; `IDCAMS VERIFY`
+handles a dataset's high-used RBA and refuses catalogs outright (OPEN error
+188). `IDCAMS EXAMINE`, with INDEXTEST and DATATEST, is the tool that would
+diagnose it, and it arrived with DFP years after 3.8j.
+
+### What repairing it would take
+
+The catalog lives *in* that data space -- SVD001's VTOC holds exactly one
+`VSAMDSPC` entry, and UCSVD001 is inside it -- so the space cannot simply be
+deleted and redefined. Repair means rebuilding UCSVD001:
+
+1. Note the 27 `SVD001.*` datasets and their volumes; `IEHLIST LISTVTOC` on
+   SVD002/003/004 produces the list without needing the catalog at all.
+2. Define a new user catalog and data space on a healthy volume.
+3. `DEFINE NONVSAM` each dataset into it, and redefine the one VSAM cluster.
+4. Repoint the `SVD001` alias in the master catalog.
+
+That is a bounded afternoon, not a rebuild from scratch, and it would leave the
+system healthy rather than routed around. Until someone wants to spend it, the
+fixture catalog means nothing has to touch UCSVD001 at all.
+
 ## DEFINE CLUSTER against UCSVD001 is not safe, and that is now the finding
 
 Three of four `DEFINE CLUSTER` commands issued against the SVD001 user catalog
