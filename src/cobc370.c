@@ -1202,8 +1202,23 @@ static void parse_data_division(void)
         if (files[i].vsam) {
             /* What is not implemented is refused by name, so the gap is
              * obvious rather than mysterious. */
-            if (files[i].org == 2) die("VSAM RRDS is not implemented yet");
             if (files[i].access == 2) die("VSAM ACCESS IS DYNAMIC is not implemented yet");
+            if (files[i].org == 2) {
+                /* An RRDS is addressed by record number. VSAM wants that as a
+                 * fullword binary, which is what a COBOL RELATIVE KEY declared
+                 * PIC 9(8) COMP already is -- so the search argument can point
+                 * straight at the program's own field, with no conversion and
+                 * nothing to keep in step. */
+                if (files[i].key_sym < 0 &&
+                    (files[i].access == 1 || files[i].has_start))
+                    die("a VSAM RRDS needs a RELATIVE KEY to be read by number");
+                if (files[i].key_sym >= 0) {
+                    const Sym *k = &syms[files[i].key_sym];
+                    if (k->usage != U_COMP || k->bytes != 4)
+                        die("RELATIVE KEY must be a fullword binary -- "
+                            "PIC 9(8) COMP");
+                }
+            }
             if (files[i].org == 1 && files[i].key_sym < 0)
                 die("a VSAM KSDS needs a RECORD KEY");
             if (files[i].org == 0) {
@@ -1289,7 +1304,6 @@ static void parse_environment(void)
                         if (is("RELATIVE")) {
                             if (!f->vsam) die("ORGANIZATION RELATIVE needs a VSAM file");
                             f->org = 2; next();
-                            if (is("KEY")) die("RELATIVE KEY is not implemented yet");
                             continue;
                         }
                         if (!is("SEQUENTIAL")) die("ORGANIZATION must be SEQUENTIAL, INDEXED or RELATIVE");
@@ -1297,6 +1311,15 @@ static void parse_environment(void)
                     if (is("FILE")) {
                         next(); expect("STATUS"); if (is("IS")) next();
                         snprintf(statname[nfile], sizeof statname[0], "%s", tok.text);
+                        next(); continue;
+                    }
+                    /* RELATIVE KEY names the record number, which is the
+                     * search argument for an RRDS exactly as RECORD KEY is for
+                     * a KSDS. It is kept in the same place. */
+                    if (is("RELATIVE")) {
+                        next(); expect("KEY"); if (is("IS")) next();
+                        if (f->org != 2) die("RELATIVE KEY needs ORGANIZATION RELATIVE");
+                        snprintf(keyname[nfile], sizeof keyname[0], "%s", tok.text);
                         next(); continue;
                     }
                     if (is("RECORD")) {      /* RECORD KEY IS x -- resolved later */
@@ -4226,7 +4249,26 @@ static void generate(void)
              * inside the record area, exactly where RECORD KEY says it does,
              * which is also where VSAMIOS points ARG. */
             char keyarg[80] = "";
-            if (f->access == 1 || f->has_start) {
+            char rrncell[10] = "";
+            if (f->org == 2) {
+                /* An RRDS always needs an argument, even for a sequential
+                 * write that does not use one: VSAM reads the field to report
+                 * back which slot it assigned, and an RPL with none abends
+                 * S0C4 on the first PUT. VSAMIOS sets ARG for every non-ESDS
+                 * request for the same reason.
+                 *
+                 * COBOL only requires a RELATIVE KEY when the program reads by
+                 * number, so when there is none the compiler supplies a
+                 * fullword of its own to be written into. No KEYLEN either --
+                 * a record number is always four bytes and VSAM knows it. */
+                if (f->key_sym >= 0)
+                    snprintf(keyarg, sizeof keyarg, "ARG=%s,",
+                             syms[f->key_sym].label);
+                else {
+                    snprintf(rrncell, sizeof rrncell, "%sK", f->label);
+                    snprintf(keyarg, sizeof keyarg, "ARG=%s,", rrncell);
+                }
+            } else if ((f->access == 1 || f->has_start) && f->key_sym >= 0) {
                 const Sym *k = &syms[f->key_sym];
                 snprintf(keyarg, sizeof keyarg, "ARG=%s,KEYLEN=%d,",
                          k->label, k->bytes);
@@ -4250,6 +4292,8 @@ static void generate(void)
                          pass ? "NUP" : optcd);
                 asm_cont(first, second);
             }
+            if (rrncell[0])
+                asm_line(rrncell, "DS", "F", "relative record number");
             continue;
         }
         if (f->isam && f->opened_output) {

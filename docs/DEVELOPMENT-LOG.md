@@ -1416,6 +1416,25 @@ The fixtures for this live in a user catalog of their own (`UCVSTEST` on
 WORK01, reached through the `VSTEST` alias), not in the user's catalog, where
 DEFINE CLUSTER has proved unsafe. See `doc/VSAM-PLAN.md`.
 
+## Slice 35: VSAM, RRDS
+
+A relative-record dataset is addressed by record number, which VSAM treats as a
+key: `MACRF=(KEY,...)`, `OPTCD=(KEY,...)`, the number in ARG, and no KEYLEN --
+a record number is always four bytes. `RELATIVE KEY IS` names it and must be
+`PIC 9(8) COMP`, so ARG points straight at the program's own field.
+
+An RRDS needs an ARG even for a sequential write that does not use one: VSAM
+writes back the slot it assigned, and an RPL without one abends S0C4 on the
+first PUT. COBOL only requires a RELATIVE KEY when the program reads by number,
+so when there is none the compiler assembles a fullword of its own rather than
+forcing a declaration the standard says is optional.
+
+Verified against RRDSLODS and RRDSREAD: identical output, 100 records each way.
+
+**All three VSAM organizations now work** -- KSDS complete, ESDS complete, RRDS
+sequential. What is left in VSAM is RRDS by record number, and ACCESS IS
+DYNAMIC.
+
 ## Suggested order
 
 Narrowest end-to-end slice first, each verifiable:

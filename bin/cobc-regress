@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 herc_running || die "Hercules is not running -- 'tk5-up' first."
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="ksdsnatl ksdsnat ksdsnats ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 pass=0; fail=0
 
@@ -63,7 +63,10 @@ for t in $TESTS; do
             # it empties the cluster and the group is repeatable.
             printf '//GO.ESDSF01 DD  DSN=VSTEST.ESDS.CLUSTER,DISP=OLD\n' ;;
         esac
-        if [ "$t" = esdsnatl ]; then
+        case "$t" in rrdsnatl|rrdsnatr)
+            printf '//GO.RRDSF01 DD  DSN=VSTEST.RRDS.CLUSTER,DISP=OLD\n' ;;
+        esac
+        if [ "$t" = rrdsnatl ] || [ "$t" = esdsnatl ]; then
             printf '//GO.IMAGES  DD  DSN=SVD001.VSAMTEST.DATA,DISP=SHR\n'
         fi
         if [ "$t" = esdsnata ]; then

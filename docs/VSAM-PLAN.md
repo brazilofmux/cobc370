@@ -289,6 +289,34 @@ between ESDSLOAD and ESDSADDT, which are otherwise the same program. OUT covers
 everything that writes; RST is what separates creating a file from adding to
 one.
 
+## Slice 8: RRDS, sequentially
+
+`rrdsnatl` and `rrdsnatr` -- RRDSLODS and RRDSREAD written against native VSAM
+-- match the VSAMIO versions exactly: 100 records loaded, 100 read back.
+
+A relative-record dataset is addressed by record number, and VSAM treats that as
+a *key*: `MACRF=(KEY,...)` and `OPTCD=(KEY,...)`, the same as a KSDS, with the
+number in ARG. `RELATIVE KEY IS` names it, and it has to be a fullword binary --
+`PIC 9(8) COMP` -- which is what VSAMIO's own `VSIO-RELATIVE-RECORD` is. So the
+search argument points straight at the program's field, with no conversion and
+nothing to keep in step.
+
+There is no KEYLEN. A record number is always four bytes and VSAM knows it,
+which is why VSAMIOS supplies KEYLEN for a KSDS and omits it here.
+
+### An RRDS always needs an ARG, even when nothing reads it
+
+The first native load abended S0C4 on the first `WRITE`. The program was
+`ACCESS IS SEQUENTIAL` with no `RELATIVE KEY`, which COBOL permits -- sequential
+writes assign the slots -- so the compiler emitted an RPL with no ARG. VSAM
+reads that field anyway, to report back *which* slot it assigned, and an RPL
+with none is an S0C4 waiting for the first PUT. VSAMIOS sets ARG for every
+non-ESDS request and does not distinguish, which was the clue.
+
+The fix keeps COBOL's rule intact rather than forcing a declaration the standard
+says is optional: when an RRDS has no RELATIVE KEY, the compiler assembles a
+fullword of its own for VSAM to write into.
+
 ## The fixture catalog, which is what actually unblocked this
 
 Three of four `DEFINE CLUSTER`s against UCSVD001 took that catalog offline, each
