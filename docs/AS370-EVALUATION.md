@@ -67,6 +67,33 @@ completion* is not *produced the right answer*, and *linked* is not *resolved to
 the right addresses*. Each time, the only thing that settled it was comparing
 against an independent implementation.
 
+## The gap that matters now: cc370 #53
+
+`P Z E L S Q` assemble to zero bytes with RC 0 and never advance the location
+counter, so every symbol declared after one of them in the same CSECT shifts.
+Found by Mike Grossmann while fixing `MP`, and raised by him rather than by us.
+
+What it costs this compiler's output:
+
+    46 of 48 modules affected
+    7521 bytes of storage that assembles to nothing
+    163 bytes mean per affected module, 216 worst
+
+Illustrated:
+
+    000000 5810 F004      00004    L     1,AFTER
+    000004                         A     DS    PL8
+    000004                         B     DS    PL4
+    000004                         C     DC    P'123'
+    000004                         Z1    DS    ZL6
+    000004 00000063                AFTER DC    F'99'
+
+Five symbols on one address, and the `L` resolves into the middle of them.
+
+Until this lands, **a clean RC 0 from `as370` is not a correct build for
+anything using COMP-3**, which here is nearly everything. This compiler emits
+no `E`, `L`, `S` or `Q`, so an RC 8 for those would cost nothing.
+
 ## Three gaps, smallest first
 
 **1. `ENTRY` with a list.** ~~`ENTRY COBDISP,COBTERM,COBWRL,COBDATE` is
@@ -86,10 +113,19 @@ reported bug, and both are fixed.
 as generated, with no `ENTRY` splitting, and `MP` is the only remaining
 diagnostic.
 
-**2. `MP` is not in the opcode table.** *"Undefined operation code"*. It is the
-only instruction in the whole corpus `as370` does not know -- `DP` and `MVO` are
-both present, as are `ZAP AP CP SRP ED EDMK PACK UNPK CVB CVD`. This is what
-flagged the other four modules.
+**2. `MP` is not in the opcode table.** ~~*"Undefined operation code"*.~~
+**Fixed upstream** in `78dda35`. Verified here: all 48 modules now assemble
+with no diagnostic, up from 44.
+
+Again the fix went past the report. Checked against IFOX00's own machine-op
+table (`genop.asm`, 220 opcodes against as370's 170), `MP` was one of thirty
+missing; all thirty were added, each through an encoder path the corpus already
+pins to IFOX00. `TPROT` and `IPTE` are deliberately still refused with RC 8,
+because as370 has neither the SSE nor the RRE format and inventing one would
+turn a clean diagnostic into silently wrong bytes -- with a regression pinning
+that so a later completeness sweep cannot quietly add them.
+
+**48 assembling is a count of silence, not of correctness.** See below.
 
 **3. LD entries name the wrong control section.** In a module with more than one
 CSECT, an `ENTRY`'s ESD item carries ESDID 1 rather than the CSECT the label is
