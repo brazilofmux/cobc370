@@ -206,17 +206,16 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Eight slices in, the histogram has gone flat -- no single thing blocks more than
+Nine slices in, the histogram has gone flat -- no single thing blocks more than
 a tenth of the corpus any more:
 
      25   an unimplemented SELECT clause  (13 of them correctly refused)
      23   a USAGE DISPLAY item past 16 digits
-     14   MOVE between a numeric and an alphanumeric item
      12   BLOCK CONTAINS n CHARACTERS
       9   the SIGN clause
       8   a RELATIVE KEY spelling
-      6   subscripting past one dimension
-      5   BEFORE ADVANCING, and ADVANCING by an identifier
+      5   nesting tables more than three deep (correctly refused)
+      5   an alphanumeric PICTURE mixing X and 9
 
 That flattening is the result worth noting. The first slices each cleared
 something standing in front of a quarter to a half of the corpus; from here the
@@ -331,6 +330,30 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### MOVE from numeric to alphanumeric
+
+The largest single blocker the corpus ever showed -- 53 programs at its peak,
+because the CCVS harness reports its own results with
+`MOVE PASS-COUNTER TO CCVS-E-4-1`, a `PIC 999` into a `PIC XXX`.
+
+Rule 3c on II-75 allows the move only for an integer; rule 4a says the
+receiver is filled from the left and space filled, truncated on the right, and
+**the operational sign is not moved**. A `USAGE DISPLAY` sender is already a
+string of digits, so it is an ordinary alphanumeric move followed by forcing an
+`F` zone over the trailing overpunch -- and only when that byte was moved at
+all, since a sender wider than the receiver loses its tail first. `COMP` and
+`COMP-3` senders are unpacked into a zoned work area and moved from there.
+
+Finding it took longer than fixing it. The category rules existed in two
+places: `emit_move`, shared with the Report Writer's `SOURCE` placement, and an
+inline copy in the `MOVE` codegen. Implementing it in `emit_move` changed
+nothing, because the copy was what ran. The copy is gone and both paths now go
+through the one dispatcher.
+
+The reverse direction -- an alphanumeric item into a numeric one -- is legal
+under the same rules and is still refused, but the message now says that it is
+legal and what it would take, rather than implying the combination is invalid.
 
 ### Table Handling level 1 is complete
 

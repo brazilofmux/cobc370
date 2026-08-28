@@ -3839,9 +3839,57 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
         gen_move_alpha(d, dsub, sv, ssub);
         return;
     }
-    if (d->is_alpha || d->is_group || sv->is_alpha || sv->is_group)
-        die("MOVE between a numeric and an alphanumeric item is not "
-            "implemented yet");
+    if (d->is_alpha || d->is_group) {
+        /* Numeric to alphanumeric. Rule 3c on II-75 allows it only for an
+         * integer, and rule 4a says the receiving item is filled from the left
+         * and space filled -- which is the ordinary alphanumeric move -- with
+         * the operational sign NOT moved. */
+        if (sv->scale != 0)
+            die("MOVE of a non-integer numeric item to an alphanumeric item is "
+                "not allowed -- rule 3c on II-75");
+        if (sv->usage == U_DISPLAY) {
+            /* Already a string of digits. */
+            gen_move_alpha(d, dsub, sv, ssub);
+            if (sv->is_signed) {
+                /* The last byte carries the sign as an overpunch. It is moved
+                 * as a character and then made a plain digit again, which is
+                 * what "the operational sign will not be moved" means for a
+                 * trailing sign. Only if it was moved at all: a sender wider
+                 * than the receiver is truncated on the right first. */
+                int dn = dsub ? d->elem : d->bytes;
+                int sn = ssub ? sv->elem : sv->bytes;
+                if (sn <= dn) {
+                    char b[96];
+                    if (dsub) snprintf(b, sizeof b, "%d(6),X'F0'", sn - 1);
+                    else      snprintf(b, sizeof b, "%s+%d,X'F0'", d->label, sn - 1);
+                    asm_line("", "OI", b, "the sign is not moved");
+                }
+            }
+            return;
+        }
+        /* COMP or COMP-3: unpack into a zoned work area first, then move that.
+         * ZWK is sized for the standard's widest numeric item. */
+        {
+            char b[96];
+            int n = sv->digits;
+            gen_load(sv, ssub, "PWK1");
+            snprintf(b, sizeof b, "ZWK(%d),PWK1(16)", n);
+            asm_line("", "UNPK", b, "packed -> zoned for an alphanumeric move");
+            snprintf(b, sizeof b, "ZWK+%d,X'F0'", n - 1);
+            asm_line("", "OI", b, "the sign is not moved");
+            Sym tmp; memset(&tmp, 0, sizeof tmp);
+            tmp.is_alpha = 1; tmp.bytes = tmp.elem = n;
+            tmp.occ_parent = tmp.gparent = tmp.index_sym = tmp.askey_sym = -1;
+            tmp.fd_file = tmp.redef_from = tmp.redef_cap = -1;
+            snprintf(tmp.label, sizeof tmp.label, "ZWK");
+            snprintf(tmp.name, sizeof tmp.name, "%s", sv->name);
+            gen_move_alpha(d, dsub, &tmp, NULL);
+            return;
+        }
+    }
+    if (sv->is_alpha || sv->is_group)
+        die("MOVE of an alphanumeric item to a numeric one is legal but not "
+            "implemented yet -- the characters would have to be packed");
     gen_load(sv, ssub, "PWK1");
     gen_rescale("PWK1", sv->scale, d->scale);
     gen_store(d, dsub, "PWK1");
@@ -4826,15 +4874,9 @@ static void generate(void)
                         asm_line("", "MVC", b, "alphanumeric into a numeric item");
                         break;
                     }
-                    if (!d_alpha || !s_alpha) {
-                        char m[160];
-                        snprintf(m, sizeof m, "MOVE %s (%s) TO %s (%s): between a "
-                                 "numeric and an alphanumeric item, not implemented yet",
-                                 sv->name, (sv->is_alpha || sv->is_group) ? "alphanumeric" : "numeric",
-                                 d->name,  (d->is_alpha  || d->is_group)  ? "alphanumeric" : "numeric");
-                        die(m);
-                    }
-                    gen_move_alpha(d, st->dsub, sv, st->ssub);
+                    /* One dispatcher for the category rules, shared with the
+                     * Report Writer's SOURCE placement. */
+                    emit_move(d, st->dsub, sv, st->ssub);
                     break;
                 }
                 if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK1"); }
@@ -4981,6 +5023,7 @@ static void generate(void)
         asm_line("PWK2", "DS", "PL16", "");
         asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");
         asm_line("EDWK", "DS", "CL64", "ED pattern and result");
+        asm_line("ZWK", "DS", "CL20", "zoned, for a numeric to alphanumeric move");
         asm_line("MULT8", "DS", "PL8", "MP right operand");
         asm_line("DIVR8", "DS", "PL8", "DP divisor");
         asm_line("QTMP", "DS", "PL8", "DP quotient");

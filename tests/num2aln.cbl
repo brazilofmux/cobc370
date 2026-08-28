@@ -1,0 +1,34 @@
+000100 IDENTIFICATION DIVISION.
+000200 PROGRAM-ID. NUM2ALN.
+000300* MOVE of a numeric item to an alphanumeric one. Rule 3c on II-75
+000400* allows it only for an integer; rule 4a fills the receiver from
+000500* the left and space fills it, truncating on the right, and the
+000600* operational sign is NOT moved.
+000700 DATA DIVISION.
+000800 WORKING-STORAGE SECTION.
+000900 01  U3      PIC 999        VALUE 42.
+001000 01  S5      PIC S9(5)      VALUE -12345.
+001100 01  P5      PIC S9(5) COMP-3 VALUE -12345.
+001200 01  B4      PIC S9(4) COMP VALUE 1234.
+001300 01  X3      PIC XXX        VALUE SPACES.
+001400 01  X8      PIC X(8)       VALUE SPACES.
+001500 01  X2      PIC XX         VALUE SPACES.
+001600 PROCEDURE DIVISION.
+001700     MOVE U3 TO X3.
+001800     DISPLAY 'U3-X3  [' X3 ']'.
+001900     MOVE U3 TO X8.
+002000     DISPLAY 'U3-X8  [' X8 ']'.
+002100     MOVE U3 TO X2.
+002200     DISPLAY 'U3-X2  [' X2 ']'.
+002300     MOVE S5 TO X8.
+002400     DISPLAY 'S5-X8  [' X8 ']'.
+002500     MOVE SPACES TO X8.
+002600     MOVE P5 TO X8.
+002700     DISPLAY 'P5-X8  [' X8 ']'.
+002800     MOVE SPACES TO X8.
+002900     MOVE B4 TO X8.
+003000     DISPLAY 'B4-X8  [' X8 ']'.
+003100     MOVE SPACES TO X3.
+003200     MOVE S5 TO X3.
+003300     DISPLAY 'S5-X3  [' X3 ']'.
+003400     STOP RUN.
