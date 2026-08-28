@@ -249,8 +249,9 @@ representation tests. **18 programs.** This is the honest edge: the next thing
 worth doing, and the first one whose cost is out of proportion to a COBOL-74
 target on this machine.
 
-**4. Ordinary remaining work, all small.** `ACCEPT` -- the last element between
-this compiler and Nucleus level 1 -- plus
+**4. Ordinary remaining work, all small.** Switch-status conditions -- the last
+element between this compiler and Nucleus level 1, and the one whose meaning the
+standard leaves to the implementor -- plus
 continuation of a word or a numeric literal, and a `SIGN` clause on an item of
 more than sixteen digits, a limitation this compiler introduced itself when the
 zoned conversion was split.
@@ -434,6 +435,21 @@ through the one dispatcher.
 The reverse direction -- an alphanumeric item into a numeric one -- is legal
 under the same rules and is still refused, but the message now says that it is
 legal and what it would take, rather than implying the combination is invalid.
+
+### ACCEPT
+
+Format 1 at level 1, II-53: one transfer from the implementor's device, which
+here is SYSIN. The `FROM` phrase -- the mnemonic-name form and `DATE`/`DAY`/
+`TIME` alike -- is level 2 and is refused by name.
+
+General rule 2 leaves the size of a transfer to the implementor. Here it is one
+80-column record, into a buffer blanked before each read, so a receiver wider
+than a card is space-padded and a read past the last card returns spaces rather
+than the card before it. `COBACC` joins `COBDISP` in the runtime and takes the
+same shape of parameter list; the list is built at run time rather than
+assembled as a constant, because a subscripted receiver has no fixed address.
+
+`COBTERM` now closes SYSIN as well as SYSOUT, and only if something opened it.
 
 ### ALTER, and what it does to segmentation
 

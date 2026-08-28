@@ -1217,7 +1217,7 @@ D0012    DC    CL1'N'              OP-FAILED-SWITCH PIC X(1)
 * Not reentrant: MVS 3.8j batch does not require it.
 *---------------------------------------------------------------
 COBRT    CSECT
-         ENTRY COBDISP,COBTERM,COBWRL,COBDATE
+         ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -1252,6 +1252,51 @@ COBD020  PUT   RTDCB,RTLINE
          BR    14
 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
 *
+* COBACC -- one transfer from SYSIN into the caller's item.
+*
+* General rule 2 on II-53 leaves the size of a transfer to the
+* implementor: here it is one 80-column record. The buffer is
+* blanked first, so a receiver wider than a card is padded and
+* a read past the last card returns spaces rather than the
+* card before it.
+*
+* Parameter list: A(item), A(halfword length).
+COBACC   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE5+4
+         LA    11,RTSAVE5
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(item)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)            length
+         MVI   ACCBUF,C' '
+         MVC   ACCBUF+1(255),ACCBUF  blank the buffer
+         CLI   ACCEOFF,X'01'       already at end of file?
+         BE    COBA020
+         CLI   ACCOPEN,X'01'       already open?
+         BE    COBA010
+         OPEN  (ACCDCB,INPUT)
+         MVI   ACCOPEN,X'01'
+COBA010  LA    1,COBA030
+         STCM  1,7,ACCDCB+33       into DCBEODAD
+         GET   ACCDCB,ACCBUF       one card
+         B     COBA020
+COBA030  MVI   ACCEOFF,X'01'       end of file: the buffer stays blank
+COBA020  LTR   4,4
+         BNP   COBA040             nothing to store
+         CH    4,ACCMAX
+         BNH   COBA035
+         LH    4,ACCMAX            one MVC is 256 bytes
+COBA035  BCTR  4,0                 EX wants length-1
+         EX    4,COBAMVC
+COBA040  L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+COBAMVC  MVC   0(0,2),ACCBUF       patched by EX
+*
 * COBTERM -- close SYSOUT if COBDISP ever opened it.
 *
 COBTERM  STM   14,12,12(13)
@@ -1261,7 +1306,11 @@ COBTERM  STM   14,12,12(13)
          LA    11,RTSAVE2
          ST    11,8(13)
          LR    13,11
-         CLI   RTOPEN,X'01'
+         CLI   ACCOPEN,X'01'
+         BNE   COBT005
+         CLOSE (ACCDCB)
+         MVI   ACCOPEN,X'00'
+COBT005  CLI   RTOPEN,X'01'
          BNE   COBT010
          CLOSE (RTDCB)
          MVI   RTOPEN,X'00'
@@ -1364,6 +1413,13 @@ RTMAX    DC    H'120'
 RTLINE   DC    CL121' '            ASA byte + 120 columns
 RTSAVE1  DS    18F
 RTSAVE2  DS    18F
+RTSAVE5  DS    18F
+ACCOPEN  DC    X'00'
+ACCEOFF  DC    X'00'
+ACCBUF   DC    CL256' '            one card from SYSIN, blank padded
+ACCMAX   DC    H'256'
+ACCDCB   DCB   DDNAME=SYSIN,DSORG=PS,MACRF=(GM),                       X
+               EODAD=0
 RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,            X
                LRECL=121,BLKSIZE=121
          END

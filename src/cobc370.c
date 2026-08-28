@@ -501,7 +501,7 @@ static Node *node(int kind)
 }
 
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
-       ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT, ST_INSPECT, ST_ALTER,
+       ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT, ST_INSPECT, ST_ALTER, ST_ACCEPT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH,
@@ -2737,6 +2737,21 @@ static void parse_one_statement(void)
         return;
     }
 
+    if (is("ACCEPT")) {
+        /* Format 1 at level 1: one transfer from the implementor's device,
+         * which here is SYSIN. The FROM phrase -- both the mnemonic-name and
+         * DATE/DAY/TIME -- is level 2. */
+        next();
+        Stmt *st = new_stmt(ST_ACCEPT);
+        st->dst = consume_sym();
+        st->dsub = opt_subscript();
+        if (is("FROM"))
+            die("ACCEPT ... FROM is level 2; level 1 takes one transfer from "
+                "the implementor's device");
+        eat_period();
+        return;
+    }
+
     if (is("ALTER")) {
         /* ALTER para-1 TO [PROCEED TO] para-2, ... II-57. Syntax rule 1: the
          * altered paragraph holds a single sentence that is a GO TO without
@@ -4094,7 +4109,7 @@ static void emit_runtime(void)
     asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
-    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -4129,6 +4144,51 @@ static void emit_runtime(void)
     asm_line("", "BR", "14", "");
     asm_line("COBDMVC", "MVC", "RTLINE+1(0),0(2)", "executed, never fallen into");
     asm_comment("");
+    asm_comment(" COBACC -- one transfer from SYSIN into the caller's item.");
+    asm_comment("");
+    asm_comment(" General rule 2 on II-53 leaves the size of a transfer to the");
+    asm_comment(" implementor: here it is one 80-column record. The buffer is");
+    asm_comment(" blanked first, so a receiver wider than a card is padded and");
+    asm_comment(" a read past the last card returns spaces rather than the");
+    asm_comment(" card before it.");
+    asm_comment("");
+    asm_comment(" Parameter list: A(item), A(halfword length).");
+    asm_line("COBACC", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE5+4", "");
+    asm_line("", "LA", "11,RTSAVE5", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(item)");
+    asm_line("", "L", "3,4(0,1)", "A(length)");
+    asm_line("", "LH", "4,0(0,3)", "length");
+    asm_line("", "MVI", "ACCBUF,C' '", "");
+    asm_line("", "MVC", "ACCBUF+1(255),ACCBUF", "blank the buffer");
+    asm_line("", "CLI", "ACCEOFF,X'01'", "already at end of file?");
+    asm_line("", "BE", "COBA020", "");
+    asm_line("", "CLI", "ACCOPEN,X'01'", "already open?");
+    asm_line("", "BE", "COBA010", "");
+    asm_line("", "OPEN", "(ACCDCB,INPUT)", "");
+    asm_line("", "MVI", "ACCOPEN,X'01'", "");
+    asm_line("COBA010", "LA", "1,COBA030", "");
+    asm_line("", "STCM", "1,7,ACCDCB+33", "into DCBEODAD");
+    asm_line("", "GET", "ACCDCB,ACCBUF", "one card");
+    asm_line("", "B", "COBA020", "");
+    asm_line("COBA030", "MVI", "ACCEOFF,X'01'", "end of file: the buffer stays blank");
+    asm_line("COBA020", "LTR", "4,4", "");
+    asm_line("", "BNP", "COBA040", "nothing to store");
+    asm_line("", "CH", "4,ACCMAX", "");
+    asm_line("", "BNH", "COBA035", "");
+    asm_line("", "LH", "4,ACCMAX", "one MVC is 256 bytes");
+    asm_line("COBA035", "BCTR", "4,0", "EX wants length-1");
+    asm_line("", "EX", "4,COBAMVC", "");
+    asm_line("COBA040", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("COBAMVC", "MVC", "0(0,2),ACCBUF", "patched by EX");
+    asm_comment("");
     asm_comment(" COBTERM -- close SYSOUT if COBDISP ever opened it.");
     asm_comment("");
     asm_line("COBTERM", "STM", "14,12,12(13)", "");
@@ -4138,7 +4198,11 @@ static void emit_runtime(void)
     asm_line("", "LA", "11,RTSAVE2", "");
     asm_line("", "ST", "11,8(13)", "");
     asm_line("", "LR", "13,11", "");
-    asm_line("", "CLI", "RTOPEN,X'01'", "");
+    asm_line("", "CLI", "ACCOPEN,X'01'", "");
+    asm_line("", "BNE", "COBT005", "");
+    asm_line("", "CLOSE", "(ACCDCB)", "");
+    asm_line("", "MVI", "ACCOPEN,X'00'", "");
+    asm_line("COBT005", "CLI", "RTOPEN,X'01'", "");
     asm_line("", "BNE", "COBT010", "");
     asm_line("", "CLOSE", "(RTDCB)", "");
     asm_line("", "MVI", "RTOPEN,X'00'", "");
@@ -4241,6 +4305,13 @@ static void emit_runtime(void)
     asm_line("RTLINE", "DC", "CL121' '", "ASA byte + 120 columns");
     asm_line("RTSAVE1", "DS", "18F", "");
     asm_line("RTSAVE2", "DS", "18F", "");
+    asm_line("RTSAVE5", "DS", "18F", "");
+    asm_line("ACCOPEN", "DC", "X'00'", "");
+    asm_line("ACCEOFF", "DC", "X'00'", "");
+    asm_line("ACCBUF", "DC", "CL256' '", "one card from SYSIN, blank padded");
+    asm_line("ACCMAX", "DC", "H'256'", "");
+    asm_cont("ACCDCB   DCB   DDNAME=SYSIN,DSORG=PS,MACRF=(GM),",
+             "EODAD=0");
     asm_cont("RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,",
              "LRECL=121,BLKSIZE=121");
 }
@@ -4988,6 +5059,33 @@ static void generate(void)
             } else asm_line("", "B", p, "");
             break;
         }
+        case ST_ACCEPT: {
+            const Sym *d = &syms[st->dst];
+            int n = st->dsub ? d->elem : d->bytes;
+            char fd[64];
+            if (n > 256)
+                die("ACCEPT into an item wider than 256 bytes is not implemented");
+            snprintf(b, sizeof b, " ACCEPT %s", d->name);
+            asm_comment(b);
+            need_sym_base(d);
+            field_ref_m(d, st->dsub, FR_SS_NOLEN, n, 6, fd, sizeof fd);
+            /* The parameter list is built here rather than assembled as a
+             * constant, because a subscripted receiver has no fixed address. */
+            snprintf(b, sizeof b, "1,%s", fd);
+            asm_line("", "LA", b, "A(item)");
+            asm_line("", "ST", "1,ACCPARM", "");
+            snprintf(b, sizeof b, "1,%d", n);
+            asm_line("", "LA", b, "");
+            asm_line("", "STH", "1,ACCLEN", "its length");
+            asm_line("", "LA", "1,ACCLEN", "");
+            asm_line("", "ST", "1,ACCPARM+4", "");
+            asm_line("", "OI", "ACCPARM+4,X'80'", "last parameter");
+            asm_line("", "LA", "1,ACCPARM", "");
+            asm_line("", "L", "15,VACC", "");
+            asm_line("", "BALR", "14,15", "one transfer from SYSIN");
+            reset_bases();
+            break;
+        }
         case ST_ALTER: {
             snprintf(b, sizeof b, " ALTER %s TO PROCEED TO %s", st->para, st->thru);
             asm_comment(b);
@@ -5733,6 +5831,13 @@ static void generate(void)
     /* Outside the DISPLAY guard: a program may want the date and print
      * nothing. */
     if (curdate_sym >= 0) asm_line("VDATE", "DC", "V(COBDATE)", "");
+    for (int i = 0; i < nstmt; i++)
+        if (stmts[i].op == ST_ACCEPT) {
+            asm_line("VACC", "DC", "V(COBACC)", "");
+            asm_line("ACCPARM", "DS", "2F", "ACCEPT parameter list");
+            asm_line("ACCLEN", "DS", "H", "");
+            break;
+        }
     ndlit = 0;
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
