@@ -385,6 +385,7 @@ typedef struct {
     int  occ_chain[3];/* every enclosing OCCURS, outermost first */
     int  occ_depth;   /* how many -- and how many subscripts a reference needs */
     int  alias;       /* REDEFINES: shares storage, so emit a label not a DC */
+    int  just;        /* JUSTIFIED RIGHT: an alphanumeric receiver right-aligns */
     int  sgn_lead;    /* SIGN IS LEADING; the default is trailing */
     int  sgn_sep;     /* SIGN IS ... SEPARATE CHARACTER: its own position */
     int  is_index;    /* an index-name, or an item with USAGE IS INDEX */
@@ -1279,6 +1280,14 @@ static void parse_data_division(void)
                 sy->redef_cap = syms[t].offset + syms[t].bytes;
                 redef_limit = sy->redef_cap;
                 next();
+            } else if (is("JUST") || is("JUSTIFIED")) {
+                /* JUSTIFIED RIGHT, II-16: on the way in the data is aligned at
+                 * the right of the receiver and space filled on the left, and
+                 * a sender that is too long loses its LEFT-hand characters
+                 * rather than its right. Only an alphabetic or alphanumeric
+                 * receiver may carry it. */
+                next(); if (is("RIGHT")) next();
+                sy->just = 1;
             } else if (is("SIGN")) {
                 /* [SIGN IS] {LEADING|TRAILING} [SEPARATE CHARACTER], II-31.
                  * Without SEPARATE the sign is an overpunch on the leading or
@@ -1406,6 +1415,9 @@ static void parse_data_division(void)
                     scale_literal(sy->value, sy->scale, scaled, sizeof scaled);
                     strcpy(sy->value, scaled);
                 }
+                if (sy->just && !pi.is_alpha)
+                    die("JUSTIFIED applies only to an alphabetic or "
+                        "alphanumeric item -- syntax rule 1 on II-16");
                 if (pi.edited) {
                     if (sy->usage != U_DISPLAY)
                         die("an edited PICTURE must be USAGE DISPLAY");
@@ -3644,6 +3656,29 @@ static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
     int n = dn < sn ? dn : sn;
     if (n > 256) die("MVC is limited to 256 bytes; long moves need a loop, "
                      "which is not implemented yet");
+    if (d->just) {
+        /* Right-aligned: the data lands at the end of the receiver, the pad
+         * goes in front of it, and an over-long sender loses its left. */
+        int doff = dn - n, soff = sn - n;
+        field_ref_m(sv, ssub, FR_SS_NOLEN, n, 7, fs, sizeof fs);
+        field_ref_m(d, dsub, FR_SS_NOLEN, n, 6, fd, sizeof fd);
+        if (doff > 0) {
+            if (dsub) snprintf(b, sizeof b, "0(6),C' '");
+            else      snprintf(b, sizeof b, "%s,C' '", d->label);
+            asm_line("", "MVI", b, "space fill on the left");
+            if (doff > 1) {
+                if (dsub) snprintf(b, sizeof b, "1(%d,6),0(6)", doff - 1);
+                else snprintf(b, sizeof b, "%s+1(%d),%s", d->label, doff - 1, d->label);
+                asm_line("", "MVC", b, "");
+            }
+        }
+        if (dsub) snprintf(b, sizeof b, "%d(%d,6),", doff, n);
+        else      snprintf(b, sizeof b, "%s+%d(%d),", d->label, doff, n);
+        if (ssub) snprintf(b + strlen(b), sizeof b - strlen(b), "%d(7)", soff);
+        else      snprintf(b + strlen(b), sizeof b - strlen(b), "%s+%d", sv->label, soff);
+        asm_line("", "MVC", b, "JUSTIFIED: aligned right");
+        return;
+    }
     field_ref_m(sv, ssub, FR_SS_NOLEN, n, 7, fs, sizeof fs);
     field_ref(d, dsub, n, 6, fd, sizeof fd);
     snprintf(b, sizeof b, "%s,%s", fd, fs);
@@ -4995,7 +5030,20 @@ static void generate(void)
                 if (st->imm == 2) {
                     int dn = st->dsub ? d->elem : d->bytes;
                     if (dn > 256) die("MVC is limited to 256 bytes");
-                    const char *sl = intern_str(st->immdigits, st->immscale, dn);
+                    const char *sl;
+                    if (d->just) {
+                        /* A literal is a compile-time string, so JUSTIFIED
+                         * costs nothing at run time: pad it on the left, and
+                         * keep the right-hand characters when it is too long. */
+                        char pad[260];
+                        int sn = st->immscale;
+                        if (sn >= dn) memcpy(pad, st->immdigits + (sn - dn), dn);
+                        else {
+                            memset(pad, ' ', dn - sn);
+                            memcpy(pad + dn - sn, st->immdigits, sn);
+                        }
+                        sl = intern_str(pad, dn, dn);
+                    } else sl = intern_str(st->immdigits, st->immscale, dn);
                     char fd[64];
                     field_ref(d, st->dsub, dn, 6, fd, sizeof fd);
                     snprintf(b, sizeof b, "%s,%s", fd, sl);

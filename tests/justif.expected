@@ -1,0 +1,7 @@
+PLAIN 4->8 [ABCD    ]
+JUST  4->8 [    ABCD]
+PLAIN 9->8 [12345678]
+JUST  9->8 [23456789]
+JUST  4->3 [BCD]
+JUST lit   [      AB]
+JUST num   [     042]
