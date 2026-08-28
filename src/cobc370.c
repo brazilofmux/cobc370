@@ -397,6 +397,7 @@ typedef struct {
     int  just;        /* JUSTIFIED RIGHT: an alphanumeric receiver right-aligns */
     int  sgn_lead;    /* SIGN IS LEADING; the default is trailing */
     int  sgn_sep;     /* SIGN IS ... SEPARATE CHARACTER: its own position */
+    int  is_alphabetic; /* PIC A: the category ALPHABETIC, narrower than is_alpha */
     int  is_index;    /* an index-name, or an item with USAGE IS INDEX */
     int  fd_file;     /* an 01 under an FD: which file's record area, else -1 */
     int  redef_from;  /* REDEFINES: cursor to resume at when this item closes */
@@ -461,12 +462,16 @@ typedef struct Node {
 
 /* Conditions. Relations compare two expressions; AND/OR short-circuit. */
 enum { REL_EQ, REL_LT, REL_GT, REL_NE, REL_NGT, REL_NLT };
-enum { C_REL, C_AND, C_OR, C_NOT };
+enum { C_REL, C_AND, C_OR, C_NOT, C_CLASS };
 
 typedef struct Cond {
     int kind, op;
     Node *l, *r;
     struct Cond *cl, *cr;
+    int  cls_sym;       /* C_CLASS: the item under test */
+    Node *cls_sub;
+    int  cls_alpha;     /* 1 for ALPHABETIC, 0 for NUMERIC */
+    int  cls_not;       /* the NOT was written before the class name */
 } Cond;
 
 #define MAXCOND 256
@@ -941,6 +946,7 @@ static void parse_report_section(void)
             if (pic_analyse(pic, &pi) < 0) die(pi.err);
             sy->digits = pi.digits; sy->scale = pi.scale;
             sy->is_signed = pi.is_signed; sy->is_alpha = pi.is_alpha;
+            sy->is_alphabetic = pi.is_alphabetic;
             sy->edited = pi.edited; sy->floating = pi.floating;
             sy->masklen = pi.masklen; sy->sign_char = pi.sign_char;
             sy->sign_pos = pi.sign_pos; sy->first_sel = pi.first_sel;
@@ -1402,6 +1408,7 @@ static void parse_data_division(void)
             if (pic_analyse(pic, &pi) < 0) die(pi.err);
             sy->digits = pi.digits; sy->scale = pi.scale;
             sy->is_signed = pi.is_signed; sy->is_alpha = pi.is_alpha;
+            sy->is_alphabetic = pi.is_alphabetic;
             sy->edited = pi.edited; sy->floating = pi.floating;
             sy->masklen = pi.masklen;
             sy->sign_char = pi.sign_char;
@@ -1885,8 +1892,14 @@ static int relop(int *op)
     if (is("NEGATIVE")) { next(); *op = neg ? REL_NLT : REL_LT; return 2; }
     if (is("ZERO") || is("ZEROS") || is("ZEROES"))
                         { next(); *op = neg ? REL_NE  : REL_EQ; return 2; }
-    if (is("NUMERIC") || is("ALPHABETIC"))
-        die("class conditions (IS NUMERIC / IS ALPHABETIC) are not implemented yet");
+    /* Class conditions are not relations: there is no right operand and the
+     * test is on the item's characters, so the caller builds a C_CLASS. 3 says
+     * "a class condition follows, and the NOT is part of it". */
+    if (is("NUMERIC") || is("ALPHABETIC")) {
+        *op = is("ALPHABETIC");
+        next();
+        return neg ? 4 : 3;
+    }
     if (neg) die("NOT must be followed by a relational operator");
     return 0;
 }
@@ -1933,6 +1946,22 @@ static Cond *parse_relation(void)
     Node *l = parse_expr();
     int op;
     int rk = relop(&op);
+    if (rk == 3 || rk == 4) {
+        /* II-43: the operand's usage must be DISPLAY, and NUMERIC may not be
+         * asked of an alphabetic item. */
+        if (l->kind != N_SYM)
+            die("a class condition tests an identifier, not an expression");
+        const Sym *sy = &syms[l->sym];
+        if (sy->usage != U_DISPLAY)
+            die("a class condition needs a USAGE DISPLAY item -- II-43");
+        if (!op && sy->is_alphabetic)
+            die("IS NUMERIC may not be asked of an item whose category is "
+                "alphabetic -- II-43");
+        Cond *c = cnode(C_CLASS);
+        c->cls_sym = l->sym; c->cls_sub = l->sub;
+        c->cls_alpha = op; c->cls_not = (rk == 4);
+        return c;
+    }
     if (rk == 2) {                       /* sign condition: compare with zero */
         Cond *c = cnode(C_REL);
         Node *z = node(N_LIT);
@@ -3058,6 +3087,11 @@ static void field_ref(const Sym *sy, Node *sub, int len, int reg, char *out, siz
 
 /* Labels generated during code emission, past the ones the parser handed out. */
 static int genlabel;
+
+/* Translate-and-test tables for the class conditions, emitted only when used. */
+enum { CLS_DIGIT, CLS_ALPHA, CLS_SIGN, CLS_N };
+static int class_used[CLS_N];
+static void need_class_table(int which) { class_used[which] = 1; }
 static void gen_load(const Sym *sy, Node *sub, const char *wk);
 static void gen_store(const Sym *sy, Node *sub, const char *wk);
 
@@ -4082,6 +4116,80 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             snprintf(l, sizeof l, "L%04d", skip); asm_line(l, "DS", "0H", "");
         }
         return;
+    case C_CLASS: {
+        /* TRT scans a field against a 256-byte table and stops at the first
+         * byte whose function code is not zero, so a table of zeros for the
+         * acceptable characters and X'FF' everywhere else makes the whole test
+         * one instruction and a branch: CC=0 means every byte was acceptable.
+         * TRT sets R1 and R2 when it stops; nothing is live in them here. */
+        const Sym *sy = &syms[c->cls_sym];
+        int n = c->cls_sub ? sy->elem : sy->bytes;
+        int want = jump_if_true ^ c->cls_not;   /* branch when the test holds */
+        int fail = ++genlabel;
+        char lf[16], f[64];
+        snprintf(lf, sizeof lf, "L%04d", fail);
+        snprintf(l, sizeof l, "L%04d", label);
+        need_class_table(c->cls_alpha ? CLS_ALPHA : CLS_DIGIT);
+        if (c->cls_alpha) {
+            field_ref_m(sy, c->cls_sub, FR_SS_NOLEN, n, 6, f, sizeof f);
+            snprintf(b, sizeof b, "%s(%d),CLSALF", f, n);
+            asm_line("", "TRT", b, "every byte A-Z or space?");
+            asm_line("", want ? "BZ" : "BNZ", l, "");
+            asm_line(lf, "DS", "0H", "");
+            reset_bases();
+            return;
+        }
+        /* NUMERIC. An unsigned item is digits throughout; a signed one carries
+         * its sign in one character position, which is the leading or trailing
+         * digit for an overpunch and a '+' or '-' of its own for SEPARATE. */
+        int sep = sy->sgn_sep, lead = sy->sgn_lead;
+        int digits_off = (sep && lead) ? 1 : 0;
+        int nd = sep ? n - 1 : n;
+        if (sy->is_signed && sep) {
+            int sgn_off = lead ? 0 : n - 1;
+            field_ref_m(sy, c->cls_sub, FR_SS_NOLEN, n, 6, f, sizeof f);
+            int ok = ++genlabel; char lo[16];
+            snprintf(lo, sizeof lo, "L%04d", ok);
+            snprintf(b, sizeof b, "%s+%d,C'+'", f, sgn_off);
+            asm_line("", "CLI", b, "a separate sign is + or -");
+            asm_line("", "BE", lo, "");
+            snprintf(b, sizeof b, "%s+%d,C'-'", f, sgn_off);
+            asm_line("", "CLI", b, "");
+            asm_line("", "BNE", want ? lf : l, "");
+            asm_line(lo, "DS", "0H", "");
+            snprintf(b, sizeof b, "%s+%d(%d),CLSNUM", f, digits_off, nd);
+            asm_line("", "TRT", b, "every other byte a digit?");
+            asm_line("", want ? "BZ" : "BNZ", l, "");
+            asm_line(lf, "DS", "0H", "");
+            reset_bases();
+            return;
+        }
+        field_ref_m(sy, c->cls_sub, FR_SS_NOLEN, n, 6, f, sizeof f);
+        if (!sy->is_signed) {
+            snprintf(b, sizeof b, "%s(%d),CLSNUM", f, n);
+            asm_line("", "TRT", b, "every byte a digit?");
+            asm_line("", want ? "BZ" : "BNZ", l, "");
+            asm_line(lf, "DS", "0H", "");
+            reset_bases();
+            return;
+        }
+        /* Signed overpunch: the sign digit takes a table of its own, since a
+         * C or D zone on it is valid there and nowhere else. */
+        need_class_table(CLS_SIGN);
+        int sgn_off = lead ? 0 : n - 1;
+        int rest_off = lead ? 1 : 0;
+        snprintf(b, sizeof b, "%s+%d(1),CLSSGN", f, sgn_off);
+        asm_line("", "TRT", b, "a signed digit where the sign lives?");
+        asm_line("", "BNZ", want ? lf : l, "");
+        if (n > 1) {
+            snprintf(b, sizeof b, "%s+%d(%d),CLSNUM", f, rest_off, n - 1);
+            asm_line("", "TRT", b, "and digits everywhere else?");
+            asm_line("", want ? "BZ" : "BNZ", l, "");
+        } else if (want) asm_line("", "B", l, "");
+        asm_line(lf, "DS", "0H", "");
+        reset_bases();
+        return;
+    }
     case C_REL: {
         if (node_alpha(c->l) || node_alpha(c->r)) {
             /* Alphanumeric: compare over the longer operand, the shorter one
@@ -5554,6 +5662,41 @@ static void generate(void)
         snprintf(b, sizeof b, "CL%d", files[i].reclen + 1);
         asm_line(files[i].pbuf, "DS", b, "ASA byte + the record");
     }
+    /* A TRT table: X'FF' everywhere, then zeros punched into the ranges the
+     * test accepts. ORG is the compact way to say that, and it is how the
+     * S/370 assembler manuals write it. */
+    if (class_used[CLS_DIGIT]) {
+        asm_comment(" IS NUMERIC: the digits");
+        asm_line("CLSNUM", "DC", "256X'FF'", "");
+        asm_line("", "ORG", "CLSNUM+X'F0'", "");
+        asm_line("", "DC", "10X'00'", "0-9");
+        asm_line("", "ORG", "CLSNUM+256", "");
+    }
+    if (class_used[CLS_ALPHA]) {
+        asm_comment(" IS ALPHABETIC: A-Z and the space");
+        asm_line("CLSALF", "DC", "256X'FF'", "");
+        asm_line("", "ORG", "CLSALF+X'40'", "");
+        asm_line("", "DC", "X'00'", "space");
+        asm_line("", "ORG", "CLSALF+X'C1'", "");
+        asm_line("", "DC", "9X'00'", "A-I");
+        asm_line("", "ORG", "CLSALF+X'D1'", "");
+        asm_line("", "DC", "9X'00'", "J-R");
+        asm_line("", "ORG", "CLSALF+X'E2'", "");
+        asm_line("", "DC", "8X'00'", "S-Z");
+        asm_line("", "ORG", "CLSALF+256", "");
+    }
+    if (class_used[CLS_SIGN]) {
+        asm_comment(" the overpunched digit: a C, D or F zone is all valid");
+        asm_line("CLSSGN", "DC", "256X'FF'", "");
+        asm_line("", "ORG", "CLSSGN+X'C0'", "");
+        asm_line("", "DC", "10X'00'", "positive");
+        asm_line("", "ORG", "CLSSGN+X'D0'", "");
+        asm_line("", "DC", "10X'00'", "negative");
+        asm_line("", "ORG", "CLSSGN+X'F0'", "");
+        asm_line("", "DC", "10X'00'", "unsigned");
+        asm_line("", "ORG", "CLSSGN+256", "");
+    }
+
     for (int i = 0; i < nconst; i++) {
         snprintf(b, sizeof b, "PL16'%s'", consts[i].digits);
         asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");

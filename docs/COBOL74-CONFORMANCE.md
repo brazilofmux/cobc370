@@ -249,10 +249,11 @@ representation tests. **18 programs.** This is the honest edge: the next thing
 worth doing, and the first one whose cost is out of proportion to a COBOL-74
 target on this machine.
 
-**4. Ordinary remaining work, all small.** `INSPECT` in its level 1 form,
-continuation of a word or a numeric literal, a `SIGN` clause on an item of more
-than sixteen digits -- a limitation this compiler introduced itself when the
-zoned conversion was split, and one it should lift.
+**4. Ordinary remaining work, all small.** `ACCEPT`, `ALTER`, `ENTER`,
+`INSPECT` and operand series on `ADD`/`SUBTRACT` -- the last five elements
+between this compiler and Nucleus level 1 -- plus continuation of a word or a
+numeric literal, and a `SIGN` clause on an item of more than sixteen digits, a
+limitation this compiler introduced itself when the zoned conversion was split.
 
 ### Reading the histogram: a blocker is not always a gap
 
@@ -433,6 +434,29 @@ through the one dispatcher.
 The reverse direction -- an alphanumeric item into a numeric one -- is legal
 under the same rules and is still refused, but the message now says that it is
 legal and what it would take, rather than implying the combination is invalid.
+
+### Class conditions
+
+`IS [NOT] NUMERIC` and `IS [NOT] ALPHABETIC`, II-43. The operand must be
+`USAGE DISPLAY`; `NUMERIC` may not be asked of an item whose *category* is
+alphabetic, which is `PIC A` and not `PIC X` -- a distinction the compiler did
+not draw before, since one `is_alpha` covered both.
+
+`TRT` does each test in one instruction. Its table gives a function byte per
+character; the instruction stops at the first non-zero one and sets the
+condition code, so a table of zeros for the acceptable characters and `X'FF'`
+everywhere else makes `CC=0` mean "every byte was acceptable". The tables are
+written the way the assembler manuals write them -- `DC 256X'FF'` and then
+`ORG` back to punch zeros into each accepted range -- and are emitted only for
+the tests a program actually uses.
+
+The signed cases are where the rule has teeth. An unsigned item is numeric only
+if it holds digits *and no sign*; a signed one only if it holds digits *and a
+valid sign*. So an overpunched item gets two tests: the sign position against a
+table that accepts a C, D or F zone, and everything else against the digits.
+`SIGN IS SEPARATE` compares its own character against `+` and `-` instead.
+
+63 tests pass on the guest.
 
 ### Table Handling level 1 is complete
 

@@ -12,7 +12,8 @@ typedef struct {
     int  digits;      /* digit positions */
     int  scale;       /* digits right of the decimal point */
     int  is_signed;
-    int  is_alpha;    /* PIC X / A */
+    int  is_alpha;      /* PIC X / A: the alphanumeric categories */
+    int  is_alphabetic; /* PIC A only -- the category ALPHABETIC */
     int  edited;      /* needs an ED pattern rather than a plain move */
     int  bytes;       /* character positions in the field */
     int  floating;    /* a floating insertion string is present -> EDMK */

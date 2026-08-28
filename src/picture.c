@@ -66,6 +66,11 @@ int pic_analyse(const char *s, PicInfo *info)
             return fail(info, "mixed alphanumeric and numeric PICTURE "
                               "characters are not implemented yet");
         info->is_alpha = 1;
+        /* Category alphabetic is A alone; an X anywhere makes it alphanumeric,
+         * which is what II-43 turns on when it forbids IS NUMERIC. */
+        info->is_alphabetic = 1;
+        for (int i = 0; i < n; i++)
+            if (it[i].sym == 'X') info->is_alphabetic = 0;
         info->bytes = total;
         if (ins) {
             /* The template: insertion characters where they fall, spaces
