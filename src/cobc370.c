@@ -529,7 +529,8 @@ typedef struct {
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
     int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
     int  rec;               /* WRITE/REWRITE: the record named, of an FD's several */
-    int  adv;               /* WRITE ADVANCING: -1 none, -2 PAGE, else lines */
+    int  adv;               /* WRITE ADVANCING: -2 none, -1 PAGE, else lines */
+    int  adv_before;        /* the phrase was BEFORE, so the advance is held */
     int  had_atend;         /* ST_READ: the statement carried AT END itself */
     int  ins_first, ins_n;  /* ST_INSPECT: its slice of the operation table */
     int  line;              /* the source line, for the program-check table */
@@ -1927,7 +1928,7 @@ static Stmt *new_stmt(int op)
     if (nstmt >= MAXSTMT) die("too many statements");
     Stmt *st = &stmts[nstmt++];
     memset(st, 0, sizeof *st);
-    st->op = op; st->dst = st->src = -1; st->vary_sym = -1; st->rec = -1; st->adv = -1;
+    st->op = op; st->dst = st->src = -1; st->vary_sym = -1; st->rec = -1; st->adv = -2;
     st->line = tok.line;
     return st;
 }
@@ -2602,11 +2603,7 @@ static void parse_one_statement(void)
             int after = is("AFTER");
             next();
             if (is("ADVANCING")) next();
-            if (!after)
-                die("BEFORE ADVANCING is not implemented: ASA carriage control "
-                    "acts before the line prints, so BEFORE needs the advance "
-                    "held over to the next WRITE");
-            if (is("PAGE")) { next(); st->adv = -2; }
+            if (is("PAGE")) { next(); st->adv = -1; }
             else if (is_numeric_literal(tok.text)) {
                 st->adv = atoi(tok.text);
                 if (st->adv < 0 || st->adv > 60)
@@ -2617,6 +2614,10 @@ static void parse_one_statement(void)
                 die("ADVANCING by an identifier or a mnemonic-name is level 2; "
                     "this compiler takes an integer or PAGE");
             }
+            /* The runtime takes the count, or -1 for PAGE, negated when the
+             * phrase was BEFORE -- which is what tells it to hold the advance
+             * over rather than apply it. */
+            st->adv_before = !after;
             files[fi].print = 1;
             snprintf(files[fi].pbuf, sizeof files[fi].pbuf, "FP%03d", fi);
         }
@@ -4185,7 +4186,7 @@ static void emit_runtime(void)
     asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
-    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI,COBADV", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -4219,6 +4220,89 @@ static void emit_runtime(void)
     asm_line("", "SR", "15,15", "");
     asm_line("", "BR", "14", "");
     asm_line("COBDMVC", "MVC", "RTLINE+1(0),0(2)", "executed, never fallen into");
+    asm_comment("");
+    asm_comment(" COBADV -- write one line with ASA carriage control.");
+    asm_comment("");
+    asm_comment("   R1 -> A(dcb), A(print buffer), A(halfword record length),");
+    asm_comment("         A(halfword owed), A(halfword request)");
+    asm_comment("");
+    asm_comment(" ASA says what to do BEFORE a line prints, which is exactly");
+    asm_comment(" what AFTER ADVANCING means. BEFORE has to be held over: the");
+    asm_comment(" line goes out with whatever was owed from the last BEFORE,");
+    asm_comment(" and its own count becomes what the next line owes. Once the");
+    asm_comment(" two can add up the total is not known until run time, which");
+    asm_comment(" is why this is a routine and not a few instructions inline.");
+    asm_comment("");
+    asm_comment(" The request is the line count, or -1 for PAGE, negated when");
+    asm_comment(" the phrase was BEFORE.");
+    asm_line("COBADV", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE7+4", "");
+    asm_line("", "LA", "11,RTSAVE7", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(dcb)");
+    asm_line("", "L", "3,4(0,1)", "A(buffer)");
+    asm_line("", "L", "4,8(0,1)", "A(length)");
+    asm_line("", "L", "5,12(0,1)", "A(owed)");
+    asm_line("", "L", "6,16(0,1)", "A(request)");
+    asm_line("", "LH", "7,0(0,4)", "the record length");
+    asm_line("", "LTR", "7,7", "");
+    asm_line("", "LH", "8,0(0,6)", "the request");
+    asm_line("", "LH", "9,0(0,5)", "what the last BEFORE left owing");
+    asm_line("", "LTR", "8,8", "BEFORE is the negative side");
+    asm_line("", "BM", "ADV100", "");
+    /* AFTER: this line's own count adds to what was owed, and nothing is left. */
+    asm_line("", "CH", "8,ADVPAGE", "AFTER PAGE?");
+    asm_line("", "BE", "ADV020", "");
+    asm_line("", "CH", "9,ADVPAGE", "was a page already owed?");
+    asm_line("", "BE", "ADV030", "then it stays a page, whatever this asks");
+    asm_line("", "AR", "9,8", "owed plus this one");
+    asm_line("", "B", "ADV030", "");
+    asm_line("ADV020", "LH", "9,ADVPAGE", "a page skip swallows what was owed");
+    asm_line("ADV030", "XC", "0(2,5),0(5)", "nothing owed after an AFTER");
+    asm_line("", "B", "ADV200", "");
+    /* BEFORE: the line goes out on what was owed, and owes its own count. */
+    asm_line("ADV100", "LCR", "8,8", "back to a positive request");
+    asm_line("", "CH", "8,ADVPAGE", "BEFORE PAGE?");
+    asm_line("", "BNE", "ADV110", "");
+    asm_line("", "LH", "8,ADVPAGE", "");
+    asm_line("ADV110", "STH", "8,0(0,5)", "this is what the next line owes");
+    asm_line("", "LTR", "9,9", "nothing owed?");
+    asm_line("", "BNZ", "ADV200", "");
+    asm_line("", "LH", "9,ADVONE", "then this line simply takes the next one");
+    /* R9 now holds the advance to apply before printing. */
+    asm_line("ADV200", "CH", "9,ADVPAGE", "a page skip?");
+    asm_line("", "BNE", "ADV210", "");
+    asm_line("", "MVI", "0(3),C'1'", "skip to a new page");
+    asm_line("", "B", "ADV300", "");
+    asm_line("ADV210", "LTR", "9,9", "");
+    asm_line("", "BNM", "ADV220", "");
+    asm_line("", "SR", "9,9", "never negative here");
+    /* More than three lines is blank lines first, three at a time. They come
+     * from the runtime's own constant rather than from the caller's buffer:
+     * the record to print is already sitting in that. */
+    asm_line("ADV220", "CH", "9,ADVTHREE", "more than one code can carry?");
+    asm_line("", "BNH", "ADV240", "");
+    asm_line("", "PUT", "(2),ADVB3", "three blank lines at a time");
+    asm_line("", "SH", "9,ADVTHREE", "");
+    asm_line("", "B", "ADV220", "");
+    asm_line("ADV240", "LA", "10,ADVCODE", "");
+    asm_line("", "AR", "10,9", "");
+    asm_line("", "MVC", "0(1,3),0(10)", "'+', ' ', '0' or '-'");
+    asm_line("ADV300", "PUT", "(2),(3)", "the line itself");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("ADVB3", "DC", "C'-'", "a blank line that advances three");
+    asm_line("", "DC", "CL132' '", "");
+    asm_line("ADVCODE", "DC", "C'+ 0-'", "0, 1, 2 or 3 lines");
+    asm_line("ADVONE", "DC", "H'1'", "");
+    asm_line("ADVPAGE", "DC", "H'999'", "the page-skip request");
+    asm_line("ADVTHREE", "DC", "H'3'", "");
+    asm_line("RTSAVE7", "DS", "18F", "");
     asm_comment("");
     asm_comment(" COBUPSI -- set the eight switches from the EXEC PARM.");
     asm_comment("");
@@ -5302,40 +5386,32 @@ static void generate(void)
                 break;
             }
             if (f->print) {
-                /* ASA carriage control: the byte says what to do BEFORE the
-                 * line prints, which is exactly AFTER ADVANCING. One code
-                 * covers 0 to 3 lines; more than that is written as blank
-                 * lines first, three at a time. */
+                /* The line goes out through the runtime, which owns the
+                 * carriage control: AFTER applies its count now, BEFORE holds
+                 * it over to the next line, and only the runtime can add the
+                 * two together because only it knows what was owed. */
                 if (f->reclen > 256)
                     die("a print record wider than 256 bytes needs a split MVC, "
                         "which is not implemented");
-                int adv = st->adv == -1 ? 1 : st->adv;   /* the standard's default */
-                char pb[16];
-                snprintf(pb, sizeof pb, "%s", f->pbuf);
-                while (adv > 3) {
-                    snprintf(b, sizeof b, "%s,C'-'", pb);
-                    asm_line("", "MVI", b, "three blank lines");
-                    snprintf(b, sizeof b, "%s+1,C' '", pb);
-                    asm_line("", "MVI", b, "");
-                    if (f->reclen > 1) {
-                        snprintf(b, sizeof b, "%s+2(%d),%s+1", pb, f->reclen - 1, pb);
-                        asm_line("", "MVC", b, "");
-                    }
-                    snprintf(b, sizeof b, "%s,%s", f->label, pb);
-                    asm_line("", "PUT", b, "");
-                    adv -= 3;
-                }
-                const char *ctl = st->adv == -2 ? "1"
-                                : adv == 0 ? "+" : adv == 1 ? " "
-                                : adv == 2 ? "0" : "-";
-                snprintf(b, sizeof b, "%s,C'%s'", pb, ctl);
-                asm_line("", "MVI", b, st->adv == -2 ? "skip to a new page"
-                         : adv == 0 ? "overprint" : "space before printing");
+                /* The request is the line count, 999 for PAGE, negated when
+                 * the phrase was BEFORE. BEFORE 0 and AFTER 0 are the same
+                 * thing -- apply what is owed and owe nothing -- so the zero
+                 * that cannot be negated needs no special case. */
+                int adv = st->adv == -2 ? 1 : st->adv == -1 ? 999 : st->adv;
+                if (st->adv_before) adv = -adv;
                 need_sym_base(wrec);
-                snprintf(b, sizeof b, "%s+1(%d),%s", pb, f->reclen, wrec->label);
-                asm_line("", "MVC", b, "");
-                snprintf(b, sizeof b, "%s,%s", f->label, pb);
-                asm_line("", "PUT", b, "");
+                snprintf(b, sizeof b, "%s+1(%d),%s", f->pbuf, f->reclen, wrec->label);
+                asm_line("", "MVC", b, "the record, behind its control byte");
+                snprintf(b, sizeof b, "1,%d", adv < 0 ? -adv : adv);
+                asm_line("", "LA", b, adv < 0 ? "BEFORE" : "AFTER");
+                if (adv < 0) asm_line("", "LCR", "1,1", "negative marks a BEFORE");
+                snprintf(b, sizeof b, "1,%sQ", f->pbuf);
+                asm_line("", "STH", b, "this line's request");
+                snprintf(b, sizeof b, "1,%sP", f->pbuf);
+                asm_line("", "LA", b, "");
+                asm_line("", "L", "15,VADV", "");
+                asm_line("", "BALR", "14,15", "carriage control and PUT");
+                reset_bases();
                 break;
             }
             need_sym_base(&syms[f->rec_sym]);
@@ -5983,6 +6059,8 @@ static void generate(void)
     /* Outside the DISPLAY guard: a program may want the date and print
      * nothing. */
     if (curdate_sym >= 0) asm_line("VDATE", "DC", "V(COBDATE)", "");
+    for (int i = 0; i < nfile; i++)
+        if (files[i].print) { asm_line("VADV", "DC", "V(COBADV)", ""); break; }
     if (uses_switches) {
         /* In the program's own CSECT, where the tests can reach it. */
         asm_line("UPSIB", "DC", "X'00'", "the eight switches, UPSI-0 leftmost");
@@ -6230,8 +6308,24 @@ static void generate(void)
     }
     for (int i = 0; i < nfile; i++) {
         if (!files[i].print) continue;
+        char pb[16]; snprintf(pb, sizeof pb, "%s", files[i].pbuf);
         snprintf(b, sizeof b, "CL%d", files[i].reclen + 1);
-        asm_line(files[i].pbuf, "DS", b, "ASA byte + the record");
+        asm_line(pb, "DS", b, "ASA byte + the record");
+        char lab[20];
+        snprintf(lab, sizeof lab, "%sP", pb);
+        snprintf(b, sizeof b, "A(%s)", files[i].label);
+        asm_line(lab, "DC", b, "COBADV parameter list");
+        snprintf(b, sizeof b, "A(%s)", pb);          asm_line("", "DC", b, "");
+        snprintf(b, sizeof b, "A(%sL)", pb);         asm_line("", "DC", b, "");
+        snprintf(b, sizeof b, "A(%sO)", pb);         asm_line("", "DC", b, "");
+        snprintf(b, sizeof b, "X'80',AL3(%sQ)", pb); asm_line("", "DC", b, "");
+        snprintf(lab, sizeof lab, "%sL", pb);
+        snprintf(b, sizeof b, "H'%d'", files[i].reclen);
+        asm_line(lab, "DC", b, "the record length");
+        snprintf(lab, sizeof lab, "%sO", pb);
+        asm_line(lab, "DC", "H'0'", "lines a BEFORE left owing");
+        snprintf(lab, sizeof lab, "%sQ", pb);
+        asm_line(lab, "DS", "H", "this line's request");
     }
     /* A TRT table: X'FF' everywhere, then zeros punched into the ranges the
      * test accepts. ORG is the compact way to say that, and it is how the

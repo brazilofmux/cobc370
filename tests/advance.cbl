@@ -5,6 +5,9 @@
 000500* line prints, which is exactly what AFTER means. ' ' is one line,
 000600* '0' two, '-' three, '+' none (overprint) and '1' a new page.
 000700* More than three lines is written as blank lines first.
+000750* BEFORE holds its advance over to the next line instead, so the
+000760* two can add up -- which only the runtime can do, because only
+000770* it knows what the last BEFORE left owing.
 000800*
 000900* GnuCOBOL cannot be the oracle here -- it writes a text file with
 001000* newlines rather than control bytes -- so this program is its
@@ -44,6 +47,14 @@
 004400     WRITE PRT-REC AFTER ADVANCING 5 LINES.
 004500     MOVE 'DEFAULT             ' TO PRT-REC.
 004600     WRITE PRT-REC.
+004610     MOVE 'BEFORE2             ' TO PRT-REC.
+004620     WRITE PRT-REC BEFORE ADVANCING 2 LINES.
+004630     MOVE 'OWES2               ' TO PRT-REC.
+004640     WRITE PRT-REC AFTER ADVANCING 1 LINE.
+004650     MOVE 'BEFOREPG            ' TO PRT-REC.
+004660     WRITE PRT-REC BEFORE ADVANCING PAGE.
+004670     MOVE 'AFTERPG             ' TO PRT-REC.
+004680     WRITE PRT-REC AFTER ADVANCING 1 LINE.
 004700     CLOSE PRT-FILE.
 004800     OPEN INPUT RAW-FILE.
 004900     PERFORM READ-ONE UNTIL EOF-FLAG = 'Y'.

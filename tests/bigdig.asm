@@ -437,7 +437,7 @@ D0009    DC    CL5' '              FLAG PIC X(5)
 * Not reentrant: MVS 3.8j batch does not require it.
 *---------------------------------------------------------------
 COBRT    CSECT
-         ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
+         ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI,COBADV
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -471,6 +471,83 @@ COBD020  PUT   RTDCB,RTLINE
          SR    15,15
          BR    14
 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
+*
+* COBADV -- write one line with ASA carriage control.
+*
+*   R1 -> A(dcb), A(print buffer), A(halfword record length),
+*         A(halfword owed), A(halfword request)
+*
+* ASA says what to do BEFORE a line prints, which is exactly
+* what AFTER ADVANCING means. BEFORE has to be held over: the
+* line goes out with whatever was owed from the last BEFORE,
+* and its own count becomes what the next line owes. Once the
+* two can add up the total is not known until run time, which
+* is why this is a routine and not a few instructions inline.
+*
+* The request is the line count, or -1 for PAGE, negated when
+* the phrase was BEFORE.
+COBADV   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE7+4
+         LA    11,RTSAVE7
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(dcb)
+         L     3,4(0,1)            A(buffer)
+         L     4,8(0,1)            A(length)
+         L     5,12(0,1)           A(owed)
+         L     6,16(0,1)           A(request)
+         LH    7,0(0,4)            the record length
+         LTR   7,7
+         LH    8,0(0,6)            the request
+         LH    9,0(0,5)            what the last BEFORE left owing
+         LTR   8,8                 BEFORE is the negative side
+         BM    ADV100
+         CH    8,ADVPAGE           AFTER PAGE?
+         BE    ADV020
+         CH    9,ADVPAGE           was a page already owed?
+         BE    ADV030              then it stays a page, whatever this
+         AR    9,8                 owed plus this one
+         B     ADV030
+ADV020   LH    9,ADVPAGE           a page skip swallows what was owed
+ADV030   XC    0(2,5),0(5)         nothing owed after an AFTER
+         B     ADV200
+ADV100   LCR   8,8                 back to a positive request
+         CH    8,ADVPAGE           BEFORE PAGE?
+         BNE   ADV110
+         LH    8,ADVPAGE
+ADV110   STH   8,0(0,5)            this is what the next line owes
+         LTR   9,9                 nothing owed?
+         BNZ   ADV200
+         LH    9,ADVONE            then this line simply takes the next
+ADV200   CH    9,ADVPAGE           a page skip?
+         BNE   ADV210
+         MVI   0(3),C'1'           skip to a new page
+         B     ADV300
+ADV210   LTR   9,9
+         BNM   ADV220
+         SR    9,9                 never negative here
+ADV220   CH    9,ADVTHREE          more than one code can carry?
+         BNH   ADV240
+         PUT   (2),ADVB3           three blank lines at a time
+         SH    9,ADVTHREE
+         B     ADV220
+ADV240   LA    10,ADVCODE
+         AR    10,9
+         MVC   0(1,3),0(10)        '+', ' ', '0' or '-'
+ADV300   PUT   (2),(3)             the line itself
+         L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+ADVB3    DC    C'-'                a blank line that advances three
+         DC    CL132' '
+ADVCODE  DC    C'+ 0-'             0, 1, 2 or 3 lines
+ADVONE   DC    H'1'
+ADVPAGE  DC    H'999'              the page-skip request
+ADVTHREE DC    H'3'
+RTSAVE7  DS    18F
 *
 * COBUPSI -- set the eight switches from the EXEC PARM.
 *

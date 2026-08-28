@@ -677,11 +677,27 @@ greater than the record, and the line goes out through a per-file buffer whose
 first byte is the control character. A plain `WRITE` on such a file gets one
 line, which is what general rule 9 on IV-35 requires.
 
-`BEFORE ADVANCING` is refused, and the message says why: ASA acts before the
-line prints, so BEFORE needs the advance held over to the next `WRITE`, which
-means carrying state per file. Six of the 248 corpus programs that use
-`ADVANCING` need it. `ADVANCING` by an identifier or a mnemonic-name is level 2
-and is refused as such.
+`BEFORE` is level 1 too -- the element list says `BEFORE/AFTER integer LINES`
+and `BEFORE/AFTER PAGE` -- and it works now. It costs a runtime routine rather
+than a few inline instructions, because the deferral is real state: the line
+goes out with whatever the last `BEFORE` left owing, and its own count becomes
+what the next line owes. Once the two can add up, the total is not known until
+run time.
+
+`COBADV` takes the request as a line count, 999 for `PAGE`, negated when the
+phrase was `BEFORE`. It applies what is owed, writes the line, and stores what
+the statement defers. `BEFORE 0` and `AFTER 0` encode the same way because they
+*are* the same thing: apply what is owed and owe nothing.
+
+Three things that had to be decided rather than looked up, since the standard
+fixes none of them: a `BEFORE` with nothing owed prints on the next line rather
+than overprinting, an owed page skip stays a page skip however many lines the
+next statement asks for, and the blank lines an advance of more than three
+needs come from the runtime's own constant -- the caller's buffer already holds
+the record to print, which the first version of this cheerfully blanked.
+
+`ADVANCING` by an identifier or a mnemonic-name is level 2 and is refused as
+such.
 
 **GnuCOBOL cannot be the oracle for this one** -- it writes a text file with
 newlines rather than control bytes. `tests/advance.cbl` is therefore its own:
