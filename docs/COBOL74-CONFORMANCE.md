@@ -249,8 +249,8 @@ representation tests. **18 programs.** This is the honest edge: the next thing
 worth doing, and the first one whose cost is out of proportion to a COBOL-74
 target on this machine.
 
-**4. Ordinary remaining work, all small.** `ACCEPT`, `ALTER` and `INSPECT` --
-the last three elements between this compiler and Nucleus level 1 -- plus
+**4. Ordinary remaining work, all small.** `ACCEPT` and `ALTER` -- the last two
+elements between this compiler and Nucleus level 1 -- plus
 continuation of a word or a numeric literal, and a `SIGN` clause on an item of
 more than sixteen digits, a limitation this compiler introduced itself when the
 zoned conversion was split.
@@ -434,6 +434,31 @@ through the one dispatcher.
 The reverse direction -- an alphanumeric item into a numeric one -- is legal
 under the same rules and is still refused, but the message now says that it is
 legal and what it would take, rather than implying the combination is invalid.
+
+### INSPECT
+
+`1 NUC 1,2` restricts `INSPECT` to a **single character data item**, which is
+what makes the level 1 form tractable: every clause becomes a byte test down
+the field rather than a substring search. `TALLYING` with `ALL`, `LEADING` and
+`CHARACTERS`; `REPLACING` with `ALL`, `LEADING`, `FIRST` and `CHARACTERS`; and
+both phrases on one statement. `BEFORE`/`AFTER INITIAL` are level 2 and are
+refused by name.
+
+One scan shape serves all of them: R3 walks the field, R5 counts it down, R4
+tallies. `LEADING` branches out of the loop on the first mismatch instead of
+around the body, and `FIRST` branches out after replacing once.
+`CHARACTERS` needs no scan at all -- for `TALLYING` it is the length, and for
+`REPLACING` it is one `MVI` and an overlapping `MVC` to carry the byte down.
+
+`TALLYING` **adds to** the counter rather than setting it, which the test
+relies on: two `ALL` clauses in a row leave 6 and then 8.
+
+The bug worth recording is mine and it was a one-line assumption. I took the
+field address with `LA 3,0(6)`, expecting `field_ref` to have loaded R6 --
+which it does for a *subscripted* reference and does not for a plain one, where
+it hands back the label instead. The scans read whatever R6 held, found
+nothing, and the run ended in a protection exception. Asking for the operand
+text and writing `LA 3,<that>` works for both shapes.
 
 ### Operand series, and ENTER
 
