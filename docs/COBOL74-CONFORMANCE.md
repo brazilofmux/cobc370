@@ -206,24 +206,33 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Five slices in, the same histogram reads:
+Six slices in, the histogram has gone flat -- no single thing blocks more than
+a tenth of the corpus any more:
 
-     78   WRITE ... AFTER ADVANCING
      25   an unimplemented SELECT clause
      24   the USE statement -- declaratives
      22   a USAGE DISPLAY item past 16 digits
+     20   a subscript on an item outside an OCCURS
      12   BLOCK CONTAINS n CHARACTERS
+     10   MOVE between a numeric and an alphanumeric item
+      9   the SIGN clause
+      6   the SET statement
+      5   BEFORE ADVANCING, and ADVANCING by an identifier
+
+That flattening is the result worth noting. The first five slices each cleared
+something that stood in front of a quarter to a half of the corpus; from here
+the work is broad rather than deep.
 
 Each fix uncovers the next thing, and the count that matters is the one at the
 top of the list rather than the number that compile:
 
-    blocker                      start   digits   REDEF   literals   SECTIONs   now
-    more than 15 digits            126       22      22         22         22    22
-    group REDEFINES                  -       94       0          0          0     0
-    literal continuation            20       20     112          0          0     0
-    a SECTION in the Proc Div        -        -       -         77          0     0
-    WRITE of a non-first record      -        -       -          -         77     0
-    WRITE ... AFTER ADVANCING        -        -       -          -          -    78
+    blocker                      start   digits   REDEF   literals   SECT   FD   now
+    more than 15 digits            126       22      22         22     22   22    22
+    group REDEFINES                  -       94       0          0      0    0     0
+    literal continuation            20       20     112          0      0    0     0
+    a SECTION in the Proc Div        -        -       -         77      0    0     0
+    WRITE of a non-first record      -        -       -          -     77    0     0
+    WRITE ... AFTER ADVANCING        -        -       -          -      -   78     5
 
 Two of those had been sitting near the bottom of the list the whole time, only
 because most programs hit something else first.
@@ -306,6 +315,33 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### WRITE ... AFTER ADVANCING
+
+`BEFORE/AFTER integer LINES` and `BEFORE/AFTER PAGE` are Sequential I-O level
+1. The DEFTLY corpus carries its vertical spacing as an ASA character inside
+the record and never used the clause; the CCVS corpus uses it 380 times.
+
+On S/370 the clause *is* ASA carriage control: a byte in front of the record
+saying what to do **before** the line prints -- which is exactly what AFTER
+means. `' '` is one line, `'0'` two, `'-'` three, `'+'` none, `'1'` a new page;
+more than three lines is written as blank lines first, three at a time. A file
+that any `WRITE ... ADVANCING` names becomes `RECFM=FBA` with `LRECL` one
+greater than the record, and the line goes out through a per-file buffer whose
+first byte is the control character. A plain `WRITE` on such a file gets one
+line, which is what general rule 9 on IV-35 requires.
+
+`BEFORE ADVANCING` is refused, and the message says why: ASA acts before the
+line prints, so BEFORE needs the advance held over to the next `WRITE`, which
+means carrying state per file. Six of the 248 corpus programs that use
+`ADVANCING` need it. `ADVANCING` by an identifier or a mnemonic-name is level 2
+and is refused as such.
+
+**GnuCOBOL cannot be the oracle for this one** -- it writes a text file with
+newlines rather than control bytes. `tests/advance.cbl` is therefore its own:
+it writes the file, closes it, reads it back through a second FD with the
+control byte as ordinary data, and displays what it finds. The expected values
+come from the standard and IBM's ASA encoding, not from a second compiler.
 
 ### Several record descriptions per FD
 

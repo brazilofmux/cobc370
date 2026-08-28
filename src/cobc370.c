@@ -489,6 +489,7 @@ typedef struct {
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
     int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
     int  rec;               /* WRITE/REWRITE: the record named, of an FD's several */
+    int  adv;               /* WRITE ADVANCING: -1 none, -2 PAGE, else lines */
     int  line;              /* the source line, for the program-check table */
     int  lab3;              /* ST_SEARCH: the end label */
     struct Cond *cond2;     /* ST_SEARCH: the same operands compared with < */
@@ -514,6 +515,8 @@ typedef struct {
     int  has_start;    /* a START names it, so the RPL needs a search argument */
     int  opened_extend;/* OPEN EXTEND: append to what is already there */
     int  report;       /* the RD this FD carries, or -1 */
+    int  print;        /* a WRITE ... ADVANCING names it: ASA control, RECFM=A */
+    char pbuf[9];      /* that file's print buffer: control byte + the record */
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
     int  blk_records;  /* BLOCK CONTAINS n RECORDS, 0 when unblocked */
@@ -1679,7 +1682,7 @@ static Stmt *new_stmt(int op)
     if (nstmt >= MAXSTMT) die("too many statements");
     Stmt *st = &stmts[nstmt++];
     memset(st, 0, sizeof *st);
-    st->op = op; st->dst = st->src = -1; st->vary_sym = -1; st->rec = -1;
+    st->op = op; st->dst = st->src = -1; st->vary_sym = -1; st->rec = -1; st->adv = -1;
     st->line = tok.line;
     return st;
 }
@@ -2175,6 +2178,28 @@ static void parse_one_statement(void)
             /* WRITE r FROM x is MOVE x TO r followed by WRITE r. */
             next();
             st->src = consume_sym();
+        }
+        if (is("BEFORE") || is("AFTER")) {
+            int after = is("AFTER");
+            next();
+            if (is("ADVANCING")) next();
+            if (!after)
+                die("BEFORE ADVANCING is not implemented: ASA carriage control "
+                    "acts before the line prints, so BEFORE needs the advance "
+                    "held over to the next WRITE");
+            if (is("PAGE")) { next(); st->adv = -2; }
+            else if (is_numeric_literal(tok.text)) {
+                st->adv = atoi(tok.text);
+                if (st->adv < 0 || st->adv > 60)
+                    die("ADVANCING takes 0 to 60 lines");
+                next();
+                if (is("LINE") || is("LINES")) next();
+            } else {
+                die("ADVANCING by an identifier or a mnemonic-name is level 2; "
+                    "this compiler takes an integer or PAGE");
+            }
+            files[fi].print = 1;
+            snprintf(files[fi].pbuf, sizeof files[fi].pbuf, "FP%03d", fi);
         }
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
@@ -4082,6 +4107,43 @@ static void generate(void)
                 reset_bases();
                 break;
             }
+            if (f->print) {
+                /* ASA carriage control: the byte says what to do BEFORE the
+                 * line prints, which is exactly AFTER ADVANCING. One code
+                 * covers 0 to 3 lines; more than that is written as blank
+                 * lines first, three at a time. */
+                if (f->reclen > 256)
+                    die("a print record wider than 256 bytes needs a split MVC, "
+                        "which is not implemented");
+                int adv = st->adv == -1 ? 1 : st->adv;   /* the standard's default */
+                char pb[16];
+                snprintf(pb, sizeof pb, "%s", f->pbuf);
+                while (adv > 3) {
+                    snprintf(b, sizeof b, "%s,C'-'", pb);
+                    asm_line("", "MVI", b, "three blank lines");
+                    snprintf(b, sizeof b, "%s+1,C' '", pb);
+                    asm_line("", "MVI", b, "");
+                    if (f->reclen > 1) {
+                        snprintf(b, sizeof b, "%s+2(%d),%s+1", pb, f->reclen - 1, pb);
+                        asm_line("", "MVC", b, "");
+                    }
+                    snprintf(b, sizeof b, "%s,%s", f->label, pb);
+                    asm_line("", "PUT", b, "");
+                    adv -= 3;
+                }
+                const char *ctl = st->adv == -2 ? "1"
+                                : adv == 0 ? "+" : adv == 1 ? " "
+                                : adv == 2 ? "0" : "-";
+                snprintf(b, sizeof b, "%s,C'%s'", pb, ctl);
+                asm_line("", "MVI", b, st->adv == -2 ? "skip to a new page"
+                         : adv == 0 ? "overprint" : "space before printing");
+                need_sym_base(wrec);
+                snprintf(b, sizeof b, "%s+1(%d),%s", pb, f->reclen, wrec->label);
+                asm_line("", "MVC", b, "");
+                snprintf(b, sizeof b, "%s,%s", f->label, pb);
+                asm_line("", "PUT", b, "");
+                break;
+            }
             need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
             asm_line("", "PUT", b, "");
@@ -4817,15 +4879,23 @@ static void generate(void)
          * BLOCK CONTAINS gives the blocking factor when the program declares
          * one; without it the records go out unblocked. */
         {
-            const char *recfm = (f->report >= 0) ? "FBA" : "FB";
-            int blk = f->reclen * (f->blk_records > 0 ? f->blk_records : 1);
+            /* A print file's records carry an ASA control byte the program
+             * never sees, so the physical record is one longer than the 01. */
+            const char *recfm = (f->report >= 0 || f->print) ? "FBA" : "FB";
+            int lrecl = f->reclen + (f->print ? 1 : 0);
+            int blk = lrecl * (f->blk_records > 0 ? f->blk_records : 1);
             snprintf(first, sizeof first,
                      "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(PM),RECFM=%s,",
                      f->label, f->ddname, recfm);
             char second[64];
-            snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", f->reclen, blk);
+            snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", lrecl, blk);
             asm_cont(first, second);
         }
+    }
+    for (int i = 0; i < nfile; i++) {
+        if (!files[i].print) continue;
+        snprintf(b, sizeof b, "CL%d", files[i].reclen + 1);
+        asm_line(files[i].pbuf, "DS", b, "ASA byte + the record");
     }
     for (int i = 0; i < nconst; i++) {
         snprintf(b, sizeof b, "PL16'%s'", consts[i].digits);
