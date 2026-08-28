@@ -1,0 +1,36 @@
+000100 IDENTIFICATION DIVISION.
+000200 PROGRAM-ID. PSCALE.
+000300* P is an assumed decimal scaling position, II-21: it counts
+000400* toward the eighteen digits and toward the value's scale but
+000500* occupies no character position. A run of P on the right
+000600* multiplies the stored digits; a run on the left makes them all
+000700* fractional. The scale machinery already handled both -- a
+000800* negative scale is an SRP to the left -- so the work was in the
+000900* PICTURE scanner, which had no P at all.
+001000 DATA DIVISION.
+001100 WORKING-STORAGE SECTION.
+001200 01  TRAIL2  PIC 9(3)PP  VALUE 12300.
+001300 01  TRAIL1  PIC S99P    VALUE 990.
+001400 01  LEAD2   PIC PP999   VALUE .00123.
+001500 01  LEAD8   PIC SP(8)9  VALUE .000000007.
+001600 01  SHOW    PIC -9(8).9(9).
+001700 01  ACC     PIC S9(9)V9(9) VALUE 0.
+001800 PROCEDURE DIVISION.
+001900     MOVE TRAIL2 TO SHOW.
+002000     DISPLAY 'TRAIL2 ' SHOW.
+002100     MOVE TRAIL1 TO SHOW.
+002200     DISPLAY 'TRAIL1 ' SHOW.
+002300     MOVE LEAD2 TO SHOW.
+002400     DISPLAY 'LEAD2  ' SHOW.
+002500     MOVE LEAD8 TO SHOW.
+002600     DISPLAY 'LEAD8  ' SHOW.
+002700     COMPUTE ACC = TRAIL2 + TRAIL1.
+002800     MOVE ACC TO SHOW.
+002900     DISPLAY 'SUM    ' SHOW.
+003000     COMPUTE ACC = LEAD2 + LEAD8.
+003100     MOVE ACC TO SHOW.
+003200     DISPLAY 'FRAC   ' SHOW.
+003300     ADD 100 TO TRAIL2.
+003400     MOVE TRAIL2 TO SHOW.
+003500     DISPLAY 'TRAIL2+' SHOW.
+003600     STOP RUN.

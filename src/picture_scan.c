@@ -44,7 +44,7 @@ int pic_scan(const char *s, PicItem *out, int max, int *errpos)
     *errpos = -1;
 
     
-#line 72 "picture.rl"
+#line 73 "picture.rl"
 
 
     
@@ -56,7 +56,7 @@ int pic_scan(const char *s, PicItem *out, int max, int *errpos)
 	act = 0;
 	}
 
-#line 75 "picture.rl"
+#line 76 "picture.rl"
     
 #line 62 "picture_scan.c"
 	{
@@ -65,7 +65,7 @@ int pic_scan(const char *s, PicItem *out, int max, int *errpos)
 	switch ( cs )
 	{
 tr0:
-#line 51 "picture.rl"
+#line 52 "picture.rl"
 	{{p = ((te))-1;}{
             if (count >= max) { *errpos = (int)(ts - s); return -1; }
             out[count].sym = (char)toupper((unsigned char)ts[0]);
@@ -74,7 +74,7 @@ tr0:
         }}
 	goto st7;
 tr2:
-#line 44 "picture.rl"
+#line 45 "picture.rl"
 	{te = p+1;{
             if (count >= max) { *errpos = (int)(ts - s); return -1; }
             out[count].sym = (char)toupper((unsigned char)ts[0]);
@@ -84,21 +84,21 @@ tr2:
         }}
 	goto st7;
 tr3:
-#line 57 "picture.rl"
+#line 58 "picture.rl"
 	{te = p+1;{
             if (count >= max) { *errpos = (int)(ts - s); return -1; }
             out[count].sym = 'C'; out[count].rep = 1; count++;
         }}
 	goto st7;
 tr5:
-#line 61 "picture.rl"
+#line 62 "picture.rl"
 	{te = p+1;{
             if (count >= max) { *errpos = (int)(ts - s); return -1; }
             out[count].sym = 'D'; out[count].rep = 1; count++;
         }}
 	goto st7;
 tr11:
-#line 51 "picture.rl"
+#line 52 "picture.rl"
 	{te = p;p--;{
             if (count >= max) { *errpos = (int)(ts - s); return -1; }
             out[count].sym = (char)toupper((unsigned char)ts[0]);
@@ -120,12 +120,14 @@ case 7:
 		case 57: goto tr6;
 		case 67: goto st3;
 		case 68: goto st4;
+		case 80: goto tr6;
 		case 83: goto tr6;
 		case 86: goto tr6;
 		case 88: goto tr6;
 		case 90: goto tr6;
 		case 99: goto st5;
 		case 100: goto st6;
+		case 112: goto tr6;
 		case 115: goto tr6;
 		case 118: goto tr6;
 		case 120: goto tr6;
@@ -151,7 +153,7 @@ st8:
 	if ( ++p == pe )
 		goto _test_eof8;
 case 8:
-#line 155 "picture_scan.c"
+#line 157 "picture_scan.c"
 	if ( (*p) == 40 )
 		goto st1;
 	goto tr11;
@@ -222,7 +224,7 @@ case 6:
 	_out: {}
 	}
 
-#line 76 "picture.rl"
+#line 77 "picture.rl"
 
     (void)act; (void)eof; (void)te;
     if (cs == picscan_error) { *errpos = (int)(p - s); return -1; }

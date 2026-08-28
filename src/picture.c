@@ -93,6 +93,7 @@ int pic_analyse(const char *s, PicInfo *info)
     }
 
     int seen_point = 0;
+    int lead_p = 0, trail_p = 0, stored = 0;
     char fillch = ' ';
 
     for (int i = 0; i < nf; i++) {
@@ -108,7 +109,15 @@ int pic_analyse(const char *s, PicInfo *info)
             continue;
         }
         switch (c) {
-        case '9': info->digits++; if (seen_point) info->scale++; info->bytes++; break;
+        case '9': info->digits++; if (seen_point) info->scale++; info->bytes++;
+                  stored++; break;
+        /* P is an assumed decimal scaling position: it counts toward the
+         * eighteen digits and toward the value's scale, but occupies no
+         * character position. A run of P's on the right multiplies the stored
+         * digits; a run on the left makes them all fractional. II-21. */
+        case 'P': info->digits++;
+                  if (stored) trail_p++; else lead_p++;
+                  break;
         case 'Z': info->digits++; if (seen_point) info->scale++; info->bytes++;
                   info->edited = 1; break;
         case '*': info->digits++; if (seen_point) info->scale++; info->bytes++;
@@ -127,6 +136,14 @@ int pic_analyse(const char *s, PicInfo *info)
         }
     }
     info->floating = (fl != 0);
+
+    if ((lead_p || trail_p) && info->edited)
+        return fail(info, "P and an insertion character cannot both appear in "
+                          "one PICTURE");
+    if (lead_p && trail_p)
+        return fail(info, "P may run to the left or to the right, not both");
+    if (trail_p) info->scale = -trail_p;
+    if (lead_p)  info->scale = lead_p + stored;
 
     if (info->digits == 0) return fail(info, "PICTURE has no digit positions");
     /* The standard sets the ceiling at 18: 1 NUC 1,2 puts numeric literals at

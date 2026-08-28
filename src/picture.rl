@@ -38,6 +38,7 @@ int pic_scan(const char *s, PicItem *out, int max, int *errpos)
         # Spelled out rather than as a character class: '-', '/' and '$' all
         # need escaping inside one, and this reads better anyway.
         picsym = '9' | 'Z' | 'z' | 'X' | 'x' | 'A' | 'a' | 'V' | 'v'
+               | 'P' | 'p'
                | 'S' | 's' | '*' | ',' | '.' | '/' | 'B' | 'b' | '0'
                | '+' | '$' | '-';
 
