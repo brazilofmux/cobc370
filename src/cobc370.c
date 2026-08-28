@@ -539,6 +539,7 @@ typedef struct {
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
     int  blk_records;  /* BLOCK CONTAINS n RECORDS, 0 when unblocked */
+    int  blk_chars;    /* BLOCK CONTAINS n CHARACTERS: the block size outright */
     /* VSAM. The ANS COBOL system-name says which access method is meant:
      * UT-S-x is QSAM, DA-I-x is ISAM, and a bare name -- or AS-x -- is VSAM.
      * ORGANIZATION then picks the cluster type. */
@@ -1082,8 +1083,16 @@ static void parse_data_division(void)
                         if (!is_numeric_literal(tok.text)) die("BLOCK CONTAINS n TO m");
                         nrec = atoi(tok.text); next();
                     }
-                    if (is("CHARACTERS"))
-                        die("BLOCK CONTAINS n CHARACTERS is not implemented yet");
+                    /* General rule 3 on IV-11: CHARACTERS states the physical
+                     * record size outright, in character positions. RECORDS
+                     * states how many logical records it holds. Rule 1 says the
+                     * clause may be omitted when a block is one record, which
+                     * is what a missing clause means here. */
+                    if (is("CHARACTERS")) {
+                        next();
+                        files[cur_file].blk_chars = nrec;
+                        continue;
+                    }
                     if (is("RECORDS")) next();
                     files[cur_file].blk_records = nrec;
                     continue;
@@ -5164,10 +5173,13 @@ static void generate(void)
             int rkp    = syms[f->key_sym].offset - syms[f->rec_sym].offset;
             if (rkp < 1)
                 die("RECORD KEY must follow the delete flag; put a PIC X first");
-            int blksize = f->reclen * (f->blk_records > 0 ? f->blk_records : 1);
+            int blksize = f->blk_chars > 0 ? f->blk_chars
+                        : f->reclen * (f->blk_records > 0 ? f->blk_records : 1);
             snprintf(first, sizeof first,
                      "%-8s DCB   DDNAME=%s,DSORG=IS,MACRF=(PM),RECFM=%s,",
-                     f->label, f->ddname, f->blk_records > 1 ? "FB" : "F");
+                     f->label, f->ddname,
+                     (f->blk_records > 1 || (f->blk_chars > 0 && f->blk_chars > f->reclen))
+                         ? "FB" : "F");
             char second[96];
             snprintf(second, sizeof second,
                      "LRECL=%d,BLKSIZE=%d,KEYLEN=%d,RKP=%d,OPTCD=L,SYNAD=ISYNAD",
@@ -5187,8 +5199,10 @@ static void generate(void)
              * the FD gives no BLOCK CONTAINS, stay silent and let the label
              * speak, which is what the sequential ISAM tests rely on. */
             char rf[16] = "";
-            if (f->blk_records > 1)      snprintf(rf, sizeof rf, ",RECFM=FB");
-            else if (f->blk_records == 1) snprintf(rf, sizeof rf, ",RECFM=F");
+            if (f->blk_records > 1 || (f->blk_chars > 0 && f->blk_chars > f->reclen))
+                snprintf(rf, sizeof rf, ",RECFM=FB");
+            else if (f->blk_records == 1 || f->blk_chars > 0)
+                snprintf(rf, sizeof rf, ",RECFM=F");
             snprintf(b, sizeof b, "DDNAME=%s,DSORG=IS,MACRF=(%s)%s%s",
                      f->ddname, f->isam == 2 ? "R" : "GM", rf,
                      f->isam == 2 ? ",SYNAD=ISYNAD" : "");
@@ -5214,10 +5228,18 @@ static void generate(void)
              * never sees, so the physical record is one longer than the 01. */
             const char *recfm = (f->report >= 0 || f->print) ? "FBA" : "FB";
             int lrecl = f->reclen + (f->print ? 1 : 0);
-            int blk = lrecl * (f->blk_records > 0 ? f->blk_records : 1);
+            int blk = f->blk_chars > 0 ? f->blk_chars
+                    : lrecl * (f->blk_records > 0 ? f->blk_records : 1);
+            if (f->blk_chars > 0 && f->blk_chars % lrecl)
+                die("BLOCK CONTAINS n CHARACTERS must be a whole number of "
+                    "records for a fixed-length file");
+            /* A file the program both writes and reads needs both macros: a
+             * DCB carrying only PM abends S013 at OPEN INPUT. The geometry is
+             * still stated, because the file is created before it is read. */
+            const char *macrf = f->opened_input ? "GM,PM" : "PM";
             snprintf(first, sizeof first,
-                     "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(PM),RECFM=%s,",
-                     f->label, f->ddname, recfm);
+                     "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(%s),RECFM=%s,",
+                     f->label, f->ddname, macrf, recfm);
             char second[64];
             snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", lrecl, blk);
             asm_cont(first, second);

@@ -206,16 +206,16 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Nine slices in, the histogram has gone flat -- no single thing blocks more than
+Ten slices in, the histogram has gone flat -- no single thing blocks more than
 a tenth of the corpus any more:
 
      25   an unimplemented SELECT clause  (13 of them correctly refused)
      23   a USAGE DISPLAY item past 16 digits
-     12   BLOCK CONTAINS n CHARACTERS
       9   the SIGN clause
       8   a RELATIVE KEY spelling
       5   nesting tables more than three deep (correctly refused)
       5   an alphanumeric PICTURE mixing X and 9
+      5   a paragraph name reused in another section
 
 That flattening is the result worth noting. The first slices each cleared
 something standing in front of a quarter to a half of the corpus; from here the
@@ -330,6 +330,25 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### BLOCK CONTAINS n CHARACTERS
+
+General rule 3 on IV-11: `CHARACTERS` states the physical record size
+outright, where `RECORDS` states how many logical records a block holds. The
+compiler had only the `RECORDS` form. Both now reach `BLKSIZE`, and a
+`CHARACTERS` figure that is not a whole number of records is refused rather
+than rounded, since these files are fixed-length.
+
+**What the test found.** `tests/blkchar.cbl` writes seven 80-byte records with
+`BLOCK CONTAINS 240 CHARACTERS` -- three to a block, so two full blocks and a
+short one -- then closes the file, reopens it for input and reads them back. It
+abended **S013** at the second `OPEN`, and the reason had nothing to do with
+blocking: a file opened both `OUTPUT` and `INPUT` in one program was getting a
+DCB with `MACRF=(PM)` alone, because the DCB was written as an either/or. It
+now carries `MACRF=(GM,PM)` when both modes appear.
+
+That is a bug no earlier test could have found. Every file test until this one
+either wrote a file or read one; none did both through the same `SELECT`.
 
 ### MOVE from numeric to alphanumeric
 
