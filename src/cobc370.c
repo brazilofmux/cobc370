@@ -403,7 +403,7 @@ typedef struct {
     int  cvalue_len, cvalue_str;
 } Sym;
 
-#define MAXSYM 256
+#define MAXSYM 1024
 static Sym syms[MAXSYM];
 static int nsym, wslen;
 
@@ -472,7 +472,7 @@ static Cond *cnode(int kind)
     return c;
 }
 
-#define MAXNODE 512
+#define MAXNODE 4096
 static Node nodes[MAXNODE];
 static int nnode;
 
@@ -540,6 +540,7 @@ typedef struct {
     char pbuf[9];      /* that file's print buffer: control byte + the record */
     int  isam;         /* 0 none, 1 QISAM sequential, 2 BISAM random */
     int  key_sym, nominal_sym;
+    int  rrn_via_cell; /* the RELATIVE KEY is not a fullword, so convert it */
     int  blk_records;  /* BLOCK CONTAINS n RECORDS, 0 when unblocked */
     int  blk_chars;    /* BLOCK CONTAINS n CHARACTERS: the block size outright */
     /* VSAM. The ANS COBOL system-name says which access method is meant:
@@ -625,7 +626,7 @@ typedef struct {
 static Decl decls[MAXDECL];
 static int ndecl;
 static int decl_end_para = -1;   /* first procedure after END DECLARATIVES */
-#define MAXPARA 256
+#define MAXPARA 1024
 static Para paras[MAXPARA];
 static int npara;
 
@@ -640,7 +641,7 @@ static int para_index(const char *n)
     return -1;
 }
 
-#define MAXSTMT 512
+#define MAXSTMT 4096
 static Stmt stmts[MAXSTMT];
 static int nstmt;
 
@@ -1561,10 +1562,14 @@ static void parse_data_division(void)
                     (files[i].access != 0 || files[i].has_start))
                     die("a VSAM RRDS needs a RELATIVE KEY to be read by number");
                 if (files[i].key_sym >= 0) {
+                    /* The standard asks only for an unsigned integer item. A
+                     * fullword COMP is what VSAM's search argument already is,
+                     * so that one is used in place; anything else is converted
+                     * through the compiler's own cell around each request. */
                     const Sym *k = &syms[files[i].key_sym];
-                    if (k->usage != U_COMP || k->bytes != 4)
-                        die("RELATIVE KEY must be a fullword binary -- "
-                            "PIC 9(8) COMP");
+                    if (k->is_alpha || k->is_group || k->scale)
+                        die("RELATIVE KEY must be an elementary integer item");
+                    files[i].rrn_via_cell = !(k->usage == U_COMP && k->bytes == 4);
                 }
             }
             if (files[i].org == 1 && files[i].key_sym < 0)
@@ -1618,21 +1623,26 @@ static void parse_environment(void)
                 f->key_sym = f->nominal_sym = f->status_sym = -1;
                 next();
                 if (is("OPTIONAL")) die("SELECT OPTIONAL is not implemented yet");
-                expect("ASSIGN"); if (is("TO")) next();
-                {
-                    const char *dash = strrchr(tok.text, '-');
-                    const char *dd = dash ? dash + 1 : tok.text;
-                    if (strlen(dd) > 8) die("ddname longer than 8 characters");
-                    snprintf(f->ddname, sizeof f->ddname, "%s", dd);
-                    /* A traditional system-name leads with a device class:
-                     * UT-S-x, DA-I-x, UR-S-x. VSAM has no device to name, so it
-                     * is written bare or as AS-x. That is how one INDEXED file
-                     * is told from another. */
-                    if (!dash) f->vsam = 1;
-                    else if (!strncmp(tok.text, "AS-", 3)) f->vsam = 1;
-                }
-                next();
                 while (!tok.eof && !is(".")) {
+                    if (is("ASSIGN")) {
+                        /* Syntax rule 1: only SELECT has to come first; the
+                         * clauses after it may appear in any order, so ASSIGN
+                         * can turn up after ACCESS or ORGANIZATION.
+                         *
+                         * A traditional system-name leads with a device class:
+                         * UT-S-x, DA-I-x, UR-S-x. VSAM has no device to name,
+                         * so it is written bare or as AS-x. That is how one
+                         * INDEXED file is told from another. */
+                        next(); if (is("TO")) next();
+                        const char *dash = strrchr(tok.text, '-');
+                        const char *dd = dash ? dash + 1 : tok.text;
+                        if (strlen(dd) > 8) die("ddname longer than 8 characters");
+                        snprintf(f->ddname, sizeof f->ddname, "%s", dd);
+                        if (!dash) f->vsam = 1;
+                        else if (!strncmp(tok.text, "AS-", 3)) f->vsam = 1;
+                        next();
+                        continue;
+                    }
                     if (is("RESERVE")) {     /* buffering advice; nothing to do */
                         next();
                         while (!tok.eof && !is(".") && !is("ACCESS") &&
@@ -1667,13 +1677,17 @@ static void parse_environment(void)
                      * search argument for an RRDS exactly as RECORD KEY is for
                      * a KSDS. It is kept in the same place. */
                     if (is("RELATIVE")) {
-                        next(); expect("KEY"); if (is("IS")) next();
+                        next(); if (is("KEY")) next(); if (is("IS")) next();
                         if (f->org != 2) die("RELATIVE KEY needs ORGANIZATION RELATIVE");
                         snprintf(keyname[nfile], sizeof keyname[0], "%s", tok.text);
                         next(); continue;
                     }
                     if (is("RECORD")) {      /* RECORD KEY IS x -- resolved later */
-                        next(); expect("KEY"); if (is("IS")) next();
+                        next();
+                        if (is("DELIMITER"))
+                            die("RECORD DELIMITER is a COBOL-85 clause; this "
+                                "compiler targets COBOL-74");
+                        if (is("KEY")) next(); if (is("IS")) next();
                         /* RECORD KEY is written the same way for ISAM and for
                          * a VSAM KSDS, so it cannot be what marks a file as
                          * ISAM -- only the absence of a VSAM assign name can. */
@@ -1689,6 +1703,7 @@ static void parse_environment(void)
                     die("this SELECT clause is not implemented yet");
                 }
                 expect(".");
+                if (!f->ddname[0]) die("SELECT needs an ASSIGN clause");
                 nfile++;
             }
             continue;
@@ -3021,6 +3036,38 @@ static void field_ref(const Sym *sy, Node *sub, int len, int reg, char *out, siz
 
 /* Labels generated during code emission, past the ones the parser handed out. */
 static int genlabel;
+static void gen_load(const Sym *sy, Node *sub, const char *wk);
+static void gen_store(const Sym *sy, Node *sub, const char *wk);
+
+/* VSAM addresses an RRDS by a fullword record number. A RELATIVE KEY that is
+ * already one is used in place; any other elementary integer -- which is all
+ * the standard asks for -- is converted through the file's own cell before a
+ * request that reads the number, and back after one that sets it. */
+static void rrn_cell_sym(const File *f, Sym *out)
+{
+    memset(out, 0, sizeof *out);
+    out->usage = U_COMP; out->digits = 9; out->bytes = out->elem = 4;
+    out->occ_parent = out->gparent = out->index_sym = out->askey_sym = -1;
+    out->fd_file = out->redef_from = out->redef_cap = -1;
+    snprintf(out->label, sizeof out->label, "%sK", f->label);
+    snprintf(out->name, sizeof out->name, "RRN");
+}
+static void gen_rrn_to_cell(const File *f)
+{
+    if (!f->rrn_via_cell || f->key_sym < 0) return;
+    Sym cell; rrn_cell_sym(f, &cell);
+    asm_comment("  the RELATIVE KEY into VSAM's search argument");
+    gen_load(&syms[f->key_sym], NULL, "PWK1");
+    gen_store(&cell, NULL, "PWK1");
+}
+static void gen_rrn_from_cell(const File *f)
+{
+    if (!f->rrn_via_cell || f->key_sym < 0) return;
+    Sym cell; rrn_cell_sym(f, &cell);
+    asm_comment("  and the number VSAM used back into the RELATIVE KEY");
+    gen_load(&cell, NULL, "PWK1");
+    gen_store(&syms[f->key_sym], NULL, "PWK1");
+}
 static const char *intern_const(const char *digits);
 
 /* A zoned item whose sign is not a trailing overpunch is copied to ZWK first
@@ -4384,12 +4431,14 @@ static void generate(void)
                     reset_bases();
                 }
                 const VsFbk *rtab = bykey ? vs_read_dir : vs_read;
+                if (bykey && f->org == 2) gen_rrn_to_cell(f);
                 snprintf(b, sizeof b, "RPL=%s", rn);
                 asm_line("", "GET", b, bykey
                          ? "VSAM retrieval by key" : "VSAM sequential retrieval");
                 asm_line("", "LTR", "15,15", "got a record?");
                 asm_line("", "BNZ", le, "");
                 gen_vsam_status(f, rn, rtab);
+                if (f->org == 2) gen_rrn_from_cell(f);
                 if (st->src >= 0) {
                     const Sym *t = &syms[st->src];
                     asm_comment("  INTO: only reached when a record was read");
@@ -4525,12 +4574,14 @@ static void generate(void)
                  * COBOL's INVALID KEY is for. */
                 need_sym_base(&syms[f->rec_sym]);
                 char wn[10]; rpl_name(f, 1, wn, sizeof wn);
+                if (f->org == 2 && f->access != 0) gen_rrn_to_cell(f);
                 snprintf(b, sizeof b, "RPL=%s", wn);
                 asm_line("", "PUT", b, f->access == 1
                          ? "VSAM insert by key" : "VSAM sequential store");
                 asm_line("", "LTR", "15,15", "stored?");
                 asm_line("", "BNZ", wle, "");
                 gen_vsam_status(f, wn, vs_write);
+                if (f->org == 2) gen_rrn_from_cell(f);
                 asm_line("", "B", wlc, "");
                 asm_line(wle, "DS", "0H", "INVALID KEY");
                 reset_bases();
@@ -4605,6 +4656,7 @@ static void generate(void)
             snprintf(b, sizeof b, " START %s", f->name);
             asm_comment(b);
             char sn[10]; rpl_name(f, 0, sn, sizeof sn);
+            if (f->org == 2) gen_rrn_to_cell(f);
             /* KEQ and KGE are the same field of the same RPL, and the RPL that
              * is positioned has to be the one the following READ uses -- VSAM
              * keeps position per RPL. So this is the one place a second
@@ -4645,6 +4697,7 @@ static void generate(void)
             asm_comment(b);
             if (!f->opened_io)
                 die("REWRITE and DELETE need the file opened I-O");
+            if (f->org == 2 && f->access != 0) gen_rrn_to_cell(f);
             if (erase && f->org == 0)
                 die("a record cannot be deleted from a VSAM ESDS -- entry "
                     "sequence is fixed once written");
@@ -5226,7 +5279,7 @@ static void generate(void)
                  * number, so when there is none the compiler supplies a
                  * fullword of its own to be written into. No KEYLEN either --
                  * a record number is always four bytes and VSAM knows it. */
-                if (f->key_sym >= 0)
+                if (f->key_sym >= 0 && !f->rrn_via_cell)
                     snprintf(keyarg, sizeof keyarg, "ARG=%s,",
                              syms[f->key_sym].label);
                 else {
