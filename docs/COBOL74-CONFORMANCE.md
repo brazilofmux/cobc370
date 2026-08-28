@@ -332,6 +332,20 @@ stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
 
+### Table Handling level 1 is complete
+
+Against the element list for `1 TBL 1,2`:
+
+    index-name                                    INDEXED BY, and as a series
+    subscripting and indexing, three levels       done here
+    OCCURS integer TIMES                          already had it
+    USAGE IS INDEX                                done
+    relation conditions on indexes                falls out of the representation
+    SET, both formats, receiver series            done
+
+That is the whole module at level 1, and Table Handling is one of the three
+modules the minimum standard is made of.
+
 ### Table Handling: USAGE IS INDEX and SET
 
 Table Handling is one of the three modules in the minimum standard, and its
@@ -357,10 +371,29 @@ Those refusals are enforced, and each one names the chart. Operands on both
 sides may be subscripted, which the corpus needs -- `SET INDEX1 TO TABLE2-REC
 (INDEX2)` is the shape that found it.
 
-What is left of Table Handling level 1 is subscripting past one dimension:
-`opt_subscript` still dies on a comma. That is the structural piece -- a
-subscript has to stop being one `Node *` and become a list, and `occ_parent`
-has to stop being one table and become the chain of enclosing `OCCURS`.
+### Subscripting to three levels
+
+This was the structural piece. `opt_subscript` returned one `Node *` and died
+on a comma; `occ_parent` held one table. A subscript is now a list -- `Node`
+gained a `next` -- and every item carries `occ_chain`, the enclosing `OCCURS`
+tables outermost first, with `occ_depth` saying how many subscripts a reference
+to it needs. The address stopped being one multiply and became a sum:
+
+    address = label + sum over levels of (subscript - 1) x element size
+
+One term goes into the addressing register and the rest are built in R0 and
+added, which is free because nothing else is live between those instructions.
+A reference with the wrong number of subscripts is now a diagnostic naming the
+item and both counts -- something the one-dimensional model could not check.
+
+Two things fell out. A **group** that carries `OCCURS` can now be subscripted:
+it appends itself to its own chain, and `MOVE ROW (3) TO X` moves the whole
+row. And `INDEXED BY` accepts a series, with the first index-name being the
+one `SEARCH` uses.
+
+Five corpus programs nest tables more than three deep. COBOL-85 raised the
+limit to seven; COBOL-74 stops at three, so refusing them is correct and the
+message says which standard is speaking.
 
 An unrelated gap surfaced while writing the test and is worth recording:
 `DISPLAY` of a subscripted item is not implemented, so the test moves elements

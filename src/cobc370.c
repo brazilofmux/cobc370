@@ -214,6 +214,20 @@ static void next(void)
 
 static int is(const char *w) { return strcmp(tok.text, w) == 0; }
 
+/* The words that end a list of names inside a data description. */
+static int is_data_clause(void)
+{
+    static const char *w[] = {
+        "PIC", "PICTURE", "VALUE", "REDEFINES", "OCCURS", "USAGE", "COMP",
+        "COMP-3", "COMPUTATIONAL", "COMPUTATIONAL-3", "DISPLAY", "INDEX",
+        "SYNC", "SYNCHRONIZED", "JUST", "JUSTIFIED", "SIGN", "BLANK",
+        "ASCENDING", "DESCENDING", "INDEXED", "DEPENDING", "TIMES", "KEY",
+        "RENAMES", "IS", 0
+    };
+    for (int i = 0; w[i]; i++) if (is(w[i])) return 1;
+    return 0;
+}
+
 /* Step past PIC / PICTURE [IS] and leave the character-string in tok. */
 static void next_pic(void)
 {
@@ -367,7 +381,9 @@ typedef struct {
     unsigned char mask[PIC_MAXMASK];
     int  occurs;      /* OCCURS count, 0 when not a table */
     int  elem;        /* size of one element */
-    int  occ_parent;  /* the table this item sits inside, -1 if none */
+    int  occ_parent;  /* the innermost table this item sits inside, -1 if none */
+    int  occ_chain[3];/* every enclosing OCCURS, outermost first */
+    int  occ_depth;   /* how many -- and how many subscripts a reference needs */
     int  alias;       /* REDEFINES: shares storage, so emit a label not a DC */
     int  is_index;    /* an index-name, or an item with USAGE IS INDEX */
     int  fd_file;     /* an 01 under an FD: which file's record area, else -1 */
@@ -426,7 +442,8 @@ typedef struct Node {
     char lit[MAXTOK];   /* N_LIT: scaled digits.  N_STR: the text */
     int litscale;
     int litlen;         /* N_STR */
-    struct Node *sub;   /* subscript on an N_SYM reference */
+    struct Node *sub;   /* subscript list on an N_SYM reference */
+    struct Node *next;  /* the next subscript of a multi-dimensional reference */
     struct Node *l, *r;
 } Node;
 
@@ -1150,6 +1167,14 @@ static void parse_data_division(void)
         sy->fd_file = -1;
         for (int k = sp - 1; k >= 0; k--)
             if (syms[stack[k]].occurs > 0) { sy->occ_parent = stack[k]; break; }
+        /* The chain runs the other way: a reference names its subscripts
+         * outermost first, and the address is the sum of one term per level. */
+        for (int k = 0; k < sp; k++)
+            if (syms[stack[k]].occurs > 0) {
+                if (sy->occ_depth >= 3)
+                    die("COBOL-74 subscripts and indexes to three levels; COBOL-85 raised that to seven, and this compiler targets the earlier standard");
+                sy->occ_chain[sy->occ_depth++] = stack[k];
+            }
         /* Anything under a REDEFINES shares that storage as well. */
         for (int k = sp - 1; k >= 0; k--)
             if (syms[stack[k]].alias) { sy->alias = 1; break; }
@@ -1207,12 +1232,18 @@ static void parse_data_division(void)
                     }
                     if (is("INDEXED")) {
                         next(); if (is("BY")) next();
-                        if (npend_idx >= MAXIDX) die("too many indexed tables");
-                        snprintf(pend_idx[npend_idx].name,
-                                 sizeof pend_idx[0].name, "%s", tok.text);
-                        pend_idx[npend_idx].table = nsym;
-                        npend_idx++;
-                        next();
+                        /* A series: INDEXED BY IA, IB names two indexes for
+                         * one table, and the scanner has already dropped the
+                         * comma. Keep taking names until a clause word turns
+                         * up. */
+                        do {
+                            if (npend_idx >= MAXIDX) die("too many indexed tables");
+                            snprintf(pend_idx[npend_idx].name,
+                                     sizeof pend_idx[0].name, "%s", tok.text);
+                            pend_idx[npend_idx].table = nsym;
+                            npend_idx++;
+                            next();
+                        } while (!tok.eof && !is(".") && !is_data_clause());
                         continue;
                     }
                     break;
@@ -1288,7 +1319,9 @@ static void parse_data_division(void)
             sy->digits = 9; sy->scale = 0; sy->is_signed = 1;
             sy->bytes = 4;
             sy->elem = sy->bytes;
-            if (sy->occurs > 0) { sy->occ_parent = nsym; sy->bytes = sy->elem * sy->occurs; }
+            if (sy->occurs > 0) { sy->occ_parent = nsym;
+            if (sy->occ_depth >= 3) die("COBOL-74 subscripts and indexes to three levels; COBOL-85 raised that to seven, and this compiler targets the earlier standard");
+            sy->occ_chain[sy->occ_depth++] = nsym; sy->bytes = sy->elem * sy->occurs; }
             sy->offset = cursor;
             cursor += sy->bytes;
             if (!in_linkage && (level == 1 || level == 77) && cursor > wslen) wslen = cursor;
@@ -1299,6 +1332,15 @@ static void parse_data_division(void)
             /* No PICTURE: this is a group, and the items that follow are its
              * subordinates. Its size is filled in when it closes. */
             sy->is_group = 1;
+            /* A group that itself carries OCCURS is the innermost table of a
+             * reference to it, so it goes on the end of its own chain. Its
+             * element size is not known until it closes, which is fine: the
+             * chain stores the symbol, and the size is read at codegen. */
+            if (sy->occurs > 0) {
+                sy->occ_parent = nsym;
+                if (sy->occ_depth >= 3) die("COBOL-74 subscripts and indexes to three levels; COBOL-85 raised that to seven, and this compiler targets the earlier standard");
+                sy->occ_chain[sy->occ_depth++] = nsym;
+            }
             sy->offset = cursor;
             if (sy->has_value) die("a group item may not carry VALUE here");
             if (sp >= 32) die("group nesting too deep");
@@ -1372,7 +1414,9 @@ static void parse_data_division(void)
         }
         sy->elem = sy->bytes;
         if (sy->occurs > 0) {
-            sy->occ_parent = nsym;          /* an elementary table is its own */
+            sy->occ_parent = nsym;
+            if (sy->occ_depth >= 3) die("COBOL-74 subscripts and indexes to three levels; COBOL-85 raised that to seven, and this compiler targets the earlier standard");
+            sy->occ_chain[sy->occ_depth++] = nsym;          /* an elementary table is its own */
             sy->bytes = sy->elem * sy->occurs;
         }
         sy->offset = cursor;
@@ -1439,7 +1483,8 @@ static void parse_data_division(void)
         wslen = (wslen + 7) & ~7;
         ix->offset = wslen; wslen += 2;
         ix->has_value = 1; strcpy(ix->value, "0");
-        syms[pend_idx[k].table].index_sym = nsym;
+        if (syms[pend_idx[k].table].index_sym < 0)
+            syms[pend_idx[k].table].index_sym = nsym;   /* the first one wins */
         nsym++;
         if (pend_idx[k].key[0]) {
             int ks = lookup(pend_idx[k].key);
@@ -1887,14 +1932,23 @@ static Cond *parse_cond(void)
 static void eat_period(void) { if (is(".")) { next(); at_period = 1; } }
 
 /* A subscript directly after an identifier, or NULL. */
+/* The subscripts on a reference, as a list. A comma between them has already
+ * been dropped by the scanner -- a comma followed by a space is a separator --
+ * so ENTRY (A, B) and ENTRY (A B) arrive here identically. */
 static Node *opt_subscript(void)
 {
     if (!is("(")) return NULL;
     next();
-    Node *n = parse_expr();
-    if (is(",")) die("only one-dimensional tables are implemented");
+    Node *head = NULL, **tail = &head;
+    int n = 0;
+    while (!tok.eof && !is(")")) {
+        if (++n > 3) die("COBOL-74 allows at most three subscripts on a reference");
+        *tail = parse_expr();
+        tail = &(*tail)->next;
+    }
     expect(")");
-    return n;
+    if (!head) die("a subscript list may not be empty");
+    return head;
 }
 
 static void parse_one_statement(void)
@@ -2882,13 +2936,33 @@ static void field_ref_m(const Sym *sy, Node *sub, int mode, int len, int reg,
         else                   snprintf(out, outn, "%s", sy->label);
         return;
     }
-    int t = sy->occ_parent;
-    if (t < 0) die("subscript on an item that is not inside an OCCURS table");
-    gen_subscript(sub, reg);
-    int elem = syms[t].elem;
-    if (elem != 1) {
-        snprintf(b, sizeof b, "%d,%s", reg, intern_half(elem));
-        asm_line("", "MH", b, "times element size");
+    if (sy->occ_depth == 0)
+        die("subscript on an item that is not inside an OCCURS table");
+    int given = 0;
+    for (Node *q = sub; q; q = q->next) given++;
+    if (given != sy->occ_depth) {
+        char m[128];
+        snprintf(m, sizeof m, "%s needs %d subscript%s, not %d",
+                 sy->name, sy->occ_depth, sy->occ_depth == 1 ? "" : "s", given);
+        die(m);
+    }
+    /* address = label + sum over levels of (subscript - 1) * element size,
+     * outermost level first. One term goes straight into reg; the rest are
+     * built in R0 and added, which is free because nothing else is live
+     * between the two instructions. */
+    int lvl = 0;
+    for (Node *q = sub; q; q = q->next, lvl++) {
+        int r = (lvl == 0) ? reg : 0;
+        gen_subscript(q, r);
+        int elem = syms[sy->occ_chain[lvl]].elem;
+        if (elem != 1) {
+            snprintf(b, sizeof b, "%d,%s", r, intern_half(elem));
+            asm_line("", "MH", b, "times element size");
+        }
+        if (lvl > 0) {
+            snprintf(b, sizeof b, "%d,0", reg);
+            asm_line("", "AR", b, "add this dimension");
+        }
     }
     need_sym_base(sy);
     snprintf(b, sizeof b, "%d,%s(%d)", reg, sy->label, reg);
