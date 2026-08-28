@@ -206,16 +206,16 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Ten slices in, the histogram has gone flat -- no single thing blocks more than
+Eleven slices in, the histogram has gone flat -- no single thing blocks more than
 a tenth of the corpus any more:
 
      25   an unimplemented SELECT clause  (13 of them correctly refused)
      23   a USAGE DISPLAY item past 16 digits
-      9   the SIGN clause
       8   a RELATIVE KEY spelling
       5   nesting tables more than three deep (correctly refused)
       5   an alphanumeric PICTURE mixing X and 9
       5   a paragraph name reused in another section
+      5   MAXSTMT, an internal limit rather than a feature
 
 That flattening is the result worth noting. The first slices each cleared
 something standing in front of a quarter to a half of the corpus; from here the
@@ -330,6 +330,33 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### The SIGN clause
+
+`[SIGN IS] {LEADING|TRAILING} [SEPARATE CHARACTER]`, II-31. Without `SEPARATE`
+the sign is an overpunch on the leading or trailing digit and the `S` costs
+nothing; with it the sign is its own character position, `+` or `-`, and the
+`S` is counted in the size. Trailing overpunch is what this compiler already
+did with no clause at all, which is exactly the choice general rule 2 leaves to
+the implementor -- so of the four combinations only three needed code.
+
+A zoned item whose sign is not a trailing overpunch is copied into `ZWK` and
+taken apart there, which makes a subscripted reference no harder than a plain
+one. `MVZ` does the overpunch cases in one instruction each: on the way in the
+leading zone is moved to where `PACK` looks for it and the leading digit is
+made plain again; on the way out, the reverse.
+
+**Only the SEPARATE layouts are compared byte for byte.** An overpunch is
+implementor-defined *and* character-set dependent -- a negative 5 is `X'D5'` in
+EBCDIC and something else entirely in ASCII -- so `tests/signclau.cbl` checks
+those forms through their value and reserves the byte comparison, via
+`REDEFINES ... PIC X(6)`, for `+12345` and `12345-`, which both compilers must
+spell the same way.
+
+One assembler error was worth the trip: `MVC` carries one length, on its first
+operand, and asking `field_ref` for a source operand *with* a length produced
+`MVC ZWK(5),D0001(5)` -- two lengths, which IFOX00 reports as a relocatable
+displacement rather than as the obvious thing.
 
 ### BLOCK CONTAINS n CHARACTERS
 

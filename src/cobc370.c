@@ -385,6 +385,8 @@ typedef struct {
     int  occ_chain[3];/* every enclosing OCCURS, outermost first */
     int  occ_depth;   /* how many -- and how many subscripts a reference needs */
     int  alias;       /* REDEFINES: shares storage, so emit a label not a DC */
+    int  sgn_lead;    /* SIGN IS LEADING; the default is trailing */
+    int  sgn_sep;     /* SIGN IS ... SEPARATE CHARACTER: its own position */
     int  is_index;    /* an index-name, or an item with USAGE IS INDEX */
     int  fd_file;     /* an 01 under an FD: which file's record area, else -1 */
     int  redef_from;  /* REDEFINES: cursor to resume at when this item closes */
@@ -1276,6 +1278,19 @@ static void parse_data_division(void)
                 sy->redef_cap = syms[t].offset + syms[t].bytes;
                 redef_limit = sy->redef_cap;
                 next();
+            } else if (is("SIGN")) {
+                /* [SIGN IS] {LEADING|TRAILING} [SEPARATE CHARACTER], II-31.
+                 * Without SEPARATE the sign is an overpunch on the leading or
+                 * trailing digit and the S costs nothing; with it the sign is
+                 * its own character position, '+' or '-', and the S is counted
+                 * in the size. Trailing overpunch is what this compiler does
+                 * when no clause is given, which is the implementor's choice
+                 * general rule 2 leaves open. */
+                next(); if (is("IS")) next();
+                if (is("LEADING")) { sy->sgn_lead = 1; next(); }
+                else if (is("TRAILING")) next();
+                else die("SIGN IS needs LEADING or TRAILING");
+                if (is("SEPARATE")) { sy->sgn_sep = 1; next(); if (is("CHARACTER")) next(); }
             } else if (is("SYNC") || is("SYNCHRONIZED")) {
                 /* Accepted, then verified. This compiler lays items out with no
                  * padding, so SYNC is a no-op exactly when every binary item
@@ -1398,6 +1413,9 @@ static void parse_data_division(void)
                     sy->bytes = pi.bytes;
                 } else switch (sy->usage) {
                 case U_DISPLAY:
+                    if ((sy->sgn_lead || sy->sgn_sep) && !pi.is_signed)
+                        die("a SIGN clause needs an S in the PICTURE -- syntax "
+                            "rule 1 on II-31");
                     /* PACK and UNPK carry their operand lengths in four bits,
                      * so a zoned field they can convert is at most 16 bytes.
                      * The standard's ceiling is 18 digits and COMP-3 reaches
@@ -1409,8 +1427,13 @@ static void parse_data_division(void)
                         die("a USAGE DISPLAY item is limited to 16 digits: "
                             "PACK and UNPK cannot convert a zoned field wider "
                             "than 16 bytes. COMP-3 reaches the standard's 18.");
-                    sy->bytes = pi.digits; break;
-                case U_COMP3:   sy->bytes = pi.digits / 2 + 1; break;
+                    sy->bytes = pi.digits + (sy->sgn_sep ? 1 : 0);
+                    break;
+                case U_COMP3:
+                    if (sy->sgn_lead || sy->sgn_sep)
+                        die("the SIGN clause applies only to USAGE DISPLAY -- "
+                            "syntax rule 2 on II-31");
+                    sy->bytes = pi.digits / 2 + 1; break;
                 case U_COMP:
                     if (pi.digits <= 4)      sy->bytes = 2;
                     else if (pi.digits <= 9) sy->bytes = 4;
@@ -2996,11 +3019,91 @@ static void field_ref(const Sym *sy, Node *sub, int len, int reg, char *out, siz
  * read as a signed value, so a right shift of k is encoded as 64-k.
  */
 
+/* Labels generated during code emission, past the ones the parser handed out. */
+static int genlabel;
+static const char *intern_const(const char *digits);
+
+/* A zoned item whose sign is not a trailing overpunch is copied to ZWK first
+ * and taken apart there, so the same code serves a subscripted reference. */
+static void gen_sign_load(const Sym *sy, Node *sub, const char *wk)
+{
+    char b[128], f[64];
+    int n = sy->digits;
+    /* MVC carries one length, on its first operand -- so the source must come
+     * back without one. */
+    field_ref_m(sy, sub, FR_SS_NOLEN, sy->elem, 7, f, sizeof f);
+    snprintf(b, sizeof b, "ZWK(%d),%s", sy->elem, f);
+    asm_line("", "MVC", b, "the item, sign and all");
+    if (!sy->sgn_sep) {
+        /* Leading overpunch: give the trailing digit the leading zone, make
+         * the leading digit plain, and PACK as usual. MVZ moves zones only. */
+        snprintf(b, sizeof b, "ZWK+%d(1),ZWK", n - 1);
+        asm_line("", "MVZ", b, "the sign moves to where PACK looks for it");
+        asm_line("", "OI", "ZWK,X'F0'", "the leading digit is a digit again");
+        snprintf(b, sizeof b, "%s(16),ZWK(%d)", wk, n);
+        asm_line("", "PACK", b, "zoned -> packed");
+        return;
+    }
+    /* SEPARATE: the digits pack on their own and the sign character decides. */
+    snprintf(b, sizeof b, "%s(16),ZWK+%d(%d)", wk, sy->sgn_lead ? 1 : 0, n);
+    asm_line("", "PACK", b, "the digits, without the sign character");
+    snprintf(b, sizeof b, "ZWK+%d,C'-'", sy->sgn_lead ? 0 : n);
+    asm_line("", "CLI", b, "negative?");
+    int lab = ++genlabel;
+    char l[16]; snprintf(l, sizeof l, "L%04d", lab);
+    asm_line("", "BNE", l, "");
+    snprintf(b, sizeof b, "%s+15,X'F0'", wk);
+    asm_line("", "NI", b, "clear the sign nibble");
+    snprintf(b, sizeof b, "%s+15,X'0D'", wk);
+    asm_line("", "OI", b, "and make it negative");
+    asm_line(l, "DS", "0H", "");
+}
+
+/* The reverse: build the zoned form in ZWK, sign where the clause asks for it,
+ * then move the whole item into place. */
+static void gen_sign_store(const Sym *sy, Node *sub, const char *wk)
+{
+    char b[128], f[64];
+    int n = sy->digits;
+    if (!sy->sgn_sep) {
+        snprintf(b, sizeof b, "ZWK(%d),%s(16)", n, wk);
+        asm_line("", "UNPK", b, "packed -> zoned");
+        snprintf(b, sizeof b, "ZWK(1),ZWK+%d", n - 1);
+        asm_line("", "MVZ", b, "the sign moves to the leading digit");
+        snprintf(b, sizeof b, "ZWK+%d,X'F0'", n - 1);
+        asm_line("", "OI", b, "the trailing digit is a digit again");
+    } else {
+        snprintf(b, sizeof b, "ZWK+%d(%d),%s(16)", sy->sgn_lead ? 1 : 0, n, wk);
+        asm_line("", "UNPK", b, "packed -> zoned");
+        snprintf(b, sizeof b, "ZWK+%d,X'F0'", (sy->sgn_lead ? 1 : 0) + n - 1);
+        asm_line("", "OI", b, "no overpunch: the sign has its own position");
+        snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("0"));
+        asm_line("", "CP", b, "negative?");
+        int lneg = ++genlabel, ldone = ++genlabel;
+        char ln[16], ld[16];
+        snprintf(ln, sizeof ln, "L%04d", lneg);
+        snprintf(ld, sizeof ld, "L%04d", ldone);
+        asm_line("", "BM", ln, "");
+        snprintf(b, sizeof b, "ZWK+%d,C'+'", sy->sgn_lead ? 0 : n);
+        asm_line("", "MVI", b, "");
+        asm_line("", "B", ld, "");
+        asm_line(ln, "DS", "0H", "");
+        snprintf(b, sizeof b, "ZWK+%d,C'-'", sy->sgn_lead ? 0 : n);
+        asm_line("", "MVI", b, "");
+        asm_line(ld, "DS", "0H", "");
+    }
+    field_ref(sy, sub, sy->elem, 6, f, sizeof f);
+    snprintf(b, sizeof b, "%s,ZWK", f);
+    asm_line("", "MVC", b, "the item, sign and all");
+    (void)n;
+}
+
 static void gen_load(const Sym *sy, Node *sub, const char *wk)
 {
     char b[128], f[64];
     switch (sy->usage) {
     case U_DISPLAY:
+        if (sy->sgn_lead || sy->sgn_sep) { gen_sign_load(sy, sub, wk); break; }
         field_ref(sy, sub, sy->elem, 7, f, sizeof f);
         snprintf(b, sizeof b, "%s(16),%s", wk, f);
         asm_line("", "PACK", b, "zoned -> packed");
@@ -3283,6 +3386,7 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
     if (sy->edited) { gen_store_edited(sy, sub, wk); return; }
     switch (sy->usage) {
     case U_DISPLAY:
+        if (sy->sgn_lead || sy->sgn_sep) { gen_sign_store(sy, sub, wk); break; }
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
         snprintf(b, sizeof b, "%s,%s(16)", f, wk);
         asm_line("", "UNPK", b, "packed -> zoned");
@@ -3763,7 +3867,6 @@ static void gen_call_range(int a, int b, int *nret)
 static const char *br_true[]  = { "BE", "BL", "BH", "BNE", "BNH", "BNL" };
 static const char *br_false[] = { "BNE", "BNL", "BNH", "BE", "BH", "BL" };
 
-static int genlabel;
 
 static int node_alpha(const Node *n)
 {
