@@ -206,15 +206,16 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Seven slices in, the histogram has gone flat -- no single thing blocks more than
+Eight slices in, the histogram has gone flat -- no single thing blocks more than
 a tenth of the corpus any more:
 
-     25   an unimplemented SELECT clause
-     22   a USAGE DISPLAY item past 16 digits
-     12   MOVE between a numeric and an alphanumeric item
+     25   an unimplemented SELECT clause  (13 of them correctly refused)
+     23   a USAGE DISPLAY item past 16 digits
+     14   MOVE between a numeric and an alphanumeric item
      12   BLOCK CONTAINS n CHARACTERS
       9   the SIGN clause
-      6   the SET statement
+      8   a RELATIVE KEY spelling
+      6   subscripting past one dimension
       5   BEFORE ADVANCING, and ADVANCING by an identifier
 
 That flattening is the result worth noting. The first slices each cleared
@@ -330,6 +331,40 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### Table Handling: USAGE IS INDEX and SET
+
+Table Handling is one of the three modules in the minimum standard, and its
+level 1 floor was the clearest example of the diagonal this map describes:
+`SEARCH` and `SEARCH ALL` -- both **level 2** -- already worked, while `SET`
+and `USAGE IS INDEX`, both **level 1**, did not exist.
+
+The representation made this cheap. An index-name in this compiler holds the
+**occurrence number** rather than a displacement, which the standard permits --
+the form is the implementor's choice. An index data item is given the same
+representation, a signed fullword. Every valid combination in the chart on
+III-12 is then an integer move or an integer add, so `SET` builds `MOVE`, `ADD`
+and `SUBTRACT` statements rather than a code path of its own:
+
+    Sending item        Receiving item
+                        integer item   index-name   index data item
+    integer literal     no             yes          no
+    integer data item   no             yes          no
+    index-name          yes            yes          yes
+    index data item     no             yes          yes
+
+Those refusals are enforced, and each one names the chart. Operands on both
+sides may be subscripted, which the corpus needs -- `SET INDEX1 TO TABLE2-REC
+(INDEX2)` is the shape that found it.
+
+What is left of Table Handling level 1 is subscripting past one dimension:
+`opt_subscript` still dies on a comma. That is the structural piece -- a
+subscript has to stop being one `Node *` and become a list, and `occ_parent`
+has to stop being one table and become the chain of enclosing `OCCURS`.
+
+An unrelated gap surfaced while writing the test and is worth recording:
+`DISPLAY` of a subscripted item is not implemented, so the test moves elements
+to a work field first.
 
 ### Declaratives
 

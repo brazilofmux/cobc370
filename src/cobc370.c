@@ -369,6 +369,7 @@ typedef struct {
     int  elem;        /* size of one element */
     int  occ_parent;  /* the table this item sits inside, -1 if none */
     int  alias;       /* REDEFINES: shares storage, so emit a label not a DC */
+    int  is_index;    /* an index-name, or an item with USAGE IS INDEX */
     int  fd_file;     /* an 01 under an FD: which file's record area, else -1 */
     int  redef_from;  /* REDEFINES: cursor to resume at when this item closes */
     int  redef_cap;   /* REDEFINES: one past the last byte it may occupy */
@@ -1247,6 +1248,14 @@ static void parse_data_division(void)
             } else if (is("USAGE")) { next(); if (is("IS")) next(); }
             else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; next(); }
             else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; next(); }
+            else if (is("INDEX")) {
+                /* An index data item holds a value corresponding to an
+                 * occurrence number, in a form the implementor chooses. This
+                 * compiler keeps the occurrence number itself, exactly as an
+                 * index-name does, so SET between the two is a plain move.
+                 * It has no PICTURE -- the standard forbids one. */
+                sy->usage = U_COMP; sy->is_index = 1; next();
+            }
             else if (is("DISPLAY")) { sy->usage = U_DISPLAY; next(); }
             else if (is("VALUE")) {
                 next(); if (is("IS")) next();
@@ -1272,6 +1281,20 @@ static void parse_data_division(void)
         }
         expect(".");
 
+        if (!pic[0] && sy->is_index) {
+            /* USAGE IS INDEX carries no PICTURE but is elementary all the
+             * same: a signed fullword holding an occurrence number. */
+            if (sy->has_value) die("VALUE is not allowed on a USAGE INDEX item");
+            sy->digits = 9; sy->scale = 0; sy->is_signed = 1;
+            sy->bytes = 4;
+            sy->elem = sy->bytes;
+            if (sy->occurs > 0) { sy->occ_parent = nsym; sy->bytes = sy->elem * sy->occurs; }
+            sy->offset = cursor;
+            cursor += sy->bytes;
+            if (!in_linkage && (level == 1 || level == 77) && cursor > wslen) wslen = cursor;
+            nsym++;
+            continue;
+        }
         if (!pic[0]) {
             /* No PICTURE: this is a group, and the items that follow are its
              * subordinates. Its size is filled in when it closes. */
@@ -1411,7 +1434,7 @@ static void parse_data_division(void)
         snprintf(ix->label, sizeof ix->label, "D%04d", nsym);
         snprintf(ix->name, sizeof ix->name, "%s", pend_idx[k].name);
         if (lookup(ix->name) >= 0) die("INDEXED BY name is already declared");
-        ix->usage = U_COMP; ix->digits = 4; ix->is_signed = 1;
+        ix->usage = U_COMP; ix->digits = 4; ix->is_signed = 1; ix->is_index = 1;
         ix->bytes = ix->elem = 2;
         wslen = (wslen + 7) & ~7;
         ix->offset = wslen; wslen += 2;
@@ -2023,6 +2046,82 @@ static void parse_one_statement(void)
             st->immscale = dot ? (int)strlen(dot + 1) : 0;
             scale_literal(save, st->immscale, st->immdigits, sizeof st->immdigits);
         } else st->src = resolve_sym(save, squal2, snq2);
+        eat_period();
+        return;
+    }
+
+    if (is("SET")) {
+        /* SET is table handling's own assignment. Because an index here holds
+         * the occurrence number rather than a displacement, every valid
+         * combination in the chart on III-12 is an integer move or an integer
+         * add -- so this builds MOVE, ADD and SUBTRACT statements rather than
+         * a codegen path of its own. */
+        next();
+        int recv[16], nrecv = 0;
+        Node *rsub[16];
+        while (!tok.eof && !is("TO") && !is("UP") && !is("DOWN")) {
+            if (nrecv >= 16) die("too many receivers in one SET");
+            recv[nrecv] = consume_sym();
+            rsub[nrecv] = opt_subscript();
+            nrecv++;
+        }
+        if (nrecv == 0) die("SET needs at least one receiving item");
+        if (is("UP") || is("DOWN")) {
+            int down = is("DOWN");
+            next(); expect("BY");
+            for (int k = 0; k < nrecv; k++)
+                if (!syms[recv[k]].is_index)
+                    die("SET ... UP BY and DOWN BY may only change an index-name");
+            char save[MAXTOK];
+            memcpy(save, tok.text, (size_t)tok.len + 1);
+            int lit = is_numeric_literal(save);
+            next();
+            int ssym = lit ? -1 : lookup(save);
+            Node *ssub = lit ? NULL : opt_subscript();
+            if (!lit && ssym < 0) die("SET ... BY names something undeclared");
+            if (!lit && (syms[ssym].is_index || syms[ssym].scale))
+                die("SET ... BY needs an elementary integer item");
+            for (int k = 0; k < nrecv; k++) {
+                Stmt *m = new_stmt(down ? ST_SUB : ST_ADD);
+                m->dst = recv[k]; m->dsub = rsub[k]; m->ssub = ssub;
+                if (lit) {
+                    m->imm = 1; m->immscale = 0;
+                    scale_literal(save, 0, m->immdigits, sizeof m->immdigits);
+                } else m->src = ssym;
+            }
+            eat_period();
+            return;
+        }
+        expect("TO");
+        char save[MAXTOK];
+        memcpy(save, tok.text, (size_t)tok.len + 1);
+        int lit = is_numeric_literal(save);
+        next();
+        int ssym = lit ? -1 : lookup(save);
+        Node *ssub = lit ? NULL : opt_subscript();
+        if (!lit && ssym < 0) die("SET ... TO names something undeclared");
+        /* The validity chart on III-12. An index-name receives anything; an
+         * integer item receives only an index-name; an index data item
+         * receives only an index. */
+        for (int k = 0; k < nrecv; k++) {
+            const Sym *r = &syms[recv[k]];
+            int src_is_index = !lit && syms[ssym].is_index;
+            if (r->is_index) continue;                 /* receives anything */
+            if (!src_is_index)
+                die("SET may only put an index-name into an item that is not "
+                    "itself an index -- see the chart on III-12");
+            if (r->is_alpha || r->is_group || r->scale)
+                die("SET ... TO an item that is not an index needs an "
+                    "elementary integer");
+        }
+        for (int k = 0; k < nrecv; k++) {
+            Stmt *m = new_stmt(ST_MOVE);
+            m->dst = recv[k]; m->dsub = rsub[k]; m->ssub = ssub;
+            if (lit) {
+                m->imm = 1; m->immscale = 0;
+                scale_literal(save, 0, m->immdigits, sizeof m->immdigits);
+            } else m->src = ssym;
+        }
         eat_period();
         return;
     }
