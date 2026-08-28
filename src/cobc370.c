@@ -369,6 +369,7 @@ typedef struct {
     int  elem;        /* size of one element */
     int  occ_parent;  /* the table this item sits inside, -1 if none */
     int  alias;       /* REDEFINES: shares storage, so emit a label not a DC */
+    int  fd_file;     /* an 01 under an FD: which file's record area, else -1 */
     int  redef_from;  /* REDEFINES: cursor to resume at when this item closes */
     int  redef_cap;   /* REDEFINES: one past the last byte it may occupy */
     int  is_88;       /* condition name: no storage, tests its parent */
@@ -487,6 +488,7 @@ typedef struct {
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
     int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
+    int  rec;               /* WRITE/REWRITE: the record named, of an FD's several */
     int  line;              /* the source line, for the program-check table */
     int  lab3;              /* ST_SEARCH: the end label */
     struct Cond *cond2;     /* ST_SEARCH: the same operands compared with < */
@@ -1091,6 +1093,7 @@ static void parse_data_division(void)
 
         while (sp > 0 && syms[stack[sp-1]].level >= level) close_group(&cursor, stack, &sp);
         redef_limit = enclosing_cap(stack, sp);
+        int fd_from = -1;
         if (level == 1 || level == 77) {
             while (sp > 0) close_group(&cursor, stack, &sp);
             redef_limit = -1;                      /* a new 01 area starts clean */
@@ -1108,6 +1111,14 @@ static void parse_data_division(void)
                 wslen = (wslen + 7) & ~7;
                 cursor = wslen;
             }
+            /* An FD may describe its record more than one way. They are not
+             * separate areas: every 01 under the FD describes the same buffer,
+             * implicitly redefining the first, and the record length is the
+             * longest of them. */
+            if (level == 1 && cur_file >= 0 && files[cur_file].rec_sym >= 0) {
+                fd_from = cursor;
+                cursor = syms[files[cur_file].rec_sym].offset;
+            }
         }
 
         if (nsym >= MAXSYM) die("too many data items");
@@ -1117,6 +1128,7 @@ static void parse_data_division(void)
         sy->occ_parent = -1;
         sy->index_sym = sy->askey_sym = -1;
         sy->redef_from = sy->redef_cap = -1;
+        sy->fd_file = -1;
         for (int k = sp - 1; k >= 0; k--)
             if (syms[stack[k]].occurs > 0) { sy->occ_parent = stack[k]; break; }
         /* Anything under a REDEFINES shares that storage as well. */
@@ -1145,7 +1157,8 @@ static void parse_data_division(void)
         next();
 
         char pic[64] = "";
-        int item_redef = 0;        /* this item carries REDEFINES itself */
+        int item_redef = (fd_from >= 0);  /* REDEFINES, or an FD's later record */
+        if (fd_from >= 0) { sy->alias = 1; sy->redef_from = fd_from; }
         sy->usage = U_DISPLAY;
         while (!tok.eof && !is(".")) {
             if (is("PIC") || is("PICTURE")) {
@@ -1248,8 +1261,10 @@ static void parse_data_division(void)
             sy->offset = cursor;
             if (sy->has_value) die("a group item may not carry VALUE here");
             if (sp >= 32) die("group nesting too deep");
-            if (cur_file >= 0 && level == 1 && files[cur_file].rec_sym < 0)
-                files[cur_file].rec_sym = nsym;
+            if (cur_file >= 0 && level == 1) {
+                sy->fd_file = cur_file;
+                if (files[cur_file].rec_sym < 0) files[cur_file].rec_sym = nsym;
+            }
             stack[sp++] = nsym;
             nsym++;
             if (level == 1 || level == 77) { /* wslen advances when it closes */ }
@@ -1336,9 +1351,9 @@ static void parse_data_division(void)
         if (redef_limit >= 0 && cursor > redef_limit)
             die("a REDEFINES may not be longer than the item it redefines");
         if (!in_linkage && (level == 1 || level == 77) && cursor > wslen) wslen = cursor;
-        if (cur_file >= 0 && level == 1 && files[cur_file].rec_sym < 0) {
-            files[cur_file].rec_sym = nsym;
-            files[cur_file].reclen = sy->bytes;
+        if (cur_file >= 0 && level == 1) {
+            sy->fd_file = cur_file;
+            if (files[cur_file].rec_sym < 0) files[cur_file].rec_sym = nsym;
         }
         nsym++;
     }
@@ -1395,7 +1410,10 @@ static void parse_data_division(void)
     for (int i = 0; i < nfile; i++) {
         if (files[i].report >= 0) { files[i].reclen = 133; continue; }
         if (files[i].rec_sym < 0) die("an FD has no record description");
-        files[i].reclen = syms[files[i].rec_sym].bytes;
+        files[i].reclen = 0;
+        for (int k = 0; k < nsym; k++)
+            if (syms[k].fd_file == i && syms[k].bytes > files[i].reclen)
+                files[i].reclen = syms[k].bytes;
         if (keyname[i][0]) files[i].key_sym = need_sym(keyname[i]);
         if (nomname[i][0]) files[i].nominal_sym = need_sym(nomname[i]);
         if (statname[i][0]) {
@@ -1661,7 +1679,7 @@ static Stmt *new_stmt(int op)
     if (nstmt >= MAXSTMT) die("too many statements");
     Stmt *st = &stmts[nstmt++];
     memset(st, 0, sizeof *st);
-    st->op = op; st->dst = st->src = -1; st->vary_sym = -1;
+    st->op = op; st->dst = st->src = -1; st->vary_sym = -1; st->rec = -1;
     st->line = tok.line;
     return st;
 }
@@ -2148,12 +2166,11 @@ static void parse_one_statement(void)
     if (is("WRITE")) {
         next();
         int i = consume_sym();
-        int fi = -1;
-        for (int k = 0; k < nfile; k++) if (files[k].rec_sym == i) fi = k;
+        int fi = syms[i].fd_file;
         if (fi < 0) die("WRITE names something that is not a file's record");
         files[fi].has_write = 1;
         Stmt *st = new_stmt(ST_WRITE);
-        st->dst = fi;
+        st->dst = fi; st->rec = i;
         if (is("FROM")) {
             /* WRITE r FROM x is MOVE x TO r followed by WRITE r. */
             next();
@@ -2179,12 +2196,11 @@ static void parse_one_statement(void)
     if (is("REWRITE")) {
         next();
         int i = consume_sym();
-        int fi = -1;
-        for (int k = 0; k < nfile; k++) if (files[k].rec_sym == i) fi = k;
+        int fi = syms[i].fd_file;
         if (fi < 0) die("REWRITE names something that is not a file's record");
         if (!files[fi].vsam) die("REWRITE is implemented for VSAM files only");
         Stmt *st = new_stmt(ST_REWRITE);
-        st->dst = fi;
+        st->dst = fi; st->rec = i;
         if (is("FROM")) { next(); st->src = consume_sym(); }
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
@@ -4019,13 +4035,14 @@ static void generate(void)
             char wle[16], wlc[16];
             snprintf(wle, sizeof wle, "L%04d", st->lab1);
             snprintf(wlc, sizeof wlc, "L%04d", st->lab2);
-            snprintf(b, sizeof b, " WRITE %s", syms[f->rec_sym].name);
+            const Sym *wrec = &syms[st->rec >= 0 ? st->rec : f->rec_sym];
+            snprintf(b, sizeof b, " WRITE %s", wrec->name);
             asm_comment(b);
             if (st->src >= 0) {
                 const Sym *sv = &syms[st->src];
                 asm_comment("  FROM: fill the record area first");
-                need_sym_base(&syms[f->rec_sym]); need_sym_base(sv);
-                gen_move_alpha(&syms[f->rec_sym], NULL, sv, NULL);
+                need_sym_base(wrec); need_sym_base(sv);
+                gen_move_alpha(wrec, NULL, sv, NULL);
             }
             if (f->vsam) {
                 /* PUT stores from the FD area because the RPL says MVE. In

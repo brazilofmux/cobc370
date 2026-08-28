@@ -206,9 +206,9 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Four slices in, the same histogram reads:
+Five slices in, the same histogram reads:
 
-     77   WRITE naming a record other than an FD's first
+     78   WRITE ... AFTER ADVANCING
      25   an unimplemented SELECT clause
      24   the USE statement -- declaratives
      22   a USAGE DISPLAY item past 16 digits
@@ -217,12 +217,13 @@ Four slices in, the same histogram reads:
 Each fix uncovers the next thing, and the count that matters is the one at the
 top of the list rather than the number that compile:
 
-    blocker                      start   digits   REDEFINES   literals   now
-    more than 15 digits            126       22          22         22    22
-    group REDEFINES                  -       94           0          0     0
-    literal continuation            20       20         112          0     0
-    a SECTION in the Proc Div        -        -           -         77     0
-    WRITE of a non-first record      -        -           -          -    77
+    blocker                      start   digits   REDEF   literals   SECTIONs   now
+    more than 15 digits            126       22      22         22         22    22
+    group REDEFINES                  -       94       0          0          0     0
+    literal continuation            20       20     112          0          0     0
+    a SECTION in the Proc Div        -        -       -         77          0     0
+    WRITE of a non-first record      -        -       -          -         77     0
+    WRITE ... AFTER ADVANCING        -        -       -          -          -    78
 
 Two of those had been sitting near the bottom of the list the whole time, only
 because most programs hit something else first.
@@ -305,6 +306,28 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### Several record descriptions per FD
+
+An FD may describe its record more than one way, and the 01s are not separate
+areas: each describes the same buffer, implicitly redefining the first. The
+compiler recorded only the first, so `WRITE` naming any other one was rejected
+as "not a file's record" -- 77 programs, because the CCVS harness describes its
+print line twice.
+
+Each 01 under an FD now records which file it belongs to, later ones overlay
+the first through the same machinery a `REDEFINES` uses, the file's record
+length is the longest of the descriptions, and `WRITE ... FROM` fills the
+record that was actually named rather than the first.
+
+**Known gap, found while testing this.** An FD whose record descriptions differ
+in length describes a *variable-length* file. GnuCOBOL writes one that way --
+each record with its own length prefix. cobc370 emits `RECFM=FB` with
+`LRECL` set to the longest description, so a shorter record is written padded
+to the full length. `RECFM=V` is not implemented. `tests/fdrecs.cbl` therefore
+describes its record three ways at one length, which is the case the corpus
+actually needs; the differing-length case is recorded here rather than papered
+over.
 
 ### Procedure Division sections
 
