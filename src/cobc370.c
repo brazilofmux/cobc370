@@ -1438,17 +1438,11 @@ static void parse_data_division(void)
                     if ((sy->sgn_lead || sy->sgn_sep) && !pi.is_signed)
                         die("a SIGN clause needs an S in the PICTURE -- syntax "
                             "rule 1 on II-31");
-                    /* PACK and UNPK carry their operand lengths in four bits,
-                     * so a zoned field they can convert is at most 16 bytes.
-                     * The standard's ceiling is 18 digits and COMP-3 reaches
-                     * it -- zoned stops two short of it, on the machine rather
-                     * than on this compiler. Lifting it means splitting the
-                     * conversion in two and shifting the top digits into place
-                     * with MVO, which nothing has asked for yet. */
-                    if (pi.digits > 16)
-                        die("a USAGE DISPLAY item is limited to 16 digits: "
-                            "PACK and UNPK cannot convert a zoned field wider "
-                            "than 16 bytes. COMP-3 reaches the standard's 18.");
+                    if (pi.digits > 18)
+                        die("18 digits is the standard's ceiling");
+                    if (pi.digits > 16 && (sy->sgn_lead || sy->sgn_sep))
+                        die("a SIGN clause on an item of more than 16 digits is "
+                            "not implemented: the conversion is already split");
                     sy->bytes = pi.digits + (sy->sgn_sep ? 1 : 0);
                     break;
                 case U_COMP3:
@@ -3173,11 +3167,69 @@ static void gen_sign_store(const Sym *sy, Node *sub, const char *wk)
     (void)n;
 }
 
+/* PACK and UNPK hold each operand length in four bits, so 16 bytes is the
+ * widest zoned field either can convert -- and the standard's ceiling is 18
+ * digits. The extra one or two leading digits are converted separately and
+ * moved into the packed field's free nibbles.
+ *
+ * With n digits and k = n - 16 left over, PACK of the low 16 digits lands
+ * 17 nibbles right-justified in the 10-byte area, so nibbles 0, 1 and 2 are
+ * free; the leading digits belong at nibbles 3-k .. 2. MVZ moves a high
+ * nibble on its own, which is what makes the second one land without
+ * disturbing the digit beside it. */
+static void gen_wide_load(const Sym *sy, Node *sub, const char *wk)
+{
+    char b[128], f[64];
+    int k = sy->digits - 16;
+    field_ref_m(sy, sub, FR_SS_NOLEN, sy->elem, 7, f, sizeof f);
+    snprintf(b, sizeof b, "ZWK(%d),%s", sy->elem, f);
+    asm_line("", "MVC", b, "the whole zoned item");
+    /* The packed value has to end where a 16-byte field's sign lives, so the
+     * 10 bytes go at the RIGHT of the work area and the six in front are
+     * cleared. Within those ten, PACK leaves nibbles 0, 1 and 2 free. */
+    snprintf(b, sizeof b, "%s(6),%s", wk, wk);
+    asm_line("", "XC", b, "the high half of the work area is zero");
+    snprintf(b, sizeof b, "%s+6(10),ZWK+%d(16)", wk, k);
+    asm_line("", "PACK", b, "the low 16 digits, with the sign");
+    snprintf(b, sizeof b, "DWK(2),ZWK(%d)", k);
+    asm_line("", "PACK", b, "and the leading digits on their own");
+    if (k == 2) {
+        snprintf(b, sizeof b, "%s+6(1),DWK", wk);
+        asm_line("", "MVC", b, "digit 1 into the free byte");
+    }
+    snprintf(b, sizeof b, "%s+7(1),DWK+1", wk);
+    asm_line("", "MVZ", b, "and the next one into the free nibble");
+}
+
+/* The reverse. UNPK of the low 16 digits fills all but the leading ones;
+ * those come out of the packed field's top byte separately. */
+static void gen_wide_store(const Sym *sy, Node *sub, const char *wk)
+{
+    char b[128], f[64];
+    int k = sy->digits - 16;
+    snprintf(b, sizeof b, "ZWK+%d(16),%s+7(9)", k, wk);
+    asm_line("", "UNPK", b, "the low 16 digits, sign and all");
+    snprintf(b, sizeof b, "DWK(3),%s+6(2)", wk);
+    asm_line("", "UNPK", b, "the leading digits");
+    snprintf(b, sizeof b, "ZWK(%d),DWK+%d", k, 3 - k);
+    asm_line("", "MVC", b, "into the front of the item");
+    asm_line("", "OI", "ZWK,X'F0'", "as plain digits");
+    if (k == 2) asm_line("", "OI", "ZWK+1,X'F0'", "");
+    field_ref_m(sy, sub, FR_SS_NOLEN, sy->elem, 6, f, sizeof f);
+    snprintf(b, sizeof b, "%s(%d),ZWK", f, sy->elem);
+    asm_line("", "MVC", b, "the whole zoned item");
+    if (!sy->is_signed) {
+        snprintf(b, sizeof b, "%s+%d,X'F0'", f, sy->elem - 1);
+        asm_line("", "OI", b, "unsigned: force an F zone");
+    }
+}
+
 static void gen_load(const Sym *sy, Node *sub, const char *wk)
 {
     char b[128], f[64];
     switch (sy->usage) {
     case U_DISPLAY:
+        if (sy->digits > 16) { gen_wide_load(sy, sub, wk); break; }
         if (sy->sgn_lead || sy->sgn_sep) { gen_sign_load(sy, sub, wk); break; }
         field_ref(sy, sub, sy->elem, 7, f, sizeof f);
         snprintf(b, sizeof b, "%s(16),%s", wk, f);
@@ -3461,6 +3513,7 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
     if (sy->edited) { gen_store_edited(sy, sub, wk); return; }
     switch (sy->usage) {
     case U_DISPLAY:
+        if (sy->digits > 16) { gen_wide_store(sy, sub, wk); break; }
         if (sy->sgn_lead || sy->sgn_sep) { gen_sign_store(sy, sub, wk); break; }
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
         snprintf(b, sizeof b, "%s,%s(16)", f, wk);
@@ -5252,7 +5305,7 @@ static void generate(void)
         asm_line("PWK2", "DS", "PL16", "");
         asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");
         asm_line("EDWK", "DS", "CL64", "ED pattern and result");
-        asm_line("ZWK", "DS", "CL20", "zoned, for a numeric to alphanumeric move");
+        asm_line("ZWK", "DS", "CL24", "zoned work area");
         asm_line("MULT8", "DS", "PL8", "MP right operand");
         asm_line("DIVR8", "DS", "PL8", "DP divisor");
         asm_line("QTMP", "DS", "PL8", "DP quotient");
@@ -5728,7 +5781,19 @@ static void generate(void)
                  * value. An UNSIGNED item must carry F there, or DISPLAY shows
                  * the final digit as a letter -- 12345 prints as 1234E -- and
                  * any byte-wise comparison against it fails. */
-                if (sy->is_signed) snprintf(b, sizeof b, "%sZL%d'%s'", dup, sy->elem, v);
+                if (sy->is_signed && sy->elem > 16) {
+                    /* A Z constant is capped at 16 bytes like everything else
+                     * that touches zoned data, so a wide one is written as the
+                     * digits followed by the last one carrying its own sign
+                     * zone -- which is all a Z constant would have produced. */
+                    const char *p2 = v; int neg = 0;
+                    if (*p2 == '+' || *p2 == '-') { neg = (*p2 == '-'); p2++; }
+                    zero_pad(p2, sy->elem, digs, sizeof digs);
+                    snprintf(b, sizeof b, "%sCL%d'%.*s',XL1'%c%c'", dup,
+                             sy->elem - 1, sy->elem - 1, digs,
+                             neg ? 'D' : 'C', digs[sy->elem - 1]);
+                }
+                else if (sy->is_signed) snprintf(b, sizeof b, "%sZL%d'%s'", dup, sy->elem, v);
                 else {
                     zero_pad(v, sy->elem, digs, sizeof digs);
                     snprintf(b, sizeof b, "%sCL%d'%s'", dup, sy->elem, digs);

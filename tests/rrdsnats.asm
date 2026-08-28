@@ -750,7 +750,7 @@ PWK1     DS    PL16
 PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
-ZWK      DS    CL20                zoned, for a numeric to alphanumeric
+ZWK      DS    CL24                zoned work area
 MULT8    DS    PL8                 MP right operand
 DIVR8    DS    PL8                 DP divisor
 QTMP     DS    PL8                 DP quotient
