@@ -249,9 +249,7 @@ representation tests. **18 programs.** This is the honest edge: the next thing
 worth doing, and the first one whose cost is out of proportion to a COBOL-74
 target on this machine.
 
-**4. Ordinary remaining work, all small.** Switch-status conditions -- the last
-element between this compiler and Nucleus level 1, and the one whose meaning the
-standard leaves to the implementor -- plus
+**4. Ordinary remaining work, all small.**
 continuation of a word or a numeric literal, and a `SIGN` clause on an item of
 more than sixteen digits, a limitation this compiler introduced itself when the
 zoned conversion was split.
@@ -511,6 +509,42 @@ It exists to let a program change language mid-stream; there is no other
 language here to change to, so "full capabilities for the ENTER statement"
 amounts to taking the sentence. GnuCOBOL rejects `ENTER LINKAGE` outright, so
 that one is covered by compiling rather than by comparison.
+
+### Switch-status conditions, and Nucleus level 1
+
+`SPECIAL-NAMES` binds an implementor-name to a mnemonic and, for a switch, an
+`ON STATUS` and `OFF STATUS` condition-name; `IF SW-ON` then tests it. II-8 and
+II-44.
+
+**The 1974 standard leaves the implementor-names open, and the compiler this
+one replaces gives no help.** IKFCBL00, asked directly rather than remembered,
+accepts `SYSIN`/`SYSIPT`, `SYSOUT`/`SYSLST`, `SYSPUNCH`/`SYSPCH`, `CONSOLE`,
+`C01` through `C12` (`C13` is refused), `CSP`, and `S01`/`S02` -- and rejects
+`UPSI-n` and `SWITCH-n` outright. OS/360 ANS COBOL has no external switches at
+all; `UPSI` belongs to the DOS and OS/VS lines.
+
+So the spellings here are a deliberate extension past IKFCBL00, taken from the
+IBM systems that do have switches, and **both `UPSI-0`..`UPSI-7` and
+`SWITCH-0`..`SWITCH-7` are accepted** so that source from either lineage
+compiles. They reach one byte with `UPSI-0` as its leftmost bit, which is how
+the string is written, and a test is one `TM`.
+
+The bits arrive as `PARM='/UPSI(10100000)'` on the EXEC card -- the form IBM's
+later compilers take. The runtime looks for the literal `UPSI` anywhere in the
+parameter text and reads the next eight `0`/`1` characters; anything else
+leaves all eight off, which is the documented default. A subprogram's R1 is its
+caller's parameter list rather than a PARM, so its switches stay off and the
+code to read them is not generated.
+
+One bug in that routine is worth keeping, because it is a class of mistake
+rather than a typo: it returned the byte in R15 with `L 15,RTUPSI` placed
+*after* `LM 14,12,12(13)`. The LM restores R12, which is the base register the
+routine's own constants are addressed through -- so the load read `RTUPSI`
+through the caller's R12 and returned whatever was there. The value has to be
+put in the save area's R15 slot before the LM, and let the LM deliver it.
+
+**With this, the Nucleus is complete at level 1.** Every element of
+`1 NUC 1,2` compiles and runs on the guest.
 
 ### Class conditions
 

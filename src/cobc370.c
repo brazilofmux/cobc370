@@ -359,6 +359,7 @@ static void emit_split_dc(const char *label, const char *value, int total,
 /* ---- parser ----------------------------------------------------------- */
 
 static char progid[9];
+static int uses_switches;   /* a SPECIAL-NAMES switch condition is tested */
 
 /* ---- data model ------------------------------------------------------- */
 /* Elementary items only, so far. Storage sits inside the program CSECT and is
@@ -403,6 +404,9 @@ typedef struct {
     int  redef_from;  /* REDEFINES: cursor to resume at when this item closes */
     int  redef_cap;   /* REDEFINES: one past the last byte it may occupy */
     int  is_88;       /* condition name: no storage, tests its parent */
+    int  is_switch;   /* SPECIAL-NAMES condition name: tests a UPSI bit */
+    int  sw_bit;      /* which switch, 0 through 7, leftmost first */
+    int  sw_on;       /* 1 for ON STATUS, 0 for OFF STATUS */
     int  parent;
     int  gparent;     /* enclosing group, -1 at 01/77 -- for OF/IN qualification */
     int  sync;        /* SYNCHRONIZED: alignment is promised, so it is checked */
@@ -462,7 +466,7 @@ typedef struct Node {
 
 /* Conditions. Relations compare two expressions; AND/OR short-circuit. */
 enum { REL_EQ, REL_LT, REL_GT, REL_NE, REL_NGT, REL_NLT };
-enum { C_REL, C_AND, C_OR, C_NOT, C_CLASS };
+enum { C_REL, C_AND, C_OR, C_NOT, C_CLASS, C_SWITCH };
 
 typedef struct Cond {
     int kind, op;
@@ -472,6 +476,7 @@ typedef struct Cond {
     Node *cls_sub;
     int  cls_alpha;     /* 1 for ALPHABETIC, 0 for NUMERIC */
     int  cls_not;       /* the NOT was written before the class name */
+    int  sw_bit, sw_on; /* C_SWITCH: which UPSI bit, and which way round */
 } Cond;
 
 #define MAXCOND 256
@@ -813,6 +818,67 @@ static void parse_program_id(void)
     while (!tok.eof && !is("ENVIRONMENT") && !is("DATA") && !is("PROCEDURE")) next();
 }
 
+
+/* SPECIAL-NAMES. The 1974 standard says only "implementor-name IS mnemonic-name
+ * [ON STATUS IS condition-name] [OFF STATUS IS condition-name]" and leaves the
+ * implementor-names themselves open.
+ *
+ * IKFCBL00 -- asked directly -- accepts SYSIN/SYSIPT, SYSOUT/SYSLST,
+ * SYSPUNCH/SYSPCH, CONSOLE, C01 through C12, CSP and S01/S02, and rejects
+ * UPSI-n and SWITCH-n outright: OS/360 ANS COBOL has no external switches at
+ * all. So the switch spellings here are a deliberate extension past the
+ * compiler this one replaces, taken from the IBM systems that do have them,
+ * and both are accepted for the sake of source that came from either.
+ *
+ * The eight bits live in one byte, leftmost digit first, exactly as the UPSI
+ * string in a PARM is written. */
+static void parse_special_names(void)
+{
+    while (!tok.eof && !is("INPUT-OUTPUT") && !is("DATA") && !is("PROCEDURE")) {
+        if (is(".")) { next(); continue; }
+        if (is("CURRENCY") || is("DECIMAL-POINT"))
+            die("the CURRENCY SIGN and DECIMAL-POINT clauses are not "
+                "implemented; they change how every PICTURE is read");
+        char nm[31];
+        snprintf(nm, sizeof nm, "%s", tok.text);
+        int bit = -1;
+        if ((!strncmp(nm, "UPSI-", 5) || !strncmp(nm, "SWITCH-", 7))) {
+            const char *d = strrchr(nm, '-') + 1;
+            if (d[0] >= '0' && d[0] <= '7' && !d[1]) bit = d[0] - '0';
+            else die("a switch is UPSI-0 through UPSI-7, or SWITCH-0 through "
+                     "SWITCH-7");
+        }
+        next();
+        if (is("IS")) next();
+        if (!tok.eof && !is(".")) next();      /* the mnemonic-name */
+        if (bit < 0) {
+            /* A device or channel name. Nothing here uses one yet -- DISPLAY
+             * UPON and WRITE ADVANCING by mnemonic are both level 2 -- so it is
+             * taken and remembered by doing nothing with it. */
+            while (!tok.eof && !is(".")) next();
+            continue;
+        }
+        while (is("ON") || is("OFF")) {
+            int on = is("ON");
+            next();
+            if (is("STATUS")) next();
+            if (is("IS")) next();
+            if (nsym >= MAXSYM) die("too many data items");
+            Sym *cn = &syms[nsym];
+            memset(cn, 0, sizeof *cn);
+            cn->level = 88; cn->is_switch = 1; uses_switches = 1;
+            cn->sw_bit = bit; cn->sw_on = on;
+            cn->occ_parent = cn->gparent = cn->index_sym = cn->askey_sym = -1;
+            cn->fd_file = cn->redef_from = cn->redef_cap = -1;
+            cn->parent = -1;
+            snprintf(cn->label, sizeof cn->label, "C%04d", nsym);
+            snprintf(cn->name, sizeof cn->name, "%s", tok.text);
+            if (lookup(cn->name) >= 0) die("duplicate condition name");
+            nsym++;
+            next();
+        }
+    }
+}
 
 /* ---- PICTURE ----------------------------------------------------------- */
 /* Numeric pictures only: optional S, then 9s and one V, with (n) repetition.
@@ -1649,7 +1715,11 @@ static void parse_environment(void)
     while (!tok.eof && !is("DATA") && !is("PROCEDURE")) {
         if (is("CONFIGURATION")) {
             next(); expect("SECTION"); expect(".");
-            while (!tok.eof && !is("INPUT-OUTPUT") && !is("DATA") && !is("PROCEDURE")) next();
+            while (!tok.eof && !is("INPUT-OUTPUT") && !is("DATA") && !is("PROCEDURE")) {
+                if (!is("SPECIAL-NAMES")) { next(); continue; }
+                next(); expect(".");
+                parse_special_names();
+            }
             continue;
         }
         if (is("INPUT-OUTPUT")) {
@@ -2018,9 +2088,15 @@ static Cond *parse_relation(void)
         return c;
     }
     if (!rk) {
-        /* No operator: this must be a level 88 condition name. */
+        /* No operator: a condition name, either a level 88 or a switch. */
+        if (l->kind == N_SYM && syms[l->sym].is_switch) {
+            Cond *c = cnode(C_SWITCH);
+            c->sw_bit = syms[l->sym].sw_bit;
+            c->sw_on  = syms[l->sym].sw_on;
+            return c;
+        }
         if (l->kind != N_SYM || !syms[l->sym].is_88)
-            die("expected a relational operator, or a level 88 condition name");
+            die("expected a relational operator, or a condition name");
         const Sym *cn = &syms[l->sym];
         Cond *c = cnode(C_REL);
         c->op = REL_EQ;
@@ -4109,7 +4185,7 @@ static void emit_runtime(void)
     asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
-    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -4143,6 +4219,59 @@ static void emit_runtime(void)
     asm_line("", "SR", "15,15", "");
     asm_line("", "BR", "14", "");
     asm_line("COBDMVC", "MVC", "RTLINE+1(0),0(2)", "executed, never fallen into");
+    asm_comment("");
+    asm_comment(" COBUPSI -- set the eight switches from the EXEC PARM.");
+    asm_comment("");
+    asm_comment(" PARM='/UPSI(10100000)' is the form IBM's later compilers");
+    asm_comment(" take, and the one the runtime looks for: the literal UPSI");
+    asm_comment(" anywhere in the parameter text, then the next eight 0 or 1");
+    asm_comment(" characters, leftmost being UPSI-0. Anything else leaves all");
+    asm_comment(" eight off, which is the documented default.");
+    asm_line("COBUPSI", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE6+4", "");
+    asm_line("", "LA", "11,RTSAVE6", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(parameter text)");
+    asm_line("", "LA", "2,0(0,2)", "drop the end-of-list bit");
+    asm_line("", "XC", "RTUPSI,RTUPSI", "all off unless the PARM says otherwise");
+    asm_line("", "LH", "3,0(0,2)", "its length");
+    asm_line("", "LA", "4,2(0,2)", "the text itself");
+    asm_line("", "CH", "3,UPSIMIN", "room for UPSI and eight digits?");
+    asm_line("", "BL", "UPSX", "");
+    asm_line("", "SH", "3,UPSIMIN", "");
+    asm_line("", "LA", "3,1(3)", "positions worth trying");
+    asm_line("UPS10", "CLC", "0(4,4),UPSITAG", "");
+    asm_line("", "BE", "UPS15", "");
+    asm_line("", "LA", "4,1(4)", "");
+    asm_line("", "BCT", "3,UPS10", "");
+    asm_line("", "B", "UPSX", "no UPSI in the parameter");
+    asm_line("UPS15", "LA", "4,4(4)", "past the tag");
+    asm_line("", "CLI", "0(4),C'0'", "");
+    asm_line("", "BE", "UPS20", "");
+    asm_line("", "CLI", "0(4),C'1'", "");
+    asm_line("", "BE", "UPS20", "");
+    asm_line("", "LA", "4,1(4)", "skip a ( or an =");
+    asm_line("UPS20", "SR", "5,5", "the byte being built");
+    asm_line("", "LA", "6,8", "eight of them");
+    asm_line("UPS30", "SLL", "5,1", "");
+    asm_line("", "CLI", "0(4),C'1'", "");
+    asm_line("", "BNE", "UPS40", "");
+    asm_line("", "LA", "5,1(5)", "");
+    asm_line("UPS40", "LA", "4,1(4)", "");
+    asm_line("", "BCT", "6,UPS30", "");
+    asm_line("", "ST", "5,RTUPSI", "the byte, for the caller to store");
+    /* The byte goes back in R15, and it has to be put in the caller's save
+     * area *before* the LM: the LM restores R12 too, and R12 is the base this
+     * routine's own constants are addressed through. Loading it afterwards
+     * reads RTUPSI through the caller's R12. */
+    asm_line("UPSX", "L", "13,4(13)", "");
+    asm_line("", "L", "15,RTUPSI", "the byte, while R12 is still ours");
+    asm_line("", "ST", "15,16(13)", "into the save area's R15 slot");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "BR", "14", "");
     asm_comment("");
     asm_comment(" COBACC -- one transfer from SYSIN into the caller's item.");
     asm_comment("");
@@ -4306,6 +4435,10 @@ static void emit_runtime(void)
     asm_line("RTSAVE1", "DS", "18F", "");
     asm_line("RTSAVE2", "DS", "18F", "");
     asm_line("RTSAVE5", "DS", "18F", "");
+    asm_line("RTSAVE6", "DS", "18F", "");
+    asm_line("RTUPSI", "DS", "F", "");
+    asm_line("UPSITAG", "DC", "C'UPSI'", "");
+    asm_line("UPSIMIN", "DC", "H'12'", "UPSI, a bracket, eight digits");
     asm_line("ACCOPEN", "DC", "X'00'", "");
     asm_line("ACCEOFF", "DC", "X'00'", "");
     asm_line("ACCBUF", "DC", "CL256' '", "one card from SYSIN, blank padded");
@@ -4374,6 +4507,16 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             snprintf(l, sizeof l, "L%04d", skip); asm_line(l, "DS", "0H", "");
         }
         return;
+    case C_SWITCH: {
+        /* One byte holds all eight switches, leftmost digit first, so UPSI-0
+         * is X'80'. TM sets the condition code from the selected bits: all
+         * zero, or -- with one bit selected -- all one. */
+        snprintf(b, sizeof b, "UPSIB,X'%02X'", 0x80 >> c->sw_bit);
+        asm_line("", "TM", b, "the switch");
+        snprintf(l, sizeof l, "L%04d", label);
+        asm_line("", (jump_if_true == c->sw_on) ? "BO" : "BZ", l, "");
+        return;
+    }
     case C_CLASS: {
         /* TRT scans a field against a 256-byte table and stops at the first
          * byte whose function code is not zero, so a table of zeros for the
@@ -4716,6 +4859,15 @@ static void generate(void)
         asm_line("", "L", "15,VDATE", "");
         asm_line("", "BALR", "14,15", "");
         reset_bases();
+    }
+    if (uses_switches && !is_subprogram) {
+        /* Before anything else touches R1: on entry to a main program it holds
+         * the OS parameter list, which is where the UPSI string arrives. A
+         * subprogram gets its caller's list instead, so its switches stay off
+         * -- there is nowhere for them to come from. */
+        asm_line("", "L", "15,VUPSI", "");
+        asm_line("", "BALR", "14,15", "read the PARM");
+        asm_line("", "STC", "15,UPSIB", "the eight switches");
     }
     if (gen_lines) {
         /* Armed for every program interruption there is, and armed *here*:
@@ -5831,6 +5983,11 @@ static void generate(void)
     /* Outside the DISPLAY guard: a program may want the date and print
      * nothing. */
     if (curdate_sym >= 0) asm_line("VDATE", "DC", "V(COBDATE)", "");
+    if (uses_switches) {
+        /* In the program's own CSECT, where the tests can reach it. */
+        asm_line("UPSIB", "DC", "X'00'", "the eight switches, UPSI-0 leftmost");
+        if (!is_subprogram) asm_line("VUPSI", "DC", "V(COBUPSI)", "");
+    }
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_ACCEPT) {
             asm_line("VACC", "DC", "V(COBACC)", "");
@@ -6285,7 +6442,7 @@ static void generate(void)
         for (int i = 0; i < nsym; i++) {
             Sym *sy = &syms[i];
             char cmt[96];
-            if (sy->is_88) continue;
+            if (sy->is_88 || sy->is_switch) continue;
             if (sy->linkage) continue;      /* described by a DSECT, not stored */
             if (sy->alias) {
                 /* Shares storage with what it redefines, so it defines no bytes
@@ -6439,7 +6596,7 @@ static void generate(void)
         int at = 0;
         for (int i = 0; i < nsym; i++) {
             Sym *sy = &syms[i];
-            if (!sy->linkage || sy->link_area != a || sy->is_88) continue;
+            if (!sy->linkage || sy->link_area != a || sy->is_88 || sy->is_switch) continue;
             if (sy->offset > at) {
                 snprintf(b, sizeof b, "XL%d", sy->offset - at);
                 asm_line("", "DS", b, "");

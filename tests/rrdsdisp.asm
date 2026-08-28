@@ -465,7 +465,7 @@ D0003    DC    CL20' '             SEEN PIC X(20)
 * Not reentrant: MVS 3.8j batch does not require it.
 *---------------------------------------------------------------
 COBRT    CSECT
-         ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC
+         ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -499,6 +499,55 @@ COBD020  PUT   RTDCB,RTLINE
          SR    15,15
          BR    14
 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
+*
+* COBUPSI -- set the eight switches from the EXEC PARM.
+*
+* PARM='/UPSI(10100000)' is the form IBM's later compilers
+* take, and the one the runtime looks for: the literal UPSI
+* anywhere in the parameter text, then the next eight 0 or 1
+* characters, leftmost being UPSI-0. Anything else leaves all
+* eight off, which is the documented default.
+COBUPSI  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE6+4
+         LA    11,RTSAVE6
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(parameter text)
+         LA    2,0(0,2)            drop the end-of-list bit
+         XC    RTUPSI,RTUPSI       all off unless the PARM says otherwi
+         LH    3,0(0,2)            its length
+         LA    4,2(0,2)            the text itself
+         CH    3,UPSIMIN           room for UPSI and eight digits?
+         BL    UPSX
+         SH    3,UPSIMIN
+         LA    3,1(3)              positions worth trying
+UPS10    CLC   0(4,4),UPSITAG
+         BE    UPS15
+         LA    4,1(4)
+         BCT   3,UPS10
+         B     UPSX                no UPSI in the parameter
+UPS15    LA    4,4(4)              past the tag
+         CLI   0(4),C'0'
+         BE    UPS20
+         CLI   0(4),C'1'
+         BE    UPS20
+         LA    4,1(4)              skip a ( or an =
+UPS20    SR    5,5                 the byte being built
+         LA    6,8                 eight of them
+UPS30    SLL   5,1
+         CLI   0(4),C'1'
+         BNE   UPS40
+         LA    5,1(5)
+UPS40    LA    4,1(4)
+         BCT   6,UPS30
+         ST    5,RTUPSI            the byte, for the caller to store
+UPSX     L     13,4(13)
+         L     15,RTUPSI           the byte, while R12 is still ours
+         ST    15,16(13)           into the save area's R15 slot
+         LM    14,12,12(13)
+         BR    14
 *
 * COBACC -- one transfer from SYSIN into the caller's item.
 *
@@ -662,6 +711,10 @@ RTLINE   DC    CL121' '            ASA byte + 120 columns
 RTSAVE1  DS    18F
 RTSAVE2  DS    18F
 RTSAVE5  DS    18F
+RTSAVE6  DS    18F
+RTUPSI   DS    F
+UPSITAG  DC    C'UPSI'
+UPSIMIN  DC    H'12'               UPSI, a bracket, eight digits
 ACCOPEN  DC    X'00'
 ACCEOFF  DC    X'00'
 ACCBUF   DC    CL256' '            one card from SYSIN, blank padded

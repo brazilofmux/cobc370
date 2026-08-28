@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="pgmchk datetest bigdig grpredef litcont sections fdrecs advance declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="pgmchk datetest bigdig grpredef litcont sections fdrecs advance declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -66,7 +66,14 @@ for t in $TESTS; do
         printf '//%-8s JOB (5161A020,1A11),%s,\n' "$jn" "'REGRESSION'"
         printf '//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),\n'
         printf '//             USER=HERC01,PASSWORD=@HERC01PW@\n'
-        printf '//ASM      EXEC ASMFCLG\n//ASM.SYSIN DD  *\n'
+        if [ "$t" = upsisw ]; then
+            # The switches arrive on the GO step's PARM, which is what the
+            # runtime reads at entry.
+            printf '//ASM      EXEC ASMFCLG,PARM.GO=%s\n' "'/UPSI(10100000)'"
+        else
+            printf '//ASM      EXEC ASMFCLG\n'
+        fi
+        printf '//ASM.SYSIN DD  *\n'
         cat "$TDIR/$t.asm"
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
         case "$t" in isamseq|isamrnd)
@@ -125,6 +132,7 @@ for t in $TESTS; do
             printf '/*\n'
         fi
         if [ "$t" = fdrecs ]; then printf '//GO.OUTFILE DD  SYSOUT=Z\n'; fi
+        if [ "$t" = upsisw ]; then printf '//GO.SYSIN   DD  DUMMY\n'; fi
         if [ "$t" = accept ]; then
             printf '//GO.SYSIN   DD  *\n'
             printf '%-72s\n' "FIRST CARD" "SECOND CARD"
