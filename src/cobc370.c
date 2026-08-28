@@ -1857,7 +1857,7 @@ static int starts_statement(void)
         "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
-        "REWRITE", "DELETE", "START", 0
+        "REWRITE", "DELETE", "START", "ENTER", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -1933,6 +1933,15 @@ static Node *binop(int kind, Node *l, Node *r)
 }
 
 /* dst [ROUNDED] for the GIVING target, then the expression. */
+/* A literal zero as an expression node, for SUBTRACT a b GIVING c. */
+static Node *node_zero(void)
+{
+    Node *z = node(N_LIT);
+    z->litscale = 0;
+    scale_literal("0", 0, z->lit, sizeof z->lit);
+    return z;
+}
+
 static void giving_target(Stmt *st)
 {
     st->dst = consume_sym();
@@ -2154,15 +2163,39 @@ static void parse_one_statement(void)
         char squal2[MAXQUAL][31];
         int snq2 = is_numeric_literal(save) ? 0 : consume_quals(squal2);
         Node *ssub2 = opt_subscript();
-        if (!sub && !is("TO")) {
-            /* ADD a b [c...] GIVING d -- no TO, so every operand is a source. */
+        if (!is(sub ? "FROM" : "TO")) {
+            /* A series of sources. 1 NUC 1,2 has "identifier/literal series"
+             * on both statements, so ADD a b TO c and SUBTRACT a b FROM c are
+             * level 1 and not just the GIVING forms. Summing them and then
+             * applying the sum is exactly what general rule 3 on II-51 says:
+             * the operands are added together first. */
             Node *e = operand_node(save, squal2, snq2, ssub2);
-            while (!tok.eof && !is("GIVING") && !is(".")) e = binop(N_ADD, e, parse_expr());
-            expect("GIVING");
+            while (!tok.eof && !is("GIVING") && !is("TO") && !is("FROM") && !is("."))
+                e = binop(N_ADD, e, parse_expr());
+            if (is("GIVING")) {
+                next();
+                st->op = ST_COMPUTE;
+                st->src = -1;
+                giving_target(st);
+                st->expr = sub ? binop(N_SUB, node_zero(), e) : e;
+                eat_period();
+                return;
+            }
+            expect(sub ? "FROM" : "TO");
+            /* The receiver is also an operand: c = c +/- (a + b). */
             st->op = ST_COMPUTE;
-            st->src = -1;
+            st->src = -1; st->imm = 0;
             giving_target(st);
-            st->expr = e;
+            Node *lhs = node(N_SYM);
+            lhs->sym = st->dst; lhs->sub = st->dsub;
+            if (is("GIVING")) {
+                /* SUBTRACT a b FROM c GIVING d. */
+                next();
+                Node *rhs = binop(sub ? N_SUB : N_ADD, lhs, e);
+                st->dsub = NULL;
+                giving_target(st);
+                st->expr = rhs;
+            } else st->expr = binop(sub ? N_SUB : N_ADD, lhs, e);
             eat_period();
             return;
         }
@@ -2662,6 +2695,18 @@ static void parse_one_statement(void)
                 st->ndop++;
             }
         }
+        eat_period();
+        return;
+    }
+
+    if (is("ENTER")) {
+        /* ENTER language-name [routine-name]. II-63 -- it exists to let a
+         * program change language mid-stream, and there is no other language
+         * here to change to, so it is accepted and does nothing. That is what
+         * "full capabilities for the ENTER statement" amounts to when the
+         * implementor offers one language. */
+        next();
+        while (!tok.eof && !is(".")) next();
         eat_period();
         return;
     }

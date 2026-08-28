@@ -249,11 +249,11 @@ representation tests. **18 programs.** This is the honest edge: the next thing
 worth doing, and the first one whose cost is out of proportion to a COBOL-74
 target on this machine.
 
-**4. Ordinary remaining work, all small.** `ACCEPT`, `ALTER`, `ENTER`,
-`INSPECT` and operand series on `ADD`/`SUBTRACT` -- the last five elements
-between this compiler and Nucleus level 1 -- plus continuation of a word or a
-numeric literal, and a `SIGN` clause on an item of more than sixteen digits, a
-limitation this compiler introduced itself when the zoned conversion was split.
+**4. Ordinary remaining work, all small.** `ACCEPT`, `ALTER` and `INSPECT` --
+the last three elements between this compiler and Nucleus level 1 -- plus
+continuation of a word or a numeric literal, and a `SIGN` clause on an item of
+more than sixteen digits, a limitation this compiler introduced itself when the
+zoned conversion was split.
 
 ### Reading the histogram: a blocker is not always a gap
 
@@ -434,6 +434,22 @@ through the one dispatcher.
 The reverse direction -- an alphanumeric item into a numeric one -- is legal
 under the same rules and is still refused, but the message now says that it is
 legal and what it would take, rather than implying the combination is invalid.
+
+### Operand series, and ENTER
+
+`1 NUC 1,2` lists "identifier/literal series" under both `ADD` and `SUBTRACT`,
+so `ADD A B TO C` is level 1 and not only the `GIVING` forms. General rule 3 on
+II-51 says the operands are added together first and the result then applied,
+which is exactly what summing them into one expression does -- so the series
+forms became `COMPUTE C = C + (A + B)` and needed no new code generation. The
+parser previously read one operand and then insisted on `TO`, which is why
+`ADD 1 2 TO N` failed on the word `TO` itself.
+
+`ENTER language-name [routine-name]` is level 1 and is accepted and ignored.
+It exists to let a program change language mid-stream; there is no other
+language here to change to, so "full capabilities for the ENTER statement"
+amounts to taking the sentence. GnuCOBOL rejects `ENTER LINKAGE` outright, so
+that one is covered by compiling rather than by comparison.
 
 ### Class conditions
 
