@@ -249,8 +249,8 @@ representation tests. **18 programs.** This is the honest edge: the next thing
 worth doing, and the first one whose cost is out of proportion to a COBOL-74
 target on this machine.
 
-**4. Ordinary remaining work, all small.** `ACCEPT` and `ALTER` -- the last two
-elements between this compiler and Nucleus level 1 -- plus
+**4. Ordinary remaining work, all small.** `ACCEPT` -- the last element between
+this compiler and Nucleus level 1 -- plus
 continuation of a word or a numeric literal, and a `SIGN` clause on an item of
 more than sixteen digits, a limitation this compiler introduced itself when the
 zoned conversion was split.
@@ -434,6 +434,26 @@ through the one dispatcher.
 The reverse direction -- an alphanumeric item into a numeric one -- is legal
 under the same rules and is still refused, but the message now says that it is
 legal and what it would take, rather than implying the combination is invalid.
+
+### ALTER, and what it does to segmentation
+
+`ALTER para-1 TO [PROCEED TO] para-2`, II-57. Syntax rule 1 is what makes it
+implementable: the altered paragraph holds a single sentence that is a `GO TO`
+without `DEPENDING`. So that branch is compiled indirect -- a load from a cell
+and a register branch -- and `ALTER` stores a new address in the cell. The cell
+starts out holding the target the `GO TO` was written with, which the compiler
+learns by finding that `GO TO` while checking rule 1 holds.
+
+**This closes a loop opened by the segmentation note above.** That note said an
+independent segment has no observable state without `ALTER`, so a `SECTION`
+segment-number could be accepted and ignored. `ALTER` now exists, so the
+statement is no longer vacuous: general rule 1 says a modified `GO TO` in an
+independent segment may be returned to its initial state. This compiler does
+not do that -- every section is resident and nothing is reset -- so a program
+that both alters a `GO TO` in a segment numbered 50 or above *and* depends on
+it reverting would be wrong here. Nothing in the corpus does, and general rule
+2 forbids the cross-segment case outright, but it is no longer true that the
+segment-number says nothing at all.
 
 ### INSPECT
 

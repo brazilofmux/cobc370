@@ -501,7 +501,7 @@ static Node *node(int kind)
 }
 
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
-       ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT, ST_INSPECT,
+       ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT, ST_INSPECT, ST_ALTER,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH,
@@ -644,7 +644,12 @@ static int ninsop;
 
 /* Paragraphs, resolved after parsing so a PERFORM may name one that has not
  * been seen yet. */
-typedef struct { char name[31]; int is_range_end; int is_section; } Para;
+typedef struct {
+    char name[31];
+    int is_range_end, is_section;
+    int altered;        /* an ALTER names it, so its GO TO is compiled indirect */
+    int alter_to;       /* the target that GO TO had when the program was written */
+} Para;
 
 /* A declarative section and what calls it. General rule 1 on IV-32: the
  * procedure runs after the standard error routine, or on AT END when the
@@ -1875,7 +1880,7 @@ static int starts_statement(void)
         "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
-        "REWRITE", "DELETE", "START", "ENTER", 0
+        "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -2732,6 +2737,24 @@ static void parse_one_statement(void)
         return;
     }
 
+    if (is("ALTER")) {
+        /* ALTER para-1 TO [PROCEED TO] para-2, ... II-57. Syntax rule 1: the
+         * altered paragraph holds a single sentence that is a GO TO without
+         * DEPENDING, which is what lets the branch be compiled indirect. */
+        next();
+        do {
+            Stmt *st = new_stmt(ST_ALTER);
+            snprintf(st->para, sizeof st->para, "%s", tok.text);
+            next();
+            expect("TO");
+            if (is("PROCEED")) { next(); expect("TO"); }
+            snprintf(st->thru, sizeof st->thru, "%s", tok.text);
+            next();
+        } while (!tok.eof && !is(".") && !starts_statement());
+        eat_period();
+        return;
+    }
+
     if (is("INSPECT")) {
         /* INSPECT id TALLYING ... [REPLACING ...] / INSPECT id REPLACING ...
          * At level 1 the compared and replacing operands are single character
@@ -2941,6 +2964,14 @@ static void parse_procedure(void)
     for (int i = 0; i < nstmt; i++) if (stmts[i].op == ST_STOP) stopped = 1;
     if (!stopped) die("PROCEDURE DIVISION has no STOP RUN");
     for (int i = 0; i < nstmt; i++) {
+        if (stmts[i].op == ST_ALTER) {
+            int a = para_index(stmts[i].para), b = para_index(stmts[i].thru);
+            if (a < 0) { char m[96]; snprintf(m, sizeof m, "ALTER names an unknown paragraph '%s'", stmts[i].para); die(m); }
+            if (b < 0) { char m[96]; snprintf(m, sizeof m, "ALTER ... TO names an unknown procedure '%s'", stmts[i].thru); die(m); }
+            paras[a].altered = 1;
+            stmts[i].dst = a; stmts[i].src = b;
+            continue;
+        }
         if (stmts[i].op == ST_GOTO) {
             int a = para_index(stmts[i].para);
             if (a < 0) { char m[96]; snprintf(m, sizeof m, "GO TO names an unknown paragraph '%s'", stmts[i].para); die(m); }
@@ -2959,6 +2990,31 @@ static void parse_procedure(void)
         stmts[i].dst = a; stmts[i].src = b;
         paras[b].is_range_end = 1;
     }
+    /* Syntax rule 1 on II-57: an altered paragraph holds a single sentence that
+     * is a GO TO without DEPENDING. Finding that GO TO is also how its original
+     * target is learnt, which is what the branch cell starts out holding. */
+    for (int a = 0; a < npara; a++) {
+        if (!paras[a].altered) continue;
+        int found = -1;
+        for (int i = 0; i < nstmt; i++) {
+            if (stmts[i].op != ST_PARA || stmts[i].dst != a) continue;
+            for (int j = i + 1; j < nstmt; j++) {
+                if (stmts[j].op == ST_LABEL) continue;   /* not a sentence */
+                found = (stmts[j].op == ST_GOTO) ? stmts[j].dst : -1;
+                break;
+            }
+            break;
+        }
+        if (found < 0) {
+            char m[128];
+            snprintf(m, sizeof m, "ALTER names '%s', which must hold a single "
+                     "sentence that is a GO TO -- syntax rule 1 on II-57",
+                     paras[a].name);
+            die(m);
+        }
+        paras[a].alter_to = found;
+    }
+
     /* A USE procedure is entered and returned from exactly as a PERFORM range
      * is -- general rule 2 on IV-32 -- so its last paragraph needs the same
      * return through the range's exit cell. */
@@ -4923,7 +4979,22 @@ static void generate(void)
             char p[16]; snprintf(p, sizeof p, "P%04d", st->dst);
             snprintf(b, sizeof b, " GO TO %s", st->para);
             asm_comment(b);
-            asm_line("", "B", p, "");
+            if (cur_para >= 0 && paras[cur_para].altered) {
+                /* This paragraph is ALTERed somewhere, so the branch goes
+                 * through a cell the ALTER can write. */
+                snprintf(b, sizeof b, "15,AL%04d", cur_para);
+                asm_line("", "L", b, "the current target");
+                asm_line("", "BR", "15", "");
+            } else asm_line("", "B", p, "");
+            break;
+        }
+        case ST_ALTER: {
+            snprintf(b, sizeof b, " ALTER %s TO PROCEED TO %s", st->para, st->thru);
+            asm_comment(b);
+            snprintf(b, sizeof b, "15,P%04d", st->src);
+            asm_line("", "LA", b, "the new target");
+            snprintf(b, sizeof b, "15,AL%04d", st->dst);
+            asm_line("", "ST", b, "into that paragraph's branch cell");
             break;
         }
         case ST_WRITE: {
@@ -5639,6 +5710,13 @@ static void generate(void)
     }
 
     /* ---- PERFORM exit cells ---- */
+    for (int i = 0; i < npara; i++) {
+        if (!paras[i].altered) continue;
+        char x[16];
+        snprintf(x, sizeof x, "AL%04d", i);
+        snprintf(b, sizeof b, "A(P%04d)", paras[i].alter_to);
+        asm_line(x, "DC", b, paras[i].name);
+    }
     for (int i = 0; i < npara; i++) {
         if (!paras[i].is_range_end) continue;
         char x[16], f[16];
