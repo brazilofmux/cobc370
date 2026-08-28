@@ -150,7 +150,13 @@ static void next(void)
     }
     tok.line = src.line;
     tok.literal = 0;
-    if (*src.p == '.') { src.p++; strcpy(tok.text, "."); tok.len = 1; return; }
+    /* A period immediately followed by a digit begins a numeric literal:
+     * "the decimal point must not be the rightmost character" is the only
+     * placement rule, so .1 is legal. A period used as a separator is always
+     * followed by a space, so the two cannot be confused. */
+    if (*src.p == '.' && !isdigit((unsigned char)src.p[1])) {
+        src.p++; strcpy(tok.text, "."); tok.len = 1; return;
+    }
     if (*src.p == '(' || *src.p == ')') {
         tok.text[0] = *src.p++; tok.text[1] = 0; tok.len = 1; return;
     }
@@ -202,8 +208,9 @@ static void next(void)
             if (lex_picture) {
                 char nx = *(src.p + 1);
                 if (!nx || isspace((unsigned char)nx)) break;
-            } else if (!(i > 0 && isdigit((unsigned char)tok.text[i-1])
-                       && isdigit((unsigned char)*(src.p + 1)))) break;
+            } else if (!(isdigit((unsigned char)*(src.p + 1))
+                         && (i == 0 || isdigit((unsigned char)tok.text[i-1]))))
+                break;   /* a decimal point: leading, as in .1, or between digits */
         }
         if (i >= MAXTOK - 1) die("word too long");
         tok.text[i++] = (char)toupper((unsigned char)*src.p);
@@ -319,7 +326,9 @@ static int escaped_len(const char *v)
 static void emit_split_dc(const char *label, const char *value, int total,
                           const char *cmt)
 {
-    enum { ROOM = 40 };                 /* escaped characters per statement */
+    enum { ROOM = 48 };                 /* escaped characters per statement; the
+                                         * operand has 71-15 columns and CLnnn''
+                                         * takes up to 7 of them */
     const char *q = value;
     int left = total;
     int first = 1;
@@ -2345,11 +2354,18 @@ static void parse_one_statement(void)
     if (is("CLOSE")) {
         next();
         int any = 0;
-        while (!tok.eof && !is(".")) {
+        while (!tok.eof && !is(".") && !starts_statement()) {
             int fi = file_index(tok.text);
             if (fi < 0) die("CLOSE names something that is not a file");
             new_stmt(ST_CLOSE)->dst = fi;
             any = 1; next();
+            /* REEL and UNIT are level 1 elements about multi-volume tape.
+             * Every file this compiler writes lives on one volume, so there is
+             * nothing to position and the phrase is accepted and ignored --
+             * which is what OS/VS COBOL does for a file that is not a reel. */
+            while (is("REEL") || is("UNIT") || is("WITH") || is("NO") ||
+                   is("REWIND") || is("LOCK") || is("FOR") || is("REMOVAL"))
+                next();
         }
         if (!any) die("CLOSE with no file named");
         eat_period();
@@ -5470,14 +5486,11 @@ static void generate(void)
         asm_line(hconsts[i].label, "DC", b, i ? "" : "element sizes");
     }
     for (int i = 0; i < nsconst; i++) {
-        char op[MAXTOK * 2 + 16]; int j = 0;
-        j += snprintf(op + j, sizeof op - j, "CL%d'", sconsts[i].len);
-        for (const char *q = sconsts[i].text; *q; q++) {
-            if (*q == '\'' || *q == '&') op[j++] = *q;
-            op[j++] = *q;
-        }
-        op[j++] = '\''; op[j] = 0;
-        asm_line(sconsts[i].label, "DC", op, i ? "" : "nonnumeric constants");
+        /* A literal padded out to a wide item makes a constant too long for
+         * one statement -- MOVE 'HI' TO an X(80) is enough. Adjacent DCs lay
+         * down the same bytes. */
+        emit_split_dc(sconsts[i].label, sconsts[i].text, sconsts[i].len,
+                      i ? "" : "nonnumeric constants");
     }
     /* One base locator per 4096-byte chunk of COBWS. */
     {

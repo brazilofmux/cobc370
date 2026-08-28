@@ -137,8 +137,8 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL40'ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789 +-'  CHARSET
-         DC    CL11'*/=$,.;()><'
+D0000    DC    CL48'ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789 +-*/=$,.;('
+         DC    CL3')><'
          DS    XL5                 reserve the rest of a table
 D0001    DC    CL40'AB                                  CD'  PADLIT PIC
 *---------------------------------------------------------------
