@@ -3725,6 +3725,37 @@ static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
     int n = dn < sn ? dn : sn;
     if (n > 256) die("MVC is limited to 256 bytes; long moves need a loop, "
                      "which is not implemented yet");
+    if (d->edited && d->is_alpha) {
+        /* Alphanumeric edited: lay down the template, then fill each run of
+         * data positions from the sending item. Both are known at compile
+         * time, so this is a handful of MVCs and no run-time decisions. */
+        char fs2[64];
+        field_ref_m(sv, ssub, FR_SS_NOLEN, sn, 7, fs2, sizeof fs2);
+        snprintf(b, sizeof b, "%s(%d),%s", dsub ? "0(6)" : d->label, d->masklen,
+                 intern_mask(d->mask, d->masklen));
+        if (dsub) { field_ref_m(d, dsub, FR_SS_NOLEN, dn, 6, fd, sizeof fd);
+                    snprintf(b, sizeof b, "0(%d,6),%s", d->masklen,
+                             intern_mask(d->mask, d->masklen)); }
+        asm_line("", "MVC", b, "the insertion characters");
+        int soff = 0, i = 0;
+        while (i < d->masklen) {
+            if (d->mask[i]) { i++; continue; }
+            int run = 0;
+            while (i + run < d->masklen && !d->mask[i + run]) run++;
+            if (soff < sn) {
+                int take = sn - soff < run ? sn - soff : run;
+                if (dsub) snprintf(b, sizeof b, "%d(%d,6),", i, take);
+                else      snprintf(b, sizeof b, "%s+%d(%d),", d->label, i, take);
+                if (ssub) snprintf(b + strlen(b), sizeof b - strlen(b), "%d(7)", soff);
+                else snprintf(b + strlen(b), sizeof b - strlen(b), "%s+%d", sv->label, soff);
+                asm_line("", "MVC", b, "a run of data positions");
+                soff += take;
+            }
+            i += run;
+        }
+        (void)fs2;
+        return;
+    }
     if (d->just) {
         /* Right-aligned: the data lands at the end of the receiver, the pad
          * goes in front of it, and an over-long sender loses its left. */

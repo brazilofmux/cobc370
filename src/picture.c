@@ -56,10 +56,31 @@ int pic_analyse(const char *s, PicInfo *info)
         total += it[i].rep;
     }
     if (nx) {
-        if (nx != n) return fail(info, "mixed alphanumeric and numeric PICTURE "
-                                       "characters are not implemented yet");
+        /* Alphanumeric, possibly edited: A and X may be joined by the simple
+         * insertion characters B, 0 and / -- II-24 -- which occupy character
+         * positions of their own and are not filled from the sending item. */
+        int ins = 0;
+        for (int i = 0; i < n; i++)
+            if (it[i].sym == 'B' || it[i].sym == '0' || it[i].sym == '/') ins++;
+        if (nx + ins != n)
+            return fail(info, "mixed alphanumeric and numeric PICTURE "
+                              "characters are not implemented yet");
         info->is_alpha = 1;
         info->bytes = total;
+        if (ins) {
+            /* The template: insertion characters where they fall, spaces
+             * elsewhere. The move fills the rest a run at a time. */
+            if (total > PIC_MAXMASK)
+                return fail(info, "an edited alphanumeric item is too wide");
+            info->edited = 1;
+            info->masklen = total;
+            int k = 0;
+            for (int i = 0; i < n; i++)
+                for (int r = 0; r < it[i].rep; r++)
+                    info->mask[k++] = (it[i].sym == 'B') ? ebcdic(' ')
+                                    : (it[i].sym == '0') ? ebcdic('0')
+                                    : (it[i].sym == '/') ? ebcdic('/') : 0;
+        }
         return 0;
     }
 
