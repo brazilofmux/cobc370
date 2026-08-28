@@ -1,0 +1,6 @@
+START
+REC    FIRST RECORD        
+REC    SECOND RECORD       
+REC    THIRD RECORD        
+READS  3
+DECLS  1

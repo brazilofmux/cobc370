@@ -490,6 +490,7 @@ typedef struct {
     int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
     int  rec;               /* WRITE/REWRITE: the record named, of an FD's several */
     int  adv;               /* WRITE ADVANCING: -1 none, -2 PAGE, else lines */
+    int  had_atend;         /* ST_READ: the statement carried AT END itself */
     int  line;              /* the source line, for the program-check table */
     int  lab3;              /* ST_SEARCH: the end label */
     struct Cond *cond2;     /* ST_SEARCH: the same operands compared with < */
@@ -589,6 +590,20 @@ static int rgroup_index(const char *n)
 /* Paragraphs, resolved after parsing so a PERFORM may name one that has not
  * been seen yet. */
 typedef struct { char name[31]; int is_range_end; int is_section; } Para;
+
+/* A declarative section and what calls it. General rule 1 on IV-32: the
+ * procedure runs after the standard error routine, or on AT END when the
+ * statement carried no AT END phrase. */
+#define MAXDECL 16
+typedef struct {
+    int  sect;          /* the section's index in paras[] */
+    int  nfiles;        /* files named, or 0 when a mode was named instead */
+    int  file[8];
+    int  mode;          /* 0 none, 1 INPUT, 2 OUTPUT, 3 I-O, 4 EXTEND */
+} Decl;
+static Decl decls[MAXDECL];
+static int ndecl;
+static int decl_end_para = -1;   /* first procedure after END DECLARATIVES */
 #define MAXPARA 256
 static Para paras[MAXPARA];
 static int npara;
@@ -2160,7 +2175,13 @@ static void parse_one_statement(void)
         } else if (is("AT") || is("END")) {
             if (is("AT")) next();
             expect("END");
+            st->had_atend = 1;
             parse_stmt_list(1);
+        } else {
+            /* No phrase at all. The sentence still has to be closed, and the
+             * AT END condition is then the I-O system's business: a USE
+             * procedure, if the file has one. */
+            eat_period();
         }
         new_stmt(ST_LABEL)->dst = st->lab2;
         return;
@@ -2490,6 +2511,46 @@ static void parse_procedure(void)
         }
     }
     expect(".");
+    if (is("DECLARATIVES")) {
+        next(); expect(".");
+        while (!tok.eof && !is("END")) {
+            /* Each declarative is a section whose header is followed at once
+             * by USE -- syntax rule 1 -- so USE has to be recognised before
+             * the statement parser sees it. */
+            if (!is("USE")) { at_period = 0; parse_stmt_list(0); continue; }
+            next();
+            if (is("AFTER")) next();
+            if (is("STANDARD")) next();
+            if (is("EXCEPTION") || is("ERROR")) next();
+            else die("USE ... EXCEPTION or ERROR PROCEDURE is the only form "
+                     "this compiler implements");
+            if (is("PROCEDURE")) next();
+            if (is("ON")) next();
+            if (ndecl >= MAXDECL) die("too many declarative sections");
+            Decl *d = &decls[ndecl];
+            memset(d, 0, sizeof *d);
+            if (npara == 0 || !paras[npara-1].is_section)
+                die("USE must follow a section header in the declaratives");
+            d->sect = npara - 1;
+            while (!tok.eof && !is(".")) {
+                if      (is("INPUT"))  { d->mode = 1; next(); }
+                else if (is("OUTPUT")) { d->mode = 2; next(); }
+                else if (is("I-O"))    { d->mode = 3; next(); }
+                else if (is("EXTEND")) { d->mode = 4; next(); }
+                else {
+                    int fi = file_index(tok.text);
+                    if (fi < 0) die("USE ... ON names something that is not a file");
+                    if (d->nfiles >= 8) die("too many files in one USE");
+                    d->file[d->nfiles++] = fi;
+                    next();
+                }
+            }
+            expect(".");
+            ndecl++;
+        }
+        expect("END"); expect("DECLARATIVES"); expect(".");
+        decl_end_para = npara;
+    }
     int stopped = 0;
     while (!tok.eof) {
         at_period = 0;
@@ -2516,6 +2577,29 @@ static void parse_procedure(void)
         stmts[i].dst = a; stmts[i].src = b;
         paras[b].is_range_end = 1;
     }
+    /* A USE procedure is entered and returned from exactly as a PERFORM range
+     * is -- general rule 2 on IV-32 -- so its last paragraph needs the same
+     * return through the range's exit cell. */
+    for (int d = 0; d < ndecl; d++)
+        paras[section_end(decls[d].sect)].is_range_end = 1;
+}
+
+/* Which declarative section covers this file, or -1. A file named outright
+ * wins over one matched by open mode. */
+static int decl_for(int fi)
+{
+    for (int d = 0; d < ndecl; d++)
+        for (int k = 0; k < decls[d].nfiles; k++)
+            if (decls[d].file[k] == fi) return d;
+    for (int d = 0; d < ndecl; d++) {
+        if (decls[d].nfiles || !decls[d].mode) continue;
+        const File *f = &files[fi];
+        if ((decls[d].mode == 1 && f->opened_input)  ||
+            (decls[d].mode == 2 && f->opened_output) ||
+            (decls[d].mode == 3 && f->opened_io)     ||
+            (decls[d].mode == 4 && f->opened_extend)) return d;
+    }
+    return -1;
 }
 
 static int section_end(int i)
@@ -3472,6 +3556,27 @@ static void emit_runtime(void)
              "LRECL=121,BLKSIZE=121");
 }
 
+/* Enter a range of procedures and come back, which is what a PERFORM does and
+ * what a USE procedure needs: park the return address in the range's exit
+ * cell, branch to its first paragraph, and put the fall-through back
+ * afterwards so the range still runs straight through when nobody performed
+ * it. */
+static void gen_call_range(int a, int b, int *nret)
+{
+    char p1[16], x[16], f[16], r[16], t[64];
+    snprintf(p1, sizeof p1, "P%04d", a);
+    snprintf(x,  sizeof x,  "X%04d", b);
+    snprintf(f,  sizeof f,  "F%04d", b);
+    snprintf(r,  sizeof r,  "R%04d", ++*nret);
+    snprintf(t, sizeof t, "15,%s", r);  asm_line("", "LA", t, "return here");
+    snprintf(t, sizeof t, "15,%s", x);  asm_line("", "ST", t, "into the range's exit cell");
+    asm_line("", "B", p1, "");
+    asm_line(r, "DS", "0H", "");
+    reset_bases();
+    snprintf(t, sizeof t, "15,%s", f);  asm_line("", "LA", t, "restore fall-through");
+    snprintf(t, sizeof t, "15,%s", x);  asm_line("", "ST", t, "");
+}
+
 /* Branch mnemonics after CP or CLC, by relation and by sense. */
 static const char *br_true[]  = { "BE", "BL", "BH", "BNE", "BNH", "BNL" };
 static const char *br_false[] = { "BNE", "BNL", "BNH", "BE", "BH", "BL" };
@@ -3742,6 +3847,13 @@ static void generate(void)
 
     int ndlit = 0, cur_para = -1, nret = 0;
     genlabel = nlabel;
+    if (ndecl > 0 && decl_end_para >= 0) {
+        /* Declaratives come first in the source and must not be fallen into --
+         * syntax rule 3 on IV-32 keeps control from crossing either way. */
+        char pd[16]; snprintf(pd, sizeof pd, "P%04d", decl_end_para);
+        asm_comment(" branch around the declaratives");
+        asm_line("", "B", pd, "");
+    }
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
         /* One label per statement, so a program check can be reported as a
@@ -3837,6 +3949,7 @@ static void generate(void)
         }
         case ST_READ: {
             File *f = &files[st->dst];
+            int decl = (!st->had_atend) ? decl_for(st->dst) : -1;
             char le[16], lc[16];
             snprintf(le, sizeof le, "L%04d", st->lab1);
             snprintf(lc, sizeof lc, "L%04d", st->lab2);
@@ -3975,6 +4088,8 @@ static void generate(void)
             asm_line("", "B", lc, "");
             asm_line(le, "DS", "0H", "AT END");
             reset_bases();
+            if (decl >= 0) gen_call_range(decls[decl].sect,
+                                          section_end(decls[decl].sect), &nret);
             break;
         }
         case ST_INITIATE: {

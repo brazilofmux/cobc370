@@ -206,22 +206,37 @@ score but a histogram -- which single missing thing blocks the most programs:
       9   the SIGN clause
       6   the JUSTIFIED clause
 
-Six slices in, the histogram has gone flat -- no single thing blocks more than
+Seven slices in, the histogram has gone flat -- no single thing blocks more than
 a tenth of the corpus any more:
 
      25   an unimplemented SELECT clause
-     24   the USE statement -- declaratives
      22   a USAGE DISPLAY item past 16 digits
-     20   a subscript on an item outside an OCCURS
+     12   MOVE between a numeric and an alphanumeric item
      12   BLOCK CONTAINS n CHARACTERS
-     10   MOVE between a numeric and an alphanumeric item
       9   the SIGN clause
       6   the SET statement
       5   BEFORE ADVANCING, and ADVANCING by an identifier
 
-That flattening is the result worth noting. The first five slices each cleared
-something that stood in front of a quarter to a half of the corpus; from here
-the work is broad rather than deep.
+That flattening is the result worth noting. The first slices each cleared
+something standing in front of a quarter to a half of the corpus; from here the
+work is broad rather than deep.
+
+### Reading the histogram: a blocker is not always a gap
+
+The corpus is CCVS-**85**, and some of what it uses is COBOL-85 only. Refusing
+those is the correct behaviour for a COBOL-74 compiler, so they will sit at the
+top of the list forever and should not be worked on. Breaking the 25-program
+`SELECT` bucket apart:
+
+    11   STATUS IS without the word FILE   COBOL-85; '74 requires FILE STATUS
+     2   PADDING CHARACTER IS             COBOL-85 only
+    10   ALTERNATE RECORD KEY             Indexed I-O level 2, and on MVS it
+                                          needs VSAM alternate indexes and paths
+     2   qualification of the FILE STATUS name, and one ACCESS MODE spelling
+
+So 13 of the 25 are conformant refusals and 10 need a large VSAM feature. The
+histogram counts what stops a program, not what is missing from the compiler --
+worth checking before treating the top line as the next slice.
 
 Each fix uncovers the next thing, and the count that matters is the one at the
 top of the list rather than the number that compile:
@@ -315,6 +330,32 @@ than the item it covers. The cursor used to resume wherever the subordinates
 stopped, so the next sibling would have been laid down inside the redefined
 item. `tests/grpredef.cbl` covers the exact fit, the short one, a redefinition
 nested inside a redefining group, and the item after all of them.
+
+### Declaratives
+
+`USE AFTER STANDARD ERROR PROCEDURE` is level 1 in all three I-O modules, and
+it is one of the eleven elements between this compiler and the minimum
+standard. The DEFTLY corpus has no declaratives; 58 CCVS programs do.
+
+The shape falls out of machinery that was already there. General rule 2 on
+IV-32 says control returns to the invoking routine after a USE procedure --
+which is precisely a `PERFORM` range, entered by parking a return address in
+the range's exit cell and left by branching through it. The `PERFORM` codegen
+became `gen_call_range`, and a declarative section's last paragraph is marked a
+range end exactly as a performed one is. Syntax rule 3 keeps control from
+crossing into or out of the declaratives, so they are branched around.
+
+**What invokes one, and what does not.** General rule 1 says the procedure runs
+after the standard error routine, or on the AT END condition when the statement
+carried no AT END phrase. cobc370 invokes it on **AT END without the phrase**,
+which is the condition it detects. It does **not** invoke it on an OPEN failure
+or on a physical I-O error: the QSAM DCBs carry no SYNAD exit, so there is
+nothing to call from. GnuCOBOL does invoke it on an OPEN failure -- that
+difference is visible in `tests/declar.cbl` if the input file is missing, where
+GnuCOBOL runs the procedure twice and this compiler would not run it at all.
+
+A `READ` with no phrase at all also now closes its own sentence; it previously
+left the period behind, because every test until this one carried `AT END`.
 
 ### WRITE ... AFTER ADVANCING
 
