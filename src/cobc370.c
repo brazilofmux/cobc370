@@ -557,6 +557,7 @@ typedef struct {
     int  has_write;    /* a WRITE names this file, so an insert RPL is needed */
     int  has_start;    /* a START names it, so the RPL needs a search argument */
     int  opened_extend;/* OPEN EXTEND: append to what is already there */
+    int  update;       /* a plain sequential file opened I-O: QSAM update mode */
     int  report;       /* the RD this FD carries, or -1 */
     int  print;        /* a WRITE ... ADVANCING names it: ASA control, RECFM=A */
     char pbuf[9];      /* that file's print buffer: control byte + the record */
@@ -1660,10 +1661,6 @@ static void parse_data_division(void)
              * obvious rather than mysterious. */
             if (files[i].access == 2 && files[i].org == 1 && files[i].key_sym < 0)
                 die("ACCESS IS DYNAMIC needs a RECORD KEY");
-            if (files[i].access == 2 && files[i].opened_io)
-                die("ACCESS IS DYNAMIC with OPEN I-O is not implemented yet -- "
-                    "browsing wants OPTCD=NSP and updating wants UPD, and one "
-                    "RPL cannot hold both");
             if (files[i].org == 2) {
                 /* An RRDS is addressed by record number. VSAM wants that as a
                  * fullword binary, which is what a COBOL RELATIVE KEY declared
@@ -2507,8 +2504,10 @@ static void parse_one_statement(void)
                    && !is("I-O") && !is("EXTEND")) {
                 int fi = file_index(tok.text);
                 if (fi < 0) die("OPEN names something that is not a file");
-                if (mode >= 3 && !files[fi].vsam)
-                    die("OPEN I-O and EXTEND are implemented for VSAM files only");
+                if (mode == 4 && !files[fi].vsam)
+                    die("OPEN EXTEND is implemented for VSAM files only");
+                if (mode == 3 && !files[fi].vsam && files[fi].isam)
+                    die("OPEN I-O on an ISAM file is not implemented");
                 if (mode == 1) files[fi].opened_input = 1;
                 else if (mode == 2) files[fi].opened_output = 1;
                 else if (mode == 3) files[fi].opened_io = 1;
@@ -2643,13 +2642,20 @@ static void parse_one_statement(void)
         int i = consume_sym();
         int fi = syms[i].fd_file;
         if (fi < 0) die("REWRITE names something that is not a file's record");
-        if (!files[fi].vsam) die("REWRITE is implemented for VSAM files only");
+        if (files[fi].isam) die("REWRITE on an ISAM file is not implemented");
         Stmt *st = new_stmt(ST_REWRITE);
         st->dst = fi; st->rec = i;
         if (is("FROM")) { next(); st->src = consume_sym(); }
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
-        if (is("INVALID")) { next(); expect("KEY"); parse_stmt_list(1); }
+        if (is("INVALID")) {
+            /* A sequential REWRITE has no key to be invalid, and the standard
+             * gives it no INVALID KEY phrase. Refusing it is kinder than
+             * generating a branch that can never be taken. */
+            if (!files[fi].vsam)
+                die("INVALID KEY has no meaning on a sequential REWRITE");
+            next(); expect("KEY"); parse_stmt_list(1);
+        }
         else eat_period();
         new_stmt(ST_LABEL)->dst = st->lab2;
         return;
@@ -4868,10 +4874,45 @@ static void emit_set_from_expr(const Sym *d, Node *e, int add)
     gen_store(d, NULL, "PWK1");
 }
 
+/* Checks that need to know how a file is USED, not just how it is declared.
+ * The OPEN modes are recorded as the PROCEDURE DIVISION is read, so none of
+ * this can live in parse_data_division -- where an earlier version of the
+ * DYNAMIC/I-O check sat, testing a flag that was still zero. */
+static void resolve_file_use(void)
+{
+    for (int i = 0; i < nfile; i++) {
+        File *f = &files[i];
+        if (f->vsam) {
+            if (f->access == 2 && f->opened_io)
+                die("ACCESS IS DYNAMIC with OPEN I-O is not implemented yet -- "
+                    "browsing wants OPTCD=NSP and updating wants UPD, and one "
+                    "RPL cannot hold both");
+            continue;
+        }
+        if (!f->opened_io || f->isam) continue;
+        /* Updating a sequential file in place is QSAM's own update mode, not
+         * BSAM: OPEN UPDAT, GET in locate mode, PUTX to write the block back.
+         * BSAM would hand us raw blocks to deblock and rewrite by hand; QSAM
+         * already does that, and blocked datasets and a short last block come
+         * out right for free. */
+        f->update = 1;
+        if (f->opened_input || f->opened_output || f->opened_extend)
+            die("a sequential file opened I-O cannot also be opened INPUT, "
+                "OUTPUT or EXTEND -- update mode needs its own DCB");
+        if (f->has_write)
+            die("a sequential file opened I-O is read and rewritten, not "
+                "written -- WRITE is for OUTPUT and EXTEND");
+        if (f->reclen > 256)
+            die("a record wider than 256 bytes needs a split MVC to be "
+                "updated in place, which is not implemented");
+    }
+}
+
 static void generate(void)
 {
     char b[200], lab[24];
     int has_display = 0;
+    resolve_file_use();
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_DISPLAY_LIT || stmts[i].op == ST_DISPLAY_ID)
             has_display = 1;
@@ -5038,8 +5079,9 @@ static void generate(void)
                 reset_bases();
                 break;
             }
-            snprintf(b, sizeof b, "(%s,%s)", f->label, st->src == 1 ? "INPUT" : "OUTPUT");
-            asm_line("", "OPEN", b, "");
+            snprintf(b, sizeof b, "(%s,%s)", f->label,
+                     st->src == 3 ? "UPDAT" : st->src == 1 ? "INPUT" : "OUTPUT");
+            asm_line("", "OPEN", b, st->src == 3 ? "QSAM update mode" : "");
             if (f->isam == 2) {
                 /* BISAM reads a whole BLOCK, not a record, and wants 16 bytes
                  * of working room in front of it. BLKSIZE is only known once
@@ -5196,8 +5238,21 @@ static void generate(void)
             snprintf(b, sizeof b, "1,%s", le);       asm_line("", "LA", b, "this READ's AT END");
             snprintf(b, sizeof b, "1,7,%s+33", f->label); asm_line("", "STCM", b, "into DCBEODAD");
             need_sym_base(&syms[f->rec_sym]);
-            snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
-            asm_line("", "GET", b, "QSAM move mode");
+            if (f->update) {
+                /* Locate mode: GET returns R1 pointing at the record inside
+                 * the access method's buffer. Keep that pointer -- a REWRITE
+                 * has to put the new bytes back through it -- and copy the
+                 * record out, because the program addresses its 01 at a fixed
+                 * place and the buffer moves. */
+                asm_line("", "GET", f->label, "QSAM locate mode");
+                snprintf(b, sizeof b, "1,U%03d", st->dst);
+                asm_line("", "ST", b, "remember where the record sits");
+                snprintf(b, sizeof b, "%s(%d),0(1)", syms[f->rec_sym].label, f->reclen);
+                asm_line("", "MVC", b, "into the record area");
+            } else {
+                snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
+                asm_line("", "GET", b, "QSAM move mode");
+            }
             if (st->src >= 0) {
                 const Sym *t = &syms[st->src];
                 asm_comment("  INTO: only reached when a record was read");
@@ -5568,6 +5623,26 @@ static void generate(void)
             asm_comment(b);
             if (!f->opened_io)
                 die("REWRITE and DELETE need the file opened I-O");
+            if (f->update) {
+                /* The record goes back through the pointer the last GET
+                 * returned, into the very buffer it came from, and PUTX with
+                 * no output DCB tells QSAM to write that block back where it
+                 * was read. Nothing here knows or cares whether the dataset is
+                 * blocked. */
+                if (st->src >= 0) {
+                    const Sym *sv = &syms[st->src];
+                    asm_comment("  FROM: fill the record area first");
+                    need_sym_base(&syms[f->rec_sym]); need_sym_base(sv);
+                    gen_move_alpha(&syms[f->rec_sym], NULL, sv, NULL);
+                }
+                need_sym_base(&syms[f->rec_sym]);
+                snprintf(b, sizeof b, "1,U%03d", st->dst);
+                asm_line("", "L", b, "where the last READ left the record");
+                snprintf(b, sizeof b, "0(%d,1),%s", f->reclen, syms[f->rec_sym].label);
+                asm_line("", "MVC", b, "back into the buffer");
+                asm_line("", "PUTX", f->label, "write that block back");
+                break;
+            }
             if (f->org == 2 && f->access != 0) gen_rrn_to_cell(f);
             if (erase && f->org == 0)
                 die("a record cannot be deleted from a VSAM ESDS -- entry "
@@ -6270,6 +6345,15 @@ static void generate(void)
             asm_line(f->label, "DCB", b, "");
             continue;
         }
+        if (f->update) {
+            /* Update mode. GL/PL is GET locate and PUTX: the access method
+             * hands back a pointer into its own buffer and puts the block back
+             * where it came from. The geometry comes from the label, as for
+             * any file that already exists. */
+            snprintf(b, sizeof b, "DDNAME=%s,DSORG=PS,MACRF=(GL,PL)", f->ddname);
+            asm_line(f->label, "DCB", b, "");
+            continue;
+        }
         if (!f->opened_output) {
             /* Reading: RECFM, LRECL and BLKSIZE all come from the label, so
              * saying nothing is not laziness, it is the only correct thing.
@@ -6305,6 +6389,11 @@ static void generate(void)
             snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", lrecl, blk);
             asm_cont(first, second);
         }
+    }
+    for (int i = 0; i < nfile; i++) {
+        if (!files[i].update) continue;
+        char ul[12]; snprintf(ul, sizeof ul, "U%03d", i);
+        asm_line(ul, "DS", "F", "the record the last GET located");
     }
     for (int i = 0; i < nfile; i++) {
         if (!files[i].print) continue;

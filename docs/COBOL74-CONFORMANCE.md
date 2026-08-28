@@ -91,15 +91,15 @@ Missing from Level 1: the `SET` statement, and `USAGE IS INDEX`. This is the
 sharpest illustration of the diagonal: the module's Level 2 search facility
 works, while the Level 1 statement for moving an index does not exist.
 
-### Sequential I-O — Level 1 but for declaratives
+### Sequential I-O — Level 1, complete
 
 `SELECT`/`ASSIGN`/`ORGANIZATION`/`ACCESS`/`FILE STATUS`, FD with its clauses
-accepted, `OPEN CLOSE READ WRITE REWRITE`, `READ INTO`, `WRITE FROM`, `AT END`.
+accepted, `OPEN INPUT/OUTPUT/I-O`, `CLOSE READ WRITE REWRITE`, `READ INTO`,
+`WRITE FROM`, `REWRITE FROM`, `AT END`, `USE` declaratives, and
+`WRITE ... BEFORE/AFTER ADVANCING` in both its integer and `PAGE` forms.
 
-Missing from Level 1: the `USE` statement — that is, declaratives — and
-`WRITE ... BEFORE/AFTER ADVANCING`. Vertical spacing is carried in the record
-as an ASA control character instead, which is what the corpus and the Report
-Writer path both do, but it is not the standard's spelling.
+`RERUN`, `SAME AREA` and `CODE-SET` are accepted and ignored, which is the
+right answer for a single-volume implementation with no alphabet-names.
 
 Level 2 adds `LINAGE`, `OPTIONAL`, `RESERVE`, `SAME RECORD AREA`, `EXTEND`,
 `MULTIPLE FILE TAPE` — none present.
@@ -161,18 +161,28 @@ have caught that; this is the kind of thing the standard-shaped one is for.
 All five have a null level, so all five are conforming choices. `COPY` is the
 only one with an obvious pull behind it.
 
-## What would reach the minimum standard
+## The minimum standard
 
-The minimum standard is `1 NUC` + `1 TBL` + `1 SEQ`. Against today:
+The minimum standard is `1 NUC` + `1 TBL` + `1 SEQ`, the three modules without
+a null level. All three are now complete: Table Handling on 2026-08-27, the
+Nucleus and Sequential I-O on the 28th.
 
-    Nucleus         ACCEPT, ALTER, ENTER, INSPECT, class conditions,
-                    switch-status conditions
-    Table Handling  SET, USAGE IS INDEX
-    Sequential I-O  USE (declaratives), WRITE ... ADVANCING
+It was eleven elements when this section was first written — `ACCEPT`, `ALTER`,
+`ENTER`, `INSPECT`, class conditions and switch-status conditions in the
+Nucleus; `SET` and `USAGE IS INDEX` in Table Handling; declaratives and
+`WRITE ... ADVANCING` in Sequential I-O — and knowing it was eleven rather than
+a hundred is what made it worth starting. Two more turned up on the way, both
+because a list written from memory was checked against the standard's own
+element list rather than trusted: switch-status conditions are Nucleus level 1,
+and `BEFORE ADVANCING` and `OPEN I-O`/`REWRITE` are Sequential I-O level 1.
+Both times the correction was found by testing each element one at a time.
 
-Eleven elements. Several are small; `INSPECT` and declaratives are not. That
-is the whole distance to a claim the project can actually make, and it is
-worth knowing that it is eleven and not a hundred.
+That is a claim the project can make: **cobc370 implements the COBOL-74 minimum
+standard**, with substantial parts of Relative, Indexed, Report Writer,
+Segmentation and Inter-Program Communication besides. It is not a validated
+claim — nobody has run the 1974 audit routines against it, and CCVS-85 tests a
+later standard — but it is a checkable one, and the map above is where to check
+it.
 
 ## Testing it
 
@@ -661,6 +671,46 @@ GnuCOBOL runs the procedure twice and this compiler would not run it at all.
 
 A `READ` with no phrase at all also now closes its own sentence; it previously
 left the period behind, because every test until this one carried `AT END`.
+
+### OPEN I-O and REWRITE on a sequential file — QSAM, not BSAM
+
+The last element of `1 SEQ`. Updating a record in place is the one sequential
+operation that is not read-forward or write-forward, and the obvious way to do
+it on MVS is BSAM: `OPEN UPDAT`, `READ`/`CHECK`, `WRITE` the block back. That
+is also the wrong way. BSAM hands back a *block*, so a blocked dataset means
+deblocking by hand, tracking which record within the block the program is
+looking at, computing the length of a short last block from the residual count
+in the IOB, and holding a dirty block until the moment before the next read.
+Several hundred lines of runtime, and every one of them a place to be wrong.
+
+QSAM already does all of that. Its update mode is `OPEN UPDAT` with
+`MACRF=(GL,PL)`: `GET` in locate mode returns R1 pointing at the record inside
+the access method's own buffer, and `PUTX` with no output DCB writes the block
+that record came from back where it was read. Blocking, the short last block
+and the write-back ordering are the access method's problem.
+
+So the compiled code is four instructions on each side. `READ` keeps the
+pointer `GET` returned and copies the record out to the 01 — the program
+addresses its record area at a fixed place and the buffer does not stay put.
+`REWRITE` copies it back through that pointer and issues `PUTX`.
+
+The DCB says nothing about geometry, as for any file that already exists: the
+label is the authority. A file opened I-O may not also be opened INPUT, OUTPUT
+or EXTEND, because the MACRF is settled at assembly time and one DCB cannot be
+both; and `WRITE` on such a file is refused, which is what the standard says
+anyway — a sequential file opened I-O is read and rewritten, not written.
+
+`tests/sequpd.cbl` writes six records `BLOCK CONTAINS 3 RECORDS`, so its
+rewrites straddle a block boundary: records 2 and 4 are in different blocks,
+and record 5 is rewritten `FROM` working storage in the second block after
+record 4 has forced the first one out. If `PUTX` were putting back the wrong
+block, that is where it would show.
+
+**Found on the way:** the check that refuses `ACCESS IS DYNAMIC` with
+`OPEN I-O` had been sitting in `parse_data_division`, testing a flag that is
+not set until the PROCEDURE DIVISION is read. It had never once fired. Both
+that check and the new update-mode ones now live in `resolve_file_use`, called
+at the top of code generation, where the OPEN modes are known.
 
 ### WRITE ... AFTER ADVANCING
 
