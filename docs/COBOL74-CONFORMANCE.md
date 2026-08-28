@@ -221,6 +221,39 @@ That flattening is the result worth noting. The first slices each cleared
 something standing in front of a quarter to a half of the corpus; from here the
 work is broad rather than deep.
 
+## Where the edge is
+
+After thirteen slices the corpus went from **2 of 265 programs compiling to 81**,
+and the histogram no longer has a Level 1 gap at the top of it. What stops the
+rest sorts into four kinds, and only the last is ordinary work:
+
+**1. COBOL-85 spellings, correctly refused.** `STATUS IS` without `FILE`,
+`PADDING CHARACTER`, `RECORD DELIMITER`, `NOT INVALID KEY`, `CALL ... BY
+REFERENCE`, tables nested more than three deep, `ADVANCING` by an identifier.
+These will sit near the top of the list forever. Implementing them would make
+the compiler accept programs COBOL-74 does not have.
+
+**2. Level 2 elements.** `SELECT OPTIONAL`, `ALTERNATE RECORD KEY`,
+`OCCURS ... TO ... DEPENDING ON`, `LINAGE` and its counter, qualification of a
+paragraph name by its section. Real COBOL-74, at the level above the one this
+compiler is closing. `ALTERNATE RECORD KEY` is also the largest single piece of
+infrastructure left: on MVS it means VSAM alternate indexes and paths, not a
+compiler change.
+
+**3. One machine limit that is still a limit.** `USAGE COMPUTATIONAL` past nine
+digits needs a doubleword binary field, and S/370 has no 64-bit arithmetic.
+It is not impossible -- IBM's own compilers convert through a 32-bit divide by
+a power of ten and reassemble -- but everything else here is computed in packed
+decimal, so it would add a multi-precision path used by nothing but the
+representation tests. **18 programs.** This is the honest edge: the next thing
+worth doing, and the first one whose cost is out of proportion to a COBOL-74
+target on this machine.
+
+**4. Ordinary remaining work, all small.** `INSPECT` in its level 1 form,
+continuation of a word or a numeric literal, a `SIGN` clause on an item of more
+than sixteen digits -- a limitation this compiler introduced itself when the
+zoned conversion was split, and one it should lift.
+
 ### Reading the histogram: a blocker is not always a gap
 
 The corpus is CCVS-**85**, and some of what it uses is COBOL-85 only. Refusing
