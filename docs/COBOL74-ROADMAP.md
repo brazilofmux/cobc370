@@ -658,6 +658,16 @@ did, and then the first FD of every report program had an eight-byte
 every report was a heading on an empty page. The sweep's 101 tests passed
 throughout. The batch is the safety net for exactly this.
 
-Still to do from that discussion: a probe matrix on the guest -- F/FB/V/VB
-by stated and unstated blocking by input and output -- run under both
-compilers and written into the conformance map as the table.
+The probe matrix from that discussion -- F/FB/V/VB by `BLOCK CONTAINS`
+omitted, stated and `0`, by input and output, eighteen cells, each run
+under IKFCBL00 and under cobc370 -- is in the conformance map under
+Sequential I-O. It came out as the three layers predict: IBM's compiler
+abends in exactly the two cells where an FD without `BLOCK CONTAINS` meets
+a blocked label (S001-4 on FB, S002-04 on VB); cobc370 reads all twelve
+input cells, because its input DCBs leave the label to decide; and on
+output the two compilers write identical labels in five cells of six, the
+sixth being `RECFM=F` against `RECFM=FB` with `BLKSIZE=LRECL` for an
+unblocked fixed file, which is the same dataset under another name. The
+first run of the matrix as one job stopped at the first abend and hid the
+rest -- one job per cell is the way to run a matrix that is expected to
+abend.

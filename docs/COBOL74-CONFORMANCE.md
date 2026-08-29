@@ -122,6 +122,46 @@ a dataset written by cobc370 reads back under IKFCBL00. `BLOCK CONTAINS 0`
 leaves the block size to the DD or the label. The roadmap's closing section
 sets out the DCB rules this rests on.
 
+The probe matrix, run on the guest on 2026-08-30 and settling what the
+online threads argue about. Each cell is one program -- `SELECT ... ASSIGN
+TO UT-S-`, `RECORD CONTAINS 80 CHARACTERS`, and the FD stating `BLOCK
+CONTAINS` as shown -- compiled by IBM's IKFCBL00 and by cobc370. The
+twelve input cells read a 20-record dataset of the label shown:
+
+| dataset label | `BLOCK CONTAINS` omitted | `10 RECORDS` | `0 RECORDS` |
+|---|---|---|---|
+| `F`, 80/80 | both read 20 | both 20 | both 20 |
+| `FB`, 80/800 | **IBM: S001-4** (`IEC020I`, block longer than the DCB's `BLKSIZE=80`); cobc370: 20 | both 20 | both 20 |
+| `V`, 84/88 | both 20 | both 20 | both 20 |
+| `VB`, 84/844 | **IBM: S002-04** (`IEC036I`, same cause for V); cobc370: 20 | both 20 | both 20 |
+
+The two abends are the trap of layer 2: an FD without `BLOCK CONTAINS`
+makes IBM's compiler assert an unblocked DCB, which wins the merge against
+the blocked label. cobc370 states nothing for input, so the label wins
+every time; the price is that a program cannot override a label on input,
+which no program of this corpus needs. With `BLOCK CONTAINS 0` both
+compilers read anything, which is why the corpus JCL was always written
+that way. A stated `10 RECORDS` against an unblocked or smaller-blocked
+label is harmless under both: the buffer is merely bigger than the blocks.
+
+The six output cells write 20 records and the label is what IEHLIST then
+shows, `RECFM`/`BLKSIZE` (`LRECL` is 80 for F and 84 for V throughout):
+
+| FD | IBM writes | cobc370 writes |
+|---|---|---|
+| F, `BLOCK CONTAINS` omitted | `F`/80 | `FB`/80 |
+| F, `10 RECORDS` | `FB`/800 | `FB`/800 |
+| F, `0 RECORDS`, DD `BLKSIZE=1600` | `FB`/1600 | `FB`/1600 |
+| V, omitted | `V`/88 | `V`/88 |
+| V, `10 RECORDS` | `VB`/844 | `VB`/844 |
+| V, `0 RECORDS`, DD `BLKSIZE=1684` | `VB`/1684 | `VB`/1684 |
+
+One difference, and it is a spelling: for an unblocked fixed file IBM's
+label says `F` and cobc370's says `FB` with `BLKSIZE=LRECL`, which every
+access method treats as the same thing (and which both compilers, and
+IEBGENER, read back as 20 records). For V both write `RECFM=V`. Every
+other cell is byte-identical between the two compilers.
+
 ### Relative I-O — Level 2, complete
 
 RRDS through VSAM. `ORGANIZATION RELATIVE`, `ACCESS SEQUENTIAL/RANDOM`,
