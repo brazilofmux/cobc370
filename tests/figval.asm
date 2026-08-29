@@ -269,6 +269,7 @@ D0006    DC    CL4' '              WS-SPC PIC X(4)
 COBRT    CSECT
          ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
          ENTRY COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT,COBMVL
+         ENTRY COBDCAL,COBCANC
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -1004,6 +1005,71 @@ ADTPK    DS    2F
 ADTZ     DS    CL9
 ADTB     DS    CL8
 RTSAVE12 DS    18F
+*
+* COBDCAL -- CALL identifier. R1 -> A(8-byte name), A(parameter list).
+* A table of programs loaded so far: a name found there is called
+* at the entry point remembered; one not found is LOADed and
+* remembered, so each program is loaded once until CANCELled.
+* The callee's return code comes back in R15.
+COBDCAL  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE14+4
+         LA    11,RTSAVE14
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            the name
+         L     3,4(0,1)            the parameter list
+         LA    4,DCTAB
+         LA    5,16                entries
+DCA010   CLI   0(4),X'00'          an empty entry?
+         BE    DCA050              then it is not loaded
+         CLC   0(8,4),0(2)         this one?
+         BE    DCA030
+         LA    4,12(4)
+         BCT   5,DCA010
+         LOAD  EPLOC=(2)           table full: load without remembering
+         LR    15,0
+         B     DCA040
+DCA050   MVC   0(8,4),0(2)         remember the name
+         LOAD  EPLOC=(2)
+         ST    0,8(0,4)            and the entry point
+DCA030   L     15,8(0,4)
+DCA040   LR    1,3                 R1 -> the callee's parameters
+         BALR  14,15
+         L     13,4(13)
+         ST    15,16(13)           the callee's return code survives th
+         LM    14,12,12(13)
+         BR    14
+RTSAVE14 DS    18F
+*
+* COBCANC -- CANCEL. R1 -> A(8-byte name). A program in the table is
+* DELETEd and forgotten; one that is not is left alone.
+COBCANC  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE15+4
+         LA    11,RTSAVE15
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            the name
+         LA    4,DCTAB
+         LA    5,16
+CAN010   CLI   0(4),X'00'
+         BE    CANX                not loaded: nothing to do
+         CLC   0(8,4),0(2)
+         BE    CAN020
+         LA    4,12(4)
+         BCT   5,CAN010
+         B     CANX
+CAN020   DELETE EPLOC=(2)          release it
+         XC    0(12,4),0(4)        and forget it
+CANX     L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+DCTAB    DC    16XL12'00'          loaded programs: CL8 name, A(entry)
+RTSAVE15 DS    18F
 *
 * COBMVL -- an alphanumeric move of any length. R1 -> A(receiver),
 *   A(sender), A(halfword receiver length, halfword sender length).

@@ -253,6 +253,9 @@ if [ $# -eq 0 ]; then
     if "$(dirname "$0")/cobc-call-roundtrip" >/dev/null 2>&1
     then say "  call-roundtrip: ok (separate compile, linked, parameters both ways)"; pass=$((pass+1))
     else say "  call-roundtrip: FAILED"; fail=$((fail+1)); fi
+    if "$(dirname "$0")/cobc-dyncall-roundtrip" >/dev/null 2>&1
+    then say "  dyncall-roundtrip: ok (CALL identifier, CANCEL, EXIT PROGRAM)"; pass=$((pass+1))
+    else say "  dyncall-roundtrip: FAILED"; fail=$((fail+1)); fi
 fi
 
 say ""

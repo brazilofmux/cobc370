@@ -219,13 +219,17 @@ The "this SELECT clause is not implemented" bucket in the CCVS histogram was
 not re-decomposed here; that is optimisation-phase housekeeping, since what is
 left of it is COBOL-85 spellings and `ALTERNATE RECORD KEY`.
 
-### Tier 5 -- Inter-Program Communication, both levels (3 items)
+### Tier 5 -- Inter-Program Communication, both levels -- DONE 2026-08-29
 
-| element | size | note |
-|---|---|---|
-| `EXIT PROGRAM` | S | a return through the save area; `GOBACK` already does it under an IBM name |
-| `CALL identifier` | S | `LOAD` the module named in the field, `BALR` to it. The source comment saying ANS COBOL has no `CALL identifier` is true of IBM's compiler and false of the standard; `2 IPC 0,2` lists it. A small runtime routine that does what the DYNALOAD idiom does by hand |
-| `CANCEL` | S | `DELETE` the loaded module |
+| element | how |
+|---|---|
+| `EXIT PROGRAM` | the subprogram return; in a main program, no effect. A called program is known by its `PROCEDURE DIVISION USING`, so one without parameters gets the no-op and `GOBACK`, which always returns, is its way out |
+| `CALL identifier` | the name goes into an 8-byte field and `COBDCAL` loads the program by name -- once, into a table of what is loaded -- and calls it with R1 -> the parameter list. The source comment saying ANS COBOL has no `CALL identifier` was true of IBM's compiler; `2 IPC 0,2` has it |
+| `CANCEL` | `COBCANC` `DELETE`s a program in the table and forgets it, so the next `CALL` loads it afresh in its initial state, as XII-7 says; a program not loaded is left alone |
+
+Proved by `bin/cobc-dyncall-roundtrip`: the callee is a load module of its own
+in a temporary library the caller reaches through `STEPLIB`, and it counts its
+calls in `WORKING-STORAGE` so a `CANCEL` shows as the count starting over.
 
 ### Tier 6 -- Library: `COPY` (1 item, host side)
 

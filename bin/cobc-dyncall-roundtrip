@@ -1,0 +1,46 @@
+#!/bin/bash
+# Prove CALL identifier and CANCEL end to end: the callee is link-edited as a
+# load module of its own into a temporary library, and the caller finds it by
+# name through STEPLIB at run time -- which is the only way a call by name
+# can work, since nothing is resolved by the linkage editor.
+set -u
+. "$(cd "$(dirname "$0")/../lib" && pwd)/common.sh"
+CC="$(cd "$(dirname "$0")/../src" && pwd)"
+TDIR="$(cd "$(dirname "$0")/../tests" && pwd)"
+WORK=${TMPDIR:-/tmp}/cobc-dyncall; mkdir -p "$WORK"
+"$CC/cobc370" "$TDIR/subdyn.cbl"  -o "$TDIR/subdyn.asm"  || die "subdyn did not compile"
+"$CC/cobc370" "$TDIR/maindyn.cbl" -o "$TDIR/maindyn.asm" || die "maindyn did not compile"
+{
+cat <<'EOF'
+//DYNCALL  JOB (5161A020,1A11),'CALL BY NAME',
+//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1)
+//* 1. the callee, as a load module of its own in a temporary library.
+//S1      EXEC ASMFCL,PARM.ASM='OBJ,NODECK'
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/subdyn.asm"
+cat <<'EOF'
+/*
+//LKED.SYSLMOD DD DSN=&&DYNLIB(SUBDYN),DISP=(NEW,PASS),UNIT=SYSDA,
+//             SPACE=(CYL,(1,1,5)),DCB=(RECFM=U,BLKSIZE=19069)
+//* 2. the caller, run with that library as its STEPLIB so LOAD can find
+//*    the callee by name.
+//S2      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/maindyn.asm"
+cat <<'EOF'
+/*
+//GO.STEPLIB DD  DSN=&&DYNLIB,DISP=(OLD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+EOF
+} > "$WORK/dyncall.jcl"
+run_deck "$WORK/dyncall.jcl" "$WORK/dyncall.out"
+grep -a "^RESULT" "$WORK/dyncall.out" > "$WORK/got.txt"
+exp="$TDIR/dyncall.expected"
+if diff -q "$exp" "$WORK/got.txt" >/dev/null; then
+    say "dyncall roundtrip: ok (CALL identifier, CANCEL, EXIT PROGRAM)"
+    exit 0
+fi
+say "dyncall roundtrip: FAILED"; diff "$exp" "$WORK/got.txt" | head -20
+grep -aoE "AB [SU][0-9A-F]+|IEW[0-9]+[A-Z]? .{0,40}|COBC370: .*" "$WORK/dyncall.out" | head -5; exit 1

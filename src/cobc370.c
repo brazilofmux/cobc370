@@ -606,7 +606,7 @@ static Node *node(int kind)
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT, ST_INSPECT, ST_ALTER, ST_ACCEPT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
-       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP, ST_STRING, ST_UNSTRING,
+       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP, ST_STRING, ST_UNSTRING, ST_CANCEL, ST_EXITPGM,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH,
        ST_REWRITE, ST_DELETE, ST_START };
 
@@ -2422,7 +2422,7 @@ static int starts_statement(void)
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
         "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT",
-        "STRING", "UNSTRING", 0
+        "STRING", "UNSTRING", "CANCEL", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -3848,6 +3848,29 @@ static void parse_one_statement(void)
         return;
     }
 
+    if (is("CANCEL")) {
+        /* CANCEL identifier / 'literal' (XII-7): the program is released, and
+         * the next CALL of it finds it in its initial state. A program not
+         * loaded is left alone. */
+        next();
+        while (!tok.eof && !is(".") && !starts_statement()) {
+            Stmt *st = new_stmt(ST_CANCEL);
+            st->src = -1;
+            if (tok.literal) {
+                if (tok.len < 1 || tok.len > 8) die("a program name is 1 to 8 characters");
+                memcpy(st->para, tok.text, (size_t)tok.len + 1);
+                next();
+            } else {
+                st->src = consume_sym();
+                if (!syms[st->src].is_alpha || syms[st->src].bytes > 8)
+                    die("CANCEL identifier needs an alphanumeric item of at most 8 characters");
+                st->para[0] = 0;
+            }
+        }
+        eat_period();
+        return;
+    }
+
     if (is("CALL")) {
         /* ANS COBOL has only CALL 'literal', which the linkage editor resolves
          * -- there is no CALL identifier and so nothing to decide at compile
@@ -3855,14 +3878,22 @@ static void parse_one_statement(void)
          * at run time, and DYNALOAD is itself reached by an ordinary static
          * call like any other subroutine. */
         next();
-        if (!tok.literal)
-            die("CALL needs a literal program name; ANS COBOL has no CALL "
-                "identifier -- that is what DYNALOAD is for");
-        if (tok.len < 1 || tok.len > 8)
-            die("a called program name is 1 to 8 characters");
         Stmt *st = new_stmt(ST_CALL);
-        memcpy(st->para, tok.text, (size_t)tok.len + 1);
-        next();
+        st->src = -1;
+        if (tok.literal) {
+            if (tok.len < 1 || tok.len > 8)
+                die("a called program name is 1 to 8 characters");
+            memcpy(st->para, tok.text, (size_t)tok.len + 1);
+            next();
+        } else {
+            /* CALL identifier, 2 IPC 0,2: the name is read at run time and the
+             * program loaded by name -- what the DYNALOAD idiom did by hand.
+             * IBM's ANS COBOL had no such thing; the standard does. */
+            st->src = consume_sym();
+            if (!syms[st->src].is_alpha || syms[st->src].bytes > 8)
+                die("CALL identifier needs an alphanumeric item of at most 8 characters");
+            st->para[0] = 0;
+        }
         if (is("USING")) {
             next();
             while (!tok.eof && !is(".") && !starts_statement()) {
@@ -4040,7 +4071,17 @@ static void parse_one_statement(void)
 
     if (is("EXIT")) {
         next();
-        if (is("PROGRAM")) die("EXIT PROGRAM is not implemented yet");
+        if (is("PROGRAM")) {
+            /* EXIT PROGRAM (XII-6): in a called program, return to the
+             * caller; in a main program, nothing at all. Which one this is
+             * cannot be known here beyond a PROCEDURE DIVISION USING, so a
+             * called program without parameters gets the no-op -- and
+             * GOBACK, which always returns, is the way out for it. */
+            next();
+            new_stmt(ST_EXITPGM);
+            eat_period();
+            return;
+        }
         new_stmt(ST_EXIT);
         eat_period();
         return;
@@ -5126,7 +5167,7 @@ static void gen_rescale16(const char *wk, int from, int to, int round)
  * the work areas, where the permanent base covers them. */
 static struct { char lab[12], op[8], opd[80], cmt[48]; } pend_dc[MAXSOP * 4];
 static int npend_dc;
-static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt, use_mvl, use_devtype;
+static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt, use_mvl, use_devtype, use_dcal;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
     if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
@@ -5783,6 +5824,7 @@ static void emit_runtime(void)
     asm_line("COBRT", "CSECT", "", "");
     asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI", "");
     asm_line("", "ENTRY", "COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT,COBMVL", "");
+    asm_line("", "ENTRY", "COBDCAL,COBCANC", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -6308,6 +6350,71 @@ static void emit_runtime(void)
     asm_line("ADTZ", "DS", "CL9", "");
     asm_line("ADTB", "DS", "CL8", "");
     asm_line("RTSAVE12", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBDCAL -- CALL identifier. R1 -> A(8-byte name), A(parameter list).");
+    asm_comment(" A table of programs loaded so far: a name found there is called");
+    asm_comment(" at the entry point remembered; one not found is LOADed and");
+    asm_comment(" remembered, so each program is loaded once until CANCELled.");
+    asm_comment(" The callee's return code comes back in R15.");
+    asm_line("COBDCAL", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE14+4", "");
+    asm_line("", "LA", "11,RTSAVE14", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "the name");
+    asm_line("", "L", "3,4(0,1)", "the parameter list");
+    asm_line("", "LA", "4,DCTAB", "");
+    asm_line("", "LA", "5,16", "entries");
+    asm_line("DCA010", "CLI", "0(4),X'00'", "an empty entry?");
+    asm_line("", "BE", "DCA050", "then it is not loaded");
+    asm_line("", "CLC", "0(8,4),0(2)", "this one?");
+    asm_line("", "BE", "DCA030", "");
+    asm_line("", "LA", "4,12(4)", "");
+    asm_line("", "BCT", "5,DCA010", "");
+    asm_line("", "LOAD", "EPLOC=(2)", "table full: load without remembering");
+    asm_line("", "LR", "15,0", "");
+    asm_line("", "B", "DCA040", "");
+    asm_line("DCA050", "MVC", "0(8,4),0(2)", "remember the name");
+    asm_line("", "LOAD", "EPLOC=(2)", "");
+    asm_line("", "ST", "0,8(0,4)", "and the entry point");
+    asm_line("DCA030", "L", "15,8(0,4)", "");
+    asm_line("DCA040", "LR", "1,3", "R1 -> the callee's parameters");
+    asm_line("", "BALR", "14,15", "");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "ST", "15,16(13)", "the callee's return code survives the LM");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "BR", "14", "");
+    asm_line("RTSAVE14", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBCANC -- CANCEL. R1 -> A(8-byte name). A program in the table is");
+    asm_comment(" DELETEd and forgotten; one that is not is left alone.");
+    asm_line("COBCANC", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE15+4", "");
+    asm_line("", "LA", "11,RTSAVE15", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "the name");
+    asm_line("", "LA", "4,DCTAB", "");
+    asm_line("", "LA", "5,16", "");
+    asm_line("CAN010", "CLI", "0(4),X'00'", "");
+    asm_line("", "BE", "CANX", "not loaded: nothing to do");
+    asm_line("", "CLC", "0(8,4),0(2)", "");
+    asm_line("", "BE", "CAN020", "");
+    asm_line("", "LA", "4,12(4)", "");
+    asm_line("", "BCT", "5,CAN010", "");
+    asm_line("", "B", "CANX", "");
+    asm_line("CAN020", "DELETE", "EPLOC=(2)", "release it");
+    asm_line("", "XC", "0(12,4),0(4)", "and forget it");
+    asm_line("CANX", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("DCTAB", "DC", "16XL12'00'", "loaded programs: CL8 name, A(entry)");
+    asm_line("RTSAVE15", "DS", "18F", "");
     asm_comment("");
     asm_comment(" COBMVL -- an alphanumeric move of any length. R1 -> A(receiver),");
     asm_comment("   A(sender), A(halfword receiver length, halfword sender length).");
@@ -8174,6 +8281,27 @@ static void generate(void)
                 snprintf(b, sizeof b, "%s+%d,X'80'", pl, (st->ndop - 1) * 4);
                 asm_line("", "OI", b, "high bit marks the last argument");
             }
+            if (st->src >= 0) {
+                /* By name: the name goes into an 8-byte field, space padded,
+                 * and COBDCAL loads the program if it is not already loaded
+                 * and calls it with R1 -> the parameter list. */
+                const Sym *nm = &syms[st->src];
+                char fn[64];
+                use_dcal = 1;
+                asm_line("", "MVC", "DYNNAME,=CL8' '", "");
+                need_sym_base(nm);
+                field_ref_m(nm, NULL, FR_SS_NOLEN, nm->bytes, 7, fn, sizeof fn);
+                snprintf(b, sizeof b, "DYNNAME(%d),%s", nm->bytes, fn);
+                asm_line("", "MVC", b, "the program name");
+                snprintf(b, sizeof b, "1,%s", pl);
+                asm_line("", "LA", b, "");
+                asm_line("", "ST", "1,DYNPARM+4", "the callee's parameter list");
+                asm_line("", "LA", "1,DYNPARM", "");
+                asm_line("", "L", "15,VDCAL", "");
+                asm_line("", "BALR", "14,15", "CALL identifier: load by name and call");
+                reset_bases();
+                break;
+            }
             snprintf(b, sizeof b, "1,%s", pl);
             asm_line("", "LA", b, "R1 -> parameter list");
             snprintf(b, sizeof b, "15,%s", vc);
@@ -8181,6 +8309,36 @@ static void generate(void)
             asm_line("", "BALR", "14,15", "static call, resolved by the linkage editor");
             break;
         }
+        case ST_CANCEL: {
+            use_dcal = 1;
+            asm_comment(" CANCEL");
+            asm_line("", "MVC", "DYNNAME,=CL8' '", "");
+            if (st->src >= 0) {
+                const Sym *nm = &syms[st->src];
+                char fn[64];
+                need_sym_base(nm);
+                field_ref_m(nm, NULL, FR_SS_NOLEN, nm->bytes, 7, fn, sizeof fn);
+                snprintf(b, sizeof b, "DYNNAME(%d),%s", nm->bytes, fn);
+                asm_line("", "MVC", b, "the program name");
+            } else {
+                int n = (int)strlen(st->para);
+                snprintf(b, sizeof b, "DYNNAME(%d),%s", n, intern_str(st->para, n, n));
+                asm_line("", "MVC", b, "the program name");
+            }
+            asm_line("", "LA", "1,DYNPARM", "");
+            asm_line("", "L", "15,VCANC", "");
+            asm_line("", "BALR", "14,15", "release it, if it was loaded");
+            reset_bases();
+            break;
+        }
+        case ST_EXITPGM:
+            if (!is_subprogram) { asm_comment(" EXIT PROGRAM in a main program: no effect"); break; }
+            asm_comment(" EXIT PROGRAM: back to the caller");
+            asm_line("", "L", "13,4(13)", "restore caller's save area");
+            asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
+            asm_line("", "SR", "15,15", "return code 0");
+            asm_line("", "BR", "14", "return to caller");
+            break;
         case ST_STOP:
             asm_comment(is_subprogram ? " GOBACK to the caller" : " STOP RUN");
             /* A subprogram must not close the runtime's SYSOUT: the caller may
@@ -8623,6 +8781,12 @@ static void generate(void)
             asm_line("WTOLEN", "DS", "H", "");
         }
         if (use_wtor) asm_line("VWTOR", "DC", "V(COBWTOR)", "");
+        if (use_dcal) {
+            asm_line("VDCAL", "DC", "V(COBDCAL)", "");
+            asm_line("VCANC", "DC", "V(COBCANC)", "");
+            asm_line("DYNPARM", "DC", "A(DYNNAME),A(0)", "CALL identifier: name, parameter list");
+            asm_line("DYNNAME", "DS", "CL8", "");
+        }
         if (use_mvl) {
             asm_line("VMVL", "DC", "V(COBMVL)", "");
             asm_line("MVLPARM", "DC", "A(0),A(0),X'80',AL3(MVLLEN)", "COBMVL: receiver, sender, lengths");
@@ -8993,6 +9157,7 @@ static void generate(void)
             snprintf(lab, sizeof lab, "PL%03d", i);
             snprintf(b, sizeof b, "%dF", stmts[i].ndop ? stmts[i].ndop : 1);
             asm_line(lab, "DS", b, "");
+            if (stmts[i].src >= 0) continue;         /* by name: no V-constant */
             snprintf(lab, sizeof lab, "VC%03d", i);
             snprintf(b, sizeof b, "V(%s)", stmts[i].para);
             asm_line(lab, "DC", b, "");
