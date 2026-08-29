@@ -70,16 +70,16 @@ T0004    DS    0H
          BALR  14,15
 T0005    DS    0H
 * MOVE SPACES -> WS-NAME
-         LA    1,D0000             MOVE SPACES
+         LA    1,D0000             SPACES
          MVI   0(1),C' '
          MVC   1(19,1),0(1)        propagate across the item
 T0006    DS    0H
 * MOVE SPACES -> WS-CH
-         LA    1,D0001             MOVE SPACES
+         LA    1,D0001             SPACES
          MVI   0(1),C' '
 T0007    DS    0H
 * MOVE ZEROS -> WS-DIG
-         LA    1,D0002             MOVE ZEROS
+         LA    1,D0002             ZEROS
          MVI   0(1),C'0'
          MVC   1(5,1),0(1)         propagate across the item
 T0008    DS    0H
@@ -100,7 +100,7 @@ T0010    DS    0H
          STH   2,D0005
 T0011    DS    0H
 * MOVE SPACES -> WS-GRP
-         LA    1,D0008             MOVE SPACES
+         LA    1,D0008             SPACES
          MVI   0(1),C' '
          MVC   1(5,1),0(1)         propagate across the item
 T0012    DS    0H
@@ -173,7 +173,7 @@ T0021    DS    0H
 * MOVE SPACES -> WS-FLAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         LA    1,D0011             MOVE SPACES
+         LA    1,D0011             SPACES
          MVI   0(1),C' '
          MVC   1(3,1),0(1)         propagate across the item
 T0022    DS    0H

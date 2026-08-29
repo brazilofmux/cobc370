@@ -137,6 +137,24 @@ static int lit_continue(Src *s)
     return 1;
 }
 
+/* The line is exhausted in the middle of a word or a numeric literal. If the
+ * next line is a continuation line -- hyphen in the indicator area, area A
+ * blank -- the word goes on from the first nonblank character in area B, with
+ * nothing between (I-106, 5.8.2.2). Otherwise the word ends here, and the line
+ * just read is left ready for the scanner exactly as src_fill would leave it:
+ * this is level 2 of the Nucleus, where level 1 continues only nonnumeric
+ * literals. */
+static int word_continue(Src *s)
+{
+    if (!src_fill(s)) return 0;
+    if (!s->cont) return 0;
+    for (int k = 7; k < 11 && s->buf[k]; k++)
+        if (s->buf[k] != ' ') return 0;            /* area A must be blank */
+    s->p = s->buf + 11;
+    while (*s->p == ' ') s->p++;
+    return 1;
+}
+
 static void die(const char *msg)
 {
     fprintf(stderr, "%s:%d: %s\n", src.name, tok.line ? tok.line : src.line, msg);
@@ -220,7 +238,15 @@ static void next(void)
         return;
     }
     int i = 0;
-    while (*src.p && !isspace((unsigned char)*src.p)) {
+    for (;;) {
+        if (!*src.p || isspace((unsigned char)*src.p)) {
+            /* The word ends -- unless nothing but blanks remain on the line
+             * and the next line continues it. */
+            const char *q = src.p;
+            while (*q && isspace((unsigned char)*q)) q++;
+            if (*q || i == 0 || !word_continue(&src)) break;
+            continue;
+        }
         if (sep_punct(src.p)) break;
         if (lex_parens && (*src.p == '(' || *src.p == ')')) break;
         if (*src.p == '.') {
@@ -523,6 +549,7 @@ typedef struct Node {
     char lit[MAXTOK];   /* N_LIT: scaled digits.  N_STR: the text */
     int litscale;
     int litlen;         /* N_STR */
+    int fig;            /* N_STR: a figurative constant; for FIG_ALL, lit is the unit */
     struct Node *sub;   /* subscript list on an N_SYM reference */
     struct Node *next;  /* the next subscript of a multi-dimensional reference */
     struct Node *l, *r;
@@ -1917,9 +1944,28 @@ static void parse_environment(void)
  */
 static Node *parse_expr(void);
 
+static int fig_code(const char *w);
 static Node *parse_primary(void)
 {
     if (is("(")) { next(); Node *n = parse_expr(); expect(")"); return n; }
+    if (is("ALL") && !tok.literal) {
+        next();
+        if (!tok.literal) die("ALL must be followed by a nonnumeric literal");
+        Node *n = node(N_STR);
+        memcpy(n->lit, tok.text, (size_t)tok.len + 1);
+        n->litlen = tok.len; n->fig = 6 /* FIG_ALL */;
+        next();
+        return n;
+    }
+    if (!tok.literal) {
+        int fg = fig_code(tok.text);
+        if (fg >= 3) {                     /* HIGH-VALUE, LOW-VALUE, QUOTE */
+            Node *n = node(N_STR);
+            n->lit[0] = 0; n->litlen = 0; n->fig = fg;
+            next();
+            return n;
+        }
+    }
     /* The quotes decide, not the characters between them. '24' is an
      * alphanumeric literal and 24 is a numeric one, and COBOL draws no other
      * distinction -- which matters most for FILE STATUS, whose values are
@@ -1985,23 +2031,60 @@ static Node *parse_expr(void)
     }
 }
 
-/* Figurative constants. Expressions already handle SPACE and ZERO through
- * parse_expr, which is why IF X = SPACES has always worked; MOVE has its own
- * source parser and did not. LOW-VALUES and HIGH-VALUES appear in the corpus
- * only in VALUE clauses, never as a MOVE source, so they are refused here with
- * a message rather than half-implemented. */
-enum { FIG_NONE = 0, FIG_SPACE = 1, FIG_ZERO = 2 };
+/* Figurative constants. SPACE and ZERO are level 1; HIGH-VALUE, LOW-VALUE,
+ * QUOTE and ALL literal are level 2, and each stands for a string of its
+ * character as long as the item it meets. A MOVE sets the first byte (or the
+ * first copy of an ALL unit) and lets an overlapping MVC carry it across the
+ * rest; a comparison reads against a 256-byte run of the character, or for
+ * ALL against the unit repeated to the item's length. QUOTE is the
+ * apostrophe, X'7D': that is what IBM's compilers mean by it and what every
+ * literal in this compiler's world is delimited with. */
+enum { FIG_NONE = 0, FIG_SPACE = 1, FIG_ZERO = 2, FIG_HIGH = 3, FIG_LOW = 4,
+       FIG_QUOTE = 5, FIG_ALL = 6 };
+static int use_hvals, use_lvals, use_qvals;
 
 static int fig_code(const char *w)
 {
     if (!strcmp(w, "SPACE")  || !strcmp(w, "SPACES"))  return FIG_SPACE;
     if (!strcmp(w, "ZERO")   || !strcmp(w, "ZEROS") ||
         !strcmp(w, "ZEROES"))                          return FIG_ZERO;
-    if (!strcmp(w, "LOW-VALUE")  || !strcmp(w, "LOW-VALUES") ||
-        !strcmp(w, "HIGH-VALUE") || !strcmp(w, "HIGH-VALUES") ||
-        !strcmp(w, "QUOTE")      || !strcmp(w, "QUOTES"))
-        die("only SPACE and ZERO are implemented as a MOVE source");
+    if (!strcmp(w, "LOW-VALUE")  || !strcmp(w, "LOW-VALUES"))  return FIG_LOW;
+    if (!strcmp(w, "HIGH-VALUE") || !strcmp(w, "HIGH-VALUES")) return FIG_HIGH;
+    if (!strcmp(w, "QUOTE")      || !strcmp(w, "QUOTES"))      return FIG_QUOTE;
     return FIG_NONE;
+}
+
+/* The byte a one-character figurative stands for, as assembler self-defining
+ * text. Hex for the three that are not printable in a C'' constant. */
+static const char *fig_byte(int fig)
+{
+    switch (fig) {
+    case FIG_SPACE: return "C' '";
+    case FIG_ZERO:  return "C'0'";
+    case FIG_HIGH:  return "X'FF'";
+    case FIG_LOW:   return "X'00'";
+    case FIG_QUOTE: return "X'7D'";
+    }
+    return "C' '";
+}
+static const char *fig_name(int fig)
+{
+    switch (fig) {
+    case FIG_SPACE: return "SPACES";   case FIG_ZERO:  return "ZEROS";
+    case FIG_HIGH:  return "HIGH-VALUES"; case FIG_LOW: return "LOW-VALUES";
+    case FIG_QUOTE: return "QUOTES";   case FIG_ALL:   return "ALL literal";
+    }
+    return "";
+}
+/* The 256-byte run a comparison reads against; emitted only when used. */
+static const char *fig_run(int fig)
+{
+    switch (fig) {
+    case FIG_HIGH:  use_hvals = 1; return "HVALS";
+    case FIG_LOW:   use_lvals = 1; return "LVALS";
+    case FIG_QUOTE: use_qvals = 1; return "QVALS";
+    }
+    return NULL;
 }
 
 static Stmt *new_stmt(int op)
@@ -2312,7 +2395,14 @@ static void parse_one_statement(void)
         char save[MAXTOK]; int savelit = tok.literal, savelen = tok.len;
         memcpy(save, tok.text, (size_t)tok.len + 1);
         next();
-        char squal[MAXQUAL][31]; int snq = savelit ? 0 : consume_quals(squal);
+        int all = 0; char unit[MAXTOK]; int unitlen = 0;
+        if (!savelit && !strcmp(save, "ALL")) {
+            if (!tok.literal) die("MOVE ALL must be followed by a nonnumeric literal");
+            all = 1; unitlen = tok.len;
+            memcpy(unit, tok.text, (size_t)tok.len + 1);
+            next();
+        }
+        char squal[MAXQUAL][31]; int snq = (savelit || all) ? 0 : consume_quals(squal);
         Node *ssub = opt_subscript();
         expect("TO");
         /* One source, any number of receiving fields. The scaling of a numeric
@@ -2322,7 +2412,14 @@ static void parse_one_statement(void)
             m->dst = consume_sym();
             m->dsub = opt_subscript();
             m->ssub = ssub;
-            if (savelit) {
+            if (all) {
+                const Sym *d = &syms[m->dst];
+                if (!(d->is_alpha || d->is_group))
+                    die("MOVE ALL literal to a numeric item is not implemented");
+                m->fig = FIG_ALL;
+                memcpy(m->lit, unit, (size_t)unitlen + 1);
+                m->litlen = unitlen;
+            } else if (savelit) {
                 m->imm = 2;                       /* nonnumeric literal */
                 memcpy(m->immdigits, save, (size_t)savelen + 1);
                 m->immscale = savelen;
@@ -2339,7 +2436,8 @@ static void parse_one_statement(void)
                     scale_literal("0", d->scale, m->immdigits, sizeof m->immdigits);
                 } else if (fg != FIG_NONE) {
                     if (!(d->is_alpha || d->is_group))
-                        die("MOVE SPACES to a numeric item is not valid");
+                        die("only ZERO may be moved to a numeric item; SPACE, "
+                            "HIGH-VALUE, LOW-VALUE and QUOTE are alphanumeric");
                     m->fig = fg;
                 } else m->src = resolve_sym(save, squal, snq);
             }
@@ -4840,7 +4938,20 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             int n = L->sub ? ls->elem : ls->bytes;
             char fl[64], fr[64];
             if (R->kind == N_STR) {
-                const char *sl = intern_str(R->lit, R->litlen, n);
+                const char *sl;
+                if (R->fig == FIG_ALL) {
+                    /* The unit repeated to the item's length -- a constant
+                     * built here, since the length is known. */
+                    char rep[MAXTOK];
+                    if (n >= MAXTOK) die("ALL literal compared against an item wider than the token buffer");
+                    for (int k = 0; k < n; k++) rep[k] = R->lit[k % R->litlen];
+                    rep[n] = 0;
+                    sl = intern_str(rep, n, n);
+                } else if (R->fig) {
+                    sl = fig_run(R->fig);
+                } else {
+                    sl = intern_str(R->lit, R->litlen, n);
+                }
                 field_ref(ls, L->sub, n, 6, fl, sizeof fl);
                 snprintf(b, sizeof b, "%s,%s", fl, sl);
             } else if (R->kind == N_SYM && node_alpha(R)) {
@@ -6084,7 +6195,7 @@ static void generate(void)
             const Sym *d = &syms[st->dst];
             const char *verb = st->op == ST_MOVE ? "MOVE" :
                                st->op == ST_ADD  ? "ADD"  : "SUBTRACT";
-            const char *figname = st->fig == FIG_SPACE ? "SPACES" : "ZEROS";
+            const char *figname = fig_name(st->fig);
             if (st->fig)      snprintf(b, sizeof b, " %s %s -> %s", verb, figname, d->name);
             else if (st->imm) snprintf(b, sizeof b, " %s %s -> %s", verb, st->immdigits, d->name);
             else              snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
@@ -6104,12 +6215,22 @@ static void generate(void)
                     char fd[64];
                     field_ref_m(d, st->dsub, FR_RX, dn, 6, fd, sizeof fd);
                     snprintf(b, sizeof b, "1,%s", fd);
-                    asm_line("", "LA", b, st->fig == FIG_SPACE ? "MOVE SPACES"
-                                                               : "MOVE ZEROS");
-                    snprintf(b, sizeof b, "0(1),C'%c'", st->fig == FIG_SPACE ? ' ' : '0');
-                    asm_line("", "MVI", b, "");
-                    if (dn > 1) {
-                        snprintf(b, sizeof b, "1(%d,1),0(1)", dn - 1);
+                    asm_line("", "LA", b, figname);
+                    int ul = 1;
+                    if (st->fig == FIG_ALL) {
+                        /* The first copy of the unit, then the overlapping MVC
+                         * repeats it: each byte is copied from one unit-length
+                         * behind, so the pattern carries across. A unit longer
+                         * than the item is simply cut. */
+                        ul = st->litlen < dn ? st->litlen : dn;
+                        snprintf(b, sizeof b, "0(%d,1),%s", ul, intern_str(st->lit, ul, ul));
+                        asm_line("", "MVC", b, "the unit");
+                    } else {
+                        snprintf(b, sizeof b, "0(1),%s", fig_byte(st->fig));
+                        asm_line("", "MVI", b, "");
+                    }
+                    if (dn > ul) {
+                        snprintf(b, sizeof b, "%d(%d,1),0(1)", ul, dn - ul);
                         asm_line("", "MVC", b, "propagate across the item");
                     }
                     break;
@@ -6388,6 +6509,9 @@ static void generate(void)
     if (nsym) {
         asm_comment(" work areas for decimal arithmetic");
         asm_line("DWK", "DS", "D", "CVD/CVB doubleword");
+        if (use_hvals) asm_line("HVALS", "DC", "256X'FF'", "HIGH-VALUES, for comparison");
+        if (use_lvals) asm_line("LVALS", "DC", "256X'00'", "LOW-VALUES, for comparison");
+        if (use_qvals) asm_line("QVALS", "DC", "256X'7D'", "QUOTES, for comparison");
         asm_line("PWK1", "DS", "PL16", "");
         asm_line("PWK2", "DS", "PL16", "");
         asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");

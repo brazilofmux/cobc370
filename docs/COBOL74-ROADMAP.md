@@ -71,13 +71,16 @@ The minimum standard is not reached until these are in. Do them first.
 
 Grouped by the machinery they touch, so each group is one piece of work.
 
-**Scanner and reference format** -- S each, do together:
-- separators: comma and semicolon allowed as separators
-- continuation of words and numeric literals (only nonnumeric literals continue today)
+**Scanner and reference format** -- DONE 2026-08-29:
+- separators: comma and semicolon -- already worked
+- continuation of words and numeric literals
 - figurative constants at Level 2: `ZEROS`/`ZEROES`, `HIGH-VALUES`, `LOW-VALUES`,
-  `QUOTES`, `ALL literal` -- accepted everywhere a literal is, including
-  conditions (`IF X = HIGH-VALUES` is refused today)
-- user-defined words need not begin with a letter
+  `QUOTES`, `ALL literal` as a MOVE source and in conditions
+- user-defined words need not begin with a letter -- already worked
+
+Found on the way and **not yet done**: `DISPLAY` of a subscripted item is
+refused. That is a Level 1 `DISPLAY identifier`, since an identifier may carry
+a subscript; it belongs with the `ACCEPT`/`DISPLAY` item below. S.
 
 **Conditions** -- M for the group:
 - abbreviated combined relation conditions: `IF A = 1 OR 2 OR 3`,
@@ -122,7 +125,8 @@ differently. **`DISPLAY ... UPON`** mnemonic-name -- S: `SYSOUT` and
 `CONSOLE` (WTO) are the two that matter.
 
 **`ACCEPT`/`DISPLAY` with no restriction on the number of transfers** -- S:
-the Level 1 forms take one operand.
+the Level 1 forms take one operand. Take `DISPLAY` of a subscripted item with
+it.
 
 ### Tier 2 -- Table Handling Level 2 (3 items)
 

@@ -72,7 +72,7 @@ T0007    DS    0H
          BALR  14,15
 T0008    DS    0H
 * MOVE SPACES -> X8
-         LA    1,D0005             MOVE SPACES
+         LA    1,D0005             SPACES
          MVI   0(1),C' '
          MVC   1(7,1),0(1)         propagate across the item
 T0009    DS    0H
@@ -93,7 +93,7 @@ T0010    DS    0H
          BALR  14,15
 T0011    DS    0H
 * MOVE SPACES -> X8
-         LA    1,D0005             MOVE SPACES
+         LA    1,D0005             SPACES
          MVI   0(1),C' '
          MVC   1(7,1),0(1)         propagate across the item
 T0012    DS    0H
@@ -116,7 +116,7 @@ T0013    DS    0H
          BALR  14,15
 T0014    DS    0H
 * MOVE SPACES -> X3
-         LA    1,D0004             MOVE SPACES
+         LA    1,D0004             SPACES
          MVI   0(1),C' '
          MVC   1(2,1),0(1)         propagate across the item
 T0015    DS    0H
