@@ -94,10 +94,7 @@ T0009    DS    0H
          BALR  14,15
 T0010    DS    0H
 * ADD B18 -> Q18
-         ZAP   PWK1(16),D0005(10)
-         ZAP   PWK2(16),D0003(10)
-         AP    PWK1(16),PWK2(16)
-         ZAP   D0005(10),PWK1(16)
+         AP    D0005(10),D0003(10)  packed, same scale: in place
 T0011    DS    0H
 * MOVE Q18 -> E18
          ZAP   PWK1(16),D0005(10)
@@ -191,9 +188,7 @@ T0022    DS    0H
          BALR  14,15
 T0023    DS    0H
 * IF
-         ZAP   WK0(16),D0002(10)
-         ZAP   WK1(16),D0003(10)
-         CP    WK0(16),WK1(16)     numeric compare
+         CP    D0002(10),D0003(10)  packed compare, in place
          BNH   L0001
 T0024    DS    0H
 * MOVE GT    -> FLAG
@@ -219,9 +214,7 @@ T0027    DS    0H
          BALR  14,15
 T0028    DS    0H
 * IF
-         ZAP   WK0(16),D0004(10)
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         CP    D0004(10),K0005+15(1)  packed compare, in place
          BNL   L0003
 T0029    DS    0H
 * MOVE NEG   -> FLAG

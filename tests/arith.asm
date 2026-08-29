@@ -25,10 +25,7 @@ T0000    DS    0H
 * ADD P1 -> P2
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(16),D0001(4)
-         ZAP   PWK2(16),D0000(4)
-         AP    PWK1(16),PWK2(16)
-         ZAP   D0001(4),PWK1(16)
+         AP    D0001(4),D0000(4)   packed, same scale: in place
 T0001    DS    0H
 * MOVE P2 -> R1
          ZAP   PWK1(16),D0001(4)

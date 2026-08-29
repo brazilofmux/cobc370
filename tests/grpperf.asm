@@ -119,10 +119,7 @@ T0012    DS    0H
          STH   2,D0008
 T0013    DS    0H
 * ADD 1050 -> CUST-BAL
-         ZAP   PWK1(16),D0003(4)
-         ZAP   PWK2(16),K0002(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   D0003(4),PWK1(16)
+         AP    D0003(4),K0002+13(3)  packed, same scale: in place
          DROP  8
 * ADD-EXIT.
 P0002    DS    0H

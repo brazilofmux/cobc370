@@ -5572,6 +5572,28 @@ static void gen_var_len(const Sym *y, int reg)
     if (fixed) { snprintf(b, sizeof b, "%d,%d(%d)", reg, fixed, reg); asm_line("", "LA", b, "plus the fixed part"); }
 }
 
+/* A numeric literal as a packed operand of exactly the bytes it needs, at
+ * the scale asked for. The interned constants are 16-byte packed fields with
+ * the value right-aligned, so the operand is the constant's tail. Returns 0
+ * when the literal's scale is finer than wanted -- padding zeros is exact,
+ * dropping digits is not. */
+static int packed_lit_operand(const char *digits, int litscale, int scale, char *out, size_t on)
+{
+    if (litscale > scale) return 0;
+    char d[48]; int n = (int)strlen(digits);
+    if (n + (scale - litscale) >= (int)sizeof d - 1) return 0;
+    memcpy(d, digits, (size_t)n);
+    for (int k = 0; k < scale - litscale; k++) d[n + k] = '0';
+    n += scale - litscale; d[n] = 0;
+    /* strip leading zeros but keep one digit */
+    const char *p = d; while (p[1] && *p == '0') p++;
+    int nd = (int)strlen(p);
+    int len = nd / 2 + 1;
+    if (len > 8) return 0;
+    snprintf(out, on, "%s+%d(%d)", intern_const(d), 16 - len, len);
+    return 1;
+}
+
 /* Alphanumeric move: left justified, space filled, truncated on the right.
  * Groups move as bytes, which is why a group MOVE is alphanumeric whatever
  * its subordinates are. */
@@ -6698,6 +6720,23 @@ static int clc_operand(const Node *n)
         && y->digits > 0 && y->bytes == y->digits && y->bytes <= 256;
 }
 
+/* Can this numeric comparison be a CP on the operands themselves? The left
+ * side a packed item; the right the same, at the same scale, or a literal no
+ * finer than that scale. */
+static int cp_comparable(const Node *l, const Node *r)
+{
+    if (l->kind != N_SYM) return 0;
+    const Sym *a = &syms[l->sym];
+    if (a->usage != U_COMP3 || a->is_group || a->is_alpha || a->edited || var_len(a)) return 0;
+    if (r->kind == N_SYM) {
+        const Sym *b = &syms[r->sym];
+        return b->usage == U_COMP3 && !b->is_group && !b->is_alpha && !b->edited && !var_len(b)
+            && b->scale == a->scale;
+    }
+    if (r->kind == N_LIT) { char t[64]; return packed_lit_operand(r->lit, r->litscale, a->scale, t, sizeof t); }
+    return 0;
+}
+
 static int clc_comparable(const Node *l, const Node *r)
 {
     if (!clc_operand(l) || !clc_operand(r)) return 0;
@@ -6915,6 +6954,21 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             } else die("mixed alphanumeric and numeric comparison is not implemented yet");
             if (n > 256) die("CLC is limited to 256 bytes");
             asm_line("", "CLC", b, "alphanumeric compare");
+        } else if (cp_comparable(c->l, c->r)) {
+            /* Two packed items at one scale, or one against a literal at
+             * that scale: CP on the fields themselves, whatever their
+             * lengths. Nothing is moved to a work area first. */
+            const Sym *ls = &syms[c->l->sym];
+            char fl[64], fr[64];
+            need_sym_base(ls);
+            field_ref_m(ls, c->l->sub, FR_SS_LEN, c->l->sub ? ls->elem : ls->bytes, 6, fl, sizeof fl);
+            if (c->r->kind == N_SYM) {
+                const Sym *rs = &syms[c->r->sym];
+                need_sym_base(rs);
+                field_ref_m(rs, c->r->sub, FR_SS_LEN, c->r->sub ? rs->elem : rs->bytes, 7, fr, sizeof fr);
+            } else packed_lit_operand(c->r->lit, c->r->litscale, ls->scale, fr, sizeof fr);
+            snprintf(b, sizeof b, "%s,%s", fl, fr);
+            asm_line("", "CP", b, "packed compare, in place");
         } else if (clc_comparable(c->l, c->r)) {
             /* Two unsigned DISPLAY items of the same picture are zoned F0
              * through F9, so a byte compare orders them exactly as a decimal
@@ -8794,6 +8848,35 @@ static void generate(void)
                    0.1, not 0.0. */
                 int ss = st->imm ? st->immscale : syms[st->src].scale;
                 int ws = d->scale > ss ? d->scale : ss;
+                /* Both packed at the same scale: the instruction the machine
+                 * has for exactly this, on the fields themselves. AP into the
+                 * receiver's own length truncates on the left, which is
+                 * COBOL's rule; an unsigned receiver takes the magnitude, as
+                 * the sign nibble forced to F makes it. A literal is added at
+                 * the receiver's scale from the tail of its constant. */
+                char fop[64];
+                int direct = d->usage == U_COMP3 && !d->edited && !var_len(d) &&
+                    ((!st->imm && syms[st->src].usage == U_COMP3 && syms[st->src].scale == d->scale)
+                     || (st->imm && packed_lit_operand(st->immdigits, st->immscale, d->scale, fop, sizeof fop)));
+                if (direct) {
+                    char fd2[64];
+                    if (!st->imm) {
+                        need_sym_base(&syms[st->src]);
+                        field_ref_m(&syms[st->src], st->ssub, FR_SS_LEN,
+                                    st->ssub ? syms[st->src].elem : syms[st->src].bytes, 7, fop, sizeof fop);
+                    }
+                    need_sym_base(d);
+                    field_ref_m(d, st->dsub, FR_SS_LEN, st->dsub ? d->elem : d->bytes, 6, fd2, sizeof fd2);
+                    snprintf(b, sizeof b, "%s,%s", fd2, fop);
+                    asm_line("", st->op == ST_ADD ? "AP" : "SP", b, "packed, same scale: in place");
+                    if (!d->is_signed) {
+                        int dl = st->dsub ? d->elem : d->bytes;
+                        if (st->dsub) snprintf(b, sizeof b, "%d(6),X'0F'", dl - 1);
+                        else snprintf(b, sizeof b, "%s+%d,X'0F'", d->label, dl - 1);
+                        asm_line("", "OI", b, "unsigned: the magnitude, F sign");
+                    }
+                    break;
+                }
                 gen_load(d, st->dsub, "PWK1");
                 gen_rescale("PWK1", d->scale, ws);
                 if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK2"); }

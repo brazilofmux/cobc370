@@ -215,10 +215,7 @@ T0030    DS    0H
          BALR  14,15
 T0031    DS    0H
 * IF
-         ZAP   WK0(16),D0002(4)
-         ZAP   WK1(16),K0001(16)   literal
-         SRP   WK1(16),2,0         align scale (left)
-         CP    WK0(16),WK1(16)     numeric compare
+         CP    D0002(4),K0004+15(1)  packed compare, in place
          BE    L0013
 T0032    DS    0H
 * MOVE NONZER -> OUT-MSG
@@ -345,6 +342,7 @@ WK5      DS    PL16
 K0001    DC    PL16'0'             numeric constants
 K0002    DC    PL16'99'
 K0003    DC    PL16'20'
+K0004    DC    PL16'000'
 S0001    DC    CL6'LESS  '         nonnumeric constants
 S0002    DC    CL6'NOTLES'
 S0003    DC    CL6'ANDOK '

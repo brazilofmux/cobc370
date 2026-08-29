@@ -760,11 +760,8 @@ T0061    DS    0H
 * ADD 999 -> C3
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(16),D0006(2)
-         ZAP   PWK2(16),K0009(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   D0006(2),PWK1(16)
-         OI    D0006+1,X'0F'       unsigned: force an F sign
+         AP    D0006(2),K0009+14(2)  packed, same scale: in place
+         OI    D0006+1,X'0F'       unsigned: the magnitude, F sign
 T0062    DS    0H
 * MOVE C3 -> C3-SHOW
          ZAP   PWK1(16),D0006(2)
