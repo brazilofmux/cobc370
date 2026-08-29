@@ -4565,6 +4565,30 @@ static const char *br_true[]  = { "BE", "BL", "BH", "BNE", "BNH", "BNL" };
 static const char *br_false[] = { "BNE", "BNL", "BNH", "BE", "BH", "BL" };
 
 
+/* Can this numeric comparison be done as a byte compare? Only when both sides
+ * are plain unsigned DISPLAY items of identical picture: same digit count,
+ * same scale, and stored one digit per byte with no sign position, no P
+ * scaling and no editing. Anything else -- a sign, COMP or COMP-3, a literal,
+ * an expression, differing pictures -- takes the packed path. */
+static int clc_operand(const Node *n)
+{
+    if (n->kind != N_SYM) return 0;
+    const Sym *y = &syms[n->sym];
+    return !y->is_group && !y->is_alpha && !y->is_88 && !y->is_index
+        && y->usage == U_DISPLAY && !y->is_signed && !y->edited
+        && !y->sgn_lead && !y->sgn_sep
+        && y->digits > 0 && y->bytes == y->digits && y->bytes <= 256;
+}
+
+static int clc_comparable(const Node *l, const Node *r)
+{
+    if (!clc_operand(l) || !clc_operand(r)) return 0;
+    const Sym *a = &syms[l->sym], *b = &syms[r->sym];
+    /* Same digits and same scale means the two are aligned already; without
+     * that the decimal points would have to be lined up first. */
+    return a->digits == b->digits && a->scale == b->scale;
+}
+
 static int node_alpha(const Node *n)
 {
     if (n->kind == N_STR) return 1;
@@ -4709,6 +4733,25 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             } else die("mixed alphanumeric and numeric comparison is not implemented yet");
             if (n > 256) die("CLC is limited to 256 bytes");
             asm_line("", "CLC", b, "alphanumeric compare");
+        } else if (clc_comparable(c->l, c->r)) {
+            /* Two unsigned DISPLAY items of the same picture are zoned F0
+             * through F9, so a byte compare orders them exactly as a decimal
+             * compare would -- one CLC instead of two PACKs and a CP, and the
+             * PACKs were into a 16-byte work area whatever the field's real
+             * width. IBM's own compilers do this, which is most of why they
+             * are faster on comparison-heavy loops.
+             *
+             * The one behavioural difference: CP raises a data exception on a
+             * field holding non-numeric bytes and CLC does not. Unsigned
+             * DISPLAY receivers are stored with an F zone forced, so the only
+             * way to get here with junk is to read it from a file -- where
+             * IKFCBL00 is equally silent. */
+            const Sym *ls = &syms[c->l->sym], *rs = &syms[c->r->sym];
+            char fl[64], fr[64];
+            field_ref(ls, c->l->sub, ls->bytes, 6, fl, sizeof fl);
+            field_ref_m(rs, c->r->sub, FR_SS_NOLEN, rs->bytes, 7, fr, sizeof fr);
+            snprintf(b, sizeof b, "%s,%s", fl, fr);
+            asm_line("", "CLC", b, "unsigned zoned: a byte compare is exact");
         } else {
             int sl = gen_expr(c->l, 0, 0);
             int sr = gen_expr(c->r, 1, 0);
