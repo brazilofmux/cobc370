@@ -134,23 +134,29 @@ indexes and paths before it is a compiler change.
 
 ### Report Writer — a fraction of its only level
 
-Present -- the page-manager subset: `REPORT IS` on the FD, `RD` with `PAGE
-LIMIT`, `HEADING`, `FIRST DETAIL`, `LAST DETAIL`; report groups of `TYPE
-DETAIL` and `TYPE PAGE HEADING`; `LINE NUMBER` absolute and `PLUS`; `COLUMN
-NUMBER`; `SOURCE`; `VALUE`; `GENERATE`, `INITIATE`, `TERMINATE`.
+Being completed, slice by slice, since 2026-08-30 -- the plan is in
+`COBOL74-ROADMAP.md` under "Report Writer: closing the module".
+
+Present: `REPORT IS` on the FD; `RD` with the `PAGE` clause entire -- `LIMIT`,
+`HEADING`, `FIRST DETAIL`, `LAST DETAIL`, `FOOTING`, with the implicit values
+of 2.16.4(2) -- and without it, a single page of indefinite length;
+`LINE-COUNTER` and `PAGE-COUNTER` as special registers, qualifiable by the
+report-name, usable in `SOURCE` and in the Procedure Division; report groups
+of `TYPE PAGE HEADING` and `TYPE DETAIL`, presented by Tables 2 and 3 of
+2.5.5 (fit tests 3a and 3b, first-line rules 4a and 4b, page advance
+processing); `LINE NUMBER` absolute and `PLUS`; `COLUMN NUMBER`; `SOURCE`
+with subscripts; `VALUE`; `USAGE DISPLAY`; `GENERATE data-name`, `INITIATE`,
+`TERMINATE`.
 
 Missing, each refused with a message: `CONTROL` clauses; `TYPE` for `REPORT
 HEADING`, `CONTROL HEADING`, `CONTROL FOOTING`, `PAGE FOOTING`, `REPORT
-FOOTING`; the `SUM` clause and sum counters, with subtotalling, crossfooting
-and rolling forward; `NEXT GROUP`; `GROUP INDICATE`; `CODE`; `SUPPRESS`; `USE
-BEFORE REPORTING`; `LINE-COUNTER` and `PAGE-COUNTER` as referenceable special
-registers.
+FOOTING`; `NEXT GROUP`; `LINE ... NEXT PAGE`; the `SUM` clause and sum
+counters, with subtotalling, crossfooting and rolling forward; `GROUP
+INDICATE`; `CODE`; `REPORTS ARE`; `GENERATE report-name`; `SUPPRESS`; `USE
+BEFORE REPORTING`.
 
-What exists is a page manager; what is absent is the part that computes, and
-it is the larger part. `1 RPW 0,1` is a single level, so the module is not
-claimed. Completing it was left as an open decision when the feature work
-closed on 2026-08-29, and has not been taken up. The README, the roadmap and
-the source comment at `---- Report Writer` all describe the same subset.
+`1 RPW 0,1` is a single level, so the module is not claimed until the list
+above is empty.
 
 ### Inter-Program Communication — Level 2, complete
 

@@ -1,0 +1,36 @@
+PAGED REPORT       PAGE   1
+NUM    NAME
+001    ALPHA
+       (second)
+002    BETA
+       (second)
+003    GAMMA
+       (second)
+004    ALPHA
+       (second)
+PAGED REPORT       PAGE   2
+NUM    NAME
+005    BETA
+       (second)
+006    single
+007    single
+008    single
+009    single
+PAGED REPORT       PAGE   3
+NUM    NAME
+-- LINE 10 --
+010    single
+011    single
+PAGED REPORT       PAGE   4
+NUM    NAME
+012    single
+013    GAMMA
+       (second)
+014    ALPHA
+       (second)
+015    BETA
+       (second)
+PAGED REPORT       PAGE 101
+NUM    NAME
+016    GAMMA
+       (second)

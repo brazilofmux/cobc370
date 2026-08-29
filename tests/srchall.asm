@@ -692,8 +692,12 @@ DTZONE   DS    CL8
 DTDW     DS    D
 RTSAVE4  DS    18F
 *
-* COBWRL -- advance the paper and write one report line.
-*   R1 -> A(dcb), A(current line), A(target line), A(buffer)
+* COBWRL -- position the paper and write one report line.
+*   R1 -> A(dcb), A(LINE-COUNTER), A(target line), A(buffer),
+*         A(pending carriage control)
+* A pending eject rides on the line itself when the target is
+* line 1; otherwise a blank line ejects first, so the blanks
+* that space down to the target land on the new page.
 *
 COBWRL   STM   14,12,12(13)
          BALR  12,0
@@ -703,11 +707,23 @@ COBWRL   STM   14,12,12(13)
          ST    11,8(13)
          LR    13,11
          L     2,0(0,1)            A(dcb)
-         L     3,4(0,1)            A(current line)
+         L     3,4(0,1)            A(LINE-COUNTER)
          L     4,8(0,1)            A(target line)
          L     5,12(0,1)           A(buffer)
-         LH    6,0(0,3)
-         LH    7,0(0,4)
+         L     9,16(0,1)           A(pending control)
+         L     6,0(0,3)            the current line
+         L     7,0(0,4)            the target
+         MVI   0(5),C' '           single space unless told otherwise
+         CLI   0(9),C'1'           an eject pending?
+         BNE   COBW010
+         MVI   0(9),C' '           once
+         CH    7,RWONE             to line 1?
+         BNE   COBW005
+         MVI   0(5),C'1'           the line itself ejects
+         SR    6,6
+         B     COBW020
+COBW005  PUT   (2),RTEJCT          a blank line at the top of a new pag
+         LA    6,1
 COBW010  LA    8,1(0,6)
          CR    8,7                 already at the line before the targe
          BNL   COBW020
@@ -715,11 +731,13 @@ COBW010  LA    8,1(0,6)
          LA    6,1(0,6)
          B     COBW010
 COBW020  PUT   (2),(5)
-         STH   7,0(0,3)            current line = target
+         ST    7,0(0,3)            LINE-COUNTER = the line just printed
          L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
+RWONE    DC    H'1'
+RTEJCT   DC    C'1',CL132' '       a blank line, ASA eject
 RTBLNK   DC    CL133' '            a blank line, ASA single space
 RTSAVE3  DS    18F
 RTOPEN   DC    X'00'

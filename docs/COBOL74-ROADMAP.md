@@ -411,7 +411,17 @@ generated per report from the `CONTROL` hierarchy.
    HEADING`; Table 3 fit tests 3a/3b, first-line rules 4a/4b and final
    setting 6d for `DETAIL`; page-advance processing as one routine per
    report. Retires the forced-first-detail cell. `SOURCE` with a subscript.
-   The existing report tests must print the same. **M.**
+   The existing report tests must print the same. **M.** -- DONE 2026-08-30.
+   `tests/rptpage` is the check, and its oracle is the standard's rather than
+   GnuCOBOL's in two places: GnuCOBOL's fit test looks at a body group's first
+   `LINE` only and so split a two-line detail across pages, where rule 3b
+   sums every `LINE` integer and 2.16.3(9) says a group is never split; and
+   GnuCOBOL ignores a `MOVE` to `PAGE-COUNTER`, which 1.2.2 allows. `COBWRL`
+   learned to put an eject on a blank line when the target is not line 1,
+   so a `HEADING` above 1 lands where it says instead of the eject's blanks
+   printing on the page before. The counters are fullword `COMP` items under
+   a hidden group named for the report, so `PAGE-COUNTER OF report-name`
+   resolves like any other qualified name.
 2. **The rest of the page: `PAGE FOOTING`, `REPORT HEADING`, `REPORT
    FOOTING`, `NEXT GROUP`, `LINE NEXT PAGE`.** Tables 1, 4 and 5; the three
    `NEXT GROUP` forms with the saved next group integer and final-setting

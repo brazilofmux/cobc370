@@ -33,15 +33,19 @@ T0000    DS    0H
 T0001    DS    0H
 * INITIATE SIMPLE-RPT
          SR    2,2
-         STH   2,RL000
-         MVI   RCTL,C'1'           eject before the first page
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         ST    2,D0005             LINE-COUNTER = 0
+         LA    2,1
+         ST    2,D0006             PAGE-COUNTER = 1
+         MVI   RBODY000,X'00'
+         MVI   RFGEN000,X'00'      no GENERATE yet
+         MVI   RCTL000,C'1'        eject before the first page
 T0002    DS    0H
 * MOVE 0 -> WS-IDX
          ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         L     8,BL0000            base locator
-         USING WSC0000,8
          STH   2,D0003
          DROP  8
 * LOOP-PARA.
@@ -83,20 +87,11 @@ T0007    DS    0H
 T0008    DS    0H
 * GENERATE DETAIL-LINE
          DROP  8
-         LH    2,RL000
-         LA    2,1(2)              last line of the group
-         LH    3,RL000
-         LTR   3,3                 no page yet?
-         BZ    L0002
-         CH    2,H0002             past LAST DETAIL?
-         BNH   L0003
-L0002    MVI   RCTL,C'1'           new page
-         SR    2,2
-         STH   2,RL000
-         BAL   14,RG000            page heading
-         LA    2,4                 first group goes at FIRST DETAIL
-         STH   2,RF000
-L0003    DS    0H
+         CLI   RFGEN000,X'00'      the first GENERATE?
+         BNE   L0002
+         MVI   RFGEN000,X'01'
+         BAL   14,RG000            the first page heading
+L0002    DS    0H
          BAL   14,RG001
 T0009    DS    0H
 * GO TO LOOP-PARA
@@ -104,7 +99,7 @@ T0009    DS    0H
 * DONE-PARA.
 P0002    DS    0H
 T0010    DS    0H
-* TERMINATE SIMPLE-RPT (no report footing in this subset)
+* TERMINATE SIMPLE-RPT (no footings yet)
 T0011    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -115,30 +110,28 @@ T0012    DS    0H
          SR    15,15               return code 0
          BR    14                  return to caller
 * report group PAGE-HEAD
-RG000    ST    14,RGS              save the return, COBWRL clobbers R14
+RG000    ST    14,RGS000           save the return
          LA    2,1                 LINE n
-         STH   2,RTGT
-         MVC   RBUF(1),RCTL        carriage control
-         MVI   RCTL,C' '           one eject only
+         ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0004(16),D0000     alphanumeric move
+         MVC   D0007(16),D0000     alphanumeric move
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+1(16),D0004    COLUMN placement
+         MVC   RBUF+1(16),D0007    COLUMN placement
          MVC   RBUF+25(11),S0001   COLUMN literal
          LA    1,RGP000
          L     15,VWRL
          BALR  14,15
          DROP  8
-         LH    2,RL000
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         L     2,D0005             LINE-COUNTER
          LA    2,2(2)              LINE PLUS n
-         STH   2,RTGT
-         MVC   RBUF(1),RCTL        carriage control
-         MVI   RCTL,C' '           one eject only
+         ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
          MVC   RBUF+1(3),S0002     COLUMN literal
@@ -146,35 +139,48 @@ RG000    ST    14,RGS              save the return, COBWRL clobbers R14
          LA    1,RGP000
          L     15,VWRL
          BALR  14,15
-         L     14,RGS
+         DROP  8
+         L     14,RGS000
          BR    14
 * report group DETAIL-LINE
-RG001    ST    14,RGS              save the return, COBWRL clobbers R14
-         LH    2,RL000
-         LA    2,1(2)              LINE PLUS n
-         LH    3,RF000
-         LTR   3,3                 a page was just started?
-         BZ    L0004
-         LR    2,3                 then start at FIRST DETAIL
-         SR    3,3
-         STH   3,RF000             consume it
-L0004    DS    0H
-         STH   2,RTGT
-         MVC   RBUF(1),RCTL        carriage control
-         MVI   RCTL,C' '           one eject only
-         MVI   RBUF+1,C' '
-         MVC   RBUF+2(131),RBUF+1  blank the line
+RG001    ST    14,RGS001           save the return
+         CLI   RBODY000,X'00'      a body group on this page yet?
+         BE    L0003               no: the first one always fits
          L     8,BL0000            base locator
          USING WSC0000,8
+         L     2,D0005             LINE-COUNTER
+         A     2,FC001             plus every LINE integer
+         C     2,FC002             against LAST DETAIL
+         BNH   L0003               fits
+         BAL   14,RADV000          page advance processing
+         DROP  8
+L0003    DS    0H
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         L     2,D0005             LINE-COUNTER
+         CLI   RBODY000,X'00'      a body group on this page yet?
+         BE    L0004
+         LA    2,1(2)              LINE PLUS n
+         B     L0005
+L0004    DS    0H
+         C     2,FC003             the heading ran past FIRST DETAIL?
+         BNL   *+12
+         LA    2,4                 no: the first line is FIRST DETAIL
+         B     L0005
+         LA    2,1(2)              yes: the line after it
+L0005    DS    0H
+         ST    2,RTGT
+         MVI   RBUF+1,C' '
+         MVC   RBUF+2(131),RBUF+1  blank the line
          L     2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0008(5),PWK1(16)   packed -> zoned
-         OI    D0008+4,X'F0'       unsigned: force an F zone
+         UNPK  D0011(5),PWK1(16)   packed -> zoned
+         OI    D0011+4,X'F0'       unsigned: force an F zone
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+1(5),D0008     COLUMN placement
+         MVC   RBUF+1(5),D0011     COLUMN placement
          ZAP   PWK1(16),D0002(5)
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
          MVC   EDWK(16),M0001      load the ED pattern
@@ -184,31 +190,51 @@ L0004    DS    0H
          BNM   G0001               not negative?
          MVI   0(1),C'-'
 G0001    DS    0H
-         MVC   D0009(14),EDWK+2    the edited result
+         MVC   D0012(14),EDWK+2    the edited result
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+10(14),D0009   COLUMN placement
+         MVC   RBUF+10(14),D0012   COLUMN placement
          LA    1,RGP001
          L     15,VWRL
          BALR  14,15
-         L     14,RGS
+         DROP  8
+         MVI   RBODY000,X'01'      a body group is on this page
+         L     14,RGS001
+         BR    14
+* page advance, report SIMPLE-RPT
+RADV000  ST    14,RADVS000
+         MVI   RCTL000,C'1'        eject before the next line
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         L     2,D0006             PAGE-COUNTER
+         LA    2,1(2)
+         ST    2,D0006
+         SR    2,2
+         ST    2,D0005             LINE-COUNTER = 0
+         MVI   RBODY000,X'00'      no body group on the new page
+         BAL   14,RG000            PAGE HEADING
+         DROP  8
+         L     14,RADVS000
          BR    14
 VWRL     DC    V(COBWRL)
 RGP000   DC    A(FD000)            PAGE-HEAD
-         DC    A(RL000)
+         DC    A(D0005)            LINE-COUNTER
          DC    A(RTGT)
-         DC    X'80',AL3(RBUF)     last parameter
+         DC    A(RBUF)
+         DC    X'80',AL3(RCTL000)  pending carriage control; last param
+RGS000   DS    F                   return address
 RGP001   DC    A(FD000)            DETAIL-LINE
-         DC    A(RL000)
+         DC    A(D0005)            LINE-COUNTER
          DC    A(RTGT)
-         DC    X'80',AL3(RBUF)     last parameter
-RL000    DC    H'0'                SIMPLE-RPT
-RP000    DC    H'0'
-RF000    DC    H'0'                forced first-detail line
-RTGT     DS    H                   target line
-RGS      DS    F                   renderer return address
-RCTL     DC    C' '                pending carriage control
+         DC    A(RBUF)
+         DC    X'80',AL3(RCTL000)  pending carriage control; last param
+RGS001   DS    F                   return address
+RCTL000  DC    C' '                SIMPLE-RPT
+RBODY000 DC    X'00'               a body group is on this page
+RFGEN000 DC    X'00'               the first GENERATE has happened
+RADVS000 DS    F                   page advance return
+RTGT     DS    F                   target line
 RBUF     DC    CL133' '            ASA byte + 132 columns
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
@@ -233,7 +259,9 @@ K0002    DC    PL16'10'
 K0003    DC    PL16'1000'
 M0001    DC    XL16'40204020206B2020206B2021204B2020'  ED patterns
 H0001    DC    H'1'                element sizes
-H0002    DC    H'10'
+FC001    DC    F'1'                binary literals
+FC002    DC    F'10'
+FC003    DC    F'4'
 S0001    DC    CL11'TEST REPORT'   nonnumeric constants
 S0002    DC    CL3'NUM'
 S0003    DC    CL6'AMOUNT'
@@ -324,12 +352,16 @@ D0001    DC    FL4'0'              WS-NUM PIC S9(5)v0 COMP
 D0002    DC    PL5'000'            WS-AMT PIC S9(9)v2 COMP-3
          DS    XL3                 reserve the rest of a table
 D0003    DC    HL2'0'              WS-IDX PIC S9(4)v0 COMP
-D0004    DC    CL16' '             RPT0 PIC X(16)
-D0005    DC    CL11' '             RPT1 PIC X(11)
-D0006    DC    CL3' '              RPT2 PIC X(3)
-D0007    DC    CL6' '              RPT3 PIC X(6)
-D0008    DC    CL5'00000'          RPT4 PIC 9(5)v0 DISP
-D0009    DC    CL14' '             RPT5 edited, 14 chars
+         DS    XL2                 reserve the rest of a table
+D0004    DS    0CL8                SIMPLE-RPT (01 group)
+D0005    DC    FL4'0'              LINE-COUNTER PIC 9(6)v0 COMP
+D0006    DC    FL4'0'              PAGE-COUNTER PIC 9(6)v0 COMP
+D0007    DC    CL16' '             RPT0 PIC X(16)
+D0008    DC    CL11' '             RPT1 PIC X(11)
+D0009    DC    CL3' '              RPT2 PIC X(3)
+D0010    DC    CL6' '              RPT3 PIC X(6)
+D0011    DC    CL5'00000'          RPT4 PIC 9(5)v0 DISP
+D0012    DC    CL14' '             RPT5 edited, 14 chars
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the
@@ -671,8 +703,12 @@ DTZONE   DS    CL8
 DTDW     DS    D
 RTSAVE4  DS    18F
 *
-* COBWRL -- advance the paper and write one report line.
-*   R1 -> A(dcb), A(current line), A(target line), A(buffer)
+* COBWRL -- position the paper and write one report line.
+*   R1 -> A(dcb), A(LINE-COUNTER), A(target line), A(buffer),
+*         A(pending carriage control)
+* A pending eject rides on the line itself when the target is
+* line 1; otherwise a blank line ejects first, so the blanks
+* that space down to the target land on the new page.
 *
 COBWRL   STM   14,12,12(13)
          BALR  12,0
@@ -682,11 +718,23 @@ COBWRL   STM   14,12,12(13)
          ST    11,8(13)
          LR    13,11
          L     2,0(0,1)            A(dcb)
-         L     3,4(0,1)            A(current line)
+         L     3,4(0,1)            A(LINE-COUNTER)
          L     4,8(0,1)            A(target line)
          L     5,12(0,1)           A(buffer)
-         LH    6,0(0,3)
-         LH    7,0(0,4)
+         L     9,16(0,1)           A(pending control)
+         L     6,0(0,3)            the current line
+         L     7,0(0,4)            the target
+         MVI   0(5),C' '           single space unless told otherwise
+         CLI   0(9),C'1'           an eject pending?
+         BNE   COBW010
+         MVI   0(9),C' '           once
+         CH    7,RWONE             to line 1?
+         BNE   COBW005
+         MVI   0(5),C'1'           the line itself ejects
+         SR    6,6
+         B     COBW020
+COBW005  PUT   (2),RTEJCT          a blank line at the top of a new pag
+         LA    6,1
 COBW010  LA    8,1(0,6)
          CR    8,7                 already at the line before the targe
          BNL   COBW020
@@ -694,11 +742,13 @@ COBW010  LA    8,1(0,6)
          LA    6,1(0,6)
          B     COBW010
 COBW020  PUT   (2),(5)
-         STH   7,0(0,3)            current line = target
+         ST    7,0(0,3)            LINE-COUNTER = the line just printed
          L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
+RWONE    DC    H'1'
+RTEJCT   DC    C'1',CL132' '       a blank line, ASA eject
 RTBLNK   DC    CL133' '            a blank line, ASA single space
 RTSAVE3  DS    18F
 RTOPEN   DC    X'00'
