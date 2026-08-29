@@ -640,6 +640,7 @@ typedef struct {
     Node *dsub, *ssub;      /* subscripts on dst and src */
     int  vary_sym;          /* PERFORM ... VARYING identifier, -1 if none */
     Node *vary_from, *vary_by, *times_expr;
+
     int  ndop;              /* DISPLAY operands */
     struct { int sym; char lit[MAXTOK]; int litlen; } dop[8];
 } Stmt;
@@ -733,18 +734,21 @@ static int rgroup_index(const char *n)
     return -1;
 }
 
-/* INSPECT, at the level 1 shape: the compared and replacing items are single
- * characters, so every operation is a byte test down the field. BEFORE and
- * AFTER INITIAL are level 2 and are refused. */
+/* INSPECT. Each operation scans the item for a string -- one character at
+ * level 1, any length at level 2 -- and tallies or replaces it; CHARACTERS
+ * takes every position. BEFORE and AFTER INITIAL bound the scan at the first
+ * occurrence of another string, on each operation separately. An operand is
+ * an interned constant (a literal or figurative) or a symbol; the length is
+ * fixed at compile time either way. */
 enum { INS_T_ALL, INS_T_LEAD, INS_T_CHARS,
        INS_R_ALL, INS_R_LEAD, INS_R_FIRST, INS_R_CHARS };
 typedef struct {
     int  kind;
     int  tally;         /* INS_T_*: the counter */
-    int  c_sym;         /* the character compared, -1 when a literal */
-    char c_lit;
-    int  by_sym;        /* the replacement, -1 when a literal */
-    char by_lit;
+    int  c_sym;  char c_lab[12];  int c_len;    /* the string compared */
+    int  by_sym; char by_lab[12]; int by_len;   /* the replacement */
+    int  bf_sym; char bf_lab[12]; int bf_len;   /* BEFORE/AFTER INITIAL, bf_len 0 = none */
+    int  bf_after;
 } InsOp;
 #define MAXINSOP 64
 static InsOp insops[MAXINSOP];
@@ -2288,19 +2292,27 @@ static Node *node_zero(void)
     return z;
 }
 
-/* One INSPECT operand: a single-character literal, or a one-byte item. */
-static void ins_operand(int *sym, char *lit)
+/* One INSPECT operand: a nonnumeric literal, a one-character figurative, or
+ * an alphanumeric item. */
+static void ins_operand(int *sym, char *lab, int *len)
 {
+    *sym = -1; lab[0] = 0;
     if (tok.literal) {
-        if (tok.len != 1)
-            die("at level 1 an INSPECT operand is a single character");
-        *lit = tok.text[0]; *sym = -1; next();
+        if (tok.len < 1) die("an INSPECT operand cannot be empty");
+        snprintf(lab, 12, "%s", intern_str(tok.text, tok.len, tok.len));
+        *len = tok.len; next();
         return;
     }
+    int fg = fig_code(tok.text);
+    if (fg == FIG_SPACE) { snprintf(lab, 12, "%s", intern_str(" ", 1, 1)); *len = 1; next(); return; }
+    if (fg == FIG_ZERO)  { snprintf(lab, 12, "%s", intern_str("0", 1, 1)); *len = 1; next(); return; }
+    if (fg == FIG_HIGH)  { use_hvals = 1; strcpy(lab, "HVALS"); *len = 1; next(); return; }
+    if (fg == FIG_LOW)   { use_lvals = 1; strcpy(lab, "LVALS"); *len = 1; next(); return; }
+    if (fg == FIG_QUOTE) { use_qvals = 1; strcpy(lab, "QVALS"); *len = 1; next(); return; }
     int i = consume_sym();
-    if (syms[i].bytes != 1)
-        die("at level 1 an INSPECT operand is a single character");
-    *sym = i;
+    if (!(syms[i].is_alpha || syms[i].is_group) && syms[i].usage != U_DISPLAY)
+        die("an INSPECT operand must be a DISPLAY item");
+    *sym = i; *len = syms[i].bytes;
 }
 
 static void giving_target(Stmt *st)
@@ -3122,7 +3134,6 @@ static void parse_one_statement(void)
             if (is("AFTER")) die("PERFORM VARYING ... AFTER is not implemented yet");
         }
         if (is("UNTIL")) { next(); st->cond = parse_cond(); }
-        else if (st->vary_sym >= 0) die("PERFORM VARYING needs an UNTIL");
         else if (!is(".") && (is_numeric_literal(tok.text) || lookup(tok.text) >= 0)) {
             /* the n TIMES form; guarded so a following statement's verb is
                never mistaken for a repeat count */
@@ -3544,15 +3555,40 @@ static void parse_one_statement(void)
                 if (ninsop >= MAXINSOP) die("too many INSPECT clauses");
                 InsOp *o = &insops[ninsop];
                 memset(o, 0, sizeof *o);
-                o->c_sym = o->by_sym = -1;
+                o->c_sym = o->by_sym = o->bf_sym = -1;
                 int tally = -1;
+                /* After ALL, LEADING or FIRST a series of operands may follow
+                 * under the same word -- REPLACING ALL 'A' BY 'B' 'C' BY 'D',
+                 * TALLYING C FOR ALL 'A' 'B' -- so a bare operand here takes
+                 * the kind (and counter) of the operation before it. For
+                 * TALLYING an identifier followed by FOR is a new counter and
+                 * anything else is such an operand. */
+                int cont = 0, taken = -1;
                 if (!repl) {
-                    tally = consume_sym();
-                    if (syms[tally].scale || syms[tally].is_alpha || syms[tally].is_group)
-                        die("the TALLYING counter must be an elementary integer");
-                    expect("FOR");
-                }
-                if (is("CHARACTERS")) {
+                    if (tok.literal || fig_code(tok.text) != FIG_NONE) cont = 1;
+                    else {
+                        taken = consume_sym();
+                        if (is("FOR")) {
+                            next();
+                            tally = taken; taken = -1;
+                            if (syms[tally].scale || syms[tally].is_alpha || syms[tally].is_group)
+                                die("the TALLYING counter must be an elementary integer");
+                        } else cont = 2;         /* an operand of the series */
+                    }
+                } else if (!is("CHARACTERS") && !is("ALL") && !is("LEADING") && !is("FIRST"))
+                    cont = 1;
+                if (cont) {
+                    if (ninsop == st->ins_first || insops[ninsop-1].kind == INS_T_CHARS
+                        || insops[ninsop-1].kind == INS_R_CHARS)
+                        die("INSPECT wants ALL, LEADING, CHARACTERS or -- when replacing -- FIRST");
+                    o->kind = insops[ninsop-1].kind;
+                    if (!repl) tally = insops[ninsop-1].tally;
+                    if (cont == 2) {
+                        if (!(syms[taken].is_alpha || syms[taken].is_group) && syms[taken].usage != U_DISPLAY)
+                            die("an INSPECT operand must be a DISPLAY item");
+                        o->c_sym = taken; o->c_len = syms[taken].bytes;
+                    } else ins_operand(&o->c_sym, o->c_lab, &o->c_len);
+                } else if (is("CHARACTERS")) {
                     next();
                     o->kind = repl ? INS_R_CHARS : INS_T_CHARS;
                 } else {
@@ -3561,12 +3597,22 @@ static void parse_one_statement(void)
                     else if (is("FIRST") && repl) { next(); o->kind = INS_R_FIRST; }
                     else die("INSPECT wants ALL, LEADING, CHARACTERS"
                              " or -- when replacing -- FIRST");
-                    ins_operand(&o->c_sym, &o->c_lit);
+                    ins_operand(&o->c_sym, o->c_lab, &o->c_len);
                 }
-                if (repl) { expect("BY"); ins_operand(&o->by_sym, &o->by_lit); }
-                if (is("BEFORE") || is("AFTER"))
-                    die("INSPECT ... BEFORE/AFTER INITIAL is level 2 and is not "
-                        "implemented");
+                if (repl) {
+                    expect("BY");
+                    ins_operand(&o->by_sym, o->by_lab, &o->by_len);
+                    if (o->kind == INS_R_CHARS) {
+                        if (o->by_len != 1) die("CHARACTERS BY takes a single character");
+                    } else if (o->by_len != o->c_len)
+                        die("the replacing string must be the same length as the one it replaces -- II-70");
+                }
+                if (is("BEFORE") || is("AFTER")) {
+                    o->bf_after = is("AFTER");
+                    next();
+                    if (is("INITIAL")) next();
+                    ins_operand(&o->bf_sym, o->bf_lab, &o->bf_len);
+                }
                 o->tally = tally;
                 ninsop++; any = 1;
             }
@@ -4655,7 +4701,7 @@ static void gen_rescale16(const char *wk, int from, int to, int round)
  * the work areas, where the permanent base covers them. */
 static struct { char lab[12], op[8], opd[80], cmt[48]; } pend_dc[MAXSOP * 4];
 static int npend_dc;
-static int use_str, use_uns;
+static int use_str, use_uns, use_insprop;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
     if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
@@ -6873,87 +6919,131 @@ static void generate(void)
         case ST_INSPECT: {
             const Sym *sy = &syms[st->dst];
             int n = st->dsub ? sy->elem : sy->bytes;
-            char f[64];
+            char f[64], g[64];
             snprintf(b, sizeof b, " INSPECT %s", sy->name);
             asm_comment(b);
             for (int k = 0; k < st->ins_n; k++) {
                 const InsOp *o = &insops[st->ins_first + k];
                 int tallying = (o->kind <= INS_T_CHARS);
-                /* CHARACTERS needs no scan: every position matches. */
-                if (o->kind == INS_T_CHARS) {
-                    snprintf(b, sizeof b, "2,%d", n);
-                    asm_line("", "LA", b, "CHARACTERS: the whole field");
-                    asm_line("", "CVD", "2,DWK", "");
-                    asm_line("", "ZAP", "PWK1(16),DWK(8)", "");
-                    gen_load(&syms[o->tally], NULL, "PWK2");
-                    asm_line("", "AP", "PWK1(16),PWK2(16)", "TALLYING adds");
-                    gen_store(&syms[o->tally], NULL, "PWK1");
-                    continue;
-                }
-                if (o->kind == INS_R_CHARS) {
-                    /* Every position is replaced: set the first byte and let
-                     * an overlapping MVC carry it down the field. */
-                    need_sym_base(sy);
-                    field_ref_m(sy, st->dsub, FR_SS_NOLEN, n, 6, f, sizeof f);
-                    snprintf(b, sizeof b, "3,%s", f);
-                    asm_line("", "LA", b, "the field");
-                    if (o->by_sym >= 0) {
-                        char g[64];
-                        need_sym_base(&syms[o->by_sym]);
-                        field_ref_m(&syms[o->by_sym], NULL, FR_SS_NOLEN, 1, 7, g, sizeof g);
-                        snprintf(b, sizeof b, "0(1,3),%s", g);
-                        asm_line("", "MVC", b, "CHARACTERS BY: the first");
-                    } else {
-                        snprintf(b, sizeof b, "0(3),C'%c'", o->by_lit);
-                        asm_line("", "MVI", b, "CHARACTERS BY");
-                    }
-                    if (n > 1) {
-                        snprintf(b, sizeof b, "1(%d,3),0(3)", n - 1);
-                        asm_line("", "MVC", b, "and propagate");
-                    }
-                    reset_bases();
-                    continue;
-                }
-                /* A scan down the field, one byte at a time. R3 walks it, R5
-                 * counts it down, R4 tallies. Nothing else is live in them. */
-                int lp = ++genlabel, nx = ++genlabel, dn = ++genlabel;
-                char llp[16], lnx[16], ldn[16], g[64];
-                snprintf(llp, sizeof llp, "L%04d", lp);
-                snprintf(lnx, sizeof lnx, "L%04d", nx);
-                snprintf(ldn, sizeof ldn, "L%04d", dn);
+                /* R3 walks the field and R5 counts what is left of the range;
+                 * R7 keeps the field's start, R4 tallies. Nothing else is
+                 * live in them. */
                 need_sym_base(sy);
                 field_ref_m(sy, st->dsub, FR_SS_NOLEN, n, 6, f, sizeof f);
                 snprintf(b, sizeof b, "3,%s", f);
                 asm_line("", "LA", b, "the field");
                 snprintf(b, sizeof b, "5,%d", n);
                 asm_line("", "LA", b, "its length");
+                if (o->bf_len) {
+                    /* BEFORE/AFTER INITIAL: find the first occurrence of the
+                     * bounding string. BEFORE scans up to it, or the whole
+                     * field if absent; AFTER scans from just past it, or
+                     * nothing if absent. */
+                    int ls = ++genlabel, lf = ++genlabel, lnf = ++genlabel, lgo = ++genlabel;
+                    char lls[16], llf[16], llnf[16], llgo[16];
+                    snprintf(lls, sizeof lls, "L%04d", ls);  snprintf(llf, sizeof llf, "L%04d", lf);
+                    snprintf(llnf, sizeof llnf, "L%04d", lnf); snprintf(llgo, sizeof llgo, "L%04d", lgo);
+                    asm_line("", "LR", "7,3", "the field's start");
+                    if (o->bf_sym >= 0) {
+                        need_sym_base(&syms[o->bf_sym]);
+                        field_ref_m(&syms[o->bf_sym], NULL, FR_SS_NOLEN, o->bf_len, 6, g, sizeof g);
+                    } else snprintf(g, sizeof g, "%s", o->bf_lab);
+                    snprintf(b, sizeof b, "5,=F'%d'", o->bf_len);
+                    asm_line(lls, "C", b, "room for the bounding string?");
+                    asm_line("", "BL", llnf, "");
+                    snprintf(b, sizeof b, "0(%d,3),%s", o->bf_len, g);
+                    asm_line("", "CLC", b, "INITIAL");
+                    asm_line("", "BE", llf, "");
+                    asm_line("", "LA", "3,1(3)", "");
+                    snprintf(b, sizeof b, "5,%s", lls);
+                    asm_line("", "BCT", b, "");
+                    asm_line(llnf, "DS", "0H", "not found");
+                    if (o->bf_after) asm_line("", "SR", "5,5", "AFTER: nothing to scan");
+                    else { asm_line("", "LR", "3,7", ""); snprintf(b, sizeof b, "5,%d", n); asm_line("", "LA", b, "BEFORE: the whole field"); }
+                    asm_line("", "B", llgo, "");
+                    asm_line(llf, "DS", "0H", "found");
+                    if (o->bf_after) {
+                        snprintf(b, sizeof b, "3,%d(3)", o->bf_len);
+                        asm_line("", "LA", b, "AFTER: from just past it");
+                        snprintf(b, sizeof b, "5,=F'%d'", o->bf_len);
+                        asm_line("", "S", b, "");
+                    } else {
+                        asm_line("", "LR", "5,3", "");
+                        asm_line("", "SR", "5,7", "BEFORE: up to it");
+                        asm_line("", "LR", "3,7", "");
+                    }
+                    asm_line(llgo, "DS", "0H", "");
+                }
+                if (o->kind == INS_T_CHARS) {
+                    asm_line("", "LR", "2,5", "CHARACTERS: every position in range");
+                    asm_line("", "CVD", "2,DWK", "");
+                    asm_line("", "ZAP", "PWK1(16),DWK(8)", "");
+                    gen_load(&syms[o->tally], NULL, "PWK2");
+                    asm_line("", "AP", "PWK1(16),PWK2(16)", "TALLYING adds");
+                    gen_store(&syms[o->tally], NULL, "PWK1");
+                    reset_bases();
+                    continue;
+                }
+                if (o->kind == INS_R_CHARS) {
+                    /* Every position in range is replaced: set the first byte
+                     * and let an overlapping MVC carry it, its length known
+                     * only at run time when a range is in play. */
+                    int ld = ++genlabel; char lld[16]; snprintf(lld, sizeof lld, "L%04d", ld);
+                    if (o->by_sym >= 0) {
+                        need_sym_base(&syms[o->by_sym]);
+                        field_ref_m(&syms[o->by_sym], NULL, FR_SS_NOLEN, 1, 7, g, sizeof g);
+                    } else snprintf(g, sizeof g, "%s", o->by_lab);
+                    asm_line("", "LTR", "5,5", "");
+                    asm_line("", "BZ", lld, "nothing in range");
+                    snprintf(b, sizeof b, "0(1,3),%s", g);
+                    asm_line("", "MVC", b, "CHARACTERS BY: the first");
+                    asm_line("", "LR", "4,5", "");
+                    asm_line("", "BCTR", "4,0", "");
+                    asm_line("", "LTR", "4,4", "");
+                    asm_line("", "BZ", lld, "");
+                    asm_line("", "BCTR", "4,0", "");
+                    use_insprop = 1;
+                    asm_line("", "EX", "4,INSPROP", "and propagate");
+                    asm_line(lld, "DS", "0H", "");
+                    reset_bases();
+                    continue;
+                }
+                /* A scan down the range: at each position, is the string
+                 * here? A match tallies or replaces and steps past the whole
+                 * string; a miss steps one byte, or ends a LEADING scan. */
+                int lp = ++genlabel, nx = ++genlabel, dn = ++genlabel;
+                char llp[16], lnx[16], ldn[16];
+                snprintf(llp, sizeof llp, "L%04d", lp);
+                snprintf(lnx, sizeof lnx, "L%04d", nx);
+                snprintf(ldn, sizeof ldn, "L%04d", dn);
                 if (tallying) asm_line("", "SR", "4,4", "the tally");
                 if (o->c_sym >= 0) {
                     need_sym_base(&syms[o->c_sym]);
-                    field_ref_m(&syms[o->c_sym], NULL, FR_SS_NOLEN, 1, 7, g, sizeof g);
-                    asm_line(llp, "DS", "0H", "");
-                    snprintf(b, sizeof b, "0(1,3),%s", g);
-                    asm_line("", "CLC", b, "");
-                } else {
-                    asm_line(llp, "DS", "0H", "");
-                    snprintf(b, sizeof b, "0(3),C'%c'", o->c_lit);
-                    asm_line("", "CLI", b, "");
-                }
+                    field_ref_m(&syms[o->c_sym], NULL, FR_SS_NOLEN, o->c_len, 7, g, sizeof g);
+                } else snprintf(g, sizeof g, "%s", o->c_lab);
+                snprintf(b, sizeof b, "5,=F'%d'", o->c_len);
+                asm_line(llp, "C", b, "room for the string?");
+                asm_line("", "BL", ldn, "");
+                snprintf(b, sizeof b, "0(%d,3),%s", o->c_len, g);
+                asm_line("", "CLC", b, "");
                 int stop_on_miss = (o->kind == INS_T_LEAD || o->kind == INS_R_LEAD);
                 asm_line("", "BNE", stop_on_miss ? ldn : lnx, "");
                 if (tallying) asm_line("", "LA", "4,1(4)", "one more");
                 else {
+                    char h[64];
                     if (o->by_sym >= 0) {
                         need_sym_base(&syms[o->by_sym]);
-                        field_ref_m(&syms[o->by_sym], NULL, FR_SS_NOLEN, 1, 7, g, sizeof g);
-                        snprintf(b, sizeof b, "0(1,3),%s", g);
-                        asm_line("", "MVC", b, "replace");
-                    } else {
-                        snprintf(b, sizeof b, "0(3),C'%c'", o->by_lit);
-                        asm_line("", "MVI", b, "replace");
-                    }
+                        field_ref_m(&syms[o->by_sym], NULL, FR_SS_NOLEN, o->by_len, 7, h, sizeof h);
+                    } else snprintf(h, sizeof h, "%s", o->by_lab);
+                    snprintf(b, sizeof b, "0(%d,3),%s", o->by_len, h);
+                    asm_line("", "MVC", b, "replace");
                     if (o->kind == INS_R_FIRST) asm_line("", "B", ldn, "FIRST: done");
                 }
+                snprintf(b, sizeof b, "3,%d(3)", o->c_len);
+                asm_line("", "LA", b, "past the string");
+                snprintf(b, sizeof b, "5,=F'%d'", o->c_len);
+                asm_line("", "S", b, "");
+                asm_line("", "B", llp, "");
                 asm_line(lnx, "DS", "0H", "");
                 asm_line("", "LA", "3,1(3)", "");
                 snprintf(b, sizeof b, "5,%s", llp);
@@ -7623,6 +7713,7 @@ static void generate(void)
         if (use_szflg) asm_line("SZFLG", "DS", "X", "ON SIZE ERROR: set by any receiver of a series");
         if (use_str) asm_line("VSTR", "DC", "V(COBSTR)", "");
         if (use_uns) asm_line("VUNS", "DC", "V(COBUNS)", "");
+        if (use_insprop) asm_line("INSPROP", "MVC", "1(0,3),0(3)", "executed: INSPECT CHARACTERS propagation");
         for (int k = 0; k < npend_dc; k++)
             asm_line(pend_dc[k].lab, pend_dc[k].op, pend_dc[k].opd, pend_dc[k].cmt);
         asm_line("PWK1", "DS", "PL16", "");

@@ -132,9 +132,12 @@ The program-check message now carries the interrupt offset from `COBBEG` in
 hex, because a fault in the runtime maps to the last source line and says
 nothing; the offset is what the assembler listing is indexed by.
 
-**`INSPECT` with multi-character operands** -- S: the single-character
-version exists; widen the compare from `CLI` to `CLC` and step by the operand
-length.
+**`INSPECT` with multi-character operands** -- DONE 2026-08-29, together
+with `BEFORE`/`AFTER INITIAL`, which the element list does not level
+separately and which had been refused as level 2, and with the series form
+(`REPLACING ALL 'A' BY 'B' 'C' BY 'D'`). The scan steps past a matched string
+and one byte past a miss; a bounding string is found first and the range
+narrowed to before or after it.
 
 **`PERFORM VARYING ... AFTER`** -- S: nested loop, one or two `AFTER` phrases.
 The `VARYING` loop exists; this wraps it.
