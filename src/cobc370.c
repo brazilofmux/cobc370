@@ -45,7 +45,62 @@ typedef struct {
     int   line;
     int   cont;         /* this line carries a hyphen in the indicator area */
     const char *name;
+    /* COPY ... REPLACING: applied to every line of this copybook as it is
+     * read. A pseudo-text operand replaces wherever its characters occur; a
+     * word or literal operand replaces whole words only. */
+    int   nrep;
+    struct { char from[120], to[120]; int pseudo; } rep[16];
 } Src;
+
+/* COPY nests: the source being read, and the sources it was copied into. The
+ * copybook is found on the -I directories, then beside the program. */
+#define MAXCOPY 4
+static Src copy_stack[MAXCOPY];
+static int copy_depth;
+static const char *copy_dirs[16];
+static int ncopy_dirs;
+static char src_dir[512];
+
+static void die(const char *msg);
+
+/* One copybook line through its REPLACING pairs. Pseudo-text is matched as
+ * characters, blanks collapsed on both sides; a word operand only between
+ * separators. The line may grow past column 72 -- the scanner reads to its
+ * end, and a card image is what it was before the copy, not after. */
+static void copy_replace(Src *s)
+{
+    char out[MAXLINE * 2];
+    for (int k = 0; k < s->nrep; k++) {
+        const char *from = s->rep[k].from, *to = s->rep[k].to;
+        size_t fl = strlen(from);
+        if (!fl) continue;
+        const char *p = s->buf + 7; char *o = out; int changed = 0;
+        while (*p) {
+            int hit = 0;
+            if (s->rep[k].pseudo) {
+                /* compare with runs of blanks collapsed */
+                const char *a = p, *b = from;
+                while (*b) {
+                    if (*b == ' ') { if (*a != ' ') break; while (*a == ' ') a++; while (*b == ' ') b++; continue; }
+                    if (toupper((unsigned char)*a) != toupper((unsigned char)*b)) break;
+                    a++; b++;
+                }
+                if (!*b) { hit = 1; p = a; }
+            } else if (!strncasecmp(p, from, fl)
+                       && (p == s->buf + 7 || strchr(" .,;()'\"", p[-1]))
+                       && (!p[fl] || strchr(" .,;()'\"", p[fl]))) {
+                hit = 1; p += fl;
+            }
+            if (hit) { size_t tl = strlen(to); if ((size_t)(o - out) + tl >= sizeof out - 1) die("COPY REPLACING made a line too long"); memcpy(o, to, tl); o += tl; changed = 1; }
+            else { if ((size_t)(o - out) >= sizeof out - 1) die("COPY REPLACING made a line too long"); *o++ = *p++; }
+        }
+        *o = 0;
+        if (changed) {
+            if (strlen(out) >= MAXLINE - 8) die("COPY REPLACING made a line too long");
+            strcpy(s->buf + 7, out);
+        }
+    }
+}
 
 static int src_fill(Src *s)
 {
@@ -59,6 +114,7 @@ static int src_fill(Src *s)
         if (n > 72) s->buf[72] = 0;                /* drop cols 73-80 */
         s->cont = (s->buf[6] == '-');
         s->p = s->buf + 7;                         /* code starts col 8 */
+        if (s->nrep) copy_replace(s);
         int blank = 1;
         for (char *q = s->p; *q; q++) if (!isspace((unsigned char)*q)) blank = 0;
         if (blank) continue;
@@ -171,12 +227,35 @@ static int sep_punct(const char *p)
     return p[1] == 0 || isspace((unsigned char)p[1]);
 }
 
+static void scan_token(void);
+static void copy_statement(void);
+
+/* The scanner the parser sees: the raw one, with COPY taken out. A COPY
+ * statement is read and its copybook opened here, and the first token the
+ * parser gets after COPY is the first token of the copybook. */
 static void next(void)
+{
+    scan_token();
+    while (!tok.eof && !tok.literal && !lex_picture && !strcmp(tok.text, "COPY")) {
+        copy_statement();
+        scan_token();
+    }
+}
+
+static void scan_token(void)
 {
     tok.eof = 0;
     for (;;) {
         if (!src.p || !*src.p) {
-            if (!src_fill(&src)) { tok.eof = 1; tok.text[0]=0; return; }
+            if (!src_fill(&src)) {
+                if (copy_depth > 0) {
+                    /* end of a copybook: back to the source it was copied into */
+                    fclose(src.fp);
+                    src = copy_stack[--copy_depth];
+                    continue;
+                }
+                tok.eof = 1; tok.text[0]=0; return;
+            }
             /* A hyphen joins the first nonblank in area B to the last nonblank
              * of the line before it, with no space between. Reaching here means
              * the previous token already ended, so this is a word or a numeric
@@ -944,6 +1023,106 @@ static int consume_sym(void)
     next();
     int nq = consume_quals(q);
     return resolve_sym(name, q, nq);
+}
+
+/* Open text-name from the copy directories: as given, then with the usual
+ * suffixes; under a library subdirectory when OF/IN names one. */
+static FILE *copy_open(const char *name, const char *lib, char *path, size_t pn)
+{
+    static const char *sfx[] = { "", ".cpy", ".CPY", ".cob", ".COB", ".cbl", ".txt", NULL };
+    const char *dirs[20]; int nd = 0;
+    for (int i = 0; i < ncopy_dirs; i++) dirs[nd++] = copy_dirs[i];
+    if (src_dir[0]) dirs[nd++] = src_dir;
+    dirs[nd++] = ".";
+    for (int d = 0; d < nd; d++)
+        for (int k = 0; sfx[k]; k++) {
+            if (lib && *lib) snprintf(path, pn, "%s/%s/%s%s", dirs[d], lib, name, sfx[k]);
+            else snprintf(path, pn, "%s/%s%s", dirs[d], name, sfx[k]);
+            FILE *fp = fopen(path, "r");
+            if (fp) return fp;
+        }
+    return NULL;
+}
+
+/* A REPLACING operand, from the raw source. Pseudo-text is everything
+ * between == and ==, on one line or several; anything else is one token. */
+static void copy_operand(char *out, size_t on, int *pseudo)
+{
+    for (;;) {
+        while (*src.p == ' ') src.p++;
+        if (*src.p) break;
+        if (!src_fill(&src)) die("COPY REPLACING ends inside the statement");
+    }
+    if (src.p[0] == '=' && src.p[1] == '=') {
+        *pseudo = 1;
+        src.p += 2;
+        size_t n = 0;
+        for (;;) {
+            if (!*src.p) {
+                if (!src_fill(&src)) die("COPY REPLACING: pseudo-text is not closed");
+                if (n < on - 1) out[n++] = ' ';
+                continue;
+            }
+            if (src.p[0] == '=' && src.p[1] == '=') { src.p += 2; break; }
+            if (n < on - 1) out[n++] = *src.p;
+            src.p++;
+        }
+        while (n && out[n-1] == ' ') n--;
+        out[n] = 0;
+        return;
+    }
+    *pseudo = 0;
+    scan_token();
+    if (tok.literal) snprintf(out, on, "'%s'", tok.text);
+    else snprintf(out, on, "%s", tok.text);
+}
+
+static void copy_statement(void)
+{
+    /* COPY text-name [OF/IN library-name] [REPLACING a BY b ...] . */
+    char name[64], lib[64] = "";
+    scan_token();
+    if (tok.eof || tok.literal) die("COPY needs a text-name");
+    snprintf(name, sizeof name, "%s", tok.text);
+    scan_token();
+    if (is("OF") || is("IN")) {
+        scan_token();
+        snprintf(lib, sizeof lib, "%s", tok.text);
+        scan_token();
+    }
+    Src cb; memset(&cb, 0, sizeof cb);
+    if (is("REPLACING")) {
+        for (;;) {
+            if (cb.nrep >= 16) die("too many COPY REPLACING pairs");
+            int ps;
+            copy_operand(cb.rep[cb.nrep].from, sizeof cb.rep[0].from, &ps);
+            cb.rep[cb.nrep].pseudo = ps;
+            scan_token();
+            if (!is("BY")) die("COPY REPLACING wants  operand BY operand");
+            copy_operand(cb.rep[cb.nrep].to, sizeof cb.rep[0].to, &ps);
+            cb.nrep++;
+            /* another pair, or the period */
+            while (*src.p == ' ') src.p++;
+            if (*src.p == '.' ) break;
+            if (!*src.p) { if (!src_fill(&src)) die("COPY has no period"); while (*src.p == ' ') src.p++; if (*src.p == '.') break; }
+        }
+        if (*src.p != '.') die("COPY has no period");
+        src.p++;
+    } else {
+        if (!is(".")) die("COPY has no period");
+    }
+    if (copy_depth >= MAXCOPY) die("COPY nests too deeply");
+    char path[600];
+    FILE *fp = copy_open(name, lib, path, sizeof path);
+    if (!fp) {
+        char m[200];
+        snprintf(m, sizeof m, "COPY %s: no copybook found on the -I directories or beside the program", name);
+        die(m);
+    }
+    copy_stack[copy_depth++] = src;
+    cb.fp = fp; cb.p = NULL; cb.line = 0;
+    cb.name = strdup(path);
+    src = cb;
 }
 
 static void parse_program_id(void)
@@ -9501,7 +9680,13 @@ int main(int argc, char **argv)
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) outname = argv[++i];
         else if (!strcmp(argv[i], "-s")) gen_lines = 0;
+        else if (!strcmp(argv[i], "-I") && i + 1 < argc) { if (ncopy_dirs < 16) copy_dirs[ncopy_dirs++] = argv[++i]; }
+        else if (!strncmp(argv[i], "-I", 2) && argv[i][2]) { if (ncopy_dirs < 16) copy_dirs[ncopy_dirs++] = argv[i] + 2; }
         else in = argv[i];
+    }
+    if (in) {
+        const char *sl = strrchr(in, '/');
+        if (sl) snprintf(src_dir, sizeof src_dir, "%.*s", (int)(sl - in), in);
     }
     /* One look at the source decides whether the CURRENT-DATE register is
      * worth creating. Cheaper than looking ahead in the parser, and a false
@@ -9515,8 +9700,9 @@ int main(int argc, char **argv)
             fclose(scan);
         }
     }
-    if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s]\n"
-                       "  -s  strip the line table and program-check exit\n"); return 2; }
+    if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s] [-I dir]...\n"
+                       "  -s      strip the line table and program-check exit\n"
+                       "  -I dir  a directory to find COPY text in (repeatable)\n"); return 2; }
 
     src.fp = fopen(in, "r");
     if (!src.fp) { perror(in); return 2; }

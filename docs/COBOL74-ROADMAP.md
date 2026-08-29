@@ -231,16 +231,19 @@ Proved by `bin/cobc-dyncall-roundtrip`: the callee is a load module of its own
 in a temporary library the caller reaches through `STEPLIB`, and it counts its
 calls in `WORKING-STORAGE` so a `CANCEL` shows as the count starting over.
 
-### Tier 6 -- Library: `COPY` (1 item, host side)
+### Tier 6 -- Library: `COPY`, host side -- DONE 2026-08-29
 
-Level 1 is textual inclusion of `text-name` from a copy library; Level 2 adds
-`REPLACING ==pseudo-text== BY ==pseudo-text==`. **M** for both together.
-
-Host side by nature: cobc370 runs on the host, so the copy library is a
-directory (or a list of them, `-I` style), and the scanner opens the member
-and reads from it until it ends, then resumes. Nothing on the guest is
-involved. `REPLACING` is a token-level substitution on the way in. This is the
-one item in the plan with a stated pull behind it.
+Level 1 is `COPY text-name [OF/IN library-name]`; level 2 adds `REPLACING
+operand BY operand` with pseudo-text. Both are in, and both are host side by
+nature: the scanner keeps a stack of open sources, a `COPY` statement pushes
+the copybook and the parser's next token is the copybook's first, and the end
+of the copybook pops back. The copybook is found on the `-I` directories,
+then beside the program, as the name given and with the usual suffixes
+(`.cpy`, `.cob`, ...); `OF library` is a subdirectory. `REPLACING` is applied
+to each copybook line as it is read: pseudo-text replaces wherever its
+characters occur, blanks collapsed on both sides, so the `:TAG:` idiom works;
+a word or literal operand replaces whole words only. Nothing reaches the
+guest but the copied text.
 
 ### Report Writer -- a separate decision
 

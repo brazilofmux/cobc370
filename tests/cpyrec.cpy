@@ -1,0 +1,3 @@
+000100     05  :PFX:-ID     PIC 9(3).
+000200     05  :PFX:-NAME   PIC X(6).
+000300     05  :PFX:-AMT    PIC 9(3)V99.

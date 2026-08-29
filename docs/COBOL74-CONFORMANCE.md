@@ -53,7 +53,7 @@ Level 2 elements while missing Level 1 elements of the same module. That is
 not a defect — it is what "pulled, not pushed" produces — but it does mean no
 conformance claim is currently available, not even the minimum standard.
 
-### Nucleus — Level 1, complete
+### Nucleus — Level 2, complete
 
 Present, and enough to compile the corpus: `ADD SUBTRACT MULTIPLY DIVIDE
 COMPUTE MOVE IF GO PERFORM STOP EXIT DISPLAY`, PICTURE with editing,
@@ -78,16 +78,18 @@ Missing from Level 2, beyond the Level 1 gaps: `STRING`, `UNSTRING`,
 `CORRESPONDING` on ADD/SUBTRACT/MOVE, level-66 `RENAMES` (which dies with a
 message), `PERFORM VARYING ... AFTER`.
 
-### Table Handling — Level 1, with some Level 2 features
+### Table Handling — Level 2, complete
 
 `OCCURS`, `INDEXED BY`, and three-level subscripting are there. `SEARCH` and
 `SEARCH ALL` are there — and both are **Level 2** elements.
 
-`SET` and `USAGE IS INDEX` were added on 2026-08-27; Level 1 is complete.
-Missing from Level 2: serial `SEARCH` (only `SEARCH ALL` exists),
-`ASCENDING/DESCENDING KEY` series, and `OCCURS ... DEPENDING ON`.
+`SET` and `USAGE IS INDEX` were added on 2026-08-27; serial `SEARCH`, the
+`KEY` series with `DESCENDING`, `SEARCH ALL` over several keys and
+`OCCURS ... DEPENDING ON` on the 29th. `OCCURS DEPENDING ON` is supported in
+`WORKING-STORAGE` and `LINKAGE`; inside an `FD` record it would mean
+variable-length records and is refused with a message.
 
-### Sequential I-O — Level 1, complete
+### Sequential I-O — Level 2, complete
 
 `SELECT`/`ASSIGN`/`ORGANIZATION`/`ACCESS`/`FILE STATUS`, FD with its clauses
 accepted, `OPEN INPUT/OUTPUT/I-O`, `CLOSE READ WRITE REWRITE`, `READ INTO`,
@@ -97,19 +99,21 @@ accepted, `OPEN INPUT/OUTPUT/I-O`, `CLOSE READ WRITE REWRITE`, `READ INTO`,
 `RERUN`, `SAME AREA` and `CODE-SET` are accepted and ignored, which is the
 right answer for a single-volume implementation with no alphabet-names.
 
-Level 2 adds `LINAGE`, `OPTIONAL`, `RESERVE`, `SAME RECORD AREA`, `EXTEND`,
-`MULTIPLE FILE TAPE` — none present.
+Level 2 -- `LINAGE` with `LINAGE-COUNTER` and `END-OF-PAGE`, `ADVANCING` by
+identifier and by channel mnemonic, `OPTIONAL`, `EXTEND`, `RESERVE`, `SAME
+RECORD AREA`, `MULTIPLE FILE TAPE`, `REVERSED`, the `CLOSE` options -- was
+added on 2026-08-29. `REVERSED` and `CLOSE REEL`/`NO REWIND` are generated
+and untested, being tape-only.
 
-### Relative I-O — most of Level 1, two Level 2 features, no declaratives
+### Relative I-O — Level 2, complete
 
 RRDS through VSAM. `ORGANIZATION RELATIVE`, `ACCESS SEQUENTIAL/RANDOM`,
 `READ WRITE REWRITE DELETE`, `INVALID KEY`, `RELATIVE KEY`.
 
-Above the floor: `ACCESS DYNAMIC`, `READ NEXT` and `START` are all **Level 2**.
+`ACCESS DYNAMIC`, `READ NEXT` and `START` are Level 2 and were there first;
+`USE` declaratives, the last Level 1 element, were added on 2026-08-29.
 
-Missing from Level 1: `USE`.
-
-### Indexed I-O — same shape
+### Indexed I-O — Level 2 but for ALTERNATE RECORD KEY
 
 ISAM and VSAM KSDS. `ORGANIZATION INDEXED`, `RECORD KEY`, `ACCESS
 SEQUENTIAL/RANDOM`, `READ WRITE REWRITE DELETE START`, `INVALID KEY`.
@@ -117,8 +121,9 @@ SEQUENTIAL/RANDOM`, `READ WRITE REWRITE DELETE START`, `INVALID KEY`.
 Above the floor: `ACCESS DYNAMIC`, `READ NEXT`, `READ ... KEY IS`, `START` —
 Level 2.
 
-Missing from Level 1: `USE`. Missing from Level 2: `ALTERNATE RECORD KEY` with
-`DUPLICATES`.
+`USE` declaratives were added on 2026-08-29. Missing from Level 2:
+`ALTERNATE RECORD KEY` with `DUPLICATES`, which on MVS is VSAM alternate
+indexes and paths before it is a compiler change.
 
 ### Report Writer — a fraction of its only level
 
@@ -135,32 +140,32 @@ INDICATE`; `CODE`; `SUPPRESS`; `USE BEFORE REPORTING`; `LINE-COUNTER` and
 
 The absent half is the half that computes. What exists is a page manager.
 
-### Inter-Program Communication — Level 1 but for EXIT PROGRAM
+### Inter-Program Communication — Level 2, complete
 
 `LINKAGE SECTION`, `PROCEDURE DIVISION USING`, `CALL 'literal' USING` all
 work, and the call round trip is a regression test.
 
-Missing from Level 1: `EXIT PROGRAM`, which dies with a message. Subprograms
-return via `GOBACK`, which is an IBM extension and **not in the 1974 standard
-at all**.
-
-Missing from Level 2: `CALL identifier` and `CANCEL`. Worth flagging, because
-the source comment at the `CALL` site says ANS COBOL has no `CALL identifier`.
-That is true of IBM's ANS COBOL, and false of the standard: `2 IPC 0,2` lists
-`The CALL statement ... identifier` explicitly. A demand-shaped map could not
-have caught that; this is the kind of thing the standard-shaped one is for.
+`EXIT PROGRAM`, `CALL identifier` and `CANCEL` were added on 2026-08-29.
+`GOBACK`, an IBM extension not in the standard, stays as well. The source
+comment that once said ANS COBOL has no `CALL identifier` was true of IBM's
+compiler and false of the standard -- `2 IPC 0,2` lists it -- and that is the
+kind of thing the standard-shaped map exists to catch.
 
 ### Segmentation — Level 1
 
 Segment-numbers on sections are accepted, and `ALTER` respects them. Level 2
 adds `SEGMENT-LIMIT`, which is not.
 
+### Library — Level 2, complete
+
+`COPY text-name [OF library]` and `REPLACING` with pseudo-text, added on
+2026-08-29, host side: the scanner stacks the copybook, found on the `-I`
+directories or beside the program.
+
 ### Null — nothing implemented
 
-`Sort-Merge`, `Library` (no `COPY`), `Debug`, `Communication`.
-
-All four have a null level, so all four are conforming choices. `COPY` is the
-only one with an obvious pull behind it, and it is in the roadmap.
+`Sort-Merge`, `Debug`, `Communication`. All three have a null level, so all
+three are conforming choices.
 
 ## The minimum standard
 
