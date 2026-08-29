@@ -262,8 +262,8 @@ is a small language of its own.
 Not required for the definition of done above. Worth doing if reports are the
 point of the compiler, which for this project they are; worth skipping if the
 goal is to close the language and move on. Left open when the feature work
-closed on 2026-08-29, and not taken up since: the programs this compiler was
-built for do their control breaks by hand, and nothing has asked for the rest.
+closed on 2026-08-29; taken up on 2026-08-30 -- see "Report Writer: closing
+the module" at the end of this file.
 
 ### `ALTERNATE RECORD KEY` -- also separate
 
@@ -355,3 +355,95 @@ times behind.
 The primitives on the list are all at or ahead of IKFCBL00. What is left
 is the shape of whole programs -- base-register traffic, the SPIE and
 DCB work at entry -- and nothing there has been measured yet.
+
+## Report Writer: closing the module
+
+Taken up 2026-08-30. The target is `1 RPW 0,1` entire -- the module has one
+level, so it is claimed whole or not at all. The element list (FIPS 21-1,
+"List of Elements by Module") was read against the compiler; chapter VIII was
+read in full, the five presentation-rules tables included. What follows is
+what the standard requires and what exists, in the order the machinery
+suggests.
+
+### What exists, against the element list
+
+Present: `REPORT IS` on the FD; `RD` with `PAGE LIMIT`, `HEADING`, `FIRST
+DETAIL`, `LAST DETAIL`; `TYPE PAGE HEADING` and `TYPE DETAIL`; `LINE` absolute
+and `PLUS`; `COLUMN`; `SOURCE` (unsubscripted); `VALUE`; `INITIATE`,
+`GENERATE data-name`, `TERMINATE` (one report each).
+
+The page manager underneath is not the standard's. It keeps a line counter,
+an eject flag and a "first group on a fresh page" cell, tests every group
+against `LAST DETAIL` whatever its type, has no `PAGE-COUNTER`, and knows
+nothing of `FOOTING`, `NEXT GROUP`, `NEXT PAGE` or the saved next group
+integer. It reproduces the corpus's six report programs, which use none of
+that. It cannot carry control breaks, because the presentation rules for a
+`CONTROL FOOTING` depend on state it does not keep.
+
+Missing, from the element list: `LINE-COUNTER` and `PAGE-COUNTER` as special
+registers; `CONTROL` with `FINAL`; `PAGE ... FOOTING`; `CODE`; the data-name
+clause on report entries (sum-counter names); `GROUP INDICATE`; `LINE ...
+NEXT PAGE`; `NEXT GROUP` in its three forms; `REPORTS ARE` (several per FD);
+`SUM ... UPON ... RESET`; `TYPE` `RH`, `CH`, `CF`, `PF`, `RF`; `GENERATE
+report-name`; `INITIATE`/`TERMINATE` series; `SUPPRESS`; `USE BEFORE
+REPORTING`.
+
+### The shape of the work
+
+Everything hangs off two things the standard defines and the current code
+lacks: a per-report state block (`LINE-COUNTER`, `PAGE-COUNTER`, the saved
+next group integer, whether a body group has been presented on this page,
+whether the first `GENERATE` has happened, the prior control values, the
+level of the current break, the suppress flag) and per-group presentation
+code generated from the tables. The tables are indexed by things known at
+compile time -- the group's `TYPE`, the shape of its `LINE` sequence (`A`,
+`R`, `AR`, `NP R`), the form of its `NEXT GROUP` -- so each group's renderer
+can carry exactly the rules its row names, and the runtime state stays a
+few halfwords. Control-break sequencing and sum-counter arithmetic are
+generated per report from the `CONTROL` hierarchy.
+
+### The slices, in order
+
+1. **The page engine to the standard's tables.** The state block;
+   `LINE-COUNTER` and `PAGE-COUNTER` as registers, usable in `SOURCE` and in
+   the Procedure Division (`PAGE-COUNTER` writable); the `PAGE` clause with
+   `FOOTING` and the implicit values of 2.16.4(2); Table 2 for `PAGE
+   HEADING`; Table 3 fit tests 3a/3b, first-line rules 4a/4b and final
+   setting 6d for `DETAIL`; page-advance processing as one routine per
+   report. Retires the forced-first-detail cell. `SOURCE` with a subscript.
+   The existing report tests must print the same. **M.**
+2. **The rest of the page: `PAGE FOOTING`, `REPORT HEADING`, `REPORT
+   FOOTING`, `NEXT GROUP`, `LINE NEXT PAGE`.** Tables 1, 4 and 5; the three
+   `NEXT GROUP` forms with the saved next group integer and final-setting
+   rules 6a-6c/6f; `RH` on the first `GENERATE` (on a page by itself under
+   `NEXT GROUP NEXT PAGE`), `RF` from `TERMINATE`. **M.**
+3. **`CONTROL`, `CH`/`CF` groups, control breaks.** `CONTROL IS ... FINAL`;
+   prior values saved on the first `GENERATE`; break detection by the
+   relation-condition rules per category (2.10.4(3)); the `GENERATE`
+   sequence of 3.1.4(5)/(6) -- `CF` minor to major up to the break level,
+   `CH` major to minor, then the detail -- and `TERMINATE` as a break in the
+   most major control followed by `RF`; prior values supplied to `CF`
+   `SOURCE` clauses (2.21.4(13)); `NEXT GROUP` ignored on a `CF` below the
+   break level (2.15.4(3)). **L** -- this is the small language of its own.
+4. **`SUM`.** Sum counters as named numeric items, zeroed by `INITIATE`;
+   subtotalling on `GENERATE` with `UPON` selectivity; crossfooting and
+   rolling forward at `CF` processing in the order of 2.21.4(10) and
+   2.20.4(8); `RESET ON`; the counter as `SOURCE` and as an ordinary item in
+   the Procedure Division; `GENERATE report-name` and summary reports
+   (2.21.4(11)). **M.**
+5. **The rest of the list.** `USE BEFORE REPORTING` as a declarative with
+   `SUPPRESS`; `GROUP INDICATE` (first after `INITIATE`, page advance or
+   break); `JUSTIFIED` and `BLANK WHEN ZERO` on printable items; `CODE`;
+   `REPORTS ARE` with several reports on one file; `INITIATE`/`TERMINATE`
+   series; `VALUE OF` accepted. **S-M.**
+
+Then the conformance map says `1 RPW 0,1`, and the README's "the module is
+not claimed" comes out.
+
+### Oracles
+
+GnuCOBOL 3 carries a full Report Writer and is the differential oracle for
+every slice. IKFCBL00 has one too, of the 1968 standard's shape, and where the
+two disagree the 1974 text decides -- the same rule as everywhere else in this
+project. The corpus's six report programs stay the regression floor: nothing
+here may change a line they print.
