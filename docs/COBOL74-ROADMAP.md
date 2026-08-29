@@ -82,13 +82,15 @@ Found on the way and **not yet done**: `DISPLAY` of a subscripted item is
 refused. That is a Level 1 `DISPLAY identifier`, since an identifier may carry
 a subscript; it belongs with the `ACCEPT`/`DISPLAY` item below. S.
 
-**Conditions** -- M for the group:
+**Conditions** -- DONE 2026-08-29:
 - abbreviated combined relation conditions: `IF A = 1 OR 2 OR 3`,
-  `IF A > 1 AND < 100` (the parser sees `<` as an identifier today)
-- comparison of nonnumeric operands of unequal size (space-padded `CLC`
-  through a work area; the shorter operand is the one to pad)
-- level-88 `VALUE ... THRU ...` and `VALUE` series
-- `NOT` on the sign condition -- already works; keep the test
+  `IF A > 1 AND < 100`, `IF A = B OR C`
+- comparison of nonnumeric operands of unequal size: `CLC` on the common
+  length, then the longer one's tail against a run of spaces, on whichever
+  side the longer one is; a literal longer than its item likewise
+- level-88 `VALUE ... THRU ...` and `VALUE` series, numeric and nonnumeric,
+  as a chain of hidden condition names expanded to an OR of ranges
+- `NOT` on the sign condition -- already worked
 
 **Arithmetic** -- M for the group:
 - `**` exponentiation (integer exponent by repeated `MP`; a non-integer

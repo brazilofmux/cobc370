@@ -506,6 +506,9 @@ typedef struct {
     int  link_area;   /* which linkage 01 it sits in, so it gets the right base */
     char cvalue[MAXTOK];
     int  cvalue_len, cvalue_str;
+    char chi[MAXTOK];   /* VALUE ... THRU: the upper bound, when has_hi */
+    int  chi_len, has_hi;
+    int  c88_next;      /* the next value of a VALUE series: a hidden 88, or -1 */
 } Sym;
 
 #define MAXSYM 1024
@@ -1191,6 +1194,19 @@ static void make_curdate(int *cursor)
     nsym++;
 }
 
+/* One literal of a level-88 VALUE, into a condition name's value slots. */
+static void read_88_literal(char *buf, int *len, int *isstr)
+{
+    *isstr = 0; *len = 0;
+    if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(buf, "0"); next(); return; }
+    if (is("SPACE") || is("SPACES")) { *isstr = 1; strcpy(buf, " "); *len = 1; next(); return; }
+    if (is("LOW-VALUE") || is("LOW-VALUES"))   { *isstr = 1; buf[0] = 0; *len = 1; buf[0] = 0; next(); return; }
+    if (is("HIGH-VALUE") || is("HIGH-VALUES")) { *isstr = 1; buf[0] = (char)0xFF; buf[1] = 0; *len = 1; next(); return; }
+    if (tok.literal) { *isstr = 1; memcpy(buf, tok.text, (size_t)tok.len + 1); *len = tok.len; next(); return; }
+    if (is_numeric_literal(tok.text)) { snprintf(buf, MAXTOK, "%s", tok.text); next(); return; }
+    die("level 88 VALUE must be a literal");
+}
+
 static void parse_data_division(void)
 {
     if (!is("DATA")) return;
@@ -1345,15 +1361,39 @@ static void parse_data_division(void)
             while (p >= 0 && (syms[p].is_88 || syms[p].is_group)) p--;
             if (p < 0) die("level 88 must follow an elementary item");
             cn->parent = p;
+            cn->c88_next = -1;
             next();
             expect("VALUE"); if (is("IS")) next();
-            if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(cn->cvalue, "0"); next(); }
-            else if (is("SPACE") || is("SPACES")) { cn->cvalue_str = 1; strcpy(cn->cvalue, " "); cn->cvalue_len = 1; next(); }
-            else if (tok.literal) { cn->cvalue_str = 1; memcpy(cn->cvalue, tok.text, (size_t)tok.len + 1); cn->cvalue_len = tok.len; next(); }
-            else if (is_numeric_literal(tok.text)) { snprintf(cn->cvalue, sizeof cn->cvalue, "%s", tok.text); next(); }
-            else die("level 88 VALUE must be a literal");
+            if (is("ARE")) next();
+            /* VALUE literal-1 [THRU literal-2] [, literal-3 [THRU literal-4]] ...
+             * Level 1 takes one literal; the range and the series are level
+             * 2. Each further value is a hidden condition name chained from
+             * the first, so the test is an OR over the chain and nothing
+             * else has to know how many there were. */
+            int first = nsym, prev = -1;
+            for (;;) {
+                Sym *e = &syms[nsym];
+                if (nsym != first) {
+                    if (nsym >= MAXSYM) die("too many data items");
+                    memset(e, 0, sizeof *e);
+                    e->level = 88; e->is_88 = 1; e->parent = p; e->c88_next = -1;
+                    snprintf(e->label, sizeof e->label, "C%04d", nsym);
+                    snprintf(e->name, sizeof e->name, "*88-%d", nsym); /* unnameable */
+                    syms[prev].c88_next = nsym;
+                }
+                read_88_literal(e->cvalue, &e->cvalue_len, &e->cvalue_str);
+                if (is("THRU") || is("THROUGH")) {
+                    next();
+                    int hs;
+                    read_88_literal(e->chi, &e->chi_len, &hs);
+                    if (hs != e->cvalue_str)
+                        die("VALUE ... THRU needs both literals of the same class");
+                    e->has_hi = 1;
+                }
+                prev = nsym++;
+                if (is(".")) break;
+            }
             expect(".");
-            nsym++;
             continue;
         }
 
@@ -2041,7 +2081,7 @@ static Node *parse_expr(void)
  * literal in this compiler's world is delimited with. */
 enum { FIG_NONE = 0, FIG_SPACE = 1, FIG_ZERO = 2, FIG_HIGH = 3, FIG_LOW = 4,
        FIG_QUOTE = 5, FIG_ALL = 6 };
-static int use_hvals, use_lvals, use_qvals;
+static int use_hvals, use_lvals, use_qvals, use_spcs;
 
 static int fig_code(const char *w)
 {
@@ -2222,9 +2262,77 @@ static void giving_target(Stmt *st)
     if (is("ROUNDED")) { st->rounded = 1; next(); }
 }
 
+/* Abbreviated combined relation conditions, II-47. In a sequence of relations
+ * joined by AND or OR, a relation may leave out its subject, or its subject
+ * and its operator, and take them from the nearest complete relation before
+ * it: IF A = 1 OR 2 OR 3, IF A > 1 AND < 100, IF A = B OR C. The last complete
+ * relation is remembered here and forgotten when a new condition starts. */
+static Node *abbr_subj;
+static int   abbr_op;
+static int   cond_depth;
+
+static int at_relop(void)
+{
+    return is("IS") || is("=") || is("EQUAL") || is("EQUALS") || is(">")
+        || is("GREATER") || is("<") || is("LESS");
+}
+
+/* The condition a level-88 name stands for: its value, or its range, ORed
+ * with the rest of its VALUE series. */
+static Cond *cond_of_88(int ci)
+{
+    const Sym *cn = &syms[ci];
+    Cond *c;
+    Node *p = node(N_SYM); p->sym = cn->parent;
+    Node *v;
+    if (cn->cvalue_str) {
+        v = node(N_STR);
+        memcpy(v->lit, cn->cvalue, (size_t)cn->cvalue_len + 1);
+        v->litlen = cn->cvalue_len;
+        if (cn->cvalue_len == 1 && (unsigned char)cn->cvalue[0] == 0xFF) v->fig = FIG_HIGH;
+        if (cn->cvalue_len == 1 && cn->cvalue[0] == 0) v->fig = FIG_LOW;
+    } else {
+        v = node(N_LIT);
+        scale_literal(cn->cvalue, syms[cn->parent].scale, v->lit, sizeof v->lit);
+        v->litscale = syms[cn->parent].scale;
+    }
+    if (!cn->has_hi) {
+        c = cnode(C_REL); c->op = REL_EQ; c->l = p; c->r = v;
+    } else {
+        Node *h;
+        if (cn->cvalue_str) {
+            h = node(N_STR);
+            memcpy(h->lit, cn->chi, (size_t)cn->chi_len + 1);
+            h->litlen = cn->chi_len;
+            if (cn->chi_len == 1 && (unsigned char)cn->chi[0] == 0xFF) h->fig = FIG_HIGH;
+        } else {
+            h = node(N_LIT);
+            scale_literal(cn->chi, syms[cn->parent].scale, h->lit, sizeof h->lit);
+            h->litscale = syms[cn->parent].scale;
+        }
+        Cond *lo = cnode(C_REL); lo->op = REL_NLT; lo->l = p; lo->r = v;
+        Cond *hi = cnode(C_REL); hi->op = REL_NGT; hi->l = p; hi->r = h;
+        c = cnode(C_AND); c->cl = lo; c->cr = hi;
+    }
+    if (cn->c88_next >= 0) {
+        Cond *o = cnode(C_OR); o->cl = c; o->cr = cond_of_88(cn->c88_next);
+        c = o;
+    }
+    return c;
+}
+
 static Cond *parse_relation(void)
 {
     if (is("(")) { next(); Cond *c = parse_cond(); expect(")"); return c; }
+    if (abbr_subj && at_relop()) {
+        /* Subject omitted: IF A > 1 AND < 100. */
+        int op;
+        if (relop(&op) != 1) die("an abbreviated relation needs a relational operator");
+        Cond *c = cnode(C_REL);
+        c->op = op; c->l = abbr_subj; c->r = parse_expr();
+        abbr_op = op;
+        return c;
+    }
     Node *l = parse_expr();
     int op;
     int rk = relop(&op);
@@ -2260,29 +2368,19 @@ static Cond *parse_relation(void)
             c->sw_on  = syms[l->sym].sw_on;
             return c;
         }
-        if (l->kind != N_SYM || !syms[l->sym].is_88)
-            die("expected a relational operator, or a condition name");
-        const Sym *cn = &syms[l->sym];
-        Cond *c = cnode(C_REL);
-        c->op = REL_EQ;
-        Node *p = node(N_SYM); p->sym = cn->parent;
-        Node *v;
-        if (cn->cvalue_str) {
-            v = node(N_STR);
-            memcpy(v->lit, cn->cvalue, (size_t)cn->cvalue_len + 1);
-            v->litlen = cn->cvalue_len;
-        } else {
-            v = node(N_LIT);
-            const char *dot = strchr(cn->cvalue, '.');
-            v->litscale = dot ? (int)strlen(dot + 1) : 0;
-            scale_literal(cn->cvalue, syms[cn->parent].scale, v->lit, sizeof v->lit);
-            v->litscale = syms[cn->parent].scale;
+        if (l->kind == N_SYM && syms[l->sym].is_88)
+            return cond_of_88(l->sym);
+        if (abbr_subj) {
+            /* Subject and operator omitted: IF A = 1 OR 2, IF A = B OR C. */
+            Cond *c = cnode(C_REL);
+            c->op = abbr_op; c->l = abbr_subj; c->r = l;
+            return c;
         }
-        c->l = p; c->r = v;
-        return c;
+        die("expected a relational operator, or a condition name");
     }
     Cond *c = cnode(C_REL);
     c->op = op; c->l = l; c->r = parse_expr();
+    abbr_subj = l; abbr_op = op;
     return c;
 }
 
@@ -2301,8 +2399,10 @@ static Cond *parse_and(void)
 
 static Cond *parse_cond(void)
 {
+    if (cond_depth++ == 0) abbr_subj = NULL;   /* a fresh condition */
     Cond *l = parse_and();
     while (is("OR")) { next(); Cond *c = cnode(C_OR); c->cl = l; c->cr = parse_and(); l = c; }
+    cond_depth--;
     return l;
 }
 
@@ -4937,6 +5037,54 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             const Sym *ls = &syms[L->sym];
             int n = L->sub ? ls->elem : ls->bytes;
             char fl[64], fr[64];
+            if (R->kind == N_STR && !R->fig && R->litlen > n) {
+                /* A literal longer than the item: the item is space-padded to
+                 * the literal's length. Compare the item's width, and only if
+                 * that is equal compare spaces against the literal's tail. The
+                 * condition code the branch below reads is then the whole
+                 * comparison's. */
+                const char *sl = intern_str(R->lit, R->litlen, R->litlen);
+                char lx[16]; snprintf(lx, sizeof lx, "L%04d", ++genlabel);
+                use_spcs = 1;
+                field_ref(ls, L->sub, n, 6, fl, sizeof fl);
+                snprintf(b, sizeof b, "%s,%s", fl, sl);
+                asm_line("", "CLC", b, "the item's width");
+                asm_line("", "BNE", lx, "");
+                snprintf(b, sizeof b, "SPCS(%d),%s+%d", R->litlen - n, sl, n);
+                asm_line("", "CLC", b, "spaces against the literal's tail");
+                asm_line(lx, "DS", "0H", "");
+                snprintf(l, sizeof l, "L%04d", label);
+                asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
+                return;
+            }
+            if (R->kind == N_SYM && node_alpha(R)
+                && (R->sub ? syms[R->sym].elem : syms[R->sym].bytes) != n) {
+                /* Two items of different lengths: the shorter is space padded
+                 * to the longer, II-42. Compare the common length; if equal,
+                 * the longer one's tail against spaces -- on whichever side
+                 * the longer one is, so the condition code reads the right
+                 * way round. */
+                const Sym *rs = &syms[R->sym];
+                int rn = R->sub ? rs->elem : rs->bytes;
+                int mn = n < rn ? n : rn;
+                if (n > 256 || rn > 256) die("CLC is limited to 256 bytes");
+                char lx[16]; snprintf(lx, sizeof lx, "L%04d", ++genlabel);
+                use_spcs = 1;
+                field_ref_m(ls, L->sub, FR_RX, n, 6, fl, sizeof fl);
+                snprintf(b, sizeof b, "6,%s", fl); asm_line("", "LA", b, "the left item");
+                field_ref_m(rs, R->sub, FR_RX, rn, 7, fr, sizeof fr);
+                snprintf(b, sizeof b, "7,%s", fr); asm_line("", "LA", b, "the right item");
+                snprintf(b, sizeof b, "0(%d,6),0(7)", mn);
+                asm_line("", "CLC", b, "the common length");
+                asm_line("", "BNE", lx, "");
+                if (n > rn) snprintf(b, sizeof b, "%d(%d,6),SPCS", mn, n - mn);
+                else        snprintf(b, sizeof b, "SPCS(%d),%d(7)", rn - mn, mn);
+                asm_line("", "CLC", b, "the longer one's tail against spaces");
+                asm_line(lx, "DS", "0H", "");
+                snprintf(l, sizeof l, "L%04d", label);
+                asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
+                return;
+            }
             if (R->kind == N_STR) {
                 const char *sl;
                 if (R->fig == FIG_ALL) {
@@ -6512,6 +6660,7 @@ static void generate(void)
         if (use_hvals) asm_line("HVALS", "DC", "256X'FF'", "HIGH-VALUES, for comparison");
         if (use_lvals) asm_line("LVALS", "DC", "256X'00'", "LOW-VALUES, for comparison");
         if (use_qvals) asm_line("QVALS", "DC", "256X'7D'", "QUOTES, for comparison");
+        if (use_spcs)  asm_line("SPCS", "DC", "256C' '", "space padding, for comparison");
         asm_line("PWK1", "DS", "PL16", "");
         asm_line("PWK2", "DS", "PL16", "");
         asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");
