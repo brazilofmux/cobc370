@@ -42,13 +42,8 @@ T0001    DS    0H
          BALR  14,15
 T0002    DS    0H
 * ADD 100 -> ACC
-         L     2,D0004
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0004             binary, same scale: in the register
+         AH    2,H0001
          ST    2,D0004
 T0003    DS    0H
 * MOVE ACC -> OUT-NUM
@@ -95,7 +90,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'100'           numeric constants
+H0001    DC    H'100'              element sizes
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 BL0001   DC    A(WSC0001)

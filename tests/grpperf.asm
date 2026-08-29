@@ -113,17 +113,12 @@ T0012    DS    0H
 * ADD 1 -> COUNTER
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0008
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0008             binary, same scale: in the register
+         AH    2,H0001
          STH   2,D0008
 T0013    DS    0H
 * ADD 1050 -> CUST-BAL
-         AP    D0003(4),K0002+13(3)  packed, same scale: in place
+         AP    D0003(4),K0001+13(3)  packed, same scale: in place
          DROP  8
 * ADD-EXIT.
 P0002    DS    0H
@@ -182,8 +177,8 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'1050'
+K0001    DC    PL16'1050'          numeric constants
+H0001    DC    H'1'                element sizes
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

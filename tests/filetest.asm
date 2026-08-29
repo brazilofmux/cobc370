@@ -91,13 +91,8 @@ T0010    DS    0H
 * ADD 1 -> REC-COUNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0002
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0002             binary, same scale: in the register
+         AH    2,H0001
          ST    2,D0002
 T0011    DS    0H
 * MOVE IN-REC -> OUT-REC
@@ -144,7 +139,7 @@ WK5      DS    PL16
 FD000    DCB   DDNAME=INFILE,DSORG=PS,MACRF=(GM)
 FD001    DCB   DDNAME=OUTFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
                LRECL=80,BLKSIZE=80
-K0001    DC    PL16'1'             numeric constants
+H0001    DC    H'1'                element sizes
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

@@ -50,20 +50,15 @@ T0003    DS    0H
 * ADD 1 -> WS-IDX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0003
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0002(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0003             binary, same scale: in the register
+         AH    2,H0001
          STH   2,D0003
 T0004    DS    0H
 * IF
          LH    2,D0003
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(16)   literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0001
 T0005    DS    0H
@@ -82,7 +77,7 @@ T0007    DS    0H
          LH    2,D0003
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0004(16)   literal
+         ZAP   WK1(16),K0003(16)   literal
          ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
          MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
          SRP   WK0(16),2,0         align scale (left)
@@ -96,7 +91,7 @@ T0008    DS    0H
          LH    3,RL000
          LTR   3,3                 no page yet?
          BZ    L0002
-         CH    2,H0001             past LAST DETAIL?
+         CH    2,H0002             past LAST DETAIL?
          BNH   L0003
 L0002    MVI   RCTL,C'1'           new page
          SR    2,2
@@ -238,11 +233,11 @@ WK5      DS    PL16
 FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FBA,             X
                LRECL=133,BLKSIZE=133
 K0001    DC    PL16'0'             numeric constants
-K0002    DC    PL16'1'
-K0003    DC    PL16'10'
-K0004    DC    PL16'1000'
+K0002    DC    PL16'10'
+K0003    DC    PL16'1000'
 M0001    DC    XL16'40204020206B2020206B2021204B2020'  ED patterns
-H0001    DC    H'10'               element sizes
+H0001    DC    H'1'                element sizes
+H0002    DC    H'10'
 S0001    DC    CL11'TEST REPORT'   nonnumeric constants
 S0002    DC    CL3'NUM'
 S0003    DC    CL6'AMOUNT'

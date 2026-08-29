@@ -87,13 +87,8 @@ T0004    DS    0H
          ZAP   0(5,6),PWK1(16)
 T0005    DS    0H
 * ADD 1 -> WS-IDX
-         LH    2,D0006
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0006             binary, same scale: in the register
+         AH    2,H0002
          STH   2,D0006
 T0006    DS    0H
 * GO TO FILL-LOOP
@@ -179,7 +174,7 @@ T0016    DS    0H
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          LA    6,0                 subscript-1
-         MH    6,H0002             times element size
+         MH    6,H0003             times element size
          LA    6,D0005(6)          element address
          STH   2,0(,6)
 T0017    DS    0H
@@ -188,13 +183,13 @@ T0017    DS    0H
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          LA    6,11                subscript-1
-         MH    6,H0002             times element size
+         MH    6,H0003             times element size
          LA    6,D0005(6)          element address
          STH   2,0(,6)
 T0018    DS    0H
 * MOVE MD-ENTRY -> OUT-SMALL
          LA    7,11                subscript-1
-         MH    7,H0002             times element size
+         MH    7,H0003             times element size
          LA    7,D0005(7)          element address
          LH    2,0(,7)
          CVD   2,DWK               binary -> packed
@@ -256,7 +251,8 @@ K0005    DC    PL16'3'
 K0006    DC    PL16'12'
 K0007    DC    PL16'31'
 H0001    DC    H'10'               element sizes
-H0002    DC    H'2'
+H0002    DC    H'1'
+H0003    DC    H'2'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

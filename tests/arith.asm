@@ -61,15 +61,8 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * ADD B2 -> B1
-         L     2,D0003
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         L     2,D0004
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK2(16),DWK(8)
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0003             binary, same scale: in the register
+         A     2,D0004
          ST    2,D0003
 T0007    DS    0H
 * MOVE B1 -> R2

@@ -33,13 +33,8 @@ T0000    DS    0H
 * ADD 1 -> WS-CALLS
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0000             binary, same scale: in the register
+         AH    2,H0001
          STH   2,D0000
 T0001    DS    0H
 * MOVE WS-CALLS -> OUT-CALLS
@@ -55,7 +50,7 @@ T0002    DS    0H
          BR    14                  return to caller
 T0003    DS    0H
 * MOVE -1 -> OUT-CALLS
-         ZAP   PWK1(16),K0002(16)  literal
+         ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0002
@@ -81,8 +76,8 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'-1'
+K0001    DC    PL16'-1'            numeric constants
+H0001    DC    H'1'                element sizes
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 * one cell per LINKAGE 01, filled in from the parameter list

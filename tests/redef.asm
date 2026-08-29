@@ -121,13 +121,8 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * ADD 1 -> WS-I
-         LH    2,D0012
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0012             binary, same scale: in the register
+         AH    2,H0002
          STH   2,D0012
 * end of a PERFORM range: return through its cell
          L     15,X0001
@@ -167,6 +162,7 @@ WK5      DS    PL16
 K0001    DC    PL16'1'             numeric constants
 K0002    DC    PL16'3'
 H0001    DC    H'14'               element sizes
+H0002    DC    H'1'
 S0001    DC    CL7'YEAR  ['        nonnumeric constants
 S0002    DC    CL1']'
 S0003    DC    CL7'YEAR1 ['

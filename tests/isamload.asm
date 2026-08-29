@@ -143,13 +143,8 @@ T0016    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0009
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0009             binary, same scale: in the register
+         AH    2,H0001
          STH   2,D0009
 T0017    DS    0H
 * PERFORM A002-READ THRU A002-READ-END
@@ -203,7 +198,7 @@ FD000    DCB   DDNAME=DESCIDX,DSORG=IS,MACRF=(PM),RECFM=FB,            X
                LRECL=81,BLKSIZE=810,KEYLEN=10,RKP=1,OPTCD=L,           X
                SYNAD=ISYNAD
 FD001    DCB   DDNAME=DESCIN,DSORG=PS,MACRF=(GM)
-K0001    DC    PL16'1'             numeric constants
+H0001    DC    H'1'                element sizes
 S0001    DC    CL1'Y'              nonnumeric constants
 S0002    DC    CL15'DESCIDX LOADED.'
 S0003    DC    CL20'DUPLICATE OR SEQ-ERR'

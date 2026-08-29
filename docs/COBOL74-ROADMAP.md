@@ -304,7 +304,7 @@ times behind.
 | packed `ADD` | 0.18 | 0.09 | **0.09** (1) |
 | packed compare | 0.17 | 0.07 | **0.09** (1) |
 | `CALL` a subprogram | 4.76 | 0.16 | **0.27** (2) |
-| `COMP` `ADD 1` | 0.20 | 0.03 | |
+| `COMP` `ADD 1` | 0.20 | 0.03 | **0.02** (4) |
 | `MOVE` same picture, DISPLAY | 0.05 | 0.01 | **0.01** (3) |
 | `MOVE` to a wider picture | 0.06 | 0.02 | **0.02** (3) |
 | `IF` same picture, unsigned DISPLAY | 0.02 | 0.10 | already ahead |
@@ -323,6 +323,16 @@ times behind.
    `MVC` from a zoned constant. Signed items and `SIGN` clauses keep the
    `PACK`/`UNPK` path, where the sign nibble has to be made.
 
-Next: `COMP` add and subtract in binary
-with a range guard for picture truncation; then right-sizing the work areas
-`gen_expr` uses, which is the general form of (1).
+4. `COMP` `ADD`/`SUBTRACT` at one scale in binary: `L`, `A` (or `AH`), `ST`
+   on the field, a literal from a halfword or fullword constant. The range
+   guard planned for this turned out to guard nothing: the decimal path never
+   truncated a `COMP` result to its picture either -- `CVB` stores whatever
+   the register holds -- so the binary add is bit-identical for every value
+   that fits 31 bits, and past that the standard calls the result undefined
+   (`CVB` took a fixed-point-divide exception there; the add wraps). A source
+   at another scale, or in `DISPLAY` or `COMP-3`, keeps the decimal path.
+   First cut skipped the source-scale check and added a `V9` item to a `V99`
+   one as hundredths; `tests/compadd` caught it before the sweep did.
+
+Next: right-sizing the work areas `gen_expr` uses, which is the general form
+of (1).

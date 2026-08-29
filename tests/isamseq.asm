@@ -50,20 +50,15 @@ T0003    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0009
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   PWK2(16),K0001(16)  literal
-         AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0009             binary, same scale: in the register
+         AH    2,H0001
          STH   2,D0009
 T0004    DS    0H
 * IF
          LH    2,D0009
          CVD   2,DWK               binary -> packed
          ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(16)   literal
+         ZAP   WK1(16),K0001(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNH   L0003
 T0005    DS    0H
@@ -127,8 +122,8 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=GLACCT,DSORG=IS,MACRF=(GM)
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'3'
+K0001    DC    PL16'3'             numeric constants
+H0001    DC    H'1'                element sizes
 S0001    DC    CL4'KEY '           nonnumeric constants
 S0002    DC    CL1' '
 * base locator cells, one per 4096 bytes of COBWS

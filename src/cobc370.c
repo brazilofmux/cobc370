@@ -4603,6 +4603,43 @@ static const char *intern_half(int v)
     return hconsts[nhconst++].label;
 }
 
+/* Fullword constants: binary literals too wide for AH. */
+static struct { char label[16]; long v; } fconsts[64];
+static int nfconst;
+
+static const char *intern_full(long v)
+{
+    for (int i = 0; i < nfconst; i++) if (fconsts[i].v == v) return fconsts[i].label;
+    if (nfconst >= 64) die("too many fullword constants");
+    snprintf(fconsts[nfconst].label, sizeof fconsts[nfconst].label, "FC%03d", nfconst + 1);
+    fconsts[nfconst].v = v;
+    return fconsts[nfconst++].label;
+}
+
+/* A numeric literal as the binary integer a COMP item of the given scale
+ * holds: the digits shifted to that scale. 0 when the literal has more
+ * decimal places than the item (the general path truncates those) or the
+ * value does not fit a fullword. */
+static int binary_lit_value(const char *digits, int litscale, int scale, long *out)
+{
+    if (litscale > scale) return 0;
+    const char *p = digits; int neg = 0;
+    if (*p == '-') { neg = 1; p++; } else if (*p == '+') p++;
+    long v = 0;
+    for (; *p; p++) {
+        if (!isdigit((unsigned char)*p)) return 0;
+        if (v > 214748364L) return 0;
+        v = v * 10 + (*p - '0');
+    }
+    for (int k = 0; k < scale - litscale; k++) {
+        if (v > 214748364L) return 0;
+        v *= 10;
+    }
+    if (v > 2147483647L) return 0;
+    *out = neg ? -v : v;
+    return 1;
+}
+
 /* Leave (subscript - 1) in reg, as a binary integer. */
 static void gen_subscript(Node *sub, int reg)
 {
@@ -8913,6 +8950,46 @@ static void generate(void)
                  * the sign nibble forced to F makes it. A literal is added at
                  * the receiver's scale from the tail of its constant. */
                 char fop[64];
+                if (d->usage == U_COMP && !d->edited && ws == d->scale) {
+                    /* A binary receiver at one scale: load, add, store. The
+                     * general path went CVD, ZAP, AP, ZAP, CVB and back --
+                     * six instructions and four decimal operations to add a
+                     * fullword. Nothing is lost by skipping them: that path
+                     * never truncated a COMP result to its picture either
+                     * (CVB stores what the register holds), and STH keeps
+                     * the same low halfword whichever way the sum was made.
+                     * Only a sum past 31 bits differs -- CVB took a
+                     * fixed-point-divide exception, the add wraps -- and the
+                     * standard leaves that result undefined. A literal
+                     * comes from a halfword constant when it fits one. */
+                    const char *op = NULL; long v = 0;
+                    if (!st->imm && syms[st->src].usage == U_COMP && syms[st->src].scale == d->scale) {
+                        need_sym_base(&syms[st->src]);
+                        field_ref(&syms[st->src], st->ssub, 0, 7, fop, sizeof fop);
+                        op = syms[st->src].elem == 2 ? (st->op == ST_ADD ? "AH" : "SH")
+                                                     : (st->op == ST_ADD ? "A"  : "S");
+                    } else if (st->imm && binary_lit_value(st->immdigits, st->immscale, d->scale, &v)) {
+                        if (v >= -32768 && v <= 32767) {
+                            snprintf(fop, sizeof fop, "%s", intern_half((int)v));
+                            op = st->op == ST_ADD ? "AH" : "SH";
+                        } else {
+                            snprintf(fop, sizeof fop, "%s", intern_full(v));
+                            op = st->op == ST_ADD ? "A" : "S";
+                        }
+                    }
+                    if (op) {
+                        char fd2[64];
+                        need_sym_base(d);
+                        field_ref(d, st->dsub, 0, 6, fd2, sizeof fd2);
+                        snprintf(b, sizeof b, "2,%s", fd2);
+                        asm_line("", d->elem == 2 ? "LH" : "L", b, "binary, same scale: in the register");
+                        snprintf(b, sizeof b, "2,%s", fop);
+                        asm_line("", op, b, "");
+                        snprintf(b, sizeof b, "2,%s", fd2);
+                        asm_line("", d->elem == 2 ? "STH" : "ST", b, "");
+                        break;
+                    }
+                }
                 int direct = d->usage == U_COMP3 && !d->edited && !var_len(d) &&
                     ((!st->imm && syms[st->src].usage == U_COMP3 && syms[st->src].scale == d->scale)
                      || (st->imm && packed_lit_operand(st->immdigits, st->immscale, d->scale, fop, sizeof fop)));
@@ -9448,6 +9525,10 @@ static void generate(void)
     for (int i = 0; i < nhconst; i++) {
         snprintf(b, sizeof b, "H'%d'", hconsts[i].v);
         asm_line(hconsts[i].label, "DC", b, i ? "" : "element sizes");
+    }
+    for (int i = 0; i < nfconst; i++) {
+        snprintf(b, sizeof b, "F'%ld'", fconsts[i].v);
+        asm_line(fconsts[i].label, "DC", b, i ? "" : "binary literals");
     }
     for (int i = 0; i < nsconst; i++) {
         /* A literal padded out to a wide item makes a constant too long for
