@@ -2311,6 +2311,61 @@ static void giving_target(Stmt *st)
 }
 
 static void eat_period(void);
+/* CORRESPONDING (II-51). Two items correspond when they have the same name
+ * and the same qualifiers up to, but not including, the two groups named in
+ * the statement; neither is FILLER; and for MOVE at least one is elementary,
+ * for ADD and SUBTRACT both are elementary numeric. An item that is a
+ * REDEFINES, a table, or an index is left out together with everything
+ * beneath it. Pairs come back in the order of the sending group. */
+static int corr_skip(const Sym *y)
+{
+    return y->is_88 || y->alias || y->occurs > 0 || y->is_index
+        || (!strncmp(y->name, "FILL", 4) && isdigit((unsigned char)y->name[4]));
+}
+/* The names from g (exclusive) down to i, outermost first. */
+static int corr_path(int i, int g, const char **out, int max)
+{
+    const char *tmp[32]; int n = 0;
+    for (int k = i; k >= 0 && k != g; k = syms[k].gparent) {
+        if (n >= 32) die("CORRESPONDING: nesting too deep");
+        tmp[n++] = syms[k].name;
+    }
+    if (n > max) die("CORRESPONDING: nesting too deep");
+    for (int k = 0; k < n; k++) out[k] = tmp[n - 1 - k];
+    return n;
+}
+static int corr_pairs(int g1, int g2, int arith, int *xs, int *ys, int max)
+{
+    int n = 0;
+    int l1 = syms[g1].level, l2 = syms[g2].level;
+    int skip = 0;                       /* level of an excluded item, or 0 */
+    for (int i = g1 + 1; i < nsym && syms[i].level > l1 && syms[i].level != 77; i++) {
+        const Sym *x = &syms[i];
+        if (skip && x->level > skip) continue;
+        skip = 0;
+        if (corr_skip(x)) { if (x->is_group) skip = x->level; continue; }
+        const char *px[32]; int npx = corr_path(i, g1, px, 32);
+        int skip2 = 0;
+        for (int j = g2 + 1; j < nsym && syms[j].level > l2 && syms[j].level != 77; j++) {
+            const Sym *y = &syms[j];
+            if (skip2 && y->level > skip2) continue;
+            skip2 = 0;
+            if (corr_skip(y)) { if (y->is_group) skip2 = y->level; continue; }
+            const char *py[32]; int npy = corr_path(j, g2, py, 32);
+            if (npx != npy) continue;
+            int same = 1;
+            for (int k = 0; k < npx && same; k++) if (strcmp(px[k], py[k])) same = 0;
+            if (!same) continue;
+            if (arith) { if (x->is_group || y->is_group || x->is_alpha || y->is_alpha || y->edited) continue; }
+            else if (x->is_group && y->is_group) continue;
+            if (n >= max) die("CORRESPONDING: too many pairs");
+            xs[n] = i; ys[n] = j; n++;
+            break;
+        }
+    }
+    return n;
+}
+
 /* One operand of STRING or UNSTRING: an identifier, a nonnumeric literal, or a
  * one-character figurative constant. A literal becomes an interned constant
  * of exactly its own length; a figurative becomes the first byte of the run
@@ -2611,8 +2666,27 @@ static void parse_one_statement(void)
         return;
     }
 
-    if (is("MOVE")) {
+    if (is("MOVE") ) {
         next();
+        if (is("CORRESPONDING") || is("CORR")) {
+            next();
+            int g1 = consume_sym(); Node *s1 = opt_subscript();
+            expect("TO");
+            int g2 = consume_sym(); Node *s2 = opt_subscript();
+            if (!syms[g1].is_group || !syms[g2].is_group)
+                die("MOVE CORRESPONDING needs two group items");
+            int xs[128], ys[128];
+            int n = corr_pairs(g1, g2, 0, xs, ys, 128);
+            if (n == 0) die("MOVE CORRESPONDING: no item of the two groups corresponds");
+            for (int k = 0; k < n; k++) {
+                Stmt *m = new_stmt(ST_MOVE);
+                m->src = xs[k]; m->ssub = s1;
+                m->dst = ys[k]; m->dsub = s2;
+                m->imm = 0; m->fig = 0;
+            }
+            eat_period();
+            return;
+        }
         Stmt *st = new_stmt(ST_MOVE);
         char save[MAXTOK]; int savelit = tok.literal, savelen = tok.len;
         memcpy(save, tok.text, (size_t)tok.len + 1);
@@ -2672,6 +2746,29 @@ static void parse_one_statement(void)
     if (is("ADD") || is("SUBTRACT")) {
         int sub = is("SUBTRACT");
         next();
+        if (is("CORRESPONDING") || is("CORR")) {
+            next();
+            int g1 = consume_sym(); Node *s1 = opt_subscript();
+            expect(sub ? "FROM" : "TO");
+            int g2 = consume_sym(); Node *s2 = opt_subscript();
+            if (!syms[g1].is_group || !syms[g2].is_group)
+                die("ADD/SUBTRACT CORRESPONDING needs two group items");
+            int rounded = 0;
+            if (is("ROUNDED")) { rounded = 1; next(); }
+            int xs[128], ys[128];
+            int n = corr_pairs(g1, g2, 1, xs, ys, 128);
+            if (n == 0) die("ADD/SUBTRACT CORRESPONDING: no elementary numeric item of the two groups corresponds");
+            int first = nstmt;
+            for (int k = 0; k < n; k++) {
+                Stmt *m = new_stmt(ST_COMPUTE);
+                m->src = -1; m->dst = ys[k]; m->dsub = s2; m->rounded = rounded;
+                Node *r = node(N_SYM); r->sym = ys[k]; r->sub = s2;
+                Node *x = node(N_SYM); x->sym = xs[k]; x->sub = s1;
+                m->expr = binop(sub ? N_SUB : N_ADD, r, x);
+            }
+            parse_size_error(first);
+            return;
+        }
         Stmt *st = new_stmt(sub ? ST_SUB : ST_ADD);
         char save[MAXTOK];
         memcpy(save, tok.text, (size_t)tok.len + 1);

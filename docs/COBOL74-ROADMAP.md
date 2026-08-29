@@ -111,8 +111,12 @@ been abending 0CA rather than truncating, because naming interruption codes
 8 and 10 in the program-check `SPIE` turns their program-mask bits on. The
 `SPIE` no longer names the maskable codes, and the mask is cleared at entry.
 
-**`CORRESPONDING`** -- S: `ADD`, `SUBTRACT`, `MOVE`. Pure front end: match
-subordinate names between two groups and expand to the elementary statements.
+**`CORRESPONDING`** -- DONE 2026-08-29: `MOVE`, `ADD`, `SUBTRACT`, with
+`ROUNDED` and `ON SIZE ERROR` on the arithmetic forms. Pure front end: items
+correspond by name and qualification up to the two groups (II-51); `FILLER`,
+`REDEFINES`, `OCCURS` and index items are left out with everything beneath
+them; a pair of groups with the same name is not moved as a group but has its
+subordinates matched, since at least one of a `MOVE` pair must be elementary.
 
 **`STRING` and `UNSTRING`** -- DONE 2026-08-29: two runtime routines,
 `COBSTR` and `COBUNS`, driven by a per-statement parameter block in the data
