@@ -662,11 +662,12 @@ RG000    ST    14,RGS000           save the return
          LA    2,1                 LINE n
          ST    2,RTGT
          MVI   RBUF+1,C' '
-         MVC   RBUF+2(131),RBUF+1  blank the line
+         MVC   RBUF+2(133),RBUF+1  blank the line
          MVC   RBUF+1(10),S0008    COLUMN literal
          LA    1,RGP000
          L     15,VWRL
          BALR  14,15
+         MVI   RSUPPR,X'00'
          L     14,RGS000
          BR    14
 * report group DE-A
@@ -712,7 +713,7 @@ L0025    DS    0H
 L0026    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
-         MVC   RBUF+2(131),RBUF+1  blank the line
+         MVC   RBUF+2(133),RBUF+1  blank the line
          MVC   RBUF+1(2),S0009     COLUMN literal
          MVC   D0020(2),D0007      alphanumeric move
          DROP  8
@@ -753,6 +754,7 @@ G0007    DS    0H
          BALR  14,15
          DROP  8
          MVI   RBODY000,X'01'      a body group is on this page
+         MVI   RSUPPR,X'00'
          L     14,RGS001
          BR    14
 * report group DE-B
@@ -798,7 +800,7 @@ L0029    DS    0H
 L0030    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
-         MVC   RBUF+2(131),RBUF+1  blank the line
+         MVC   RBUF+2(133),RBUF+1  blank the line
          MVC   RBUF+1(2),S0010     COLUMN literal
          MVC   D0026(2),D0007      alphanumeric move
          DROP  8
@@ -827,6 +829,7 @@ G0009    DS    0H
          BALR  14,15
          DROP  8
          MVI   RBODY000,X'01'      a body group is on this page
+         MVI   RSUPPR,X'00'
          L     14,RGS002
          BR    14
 * report group ACCT-FOOT
@@ -872,7 +875,7 @@ L0033    DS    0H
 L0034    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
-         MVC   RBUF+2(131),RBUF+1  blank the line
+         MVC   RBUF+2(133),RBUF+1  blank the line
          MVC   RBUF+1(9),S0011     COLUMN literal
          ZAP   PWK1(16),D0031(4)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
@@ -924,6 +927,7 @@ G0015    DS    0H
          BALR  14,15
          DROP  8
          MVI   RBODY000,X'01'      a body group is on this page
+         MVI   RSUPPR,X'00'
          L     14,RGS003
          BR    14
 * report group DEPT-FOOT
@@ -969,7 +973,7 @@ L0037    DS    0H
 L0038    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
-         MVC   RBUF+2(131),RBUF+1  blank the line
+         MVC   RBUF+2(133),RBUF+1  blank the line
          MVC   RBUF+1(9),S0012     COLUMN literal
          ZAP   PWK1(16),D0042(4)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
@@ -997,6 +1001,7 @@ G0017    DS    0H
          BALR  14,15
          DROP  8
          MVI   RBODY000,X'01'      a body group is on this page
+         MVI   RSUPPR,X'00'
          L     14,RGS004
          BR    14
 * report group FINAL-FOOT
@@ -1042,7 +1047,7 @@ L0041    DS    0H
 L0042    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
-         MVC   RBUF+2(131),RBUF+1  blank the line
+         MVC   RBUF+2(133),RBUF+1  blank the line
          MVC   RBUF+1(9),S0013     COLUMN literal
          ZAP   PWK1(16),D0048(4)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
@@ -1073,6 +1078,7 @@ G0021    DS    0H
          BALR  14,15
          DROP  8
          MVI   RBODY000,X'01'      a body group is on this page
+         MVI   RSUPPR,X'00'
          L     14,RGS005
          BR    14
 * eject, report SUM-RPT
@@ -1103,43 +1109,50 @@ RGP000   DC    A(FD000)            PAGE-HEAD
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    X'80',AL3(D0012)    LINE-COUNTER; last parameter
+         DC    A(D0012)            LINE-COUNTER
+         DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS000   DS    F                   return address
 RGP001   DC    A(FD000)            DE-A
          DC    A(RPHY000)          the physical line
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    X'80',AL3(D0012)    LINE-COUNTER; last parameter
+         DC    A(D0012)            LINE-COUNTER
+         DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS001   DS    F                   return address
 RGP002   DC    A(FD000)            DE-B
          DC    A(RPHY000)          the physical line
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    X'80',AL3(D0012)    LINE-COUNTER; last parameter
+         DC    A(D0012)            LINE-COUNTER
+         DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS002   DS    F                   return address
 RGP003   DC    A(FD000)            ACCT-FOOT
          DC    A(RPHY000)          the physical line
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    X'80',AL3(D0012)    LINE-COUNTER; last parameter
+         DC    A(D0012)            LINE-COUNTER
+         DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS003   DS    F                   return address
 RGP004   DC    A(FD000)            DEPT-FOOT
          DC    A(RPHY000)          the physical line
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    X'80',AL3(D0012)    LINE-COUNTER; last parameter
+         DC    A(D0012)            LINE-COUNTER
+         DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS004   DS    F                   return address
 RGP005   DC    A(FD000)            FINAL-FOOT
          DC    A(RPHY000)          the physical line
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    X'80',AL3(D0012)    LINE-COUNTER; last parameter
+         DC    A(D0012)            LINE-COUNTER
+         DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS005   DS    F                   return address
+RSUPPR   DC    X'00'               SUPPRESS PRINTING was executed
 RCTL000  DC    C' '                SUM-RPT
 RBODY000 DC    X'00'               a body group is on this page
 RFGEN000 DC    X'00'               the first GENERATE has happened
@@ -1151,7 +1164,7 @@ RBRK000  DC    X'00'               the level of the control break
 RADVS000 DS    F                   page advance return
 REJCS000 DS    F                   eject return
 RTGT     DS    F                   target line
-RBUF     DC    CL133' '            ASA byte + 132 columns
+RBUF     DC    CL135' '            ASA byte, room for a CODE, 132 colum
 X0001    DC    A(F0001)            ONE-REC
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
@@ -1735,6 +1748,7 @@ COBWRL   STM   14,12,12(13)
          L     5,12(0,1)           A(buffer)
          L     9,16(0,1)           A(pending control)
          L     10,20(0,1)          A(LINE-COUNTER)
+         L     11,24(0,1)          A(this report's blank line)
          L     6,0(0,3)            the physical line
          L     7,0(0,4)            the target
          MVI   0(5),C' '           single space unless told otherwise
@@ -1746,7 +1760,9 @@ COBWRL   STM   14,12,12(13)
          MVI   0(5),C'1'           the line itself ejects
          SR    6,6
          B     COBW020
-COBW005  PUT   (2),RTEJCT          a blank line at the top of a new pag
+COBW005  MVI   0(11),C'1'          the blank line ejects
+         PUT   (2),(11)            a blank line at the top of a new pag
+         MVI   0(11),C' '
          LA    6,1
 COBW010  CR    7,6                 a target behind the paper?
          BH    COBW012
@@ -1754,7 +1770,7 @@ COBW010  CR    7,6                 a target behind the paper?
 COBW012  LA    8,1(0,6)
          CR    8,7                 already at the line before the targe
          BNL   COBW020
-         PUT   (2),RTBLNK          skip a line
+         PUT   (2),(11)            skip a line
          LA    6,1(0,6)
          B     COBW012
 COBW020  PUT   (2),(5)
@@ -1765,7 +1781,6 @@ COBW020  PUT   (2),(5)
          SR    15,15
          BR    14
 RWONE    DC    H'1'
-RTEJCT   DC    C'1',CL132' '       a blank line, ASA eject
 RTBLNK   DC    CL133' '            a blank line, ASA single space
 RTSAVE3  DS    18F
 RTOPEN   DC    X'00'

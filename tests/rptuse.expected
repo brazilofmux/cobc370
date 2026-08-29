@@ -1,0 +1,16 @@
+DETAIL USE RAN 08 TIMES
+BLANK WHEN ZERO: [   ]
+BLANK WHEN ZERO: [ 42]
+USE REPORT
+AA     abc    10
+       abc
+       abc     5
+DEPT TOT     15
+BB     abc
+USE REPORT
+BB     abc
+       abc
+CC     abc     7
+       abc
+DEPT TOT      7
+GRAND        22

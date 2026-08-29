@@ -521,6 +521,7 @@ COBWRL   STM   14,12,12(13)
          L     5,12(0,1)           A(buffer)
          L     9,16(0,1)           A(pending control)
          L     10,20(0,1)          A(LINE-COUNTER)
+         L     11,24(0,1)          A(this report's blank line)
          L     6,0(0,3)            the physical line
          L     7,0(0,4)            the target
          MVI   0(5),C' '           single space unless told otherwise
@@ -532,7 +533,9 @@ COBWRL   STM   14,12,12(13)
          MVI   0(5),C'1'           the line itself ejects
          SR    6,6
          B     COBW020
-COBW005  PUT   (2),RTEJCT          a blank line at the top of a new pag
+COBW005  MVI   0(11),C'1'          the blank line ejects
+         PUT   (2),(11)            a blank line at the top of a new pag
+         MVI   0(11),C' '
          LA    6,1
 COBW010  CR    7,6                 a target behind the paper?
          BH    COBW012
@@ -540,7 +543,7 @@ COBW010  CR    7,6                 a target behind the paper?
 COBW012  LA    8,1(0,6)
          CR    8,7                 already at the line before the targe
          BNL   COBW020
-         PUT   (2),RTBLNK          skip a line
+         PUT   (2),(11)            skip a line
          LA    6,1(0,6)
          B     COBW012
 COBW020  PUT   (2),(5)
@@ -551,7 +554,6 @@ COBW020  PUT   (2),(5)
          SR    15,15
          BR    14
 RWONE    DC    H'1'
-RTEJCT   DC    C'1',CL132' '       a blank line, ASA eject
 RTBLNK   DC    CL133' '            a blank line, ASA single space
 RTSAVE3  DS    18F
 RTOPEN   DC    X'00'

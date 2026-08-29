@@ -50,7 +50,7 @@ Writer Level 2" to aspire to. The whole module is `1 RPW 0,1` or nothing.
 The short version, as of 2026-08-29: **Level 2 of the Nucleus, Table
 Handling, Sequential I-O, Relative I-O, Inter-Program Communication and
 Library; Indexed I-O at Level 2 but for `ALTERNATE RECORD KEY`; Segmentation
-at Level 1; the Report Writer's page-manager subset without the module claim;
+at Level 1; the Report Writer at its one level, complete since 2026-08-30;
 and the null level of Sort-Merge, Debug and Communication.** Each module's
 section below says what is there and what is not, and the dates.
 
@@ -74,7 +74,9 @@ switch-status conditions were added on 2026-08-27 and 28.
 the three Level 1 elements a check against the standard's own `1 NUC 1,2` list
 found still refused on 2026-08-29 -- were added the same day. The claim made
 on the 28th that the Nucleus was complete had been wrong; this one was made by
-walking the element list.
+walking the element list. It was wrong once more: `BLANK WHEN ZERO`
+(II-14, Level 1) had been missed on that walk and was found on 2026-08-30
+while finishing the Report Writer; it is in now.
 
 Already at **Level 2**, above a floor not yet reached: `COMPUTE` (Level 2, not
 1), qualification with `OF`/`IN`, level-88 condition-names, `PERFORM UNTIL`,
@@ -132,10 +134,12 @@ Level 2.
 `ALTERNATE RECORD KEY` with `DUPLICATES`, which on MVS is VSAM alternate
 indexes and paths before it is a compiler change.
 
-### Report Writer — a fraction of its only level
+### Report Writer — Level 1, complete
 
-Being completed, slice by slice, since 2026-08-30 -- the plan is in
-`COBOL74-ROADMAP.md` under "Report Writer: closing the module".
+`1 RPW 0,1` is a single level; it was completed in five slices on
+2026-08-30 -- the plan and the record are in `COBOL74-ROADMAP.md` under
+"Report Writer: closing the module". Every element of the module's list
+is present:
 
 Present: `REPORT IS` on the FD; `RD` with the `PAGE` clause entire -- `LIMIT`,
 `HEADING`, `FIRST DETAIL`, `LAST DETAIL`, `FOOTING`, with the implicit values
@@ -161,15 +165,14 @@ sum counter defined later in the section; `VALUE`; `USAGE DISPLAY`; the
 counters zeroed by `INITIATE`, usable as `SOURCE` and in the Procedure
 Division, qualified by the footing's name or the report's; `GENERATE
 data-name` and `GENERATE report-name` (summary reports, 2.21.4(11)),
-`INITIATE`, `TERMINATE`.
+`INITIATE` and `TERMINATE`, of one report or a series; `USE BEFORE
+REPORTING` with `SUPPRESS PRINTING` (3.3, 3.5); `GROUP INDICATE` (2.12);
+`JUSTIFIED` and `BLANK WHEN ZERO` on printable items; `CODE` (2.7);
+`REPORTS ARE` (several reports on one file); the FD clauses accepted.
 
-Missing, each refused with a message: `GROUP INDICATE`; `JUSTIFIED` and
-`BLANK WHEN ZERO` on report items; `CODE`; `REPORTS ARE`; `SUPPRESS`; `USE
-BEFORE REPORTING`; `INITIATE`/`TERMINATE` of several reports in one
-statement.
-
-`1 RPW 0,1` is a single level, so the module is not claimed until the list
-above is empty.
+Nothing in the module is refused. The oracles for the later slices are
+the 1974 text itself, IKFCBL00 corroborating where its 1968 Report Writer
+reaches.
 
 ### Inter-Program Communication — Level 2, complete
 
@@ -220,8 +223,8 @@ That was the first claim the project could make, on 2026-08-29: **cobc370
 implements the COBOL-74 minimum standard.** By the end of the same day the
 roadmap's definition of done was reached as well -- Level 2 of those three
 modules and of Relative I-O, Inter-Program Communication and Library, Indexed
-I-O at Level 2 less `ALTERNATE RECORD KEY`, Segmentation at Level 1 -- with
-the Report Writer's page-manager subset besides. None of it is a validated
+I-O at Level 2 less `ALTERNATE RECORD KEY`, Segmentation at Level 1 -- and
+on the 30th the Report Writer entire. None of it is a validated
 claim — nobody has run the 1974 audit routines against it, and CCVS-85 tests
 a later standard — but all of it is checkable, and the map above is where to
 check it.

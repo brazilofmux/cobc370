@@ -18,8 +18,9 @@ compiler and does not try to be.
 
 ## State
 
-Feature work closed on 2026-08-29. Against the twelve modules of the 1974
-standard, checked element by element against the standard's own lists:
+Feature work closed on 2026-08-29; the Report Writer was completed on the
+30th. Against the twelve modules of the 1974 standard, checked element by
+element against the standard's own lists:
 
 | module | level |
 |---|---|
@@ -27,7 +28,7 @@ standard, checked element by element against the standard's own lists:
 | Relative I-O, Inter-Program Communication, Library | **Level 2, complete** |
 | Indexed I-O | Level 2 but for `ALTERNATE RECORD KEY` |
 | Segmentation | Level 1 |
-| Report Writer | the page-manager subset (below); the module is not claimed |
+| Report Writer | **Level 1, complete** (its only level) |
 | Sort-Merge, Debug, Communication | not implemented -- each has a null level, which conforms |
 
 `docs/COBOL74-CONFORMANCE.md` is the element-by-element map;
@@ -42,7 +43,10 @@ aggregate on the measurement in `docs/MEASUREMENTS.md`, a third on the later
 full build -- and, after the optimization pass, the CPU time of the COBOL steps
 is at IBM's (0.6s either way, at the noise floor of the step accounting).
 
-88 regression tests, all green, every one diffed against an oracle.
+96 regression tests, all green, every one diffed against an oracle -- and
+for the Report Writer the oracle is the 1974 text itself, hand-derived from
+its presentation-rule tables, with IBM's own compiler run on the same
+source wherever its 1968-vintage Report Writer reaches.
 
 | area | supported |
 |---|---|
@@ -53,15 +57,10 @@ is at IBM's (0.6s either way, at the noise floor of the step accounting).
 | **VSAM KSDS** | read, load, update in place, read/write/delete by key, `START`, `ACCESS IS DYNAMIC` |
 | **VSAM ESDS** | read, load, update in place, extend |
 | **VSAM RRDS** | read, load, read/write/delete by record number, `START` |
-| reports | Report Writer, the page-manager subset: `RD` with `PAGE LIMIT`, `HEADING`, `FIRST DETAIL`, `LAST DETAIL`; `PAGE HEADING` and `DETAIL` groups; `LINE`/`LINE PLUS`, `COLUMN` with `SOURCE` or `VALUE`; `INITIATE`, `GENERATE`, `TERMINATE` |
+| reports | Report Writer entire: `RD` with `CONTROL`, `PAGE` and `CODE`; all seven group `TYPE`s; `LINE` (absolute, `PLUS`, `NEXT PAGE`), `NEXT GROUP`, `COLUMN`, `SOURCE`, `VALUE`, `SUM ... UPON ... RESET`, `GROUP INDICATE`, `JUSTIFIED`, `BLANK WHEN ZERO`; `LINE-COUNTER`/`PAGE-COUNTER`; `INITIATE`, `GENERATE` (detail or summary), `TERMINATE`, `USE BEFORE REPORTING`, `SUPPRESS`; presented by the standard's tables, not an approximation of them |
 
 What is deliberately not there, each refused with a message that says so:
 
-- **Report Writer's other half** -- `CONTROL` clauses and control heading and
-  footing groups, `SUM` counters, report and page footings, `NEXT GROUP`,
-  `GROUP INDICATE`, `USE BEFORE REPORTING`. What exists is a page manager;
-  what is missing is the part that computes, and it is the larger part.
-  The programs this compiler was built for do their control breaks by hand.
 - `ALTERNATE RECORD KEY` -- on MVS that is VSAM alternate indexes and paths
   before it is a compiler change.
 - `ACCESS IS DYNAMIC` combined with `OPEN I-O`.
@@ -160,7 +159,7 @@ what each change was, are under Optimization in `docs/COBOL74-ROADMAP.md`.
 ## Layout
 
     src/     the compiler: one C file, plus a Ragel scanner for PICTURE
-    tests/   96 COBOL programs and their oracles
+    tests/   104 COBOL programs and their oracles
     bin/     the regression harness, the three round-trip checks, and
              cobc-ccvs to run the NIST CCVS-85 corpus through the front end
     bench/   the micro-benchmarks

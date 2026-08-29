@@ -247,6 +247,10 @@ guest but the copied text.
 
 ### Report Writer -- a separate decision
 
+*(Written 2026-08-29, when this was the state of things; the decision was
+taken the next day and the module is complete -- see "Report Writer:
+closing the module" at the end of this file.)*
+
 `1 RPW 0,1` is a single level, so the module is either complete or not
 claimed. What exists is the page-manager subset: `RD` with `PAGE LIMIT`,
 `HEADING`, `FIRST DETAIL`, `LAST DETAIL`; `PAGE HEADING` and `DETAIL` groups;
@@ -500,10 +504,28 @@ generated per report from the `CONTROL` hierarchy.
    `SUPPRESS`; `GROUP INDICATE` (first after `INITIATE`, page advance or
    break); `JUSTIFIED` and `BLANK WHEN ZERO` on printable items; `CODE`;
    `REPORTS ARE` with several reports on one file; `INITIATE`/`TERMINATE`
-   series; `VALUE OF` accepted. **S-M.**
+   series; `VALUE OF` accepted. **S-M.** -- DONE 2026-08-30. The USE
+   procedure is called from the group's renderer before anything else, by
+   the same range mechanism the file declaratives use; `SUPPRESS` sets a
+   cell the renderer tests on return and clears on exit, so a suppressed
+   group moves no paper and leaves `LINE-COUNTER` alone while its
+   footing's resets still run. `GROUP INDICATE` is a cell per `DETAIL`
+   group, set by `INITIATE`, the eject and a break, cleared when the group
+   presents. `CODE` widens the file's records to 135 and every line, blank
+   ones included, carries it -- `COBWRL` now takes the report's own blank
+   line from the parameter block. `tests/rptuse` and `tests/rptcode`.
+   IKFCBL00 cannot compile `SUPPRESS` (1974) and takes `CODE` as a
+   mnemonic-name, so both oracles are derived from the text. **Found on
+   the way: `BLANK WHEN ZERO` was not implemented at all** -- not on
+   report items and not in the Nucleus, where it is a Level 1 element
+   (II-14). The map had said the Nucleus was complete; the element list
+   had been walked, and this one was missed. It is in now, in `gen_store`
+   for every numeric and numeric-edited `DISPLAY` receiver, and the two
+   zoned `MVC` shortcuts step aside for it.
 
-Then the conformance map says `1 RPW 0,1`, and the README's "the module is
-not claimed" comes out.
+**With that, `1 RPW 0,1` is claimed** (2026-08-30): every element in the
+module's list is implemented and checked. The conformance map says so and
+the README's "the module is not claimed" is gone.
 
 ### Oracles
 
