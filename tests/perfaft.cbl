@@ -1,0 +1,50 @@
+000100 IDENTIFICATION DIVISION.
+000200 PROGRAM-ID. PERFAFT.
+000300* PERFORM VARYING ... AFTER, to two AFTER levels (II-83). The
+000350* inner index is reset and the outer augmented each time an inner
+000400* condition turns true; the body runs only when all are false.
+000450* The order matters when the inner FROM names the outer index:
+000500* 1974 resets the inner from the CURRENT outer value and augments
+000550* the outer afterwards, so TRIANGLE is 13. COBOL-85 augments
+000560* first and gives 9; GnuCOBOL follows 85 and the expected value
+000570* here was corrected by hand from the rule's text.
+000600 DATA DIVISION.
+000700 WORKING-STORAGE SECTION.
+000800 01  I            PIC 99 VALUE 0.
+000900 01  J            PIC 99 VALUE 0.
+001000 01  K            PIC 99 VALUE 0.
+001100 01  N            PIC 99 VALUE 0.
+001200 01  LINE-OUT     PIC X(20) VALUE SPACES.
+001300 01  P            PIC 99 VALUE 1.
+001350 01  IX           PIC XX.
+001360 01  JX           PIC XX.
+001400 PROCEDURE DIVISION.
+001500 MAIN.
+001600     PERFORM SHOW-IJ VARYING I FROM 1 BY 1 UNTIL I > 3
+001700         AFTER J FROM 1 BY 1 UNTIL J > 2.
+001800     DISPLAY 'PAIRS ' N ' I=' I ' J=' J.
+001900     MOVE 0 TO N.
+002000     PERFORM COUNT-IT VARYING I FROM 1 BY 1 UNTIL I > 2
+002100         AFTER J FROM 1 BY 1 UNTIL J > 3
+002200         AFTER K FROM 5 BY -2 UNTIL K < 2.
+002300     DISPLAY 'TRIPLES ' N ' K=' K.
+002400     MOVE 0 TO N.
+002500     PERFORM COUNT-IT VARYING I FROM 1 BY 1 UNTIL I > 9
+002600         AFTER J FROM 1 BY 1 UNTIL J > 0.
+002700     DISPLAY 'EMPTY INNER ' N.
+002800     MOVE 0 TO N.
+002900     PERFORM COUNT-IT THRU COUNT-X
+002950         VARYING I FROM 1 BY 2 UNTIL I > 5
+003000         AFTER J FROM I BY 1 UNTIL J > 5.
+003100     DISPLAY 'TRIANGLE ' N.
+003200     STOP RUN.
+003300 SHOW-IJ.
+003400     ADD 1 TO N.
+003500     MOVE I TO IX. MOVE J TO JX.
+003600     STRING IX ',' JX ' ' DELIMITED BY SIZE INTO LINE-OUT
+003650         WITH POINTER P.
+003700     IF N = 6 DISPLAY LINE-OUT.
+003800 COUNT-IT.
+003900     ADD 1 TO N.
+004000 COUNT-X.
+004100     EXIT.

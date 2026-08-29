@@ -48,7 +48,7 @@ T0002    DS    0H
          MVC   DSPBUF+0(4),S0010
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(20),D0003
+         MVC   DSPBUF+4(20),D0003+0
          MVC   DSPBUF+24(1),S0011
          LA    1,PARM0001
          L     15,VDISP
@@ -74,7 +74,7 @@ T0005    DS    0H
          MVC   DSPBUF+0(4),S0012
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(20),D0003
+         MVC   DSPBUF+4(20),D0003+0
          MVC   DSPBUF+24(1),S0011
          LA    1,PARM0002
          L     15,VDISP
@@ -116,9 +116,9 @@ T0009    DS    0H
          MVC   DSPBUF+0(4),S0013
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(20),D0003
+         MVC   DSPBUF+4(20),D0003+0
          MVC   DSPBUF+24(4),S0014
-         MVC   DSPBUF+28(2),D0005
+         MVC   DSPBUF+28(2),D0005+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -149,9 +149,9 @@ T0011    DS    0H
          MVC   DSPBUF+0(4),S0015
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(20),D0003
+         MVC   DSPBUF+4(20),D0003+0
          MVC   DSPBUF+24(4),S0014
-         MVC   DSPBUF+28(2),D0005
+         MVC   DSPBUF+28(2),D0005+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -200,9 +200,9 @@ T0016    DS    0H
          MVC   DSPBUF+0(4),S0017
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(6),D0004
+         MVC   DSPBUF+4(6),D0004+0
          MVC   DSPBUF+10(4),S0014
-         MVC   DSPBUF+14(2),D0005
+         MVC   DSPBUF+14(2),D0005+0
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
@@ -251,9 +251,9 @@ T0021    DS    0H
          MVC   DSPBUF+0(4),S0019
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(6),D0004
+         MVC   DSPBUF+4(6),D0004+0
          MVC   DSPBUF+10(4),S0014
-         MVC   DSPBUF+14(2),D0005
+         MVC   DSPBUF+14(2),D0005+0
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
@@ -276,7 +276,7 @@ T0024    DS    0H
          MVC   DSPBUF+0(4),S0020
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(6),D0004
+         MVC   DSPBUF+4(6),D0004+0
          MVC   DSPBUF+10(1),S0011
          LA    1,PARM0009
          L     15,VDISP
@@ -328,7 +328,7 @@ T0030    DS    0H
          MVC   DSPBUF+0(4),S0024
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(20),D0003
+         MVC   DSPBUF+4(20),D0003+0
          MVC   DSPBUF+24(1),S0011
          LA    1,PARM0010
          L     15,VDISP
@@ -376,13 +376,13 @@ T0036    DS    0H
          MVC   DSPBUF+0(3),S0026
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+3(6),D0010
+         MVC   DSPBUF+3(6),D0010+0
          MVC   DSPBUF+9(1),S0027
-         MVC   DSPBUF+10(6),D0011
+         MVC   DSPBUF+10(6),D0011+0
          MVC   DSPBUF+16(1),S0027
-         MVC   DSPBUF+17(6),D0012
+         MVC   DSPBUF+17(6),D0012+0
          MVC   DSPBUF+23(1),S0027
-         MVC   DSPBUF+24(3),D0013
+         MVC   DSPBUF+24(3),D0013+0
          LA    1,PARM0011
          L     15,VDISP
          BALR  14,15
@@ -478,11 +478,11 @@ T0047    DS    0H
          MVC   DSPBUF+0(3),S0028
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+3(6),D0010
+         MVC   DSPBUF+3(6),D0010+0
          MVC   DSPBUF+9(1),S0027
-         MVC   DSPBUF+10(6),D0011
+         MVC   DSPBUF+10(6),D0011+0
          MVC   DSPBUF+16(1),S0027
-         MVC   DSPBUF+17(6),D0012
+         MVC   DSPBUF+17(6),D0012+0
          MVC   DSPBUF+23(1),S0027
          LA    1,PARM0012
          L     15,VDISP
@@ -490,9 +490,9 @@ T0047    DS    0H
 T0048    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0029
-         MVC   DSPBUF+5(2),D0014
+         MVC   DSPBUF+5(2),D0014+0
          MVC   DSPBUF+7(1),S0027
-         MVC   DSPBUF+8(2),D0015
+         MVC   DSPBUF+8(2),D0015+0
          MVC   DSPBUF+10(1),S0027
          LA    1,PARM0013
          L     15,VDISP
@@ -500,11 +500,11 @@ T0048    DS    0H
 T0049    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0030
-         MVC   DSPBUF+5(2),D0016
+         MVC   DSPBUF+5(2),D0016+0
          MVC   DSPBUF+7(1),S0001
-         MVC   DSPBUF+8(2),D0017
+         MVC   DSPBUF+8(2),D0017+0
          MVC   DSPBUF+10(3),S0031
-         MVC   DSPBUF+13(2),D0018
+         MVC   DSPBUF+13(2),D0018+0
          LA    1,PARM0014
          L     15,VDISP
          BALR  14,15
@@ -544,11 +544,11 @@ T0054    DS    0H
          MVC   DSPBUF+0(4),S0032
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(6),D0010
+         MVC   DSPBUF+4(6),D0010+0
          MVC   DSPBUF+10(2),S0033
-         MVC   DSPBUF+12(6),D0011
+         MVC   DSPBUF+12(6),D0011+0
          MVC   DSPBUF+18(2),S0033
-         MVC   DSPBUF+20(6),D0012
+         MVC   DSPBUF+20(6),D0012+0
          MVC   DSPBUF+26(1),S0011
          LA    1,PARM0015
          L     15,VDISP
@@ -621,13 +621,13 @@ T0061    DS    0H
          MVC   DSPBUF+0(4),S0035
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(6),D0010
+         MVC   DSPBUF+4(6),D0010+0
          MVC   DSPBUF+10(2),S0033
-         MVC   DSPBUF+12(6),D0011
+         MVC   DSPBUF+12(6),D0011+0
          MVC   DSPBUF+18(4),S0014
-         MVC   DSPBUF+22(2),D0019
+         MVC   DSPBUF+22(2),D0019+0
          MVC   DSPBUF+24(3),S0031
-         MVC   DSPBUF+27(2),D0018
+         MVC   DSPBUF+27(2),D0018+0
          LA    1,PARM0017
          L     15,VDISP
          BALR  14,15
@@ -675,11 +675,11 @@ T0067    DS    0H
          MVC   DSPBUF+0(4),S0037
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(6),D0010
+         MVC   DSPBUF+4(6),D0010+0
          MVC   DSPBUF+10(2),S0033
-         MVC   DSPBUF+12(6),D0011
+         MVC   DSPBUF+12(6),D0011+0
          MVC   DSPBUF+18(2),S0033
-         MVC   DSPBUF+20(6),D0012
+         MVC   DSPBUF+20(6),D0012+0
          MVC   DSPBUF+26(1),S0011
          LA    1,PARM0019
          L     15,VDISP
@@ -735,13 +735,13 @@ T0074    DS    0H
          MVC   DSPBUF+0(3),S0039
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+3(6),D0010
+         MVC   DSPBUF+3(6),D0010+0
          MVC   DSPBUF+9(1),S0027
-         MVC   DSPBUF+10(6),D0011
+         MVC   DSPBUF+10(6),D0011+0
          MVC   DSPBUF+16(1),S0027
-         MVC   DSPBUF+17(6),D0012
+         MVC   DSPBUF+17(6),D0012+0
          MVC   DSPBUF+23(1),S0027
-         MVC   DSPBUF+24(3),D0013
+         MVC   DSPBUF+24(3),D0013+0
          LA    1,PARM0021
          L     15,VDISP
          BALR  14,15
@@ -787,11 +787,11 @@ T0079    DS    0H
          MVC   DSPBUF+0(4),S0040
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+4(3),D0013
+         MVC   DSPBUF+4(3),D0013+0
          MVC   DSPBUF+7(5),S0041
-         MVC   DSPBUF+12(2),D0014
+         MVC   DSPBUF+12(2),D0014+0
          MVC   DSPBUF+14(4),S0042
-         MVC   DSPBUF+18(2),D0016
+         MVC   DSPBUF+18(2),D0016+0
          LA    1,PARM0022
          L     15,VDISP
          BALR  14,15
@@ -1353,7 +1353,7 @@ D0020    DC    CL3'X,Y'            XY PIC X(3)
 *---------------------------------------------------------------
 COBRT    CSECT
          ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
-         ENTRY COBADV,COBSTR,COBUNS
+         ENTRY COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -1703,6 +1703,124 @@ UNSMVC   MVC   0(0,14),0(15)       executed with the byte count
 UNSPAD   MVC   1(0,14),0(14)       executed: propagate the space
 RTSAVE9  DS    18F
 *
+* COBWTO -- DISPLAY UPON CONSOLE. R1 -> A(text), A(halfword length).
+* The text goes into a WTO list whose length halfword is set
+* from the parameter; MVS caps a line at what it will show.
+COBWTO   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE10+4
+         LA    11,RTSAVE10
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(text)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)
+         CH    4,WTOMAX
+         BNH   WTO010
+         LH    4,WTOMAX
+WTO010   MVI   WTOTXT,C' '
+         MVC   WTOTXT+1(119),WTOTXT
+         LTR   4,4
+         BNP   WTO020
+         BCTR  4,0
+         EX    4,WTOMVC
+         LA    4,1(4)
+WTO020   LA    4,4(4)              plus the header
+         STH   4,WTOLST
+         WTO   MF=(E,WTOLST)
+         L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+WTOMVC   MVC   WTOTXT(0),0(2)      executed
+WTOMAX   DC    H'120'
+WTOLST   DC    AL2(124),AL2(0)     length, MCS flags
+WTOTXT   DC    CL120' '
+RTSAVE10 DS    18F
+*
+* COBWTOR -- ACCEPT FROM CONSOLE. R1 -> A(item), A(halfword length).
+* A WTOR asks the operator, the task waits on its ECB, and the
+* reply is moved to the item space padded. One line only.
+COBWTOR  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE11+4
+         LA    11,RTSAVE11
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(item)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)
+         MVI   WTORRPL,C' '
+         MVC   WTORRPL+1(119),WTORRPL
+         XC    WTORECB,WTORECB
+         WTOR  'COBC370: ACCEPT FROM CONSOLE',WTORRPL,120,WTORECB
+         WAIT  ECB=WTORECB
+         LTR   4,4
+         BNP   WTOR20
+         CH    4,WTORMAX
+         BNH   WTOR10
+         LH    4,WTORMAX
+WTOR10   BCTR  4,0
+         EX    4,WTORMVC
+WTOR20   L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+WTORMVC  MVC   0(0,2),WTORRPL      executed
+WTORMAX  DC    H'120'
+WTORECB  DC    F'0'
+WTORRPL  DC    CL120' '
+RTSAVE11 DS    18F
+*
+* COBADT -- ACCEPT FROM DATE, DAY or TIME. R1 -> A(area), A(halfword
+* kind: 1 DATE, 2 DAY, 3 TIME). Writes YYMMDD, YYDDD or HHMMSSth as
+* zoned digits into the area. DATE borrows COBDATE's month walk.
+COBADT   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE12+4
+         LA    11,RTSAVE12
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            the area
+         L     3,4(0,1)
+         LH    3,0(0,3)            the kind
+         CH    3,ADTH3
+         BE    ADT300              TIME
+         TIME  DEC                 R1 = 00YYDDDF
+         ST    1,ADTPK
+         UNPK  ADTZ(7),ADTPK(4)    '00YYDDD'
+         OI    ADTZ+6,X'F0'
+         CH    3,ADTH2
+         BE    ADT200              DAY
+         LA    1,ADTB              DATE: MM/DD/YY first
+         L     15,ADTVD
+         BALR  14,15
+         MVC   0(2,2),ADTB+6       YY
+         MVC   2(2,2),ADTB         MM
+         MVC   4(2,2),ADTB+3       DD
+         B     ADTX
+ADT200   MVC   0(5,2),ADTZ+2       YYDDD
+         B     ADTX
+ADT300   TIME  DEC                 R0 = HHMMSSth
+         ST    0,ADTPK
+         MVI   ADTPK+4,X'0F'       a sign nibble to unpack against
+         UNPK  ADTZ(9),ADTPK(5)    'HHMMSSth0'
+         MVC   0(8,2),ADTZ
+ADTX     L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+ADTVD    DC    A(COBDATE)
+ADTH2    DC    H'2'
+ADTH3    DC    H'3'
+ADTPK    DS    2F
+ADTZ     DS    CL9
+ADTB     DS    CL8
+RTSAVE12 DS    18F
+*
 * COBUPSI -- set the eight switches from the EXEC PARM.
 *
 * PARM='/UPSI(10100000)' is the form IBM's later compilers
@@ -1770,7 +1888,9 @@ COBACC   STM   14,12,12(13)
          LR    13,11
          L     2,0(0,1)            A(item)
          L     3,4(0,1)            A(length)
-         LH    4,0(0,3)            length
+         LH    4,0(0,3)            length still to fill
+COBA005  LTR   4,4
+         BNP   COBA040             filled
          MVI   ACCBUF,C' '
          MVC   ACCBUF+1(255),ACCBUF  blank the buffer
          CLI   ACCEOFF,X'01'       already at end of file?
@@ -1784,18 +1904,22 @@ COBA010  LA    1,COBA030
          GET   ACCDCB,ACCBUF       one card
          B     COBA020
 COBA030  MVI   ACCEOFF,X'01'       end of file: the buffer stays blank
-COBA020  LTR   4,4
-         BNP   COBA040             nothing to store
-         CH    4,ACCMAX
+COBA020  LR    5,4
+         CH    5,ACCCARD
          BNH   COBA035
-         LH    4,ACCMAX            one MVC is 256 bytes
-COBA035  BCTR  4,0                 EX wants length-1
-         EX    4,COBAMVC
+         LH    5,ACCCARD           one card's worth
+COBA035  BCTR  5,0                 EX wants length-1
+         EX    5,COBAMVC
+         LA    2,1(5,2)            past what was stored
+         LA    5,1(5)
+         SR    4,5
+         B     COBA005
 COBA040  L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
 COBAMVC  MVC   0(0,2),ACCBUF       patched by EX
+ACCCARD  DC    H'80'               a card
 *
 * COBTERM -- close SYSOUT if COBDISP ever opened it.
 *

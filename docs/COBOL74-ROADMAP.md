@@ -67,7 +67,7 @@ against the compiler rather than trusting the map:
 
 The minimum standard is not reached until these are in. Do them first.
 
-### Tier 1 -- Nucleus Level 2 (about 20 items)
+### Tier 1 -- Nucleus Level 2 (about 20 items) -- DONE 2026-08-29
 
 Grouped by the machinery they touch, so each group is one piece of work.
 
@@ -139,24 +139,35 @@ separately and which had been refused as level 2, and with the series form
 and one byte past a miss; a bounding string is found first and the range
 narrowed to before or after it.
 
-**`PERFORM VARYING ... AFTER`** -- S: nested loop, one or two `AFTER` phrases.
-The `VARYING` loop exists; this wraps it.
+**`PERFORM VARYING ... AFTER`** -- DONE 2026-08-29, to two `AFTER` levels.
+One thing to know: II-83 resets an inner identifier from the *current* value
+of its FROM and augments the outer one afterwards, so `AFTER J FROM I` starts
+`J` at the old `I`. COBOL-85 reversed that, GnuCOBOL follows 85, and the
+test's oracle was corrected by hand from the rule's text.
 
-**Level-66 `RENAMES`** -- S: a symbol whose storage is a byte range of its
-parent. `RENAMES ... THRU ...` too. No code generation of its own.
+**Level-66 `RENAMES`** -- DONE 2026-08-29: an alias over a range of the
+record, elementary with d1's description when it renames one elementary
+item, a group otherwise; the `REDEFINES` emitter already names an alias.
 
-**`GO TO` without a procedure-name** -- S: the `ALTER` target. `ALTER` exists,
-so this is only the parser accepting the bare form and the initial branch
-going to a fault.
+**`GO TO` without a procedure-name** -- DONE 2026-08-29: the branch cell
+starts out zero, so a bare `GO TO` executed before any `ALTER` takes a
+program check naming its own line; anywhere but a paragraph an `ALTER` names
+it is refused.
 
-**`ACCEPT ... FROM`** -- S: mnemonic-name, `DATE`, `DAY`, `TIME`. `COBDATE`
-already produces the date; `DAY` and `TIME` are the same `TIME` macro read
-differently. **`DISPLAY ... UPON`** mnemonic-name -- S: `SYSOUT` and
-`CONSOLE` (WTO) are the two that matter.
+**`ACCEPT ... FROM`** -- DONE 2026-08-29: `DATE` (YYMMDD), `DAY` (YYDDD),
+`TIME` (HHMMSSth) through `COBADT`, which borrows `COBDATE`'s month walk and
+writes zoned digits for an ordinary MOVE into the item; a mnemonic-name for
+`SYSIN`; and `CONSOLE` as a `WTOR` with a wait on its ECB (built, not in the
+regression suite -- a batch test cannot answer an operator prompt).
+**`DISPLAY ... UPON`** -- DONE: a mnemonic for `SYSOUT`, and `CONSOLE` as a
+`WTO`, which lands in the job log with a `+`.
 
-**`ACCEPT`/`DISPLAY` with no restriction on the number of transfers** -- S:
-the Level 1 forms take one operand. Take `DISPLAY` of a subscripted item with
-it.
+**`ACCEPT`/`DISPLAY` with no restriction on the number of transfers** --
+DONE 2026-08-29. The level 1 restriction is one transfer *of data*, not one
+operand: a `DISPLAY` longer than the 120-character line now continues on the
+next line, cut wherever the line ends, and an `ACCEPT` wider than a card is
+filled from as many cards as it takes. `DISPLAY` of a subscripted item came
+with it, and `VALUE ALL literal` because the test used one.
 
 ### Tier 2 -- Table Handling Level 2 (3 items)
 

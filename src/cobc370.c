@@ -640,9 +640,13 @@ typedef struct {
     Node *dsub, *ssub;      /* subscripts on dst and src */
     int  vary_sym;          /* PERFORM ... VARYING identifier, -1 if none */
     Node *vary_from, *vary_by, *times_expr;
-
+    int  vary2_sym, vary3_sym;  /* PERFORM ... VARYING ... AFTER: two more levels */
+    Node *vary2_from, *vary2_by, *vary3_from, *vary3_by;
+    Cond *acond2, *acond3;
     int  ndop;              /* DISPLAY operands */
-    struct { int sym; char lit[MAXTOK]; int litlen; } dop[8];
+    struct { int sym; char lit[MAXTOK]; int litlen; Node *sub; int part_off, part_len; } dop[8];
+    int  upon_console;      /* DISPLAY UPON CONSOLE: a WTO rather than SYSOUT */
+    int  acc_from;          /* ACCEPT FROM: 0 SYSIN, 1 DATE, 2 DAY, 3 TIME, 4 CONSOLE */
 } Stmt;
 
 /* Files. One DCB each, emitted into the program CSECT. QSAM move mode: the
@@ -957,6 +961,16 @@ static void parse_program_id(void)
  *
  * The eight bits live in one byte, leftmost digit first, exactly as the UPSI
  * string in a PARM is written. */
+/* Mnemonic-names from SPECIAL-NAMES, with the implementor-name each stands
+ * for. What DISPLAY UPON and ACCEPT FROM look up. */
+static struct { char name[31]; char dev[9]; } mnems[16];
+static int nmnem;
+static const char *mnem_dev(const char *nm)
+{
+    for (int i = 0; i < nmnem; i++) if (!strcmp(mnems[i].name, nm)) return mnems[i].dev;
+    return NULL;
+}
+
 static void parse_special_names(void)
 {
     while (!tok.eof && !is("INPUT-OUTPUT") && !is("DATA") && !is("PROCEDURE")) {
@@ -995,14 +1009,20 @@ static void parse_special_names(void)
         }
         next();
         if (is("IS")) next();
-        if (!tok.eof && !is(".")) next();      /* the mnemonic-name */
         if (bit < 0) {
-            /* A device or channel name. Nothing here uses one yet -- DISPLAY
-             * UPON and WRITE ADVANCING by mnemonic are both level 2 -- so it is
-             * taken and remembered by doing nothing with it. */
-            while (!tok.eof && !is(".")) next();
+            /* A device or channel name and its mnemonic, remembered for
+             * DISPLAY UPON and ACCEPT FROM. */
+            if (nmnem < 16 && !tok.eof && !is(".")) {
+                snprintf(mnems[nmnem].name, sizeof mnems[nmnem].name, "%s", tok.text);
+                snprintf(mnems[nmnem].dev, sizeof mnems[nmnem].dev, "%.8s", nm);
+                nmnem++;
+            }
+            if (!tok.eof && !is(".")) next();
+            /* The next clause may follow in the same sentence: SYSOUT IS
+             * PRINTER SYSIN IS CARDS. -- so nothing is skipped here. */
             continue;
         }
+        if (!tok.eof && !is(".")) next();      /* the mnemonic-name */
         while (is("ON") || is("OFF")) {
             int on = is("ON");
             next();
@@ -1371,10 +1391,53 @@ static void parse_data_division(void)
         if (!isdigit((unsigned char)tok.text[0]))
             die("expected a level number, FD, or a section header");
         int level = atoi(tok.text);
-        if (level != 77 && level != 88 && (level < 1 || level > 49))
-            die("level number out of range (01-49, 77, or 88)");
-        if (level == 66) die("level 66 RENAMES is not implemented yet");
+        if (level != 66 && level != 77 && level != 88 && (level < 1 || level > 49))
+            die("level number out of range (01-49, 66, 77, or 88)");
         next();
+        if (level == 66) {
+            /* 66 name RENAMES d1 [THRU d2], II-29: another name for a range of
+             * the record's storage, from d1's first byte to d2's last. With
+             * THRU, or when d1 is a group, the new item is a group; alone
+             * and elementary, it takes d1's description. It is an alias, so
+             * it defines no bytes -- the emitter gives it an EQU. */
+            if (nsym >= MAXSYM) die("too many data items");
+            Sym *rn = &syms[nsym];
+            char nm[31]; snprintf(nm, sizeof nm, "%s", tok.text);
+            if (lookup(nm) >= 0) die("duplicate data name");
+            next();
+            expect("RENAMES");
+            int d1 = lookup(tok.text);
+            if (d1 < 0) die("RENAMES names an item that was not declared");
+            next();
+            int d2 = d1;
+            if (is("THRU") || is("THROUGH")) {
+                next();
+                d2 = lookup(tok.text);
+                if (d2 < 0) die("RENAMES ... THRU names an item that was not declared");
+                next();
+            }
+            if (syms[d1].level == 1 || syms[d1].level == 77 || syms[d1].is_88 ||
+                syms[d2].level == 1 || syms[d2].level == 77 || syms[d2].is_88)
+                die("RENAMES may not name a level 01, 77 or 88 item -- II-29");
+            if (syms[d1].occurs || syms[d2].occurs || syms[d1].occ_parent >= 0 || syms[d2].occ_parent >= 0)
+                die("RENAMES may not name a table or anything inside one -- II-29");
+            int end = syms[d2].offset + syms[d2].bytes;
+            if (d2 != d1 && end <= syms[d1].offset)
+                die("RENAMES ... THRU must run forward through the record");
+            if (d2 == d1) *rn = syms[d1];             /* d1's own description */
+            else { memset(rn, 0, sizeof *rn); rn->is_group = 1; rn->usage = U_DISPLAY; }
+            snprintf(rn->name, sizeof rn->name, "%s", nm);
+            snprintf(rn->label, sizeof rn->label, "D%04d", nsym);
+            rn->level = 66; rn->alias = 1; rn->has_value = 0;
+            rn->offset = syms[d1].offset; rn->bytes = rn->elem = end - syms[d1].offset;
+            rn->occurs = 0; rn->occ_depth = 0; rn->occ_parent = -1;
+            rn->parent = rn->gparent = rn->index_sym = rn->askey_sym = -1;
+            rn->fd_file = syms[d1].fd_file; rn->redef_from = rn->redef_cap = -1;
+            rn->linkage = syms[d1].linkage; rn->link_area = syms[d1].link_area;
+            expect(".");
+            nsym++;
+            continue;
+        }
 
         if (level == 88) {
             /* A condition name: no storage, it tests the item it follows. */
@@ -1615,6 +1678,15 @@ static void parse_data_division(void)
                 else if (is("LOW-VALUE")  || is("LOW-VALUES"))  { sy->has_value = 4; next(); }
                 else if (is("HIGH-VALUE") || is("HIGH-VALUES")) { sy->has_value = 5; next(); }
                 else if (is("QUOTE")      || is("QUOTES"))      { sy->has_value = 6; next(); }
+                else if (is("ALL") && !tok.literal) {
+                    /* ALL literal, level 2: the unit is kept and repeated to
+                     * the item's width when the storage is laid down. */
+                    next();
+                    if (!tok.literal) die("VALUE ALL must be followed by a nonnumeric literal");
+                    sy->has_value = 7;
+                    snprintf(sy->value, sizeof sy->value, "%s", tok.text);
+                    next();
+                }
                 else if (tok.literal) {
                     sy->has_value = 3;
                     snprintf(sy->value, sizeof sy->value, "%s", tok.text);
@@ -2623,37 +2695,60 @@ static void parse_one_statement(void)
 {
     if (is("DISPLAY")) {
         next();
+        int first = nstmt;
         Stmt *st = new_stmt(ST_DISPLAY_LIT);
-        /* COBOL concatenates the operands into one line. */
-        while (!tok.eof && !is(".") && !(st->ndop > 0 && starts_statement())) {
-            if (st->ndop >= 8) die("too many DISPLAY operands");
-            if (tok.literal) {
-                memcpy(st->dop[st->ndop].lit, tok.text, (size_t)tok.len + 1);
-                st->dop[st->ndop].litlen = tok.len;
-                st->dop[st->ndop].sym = -1;
-                next();
-            } else {
-                /* consume_sym has already advanced past the name and any
-                 * OF/IN chain -- do NOT advance again here. */
-                int i = consume_sym();
-                if (syms[i].is_88) die("DISPLAY of a condition name is meaningless");
+        int line = 0;                       /* characters on the line so far */
+        /* COBOL concatenates the operands into one line -- and at level 2
+         * the line may be longer than the device's, so what does not fit in
+         * 120 characters continues on the next line: an operand is cut where
+         * the line ends, and each further line is a further statement. */
+        while (!tok.eof && !is(".") && !is("UPON") && !(st->ndop > 0 && starts_statement())) {
+            int sym = -1; Node *sub = NULL; int n;
+            char lit[MAXTOK]; int islit = tok.literal;
+            if (islit) { memcpy(lit, tok.text, (size_t)tok.len + 1); n = tok.len; next(); }
+            else {
+                sym = consume_sym();
+                if (syms[sym].is_88) die("DISPLAY of a condition name is meaningless");
                 /* A group and a signed DISPLAY item are both just bytes as far
                  * as DISPLAY is concerned. A signed item shows its last digit
                  * overpunched -- 12345 in a PIC S9(5) prints as 1234E -- which
                  * is what IKFCBL00 does and what the oracle confirms. COMP and
                  * COMP-3 are still refused: their bytes are not characters. */
-                if (!syms[i].is_alpha && !syms[i].is_group && !syms[i].edited &&
-                    syms[i].usage != U_DISPLAY)
+                if (!syms[sym].is_alpha && !syms[sym].is_group && !syms[sym].edited &&
+                    syms[sym].usage != U_DISPLAY)
                     die("DISPLAY of a COMP or COMP-3 item needs a MOVE to a "
                         "DISPLAY item first");
-                st->dop[st->ndop].sym = i;
-                st->dop[st->ndop].litlen = 0;
+                sub = opt_subscript();
+                n = sub ? syms[sym].elem : syms[sym].bytes;
             }
-            st->ndop++;
-            if (is("(")) die("DISPLAY of a subscripted item is not implemented yet");
-            if (is("UPON")) die("DISPLAY UPON is not implemented yet");
+            for (int off = 0; off < n; ) {
+                if (line >= 120 || st->ndop >= 8) { st = new_stmt(ST_DISPLAY_LIT); line = 0; }
+                int take = n - off < 120 - line ? n - off : 120 - line;
+                if (islit) {
+                    memcpy(st->dop[st->ndop].lit, lit + off, (size_t)take);
+                    st->dop[st->ndop].lit[take] = 0;
+                    st->dop[st->ndop].litlen = take;
+                    st->dop[st->ndop].sym = -1;
+                } else {
+                    st->dop[st->ndop].sym = sym; st->dop[st->ndop].sub = sub;
+                    st->dop[st->ndop].litlen = 0;
+                    st->dop[st->ndop].part_off = off; st->dop[st->ndop].part_len = take;
+                }
+                st->ndop++;
+                off += take; line += take;
+            }
         }
         if (!st->ndop) die("DISPLAY with no operands");
+        if (is("UPON")) {
+            next();
+            const char *dev = mnem_dev(tok.text);
+            if (!dev) die("DISPLAY UPON needs a mnemonic-name from SPECIAL-NAMES");
+            int console = !strcmp(dev, "CONSOLE");
+            if (!console && strcmp(dev, "SYSOUT") && strcmp(dev, "SYSLST"))
+                die("DISPLAY UPON: the mnemonic must stand for SYSOUT, SYSLST or CONSOLE");
+            for (int k = first; k < nstmt; k++) stmts[k].upon_console = console;
+            next();
+        }
         eat_period();
         return;
     }
@@ -3124,6 +3219,7 @@ static void parse_one_statement(void)
             next(); snprintf(st->thru, sizeof st->thru, "%s", tok.text); next();
         } else snprintf(st->thru, sizeof st->thru, "%s", st->para);
 
+        st->vary2_sym = st->vary3_sym = -1;
         if (is("VARYING")) {
             next();
             st->vary_sym = consume_sym();
@@ -3131,9 +3227,23 @@ static void parse_one_statement(void)
                 die("PERFORM VARYING needs a numeric identifier");
             expect("FROM"); st->vary_from = parse_expr();
             expect("BY");   st->vary_by = parse_expr();
-            if (is("AFTER")) die("PERFORM VARYING ... AFTER is not implemented yet");
+            expect("UNTIL"); st->cond = parse_cond();
+            /* AFTER: up to two more levels, each with its own FROM, BY and
+             * UNTIL, nested inside the one before it. II-83. */
+            for (int lv = 2; is("AFTER"); lv++) {
+                if (lv > 3) die("PERFORM VARYING takes at most two AFTER phrases");
+                next();
+                int vs = consume_sym();
+                if (syms[vs].is_alpha || syms[vs].is_group)
+                    die("PERFORM VARYING ... AFTER needs a numeric identifier");
+                expect("FROM"); Node *fr = parse_expr();
+                expect("BY");   Node *by = parse_expr();
+                expect("UNTIL"); Cond *c = parse_cond();
+                if (lv == 2) { st->vary2_sym = vs; st->vary2_from = fr; st->vary2_by = by; st->acond2 = c; }
+                else         { st->vary3_sym = vs; st->vary3_from = fr; st->vary3_by = by; st->acond3 = c; }
+            }
         }
-        if (is("UNTIL")) { next(); st->cond = parse_cond(); }
+        else if (is("UNTIL")) { next(); st->cond = parse_cond(); }
         else if (!is(".") && (is_numeric_literal(tok.text) || lookup(tok.text) >= 0)) {
             /* the n TIMES form; guarded so a following statement's verb is
                never mistaken for a repeat count */
@@ -3148,6 +3258,17 @@ static void parse_one_statement(void)
         next();
         if (is("TO")) next();
         Stmt *st = new_stmt(ST_GOTO);
+        if (is(".")) {
+            /* GO TO with no procedure-name (II-65): legal only as the single
+             * sentence of a paragraph some ALTER names, whose branch cell
+             * then supplies the target. Until an ALTER runs the target is
+             * undefined; the cell starts out zero, so an early GO TO takes a
+             * program check that names its own line rather than going
+             * somewhere plausible. */
+            st->para[0] = 0;
+            eat_period();
+            return;
+        }
         snprintf(st->para, sizeof st->para, "%s", tok.text);
         next();
         if (is("DEPENDING") || (!is(".") && !starts_statement())) {
@@ -3510,9 +3631,22 @@ static void parse_one_statement(void)
         Stmt *st = new_stmt(ST_ACCEPT);
         st->dst = consume_sym();
         st->dsub = opt_subscript();
-        if (is("FROM"))
-            die("ACCEPT ... FROM is level 2; level 1 takes one transfer from "
-                "the implementor's device");
+        if (is("FROM")) {
+            /* Level 2: a mnemonic-name, or DATE (YYMMDD), DAY (YYDDD) or
+             * TIME (HHMMSSth), each moved to the item under the MOVE rules. */
+            next();
+            if (is("DATE")) st->acc_from = 1;
+            else if (is("DAY")) st->acc_from = 2;
+            else if (is("TIME")) st->acc_from = 3;
+            else {
+                const char *dev = mnem_dev(tok.text);
+                if (!dev) die("ACCEPT FROM needs DATE, DAY, TIME or a mnemonic-name from SPECIAL-NAMES");
+                if (!strcmp(dev, "CONSOLE")) st->acc_from = 4;
+                else if (strcmp(dev, "SYSIN") && strcmp(dev, "SYSIPT"))
+                    die("ACCEPT FROM: the mnemonic must stand for SYSIN, SYSIPT or CONSOLE");
+            }
+            next();
+        }
         eat_period();
         return;
     }
@@ -3788,6 +3922,7 @@ static void parse_procedure(void)
             continue;
         }
         if (stmts[i].op == ST_GOTO) {
+            if (!stmts[i].para[0]) { stmts[i].dst = -1; continue; }   /* bare: an ALTER supplies it */
             int a = para_index(stmts[i].para);
             if (a < 0) { char m[96]; snprintf(m, sizeof m, "GO TO names an unknown paragraph '%s'", stmts[i].para); die(m); }
             stmts[i].dst = a;
@@ -3823,11 +3958,16 @@ static void parse_procedure(void)
             if (stmts[i].op != ST_PARA || stmts[i].dst != a) continue;
             for (int j = i + 1; j < nstmt; j++) {
                 if (stmts[j].op == ST_LABEL) continue;   /* not a sentence */
-                found = (stmts[j].op == ST_GOTO) ? stmts[j].dst : -1;
+                if (stmts[j].op == ST_GOTO) {
+                    /* A bare GO TO has no target of its own: the cell starts
+                     * out zero and the first ALTER fills it. */
+                    found = stmts[j].para[0] ? stmts[j].dst : -2;
+                } else found = -1;
                 break;
             }
             break;
         }
+        if (found == -2) { paras[a].alter_to = -1; continue; }
         if (found < 0) {
             char m[128];
             snprintf(m, sizeof m, "ALTER names '%s', which must hold a single "
@@ -3836,6 +3976,16 @@ static void parse_procedure(void)
             die(m);
         }
         paras[a].alter_to = found;
+    }
+
+    /* A bare GO TO is legal only inside a paragraph some ALTER names. */
+    {
+        int cur = -1;
+        for (int i = 0; i < nstmt; i++) {
+            if (stmts[i].op == ST_PARA) cur = stmts[i].dst;
+            if (stmts[i].op == ST_GOTO && !stmts[i].para[0] && (cur < 0 || !paras[cur].altered))
+                die("GO TO without a procedure-name is allowed only in a paragraph that an ALTER names -- II-65");
+        }
     }
 
     /* A USE procedure is entered and returned from exactly as a PERFORM range
@@ -4701,7 +4851,7 @@ static void gen_rescale16(const char *wk, int from, int to, int round)
  * the work areas, where the permanent base covers them. */
 static struct { char lab[12], op[8], opd[80], cmt[48]; } pend_dc[MAXSOP * 4];
 static int npend_dc;
-static int use_str, use_uns, use_insprop;
+static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
     if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
@@ -5314,7 +5464,7 @@ static void emit_runtime(void)
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
     asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI", "");
-    asm_line("", "ENTRY", "COBADV,COBSTR,COBUNS", "");
+    asm_line("", "ENTRY", "COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -5433,6 +5583,124 @@ static void emit_runtime(void)
     asm_line("RTSAVE7", "DS", "18F", "");
     emit_string_runtime();
     asm_comment("");
+    asm_comment(" COBWTO -- DISPLAY UPON CONSOLE. R1 -> A(text), A(halfword length).");
+    asm_comment(" The text goes into a WTO list whose length halfword is set");
+    asm_comment(" from the parameter; MVS caps a line at what it will show.");
+    asm_line("COBWTO", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE10+4", "");
+    asm_line("", "LA", "11,RTSAVE10", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(text)");
+    asm_line("", "L", "3,4(0,1)", "A(length)");
+    asm_line("", "LH", "4,0(0,3)", "");
+    asm_line("", "CH", "4,WTOMAX", "");
+    asm_line("", "BNH", "WTO010", "");
+    asm_line("", "LH", "4,WTOMAX", "");
+    asm_line("WTO010", "MVI", "WTOTXT,C' '", "");
+    asm_line("", "MVC", "WTOTXT+1(119),WTOTXT", "");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BNP", "WTO020", "");
+    asm_line("", "BCTR", "4,0", "");
+    asm_line("", "EX", "4,WTOMVC", "");
+    asm_line("", "LA", "4,1(4)", "");
+    asm_line("WTO020", "LA", "4,4(4)", "plus the header");
+    asm_line("", "STH", "4,WTOLST", "");
+    asm_line("", "WTO", "MF=(E,WTOLST)", "");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("WTOMVC", "MVC", "WTOTXT(0),0(2)", "executed");
+    asm_line("WTOMAX", "DC", "H'120'", "");
+    asm_line("WTOLST", "DC", "AL2(124),AL2(0)", "length, MCS flags");
+    asm_line("WTOTXT", "DC", "CL120' '", "");
+    asm_line("RTSAVE10", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBWTOR -- ACCEPT FROM CONSOLE. R1 -> A(item), A(halfword length).");
+    asm_comment(" A WTOR asks the operator, the task waits on its ECB, and the");
+    asm_comment(" reply is moved to the item space padded. One line only.");
+    asm_line("COBWTOR", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE11+4", "");
+    asm_line("", "LA", "11,RTSAVE11", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(item)");
+    asm_line("", "L", "3,4(0,1)", "A(length)");
+    asm_line("", "LH", "4,0(0,3)", "");
+    asm_line("", "MVI", "WTORRPL,C' '", "");
+    asm_line("", "MVC", "WTORRPL+1(119),WTORRPL", "");
+    asm_line("", "XC", "WTORECB,WTORECB", "");
+    asm_line("", "WTOR", "'COBC370: ACCEPT FROM CONSOLE',WTORRPL,120,WTORECB", "");
+    asm_line("", "WAIT", "ECB=WTORECB", "");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BNP", "WTOR20", "");
+    asm_line("", "CH", "4,WTORMAX", "");
+    asm_line("", "BNH", "WTOR10", "");
+    asm_line("", "LH", "4,WTORMAX", "");
+    asm_line("WTOR10", "BCTR", "4,0", "");
+    asm_line("", "EX", "4,WTORMVC", "");
+    asm_line("WTOR20", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("WTORMVC", "MVC", "0(0,2),WTORRPL", "executed");
+    asm_line("WTORMAX", "DC", "H'120'", "");
+    asm_line("WTORECB", "DC", "F'0'", "");
+    asm_line("WTORRPL", "DC", "CL120' '", "");
+    asm_line("RTSAVE11", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBADT -- ACCEPT FROM DATE, DAY or TIME. R1 -> A(area), A(halfword");
+    asm_comment(" kind: 1 DATE, 2 DAY, 3 TIME). Writes YYMMDD, YYDDD or HHMMSSth as");
+    asm_comment(" zoned digits into the area. DATE borrows COBDATE's month walk.");
+    asm_line("COBADT", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE12+4", "");
+    asm_line("", "LA", "11,RTSAVE12", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "the area");
+    asm_line("", "L", "3,4(0,1)", "");
+    asm_line("", "LH", "3,0(0,3)", "the kind");
+    asm_line("", "CH", "3,ADTH3", "");
+    asm_line("", "BE", "ADT300", "TIME");
+    asm_line("", "TIME", "DEC", "R1 = 00YYDDDF");
+    asm_line("", "ST", "1,ADTPK", "");
+    asm_line("", "UNPK", "ADTZ(7),ADTPK(4)", "'00YYDDD'");
+    asm_line("", "OI", "ADTZ+6,X'F0'", "");
+    asm_line("", "CH", "3,ADTH2", "");
+    asm_line("", "BE", "ADT200", "DAY");
+    asm_line("", "LA", "1,ADTB", "DATE: MM/DD/YY first");
+    asm_line("", "L", "15,ADTVD", "");
+    asm_line("", "BALR", "14,15", "");
+    asm_line("", "MVC", "0(2,2),ADTB+6", "YY");
+    asm_line("", "MVC", "2(2,2),ADTB", "MM");
+    asm_line("", "MVC", "4(2,2),ADTB+3", "DD");
+    asm_line("", "B", "ADTX", "");
+    asm_line("ADT200", "MVC", "0(5,2),ADTZ+2", "YYDDD");
+    asm_line("", "B", "ADTX", "");
+    asm_line("ADT300", "TIME", "DEC", "R0 = HHMMSSth");
+    asm_line("", "ST", "0,ADTPK", "");
+    asm_line("", "MVI", "ADTPK+4,X'0F'", "a sign nibble to unpack against");
+    asm_line("", "UNPK", "ADTZ(9),ADTPK(5)", "'HHMMSSth0'");
+    asm_line("", "MVC", "0(8,2),ADTZ", "");
+    asm_line("ADTX", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("ADTVD", "DC", "A(COBDATE)", "");
+    asm_line("ADTH2", "DC", "H'2'", "");
+    asm_line("ADTH3", "DC", "H'3'", "");
+    asm_line("ADTPK", "DS", "2F", "");
+    asm_line("ADTZ", "DS", "CL9", "");
+    asm_line("ADTB", "DS", "CL8", "");
+    asm_line("RTSAVE12", "DS", "18F", "");
+    asm_comment("");
     asm_comment(" COBUPSI -- set the eight switches from the EXEC PARM.");
     asm_comment("");
     asm_comment(" PARM='/UPSI(10100000)' is the form IBM's later compilers");
@@ -5504,7 +5772,11 @@ static void emit_runtime(void)
     asm_line("", "LR", "13,11", "");
     asm_line("", "L", "2,0(0,1)", "A(item)");
     asm_line("", "L", "3,4(0,1)", "A(length)");
-    asm_line("", "LH", "4,0(0,3)", "length");
+    asm_line("", "LH", "4,0(0,3)", "length still to fill");
+    /* Level 2 lifts the one-transfer rule: an item wider than a card is
+     * filled from as many cards as it takes, eighty bytes at a time. */
+    asm_line("COBA005", "LTR", "4,4", "");
+    asm_line("", "BNP", "COBA040", "filled");
     asm_line("", "MVI", "ACCBUF,C' '", "");
     asm_line("", "MVC", "ACCBUF+1(255),ACCBUF", "blank the buffer");
     asm_line("", "CLI", "ACCEOFF,X'01'", "already at end of file?");
@@ -5518,18 +5790,22 @@ static void emit_runtime(void)
     asm_line("", "GET", "ACCDCB,ACCBUF", "one card");
     asm_line("", "B", "COBA020", "");
     asm_line("COBA030", "MVI", "ACCEOFF,X'01'", "end of file: the buffer stays blank");
-    asm_line("COBA020", "LTR", "4,4", "");
-    asm_line("", "BNP", "COBA040", "nothing to store");
-    asm_line("", "CH", "4,ACCMAX", "");
+    asm_line("COBA020", "LR", "5,4", "");
+    asm_line("", "CH", "5,ACCCARD", "");
     asm_line("", "BNH", "COBA035", "");
-    asm_line("", "LH", "4,ACCMAX", "one MVC is 256 bytes");
-    asm_line("COBA035", "BCTR", "4,0", "EX wants length-1");
-    asm_line("", "EX", "4,COBAMVC", "");
+    asm_line("", "LH", "5,ACCCARD", "one card's worth");
+    asm_line("COBA035", "BCTR", "5,0", "EX wants length-1");
+    asm_line("", "EX", "5,COBAMVC", "");
+    asm_line("", "LA", "2,1(5,2)", "past what was stored");
+    asm_line("", "LA", "5,1(5)", "");
+    asm_line("", "SR", "4,5", "");
+    asm_line("", "B", "COBA005", "");
     asm_line("COBA040", "L", "13,4(13)", "");
     asm_line("", "LM", "14,12,12(13)", "");
     asm_line("", "SR", "15,15", "");
     asm_line("", "BR", "14", "");
     asm_line("COBAMVC", "MVC", "0(0,2),ACCBUF", "patched by EX");
+    asm_line("ACCCARD", "DC", "H'80'", "a card");
     asm_comment("");
     asm_comment(" COBTERM -- close SYSOUT if COBDISP ever opened it.");
     asm_comment("");
@@ -6796,9 +7072,32 @@ static void generate(void)
             const Sym *d = &syms[st->dst];
             int n = st->dsub ? d->elem : d->bytes;
             char fd[64];
-            if (n > 256)
-                die("ACCEPT into an item wider than 256 bytes is not implemented");
-            snprintf(b, sizeof b, " ACCEPT %s", d->name);
+            if (st->acc_from >= 1 && st->acc_from <= 3) {
+                /* DATE, DAY or TIME: the runtime writes the digits into ZWK,
+                 * and from there it is an ordinary MOVE from an unsigned
+                 * DISPLAY integer of six, five or eight digits. */
+                static const int dlen[4] = { 0, 6, 5, 8 };
+                static const char *dnm[4] = { "", "DATE", "DAY", "TIME" };
+                snprintf(b, sizeof b, " ACCEPT %s FROM %s", d->name, dnm[st->acc_from]);
+                asm_comment(b);
+                use_adt = 1;
+                snprintf(b, sizeof b, "1,ADTP%d", st->acc_from); asm_line("", "LA", b, "");
+                asm_line("", "L", "15,VADT", "");
+                asm_line("", "BALR", "14,15", "the digits into ZWK");
+                reset_bases();
+                Sym tmp; memset(&tmp, 0, sizeof tmp);
+                tmp.usage = U_DISPLAY; tmp.digits = dlen[st->acc_from];
+                tmp.bytes = tmp.elem = dlen[st->acc_from];
+                tmp.occ_parent = tmp.gparent = tmp.index_sym = tmp.askey_sym = -1;
+                tmp.fd_file = tmp.redef_from = tmp.redef_cap = -1; tmp.parent = -1;
+                snprintf(tmp.label, sizeof tmp.label, "ZWK");
+                snprintf(tmp.name, sizeof tmp.name, "%s", dnm[st->acc_from]);
+                need_sym_base(d);
+                emit_move(d, st->dsub, &tmp, NULL);
+                reset_bases();
+                break;
+            }
+            snprintf(b, sizeof b, " ACCEPT %s%s", d->name, st->acc_from == 4 ? " FROM CONSOLE" : "");
             asm_comment(b);
             need_sym_base(d);
             field_ref_m(d, st->dsub, FR_SS_NOLEN, n, 6, fd, sizeof fd);
@@ -6814,8 +7113,14 @@ static void generate(void)
             asm_line("", "ST", "1,ACCPARM+4", "");
             asm_line("", "OI", "ACCPARM+4,X'80'", "last parameter");
             asm_line("", "LA", "1,ACCPARM", "");
-            asm_line("", "L", "15,VACC", "");
-            asm_line("", "BALR", "14,15", "one transfer from SYSIN");
+            if (st->acc_from == 4) {
+                use_wtor = 1;
+                asm_line("", "L", "15,VWTOR", "");
+                asm_line("", "BALR", "14,15", "a reply from the operator");
+            } else {
+                asm_line("", "L", "15,VACC", "");
+                asm_line("", "BALR", "14,15", "from SYSIN, a card at a time");
+            }
             reset_bases();
             break;
         }
@@ -7170,6 +7475,53 @@ static void generate(void)
             int looping = (st->cond != NULL) || (st->times_expr != NULL);
             if (st->vary_sym >= 0)
                 emit_set_from_expr(&syms[st->vary_sym], st->vary_from, 0);
+            if (st->vary2_sym >= 0) {
+                /* VARYING ... AFTER: every level starts from its FROM. Then
+                 * the outermost condition ends the whole thing; an inner
+                 * condition true resets its own level, augments the level
+                 * above, and retests from there; the body runs only when
+                 * every condition is false, and augments the innermost. */
+                emit_set_from_expr(&syms[st->vary2_sym], st->vary2_from, 0);
+                if (st->vary3_sym >= 0) emit_set_from_expr(&syms[st->vary3_sym], st->vary3_from, 0);
+                int l1 = ++genlabel, l2 = ++genlabel, l3 = ++genlabel, lr2 = ++genlabel, lr3 = ++genlabel, lx = ++genlabel;
+                char s1[16], s2[16], s3[16], sr2[16], sr3[16], sx[16];
+                snprintf(s1, sizeof s1, "L%04d", l1); snprintf(s2, sizeof s2, "L%04d", l2);
+                snprintf(s3, sizeof s3, "L%04d", l3); snprintf(sr2, sizeof sr2, "L%04d", lr2);
+                snprintf(sr3, sizeof sr3, "L%04d", lr3); snprintf(sx, sizeof sx, "L%04d", lx);
+                asm_line(s1, "DS", "0H", "outer test"); reset_bases();
+                gen_cond(st->cond, lx, 1);
+                asm_line(s2, "DS", "0H", "AFTER test"); reset_bases();
+                gen_cond(st->acond2, lr2, 1);
+                if (st->vary3_sym >= 0) {
+                    asm_line(s3, "DS", "0H", "second AFTER test"); reset_bases();
+                    gen_cond(st->acond3, lr3, 1);
+                }
+                snprintf(r, sizeof r, "R%04d", ++nret);
+                snprintf(b, sizeof b, "15,%s", r);  asm_line("", "LA", b, "return here");
+                snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
+                asm_line("", "B", p1, "");
+                asm_line(r, "DS", "0H", "");
+                reset_bases();
+                snprintf(b, sizeof b, "15,%s", f);  asm_line("", "LA", b, "restore fall-through");
+                snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
+                if (st->vary3_sym >= 0) {
+                    emit_set_from_expr(&syms[st->vary3_sym], st->vary3_by, 1);
+                    asm_line("", "B", s3, "");
+                    asm_line(sr3, "DS", "0H", "innermost done: reset it, step the middle"); reset_bases();
+                    emit_set_from_expr(&syms[st->vary3_sym], st->vary3_from, 0);
+                    emit_set_from_expr(&syms[st->vary2_sym], st->vary2_by, 1);
+                    asm_line("", "B", s2, "");
+                } else {
+                    emit_set_from_expr(&syms[st->vary2_sym], st->vary2_by, 1);
+                    asm_line("", "B", s2, "");
+                }
+                asm_line(sr2, "DS", "0H", "AFTER level done: reset it, step the outer"); reset_bases();
+                emit_set_from_expr(&syms[st->vary2_sym], st->vary2_from, 0);
+                emit_set_from_expr(&syms[st->vary_sym], st->vary_by, 1);
+                asm_line("", "B", s1, "");
+                asm_line(sx, "DS", "0H", ""); reset_bases();
+                break;
+            }
             if (st->times_expr) {
                 gen_expr(st->times_expr, 0, 0);
                 asm_line("", "ZAP", "DWK(8),WK0(16)", "");
@@ -7311,7 +7663,7 @@ static void generate(void)
             break;
         case ST_DISPLAY_LIT: {
             int off = 0;
-            asm_comment(" DISPLAY");
+            asm_comment(st->upon_console ? " DISPLAY UPON CONSOLE" : " DISPLAY");
             for (int k = 0; k < st->ndop; k++) {
                 if (st->dop[k].sym < 0) {
                     const char *sl = intern_str(st->dop[k].lit, st->dop[k].litlen,
@@ -7321,12 +7673,29 @@ static void generate(void)
                     off += st->dop[k].litlen;
                 } else {
                     const Sym *sy = &syms[st->dop[k].sym];
+                    int n = st->dop[k].part_len;
+                    char f[64];
                     need_sym_base(sy);
-                    snprintf(b, sizeof b, "DSPBUF+%d(%d),%s", off, sy->bytes, sy->label);
+                    if (st->dop[k].sub) {
+                        field_ref_m(sy, st->dop[k].sub, FR_RX, sy->elem, 6, f, sizeof f);
+                        snprintf(b, sizeof b, "6,%s", f);
+                        asm_line("", "LA", b, "the element");
+                        snprintf(b, sizeof b, "DSPBUF+%d(%d),%d(6)", off, n, st->dop[k].part_off);
+                    } else snprintf(b, sizeof b, "DSPBUF+%d(%d),%s+%d", off, n, sy->label, st->dop[k].part_off);
                     asm_line("", "MVC", b, "");
-                    off += sy->bytes;
+                    off += n;
                 }
-                if (off > 120) die("DISPLAY line longer than 120 characters");
+                if (off > 120) die("internal: DISPLAY line longer than 120 characters");
+            }
+            if (st->upon_console) {
+                use_wto = 1;
+                snprintf(b, sizeof b, "1,%d", off); asm_line("", "LA", b, "");
+                asm_line("", "STH", "1,WTOLEN", "");
+                asm_line("", "LA", "1,WTOPARM", "");
+                asm_line("", "L", "15,VWTO", "");
+                asm_line("", "BALR", "14,15", "to the operator");
+                st->litlen = off;
+                break;
             }
             snprintf(lab, sizeof lab, "PARM%04d", ++ndlit);
             snprintf(b, sizeof b, "1,%s", lab);
@@ -7657,8 +8026,9 @@ static void generate(void)
         if (!paras[i].altered) continue;
         char x[16];
         snprintf(x, sizeof x, "AL%04d", i);
-        snprintf(b, sizeof b, "A(P%04d)", paras[i].alter_to);
-        asm_line(x, "DC", b, paras[i].name);
+        if (paras[i].alter_to >= 0) snprintf(b, sizeof b, "A(P%04d)", paras[i].alter_to);
+        else snprintf(b, sizeof b, "A(0)");
+        asm_line(x, "DC", b, paras[i].alter_to >= 0 ? paras[i].name : "bare GO TO: undefined until ALTERed");
     }
     for (int i = 0; i < npara; i++) {
         if (!paras[i].is_range_end) continue;
@@ -7714,6 +8084,21 @@ static void generate(void)
         if (use_str) asm_line("VSTR", "DC", "V(COBSTR)", "");
         if (use_uns) asm_line("VUNS", "DC", "V(COBUNS)", "");
         if (use_insprop) asm_line("INSPROP", "MVC", "1(0,3),0(3)", "executed: INSPECT CHARACTERS propagation");
+        if (use_wto) {
+            asm_line("VWTO", "DC", "V(COBWTO)", "");
+            asm_line("WTOPARM", "DC", "A(DSPBUF),X'80',AL3(WTOLEN)", "DISPLAY UPON CONSOLE");
+            asm_line("WTOLEN", "DS", "H", "");
+        }
+        if (use_wtor) asm_line("VWTOR", "DC", "V(COBWTOR)", "");
+        if (use_adt) {
+            asm_line("VADT", "DC", "V(COBADT)", "");
+            asm_line("ADTP1", "DC", "A(ZWK),X'80',AL3(ADTK1)", "ACCEPT FROM DATE");
+            asm_line("ADTP2", "DC", "A(ZWK),X'80',AL3(ADTK2)", "ACCEPT FROM DAY");
+            asm_line("ADTP3", "DC", "A(ZWK),X'80',AL3(ADTK3)", "ACCEPT FROM TIME");
+            asm_line("ADTK1", "DC", "H'1'", "");
+            asm_line("ADTK2", "DC", "H'2'", "");
+            asm_line("ADTK3", "DC", "H'3'", "");
+        }
         for (int k = 0; k < npend_dc; k++)
             asm_line(pend_dc[k].lab, pend_dc[k].op, pend_dc[k].opd, pend_dc[k].cmt);
         asm_line("PWK1", "DS", "PL16", "");
@@ -8216,6 +8601,21 @@ static void generate(void)
             }
             char dup[12] = "";
             if (sy->occurs > 1) snprintf(dup, sizeof dup, "%d", sy->occurs);
+            if (sy->is_alpha && sy->has_value == 7) {
+                /* VALUE ALL literal: the unit repeated to the item's width and
+                 * laid down as a run of DCs, which is what a long plain
+                 * literal becomes too. */
+                char allrep[257];
+                int ul = (int)strlen(sy->value), w = sy->elem;
+                if (w > 256 || sy->occurs)
+                    die("VALUE ALL on an item wider than 256 bytes, or on a table, is not implemented");
+                for (int k = 0; k < w; k++) allrep[k] = sy->value[k % ul];
+                allrep[w] = 0;
+                snprintf(cmt, sizeof cmt, "%s PIC X(%d) VALUE ALL", sy->name, w);
+                emit_split_dc(sy->label, allrep, w, cmt);
+                at = sy->offset + sy->bytes;
+                continue;
+            }
             if (sy->is_alpha) {
                 if (sy->has_value == 3 && sy->elem > 256)
                     die("a VALUE literal on an item longer than 256 bytes is "

@@ -28,10 +28,14 @@ T0000    DS    0H
          LA    3,D0000             the field
          LA    5,10                its length
          SR    4,4                 the tally
-L0001    DS    0H
-         CLI   0(3),C'A'
+L0001    C     5,=F'1'             room for the string?
+         BL    L0003
+         CLC   0(1,3),S0001
          BNE   L0002
          LA    4,1(4)              one more
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0001
 L0002    DS    0H
          LA    3,1(3)
          BCT   5,L0001
@@ -47,8 +51,8 @@ L0003    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0001    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0001
-         MVC   DSPBUF+10(4),D0003
+         MVC   DSPBUF+0(10),S0007
+         MVC   DSPBUF+10(4),D0003+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -57,10 +61,14 @@ T0002    DS    0H
          LA    3,D0000             the field
          LA    5,10                its length
          SR    4,4                 the tally
-L0004    DS    0H
-         CLI   0(3),C'B'
+L0004    C     5,=F'1'             room for the string?
+         BL    L0006
+         CLC   0(1,3),S0002
          BNE   L0005
          LA    4,1(4)              one more
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0004
 L0005    DS    0H
          LA    3,1(3)
          BCT   5,L0004
@@ -76,8 +84,8 @@ L0006    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0003    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0002
-         MVC   DSPBUF+10(4),D0003
+         MVC   DSPBUF+0(10),S0008
+         MVC   DSPBUF+10(4),D0003+0
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -91,10 +99,14 @@ T0005    DS    0H
          LA    3,D0000             the field
          LA    5,10                its length
          SR    4,4                 the tally
-L0007    DS    0H
-         CLI   0(3),C'A'
+L0007    C     5,=F'1'             room for the string?
+         BL    L0009
+         CLC   0(1,3),S0001
          BNE   L0009
          LA    4,1(4)              one more
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0007
 L0008    DS    0H
          LA    3,1(3)
          BCT   5,L0007
@@ -110,8 +122,8 @@ L0009    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0006    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0003
-         MVC   DSPBUF+10(4),D0003
+         MVC   DSPBUF+0(10),S0009
+         MVC   DSPBUF+10(4),D0003+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -122,17 +134,22 @@ T0007    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0008    DS    0H
 * INSPECT W
-         LA    2,10                CHARACTERS: the whole field
+         LA    3,D0000             the field
+         LA    5,10                its length
+         LR    2,5                 CHARACTERS: every position in range
          CVD   2,DWK
          ZAP   PWK1(16),DWK(8)
          PACK  PWK2(16),D0003(4)   zoned -> packed
          AP    PWK1(16),PWK2(16)   TALLYING adds
          UNPK  D0003(4),PWK1(16)   packed -> zoned
          OI    D0003+3,X'F0'       unsigned: force an F zone
+         DROP  8
 T0009    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0004
-         MVC   DSPBUF+10(4),D0003
+         MVC   DSPBUF+0(10),S0010
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+10(4),D0003+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -146,10 +163,14 @@ T0011    DS    0H
          LA    3,D0000             the field
          LA    5,10                its length
          SR    4,4                 the tally
-L0010    DS    0H
+L0010    C     5,=F'1'             room for the string?
+         BL    L0012
          CLC   0(1,3),D0004
          BNE   L0011
          LA    4,1(4)              one more
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0010
 L0011    DS    0H
          LA    3,1(3)
          BCT   5,L0010
@@ -165,8 +186,8 @@ L0012    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0012    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0005
-         MVC   DSPBUF+10(4),D0003
+         MVC   DSPBUF+0(10),S0011
+         MVC   DSPBUF+10(4),D0003+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
@@ -174,10 +195,14 @@ T0013    DS    0H
 * INSPECT V
          LA    3,D0001             the field
          LA    5,10                its length
-L0013    DS    0H
-         CLI   0(3),C'A'
+L0013    C     5,=F'1'             room for the string?
+         BL    L0015
+         CLC   0(1,3),S0001
          BNE   L0014
-         MVI   0(3),C'Z'           replace
+         MVC   0(1,3),S0003        replace
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0013
 L0014    DS    0H
          LA    3,1(3)
          BCT   5,L0013
@@ -185,25 +210,29 @@ L0015    DS    0H
          DROP  8
 T0014    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0006
+         MVC   DSPBUF+0(11),S0012
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+11(10),D0001
-         MVC   DSPBUF+21(1),S0007
+         MVC   DSPBUF+11(10),D0001+0
+         MVC   DSPBUF+21(1),S0013
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
 T0015    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0008     literal move, space padded
+         MVC   D0001(10),S0014     literal move, space padded
 T0016    DS    0H
 * INSPECT V
          LA    3,D0001             the field
          LA    5,10                its length
-L0016    DS    0H
-         CLI   0(3),C'A'
+L0016    C     5,=F'1'             room for the string?
+         BL    L0018
+         CLC   0(1,3),S0001
          BNE   L0018
-         MVI   0(3),C'Z'           replace
+         MVC   0(1,3),S0003        replace
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0016
 L0017    DS    0H
          LA    3,1(3)
          BCT   5,L0016
@@ -211,26 +240,30 @@ L0018    DS    0H
          DROP  8
 T0017    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0009
+         MVC   DSPBUF+0(11),S0015
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+11(10),D0001
-         MVC   DSPBUF+21(1),S0007
+         MVC   DSPBUF+11(10),D0001+0
+         MVC   DSPBUF+21(1),S0013
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 T0018    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0008     literal move, space padded
+         MVC   D0001(10),S0014     literal move, space padded
 T0019    DS    0H
 * INSPECT V
          LA    3,D0001             the field
          LA    5,10                its length
-L0019    DS    0H
-         CLI   0(3),C'C'
+L0019    C     5,=F'1'             room for the string?
+         BL    L0021
+         CLC   0(1,3),S0004
          BNE   L0020
-         MVI   0(3),C'Z'           replace
+         MVC   0(1,3),S0003        replace
          B     L0021               FIRST: done
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0019
 L0020    DS    0H
          LA    3,1(3)
          BCT   5,L0019
@@ -238,25 +271,29 @@ L0021    DS    0H
          DROP  8
 T0020    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0010
+         MVC   DSPBUF+0(11),S0016
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+11(10),D0001
-         MVC   DSPBUF+21(1),S0007
+         MVC   DSPBUF+11(10),D0001+0
+         MVC   DSPBUF+21(1),S0013
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
 T0021    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0008     literal move, space padded
+         MVC   D0001(10),S0014     literal move, space padded
 T0022    DS    0H
 * INSPECT V
          LA    3,D0001             the field
          LA    5,10                its length
-L0022    DS    0H
+L0022    C     5,=F'1'             room for the string?
+         BL    L0024
          CLC   0(1,3),D0004
          BNE   L0023
          MVC   0(1,3),D0005        replace
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0022
 L0023    DS    0H
          LA    3,1(3)
          BCT   5,L0022
@@ -264,27 +301,36 @@ L0024    DS    0H
          DROP  8
 T0023    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0011
+         MVC   DSPBUF+0(11),S0017
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+11(10),D0001
-         MVC   DSPBUF+21(1),S0007
+         MVC   DSPBUF+11(10),D0001+0
+         MVC   DSPBUF+21(1),S0013
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
 T0024    DS    0H
 * INSPECT U
          LA    3,D0002             the field
-         MVI   0(3),C'.'           CHARACTERS BY
-         MVC   1(5,3),0(3)         and propagate
+         LA    5,6                 its length
+         LTR   5,5
+         BZ    L0025               nothing in range
+         MVC   0(1,3),S0005        CHARACTERS BY: the first
+         LR    4,5
+         BCTR  4,0
+         LTR   4,4
+         BZ    L0025
+         BCTR  4,0
+         EX    4,INSPROP           and propagate
+L0025    DS    0H
          DROP  8
 T0025    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0012
+         MVC   DSPBUF+0(11),S0018
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+11(6),D0002
-         MVC   DSPBUF+17(1),S0007
+         MVC   DSPBUF+11(6),D0002+0
+         MVC   DSPBUF+17(1),S0013
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
@@ -295,20 +341,24 @@ T0026    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0027    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0008     literal move, space padded
+         MVC   D0001(10),S0014     literal move, space padded
 T0028    DS    0H
 * INSPECT V
          LA    3,D0001             the field
          LA    5,10                its length
          SR    4,4                 the tally
-L0025    DS    0H
-         CLI   0(3),C'C'
-         BNE   L0026
+L0026    C     5,=F'1'             room for the string?
+         BL    L0028
+         CLC   0(1,3),S0004
+         BNE   L0027
          LA    4,1(4)              one more
-L0026    DS    0H
-         LA    3,1(3)
-         BCT   5,L0025
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0026
 L0027    DS    0H
+         LA    3,1(3)
+         BCT   5,L0026
+L0028    DS    0H
          DROP  8
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
@@ -320,24 +370,28 @@ L0027    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
          LA    3,D0001             the field
          LA    5,10                its length
-L0028    DS    0H
-         CLI   0(3),C'C'
-         BNE   L0029
-         MVI   0(3),C'K'           replace
-L0029    DS    0H
-         LA    3,1(3)
-         BCT   5,L0028
+L0029    C     5,=F'1'             room for the string?
+         BL    L0031
+         CLC   0(1,3),S0004
+         BNE   L0030
+         MVC   0(1,3),S0006        replace
+         LA    3,1(3)              past the string
+         S     5,=F'1'
+         B     L0029
 L0030    DS    0H
+         LA    3,1(3)
+         BCT   5,L0029
+L0031    DS    0H
          DROP  8
 T0029    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0013
+         MVC   DSPBUF+0(10),S0019
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+10(4),D0003
-         MVC   DSPBUF+14(2),S0014
-         MVC   DSPBUF+16(10),D0001
-         MVC   DSPBUF+26(1),S0007
+         MVC   DSPBUF+10(4),D0003+0
+         MVC   DSPBUF+14(2),S0020
+         MVC   DSPBUF+16(10),D0001+0
+         MVC   DSPBUF+26(1),S0013
          LA    1,PARM0011
          L     15,VDISP
          BALR  14,15
@@ -386,6 +440,7 @@ PARM0011 DC    A(DSPBUF)
 LEN0011  DC    H'27'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
+INSPROP  MVC   1(0,3),0(3)         executed: INSPECT CHARACTERS propaga
 PWK1     DS    PL16
 PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
@@ -401,20 +456,26 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    DC    PL16'0'             numeric constants
-S0001    DC    CL10'ALL A     '    nonnumeric constants
-S0002    DC    CL10'PLUS ALL B'
-S0003    DC    CL10'LEADING A '
-S0004    DC    CL10'CHARACTERS'
-S0005    DC    CL10'ALL BY ID '
-S0006    DC    CL11'REPL ALL  ['
-S0007    DC    CL1']'
-S0008    DC    CL10'AABBAACCAA'
-S0009    DC    CL11'REPL LEAD ['
-S0010    DC    CL11'REPL FIRST['
-S0011    DC    CL11'REPL BY ID['
-S0012    DC    CL11'REPL CHARS['
-S0013    DC    CL10'BOTH      '
-S0014    DC    CL2' ['
+S0001    DC    CL1'A'              nonnumeric constants
+S0002    DC    CL1'B'
+S0003    DC    CL1'Z'
+S0004    DC    CL1'C'
+S0005    DC    CL1'.'
+S0006    DC    CL1'K'
+S0007    DC    CL10'ALL A     '
+S0008    DC    CL10'PLUS ALL B'
+S0009    DC    CL10'LEADING A '
+S0010    DC    CL10'CHARACTERS'
+S0011    DC    CL10'ALL BY ID '
+S0012    DC    CL11'REPL ALL  ['
+S0013    DC    CL1']'
+S0014    DC    CL10'AABBAACCAA'
+S0015    DC    CL11'REPL LEAD ['
+S0016    DC    CL11'REPL FIRST['
+S0017    DC    CL11'REPL BY ID['
+S0018    DC    CL11'REPL CHARS['
+S0019    DC    CL10'BOTH      '
+S0020    DC    CL2' ['
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
@@ -533,7 +594,7 @@ D0005    DC    CL1'Q'              REPCH PIC X(1)
 *---------------------------------------------------------------
 COBRT    CSECT
          ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
-         ENTRY COBADV,COBSTR,COBUNS
+         ENTRY COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -883,6 +944,124 @@ UNSMVC   MVC   0(0,14),0(15)       executed with the byte count
 UNSPAD   MVC   1(0,14),0(14)       executed: propagate the space
 RTSAVE9  DS    18F
 *
+* COBWTO -- DISPLAY UPON CONSOLE. R1 -> A(text), A(halfword length).
+* The text goes into a WTO list whose length halfword is set
+* from the parameter; MVS caps a line at what it will show.
+COBWTO   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE10+4
+         LA    11,RTSAVE10
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(text)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)
+         CH    4,WTOMAX
+         BNH   WTO010
+         LH    4,WTOMAX
+WTO010   MVI   WTOTXT,C' '
+         MVC   WTOTXT+1(119),WTOTXT
+         LTR   4,4
+         BNP   WTO020
+         BCTR  4,0
+         EX    4,WTOMVC
+         LA    4,1(4)
+WTO020   LA    4,4(4)              plus the header
+         STH   4,WTOLST
+         WTO   MF=(E,WTOLST)
+         L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+WTOMVC   MVC   WTOTXT(0),0(2)      executed
+WTOMAX   DC    H'120'
+WTOLST   DC    AL2(124),AL2(0)     length, MCS flags
+WTOTXT   DC    CL120' '
+RTSAVE10 DS    18F
+*
+* COBWTOR -- ACCEPT FROM CONSOLE. R1 -> A(item), A(halfword length).
+* A WTOR asks the operator, the task waits on its ECB, and the
+* reply is moved to the item space padded. One line only.
+COBWTOR  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE11+4
+         LA    11,RTSAVE11
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(item)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)
+         MVI   WTORRPL,C' '
+         MVC   WTORRPL+1(119),WTORRPL
+         XC    WTORECB,WTORECB
+         WTOR  'COBC370: ACCEPT FROM CONSOLE',WTORRPL,120,WTORECB
+         WAIT  ECB=WTORECB
+         LTR   4,4
+         BNP   WTOR20
+         CH    4,WTORMAX
+         BNH   WTOR10
+         LH    4,WTORMAX
+WTOR10   BCTR  4,0
+         EX    4,WTORMVC
+WTOR20   L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+WTORMVC  MVC   0(0,2),WTORRPL      executed
+WTORMAX  DC    H'120'
+WTORECB  DC    F'0'
+WTORRPL  DC    CL120' '
+RTSAVE11 DS    18F
+*
+* COBADT -- ACCEPT FROM DATE, DAY or TIME. R1 -> A(area), A(halfword
+* kind: 1 DATE, 2 DAY, 3 TIME). Writes YYMMDD, YYDDD or HHMMSSth as
+* zoned digits into the area. DATE borrows COBDATE's month walk.
+COBADT   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE12+4
+         LA    11,RTSAVE12
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            the area
+         L     3,4(0,1)
+         LH    3,0(0,3)            the kind
+         CH    3,ADTH3
+         BE    ADT300              TIME
+         TIME  DEC                 R1 = 00YYDDDF
+         ST    1,ADTPK
+         UNPK  ADTZ(7),ADTPK(4)    '00YYDDD'
+         OI    ADTZ+6,X'F0'
+         CH    3,ADTH2
+         BE    ADT200              DAY
+         LA    1,ADTB              DATE: MM/DD/YY first
+         L     15,ADTVD
+         BALR  14,15
+         MVC   0(2,2),ADTB+6       YY
+         MVC   2(2,2),ADTB         MM
+         MVC   4(2,2),ADTB+3       DD
+         B     ADTX
+ADT200   MVC   0(5,2),ADTZ+2       YYDDD
+         B     ADTX
+ADT300   TIME  DEC                 R0 = HHMMSSth
+         ST    0,ADTPK
+         MVI   ADTPK+4,X'0F'       a sign nibble to unpack against
+         UNPK  ADTZ(9),ADTPK(5)    'HHMMSSth0'
+         MVC   0(8,2),ADTZ
+ADTX     L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+ADTVD    DC    A(COBDATE)
+ADTH2    DC    H'2'
+ADTH3    DC    H'3'
+ADTPK    DS    2F
+ADTZ     DS    CL9
+ADTB     DS    CL8
+RTSAVE12 DS    18F
+*
 * COBUPSI -- set the eight switches from the EXEC PARM.
 *
 * PARM='/UPSI(10100000)' is the form IBM's later compilers
@@ -950,7 +1129,9 @@ COBACC   STM   14,12,12(13)
          LR    13,11
          L     2,0(0,1)            A(item)
          L     3,4(0,1)            A(length)
-         LH    4,0(0,3)            length
+         LH    4,0(0,3)            length still to fill
+COBA005  LTR   4,4
+         BNP   COBA040             filled
          MVI   ACCBUF,C' '
          MVC   ACCBUF+1(255),ACCBUF  blank the buffer
          CLI   ACCEOFF,X'01'       already at end of file?
@@ -964,18 +1145,22 @@ COBA010  LA    1,COBA030
          GET   ACCDCB,ACCBUF       one card
          B     COBA020
 COBA030  MVI   ACCEOFF,X'01'       end of file: the buffer stays blank
-COBA020  LTR   4,4
-         BNP   COBA040             nothing to store
-         CH    4,ACCMAX
+COBA020  LR    5,4
+         CH    5,ACCCARD
          BNH   COBA035
-         LH    4,ACCMAX            one MVC is 256 bytes
-COBA035  BCTR  4,0                 EX wants length-1
-         EX    4,COBAMVC
+         LH    5,ACCCARD           one card's worth
+COBA035  BCTR  5,0                 EX wants length-1
+         EX    5,COBAMVC
+         LA    2,1(5,2)            past what was stored
+         LA    5,1(5)
+         SR    4,5
+         B     COBA005
 COBA040  L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
 COBAMVC  MVC   0(0,2),ACCBUF       patched by EX
+ACCCARD  DC    H'80'               a card
 *
 * COBTERM -- close SYSOUT if COBDISP ever opened it.
 *

@@ -1,0 +1,75 @@
+000100 IDENTIFICATION DIVISION.
+000200 PROGRAM-ID. ACCDISP.
+000300* ACCEPT ... FROM DATE / DAY / TIME and a mnemonic-name; DISPLAY
+000400* UPON a mnemonic-name; DISPLAY of a subscripted item; and the
+000500* level-2 lifting of the one-transfer rule: a DISPLAY longer than
+000600* a line wraps onto the next, and an ACCEPT wider than a card is
+000700* filled from as many cards as it takes. The date and time are
+000800* not printed -- an oracle cannot know them -- only their shape.
+000810* GnuCOBOL fills a wide ACCEPT from one line and reads the next
+000820* for the next ACCEPT; 1974 fills it from as many cards as it
+000830* takes, so the three lines after the wrapped DISPLAY were set by
+000840* hand. The DISPLAY UPON the console is a WTO, in the job log,
+000850* not on SYSOUT, so it is not in the expected output either.
+000860* A DISPLAY longer than 120 characters wraps here where GnuCOBOL
+000870* prints one long line; those lines were set by hand too.
+000900 ENVIRONMENT DIVISION.
+001000 CONFIGURATION SECTION.
+001100 SPECIAL-NAMES.
+001200     SYSOUT IS PRINTER
+001250     CONSOLE IS OPERATOR
+001300     SYSIN IS CARDS.
+001400 DATA DIVISION.
+001500 WORKING-STORAGE SECTION.
+001600 01  D6           PIC 9(6).
+001700 01  D5           PIC 9(5).
+001800 01  T8           PIC 9(8).
+001900 01  DX           PIC X(8).
+001950 01  DXR.
+001960     05  DX-YY    PIC XX.
+001970     05  FILLER   PIC X(6).
+002000 01  YY1          PIC 99.
+002100 01  YY2          PIC 99.
+002200 01  HH           PIC 99.
+002300 01  T.
+002400     05  E OCCURS 3 TIMES PIC X(4).
+002500 01  I            PIC 9 VALUE 2.
+002600 01  LONG-ITEM    PIC X(150) VALUE ALL 'AB'.
+002700 01  WIDE         PIC X(100).
+002710 01  WIDER        REDEFINES WIDE PIC X(100).
+002720 01  WIDE-R.
+002730     05  WR1      PIC X(50).
+002740     05  WR2      PIC X(50).
+002800 01  W1           PIC X(50).
+002900 01  W2           PIC X(50).
+003000 PROCEDURE DIVISION.
+003100 MAIN.
+003200     ACCEPT D6 FROM DATE.
+003300     ACCEPT D5 FROM DAY.
+003400     ACCEPT T8 FROM TIME.
+003500     ACCEPT DX FROM DATE.
+003600     MOVE D6 TO DX.
+003700     MOVE DX TO DXR.
+003750     MOVE DX-YY TO YY1.
+003800     DIVIDE D5 BY 1000 GIVING YY2.
+003900     DIVIDE T8 BY 1000000 GIVING HH.
+004000     IF D6 IS NUMERIC AND D5 IS NUMERIC AND T8 IS NUMERIC
+004100         DISPLAY 'DATE DAY TIME NUMERIC'.
+004200     IF YY1 = YY2 DISPLAY 'YEARS AGREE'.
+004300     IF HH < 24 DISPLAY 'HOUR IN RANGE'.
+004400     IF D6 > 0 AND D5 > 0 DISPLAY 'NONZERO'.
+004500     MOVE 'AAAA' TO E (1).
+004510     MOVE 'BBBB' TO E (2).
+004520     MOVE 'CCCC' TO E (3).
+004600     DISPLAY '[' E (2) '][' E (I) '][' E (3) ']' UPON PRINTER.
+004700     DISPLAY LONG-ITEM.
+004800     DISPLAY 'X' LONG-ITEM 'Y'.
+004900     ACCEPT WIDE FROM CARDS.
+005000     MOVE WIDER TO WIDE-R.
+005100     MOVE WR1 TO W1. MOVE WR2 TO W2.
+005200     DISPLAY '[' W1 ']'.
+005300     DISPLAY '[' W2 ']'.
+005400     ACCEPT W1.
+005500     DISPLAY '[' W1 ']'.
+005600     DISPLAY 'TO THE OPERATOR' UPON OPERATOR.
+005700     STOP RUN.

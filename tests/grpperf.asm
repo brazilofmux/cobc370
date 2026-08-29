@@ -57,7 +57,7 @@ T0004    DS    0H
          MVC   D0009(9),D0005      alphanumeric move
 T0005    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),D0009
+         MVC   DSPBUF+0(9),D0009+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -68,7 +68,7 @@ T0006    DS    0H
          OI    D0011+6,X'F0'       unsigned: force an F zone
 T0007    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),D0011
+         MVC   DSPBUF+0(7),D0011+0
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -82,7 +82,7 @@ T0008    DS    0H
          OI    D0011+6,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),D0011
+         MVC   DSPBUF+0(7),D0011+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -141,7 +141,7 @@ T0015    DS    0H
          MVC   D0010(3),D0002      alphanumeric move
 T0016    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),D0010
+         MVC   DSPBUF+0(3),D0010+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -291,7 +291,7 @@ D0011    DC    CL7'0000000'        OUT-NUM PIC 9(7)v2 DISP
 *---------------------------------------------------------------
 COBRT    CSECT
          ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
-         ENTRY COBADV,COBSTR,COBUNS
+         ENTRY COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -641,6 +641,124 @@ UNSMVC   MVC   0(0,14),0(15)       executed with the byte count
 UNSPAD   MVC   1(0,14),0(14)       executed: propagate the space
 RTSAVE9  DS    18F
 *
+* COBWTO -- DISPLAY UPON CONSOLE. R1 -> A(text), A(halfword length).
+* The text goes into a WTO list whose length halfword is set
+* from the parameter; MVS caps a line at what it will show.
+COBWTO   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE10+4
+         LA    11,RTSAVE10
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(text)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)
+         CH    4,WTOMAX
+         BNH   WTO010
+         LH    4,WTOMAX
+WTO010   MVI   WTOTXT,C' '
+         MVC   WTOTXT+1(119),WTOTXT
+         LTR   4,4
+         BNP   WTO020
+         BCTR  4,0
+         EX    4,WTOMVC
+         LA    4,1(4)
+WTO020   LA    4,4(4)              plus the header
+         STH   4,WTOLST
+         WTO   MF=(E,WTOLST)
+         L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+WTOMVC   MVC   WTOTXT(0),0(2)      executed
+WTOMAX   DC    H'120'
+WTOLST   DC    AL2(124),AL2(0)     length, MCS flags
+WTOTXT   DC    CL120' '
+RTSAVE10 DS    18F
+*
+* COBWTOR -- ACCEPT FROM CONSOLE. R1 -> A(item), A(halfword length).
+* A WTOR asks the operator, the task waits on its ECB, and the
+* reply is moved to the item space padded. One line only.
+COBWTOR  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE11+4
+         LA    11,RTSAVE11
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(item)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)
+         MVI   WTORRPL,C' '
+         MVC   WTORRPL+1(119),WTORRPL
+         XC    WTORECB,WTORECB
+         WTOR  'COBC370: ACCEPT FROM CONSOLE',WTORRPL,120,WTORECB
+         WAIT  ECB=WTORECB
+         LTR   4,4
+         BNP   WTOR20
+         CH    4,WTORMAX
+         BNH   WTOR10
+         LH    4,WTORMAX
+WTOR10   BCTR  4,0
+         EX    4,WTORMVC
+WTOR20   L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+WTORMVC  MVC   0(0,2),WTORRPL      executed
+WTORMAX  DC    H'120'
+WTORECB  DC    F'0'
+WTORRPL  DC    CL120' '
+RTSAVE11 DS    18F
+*
+* COBADT -- ACCEPT FROM DATE, DAY or TIME. R1 -> A(area), A(halfword
+* kind: 1 DATE, 2 DAY, 3 TIME). Writes YYMMDD, YYDDD or HHMMSSth as
+* zoned digits into the area. DATE borrows COBDATE's month walk.
+COBADT   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE12+4
+         LA    11,RTSAVE12
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            the area
+         L     3,4(0,1)
+         LH    3,0(0,3)            the kind
+         CH    3,ADTH3
+         BE    ADT300              TIME
+         TIME  DEC                 R1 = 00YYDDDF
+         ST    1,ADTPK
+         UNPK  ADTZ(7),ADTPK(4)    '00YYDDD'
+         OI    ADTZ+6,X'F0'
+         CH    3,ADTH2
+         BE    ADT200              DAY
+         LA    1,ADTB              DATE: MM/DD/YY first
+         L     15,ADTVD
+         BALR  14,15
+         MVC   0(2,2),ADTB+6       YY
+         MVC   2(2,2),ADTB         MM
+         MVC   4(2,2),ADTB+3       DD
+         B     ADTX
+ADT200   MVC   0(5,2),ADTZ+2       YYDDD
+         B     ADTX
+ADT300   TIME  DEC                 R0 = HHMMSSth
+         ST    0,ADTPK
+         MVI   ADTPK+4,X'0F'       a sign nibble to unpack against
+         UNPK  ADTZ(9),ADTPK(5)    'HHMMSSth0'
+         MVC   0(8,2),ADTZ
+ADTX     L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+ADTVD    DC    A(COBDATE)
+ADTH2    DC    H'2'
+ADTH3    DC    H'3'
+ADTPK    DS    2F
+ADTZ     DS    CL9
+ADTB     DS    CL8
+RTSAVE12 DS    18F
+*
 * COBUPSI -- set the eight switches from the EXEC PARM.
 *
 * PARM='/UPSI(10100000)' is the form IBM's later compilers
@@ -708,7 +826,9 @@ COBACC   STM   14,12,12(13)
          LR    13,11
          L     2,0(0,1)            A(item)
          L     3,4(0,1)            A(length)
-         LH    4,0(0,3)            length
+         LH    4,0(0,3)            length still to fill
+COBA005  LTR   4,4
+         BNP   COBA040             filled
          MVI   ACCBUF,C' '
          MVC   ACCBUF+1(255),ACCBUF  blank the buffer
          CLI   ACCEOFF,X'01'       already at end of file?
@@ -722,18 +842,22 @@ COBA010  LA    1,COBA030
          GET   ACCDCB,ACCBUF       one card
          B     COBA020
 COBA030  MVI   ACCEOFF,X'01'       end of file: the buffer stays blank
-COBA020  LTR   4,4
-         BNP   COBA040             nothing to store
-         CH    4,ACCMAX
+COBA020  LR    5,4
+         CH    5,ACCCARD
          BNH   COBA035
-         LH    4,ACCMAX            one MVC is 256 bytes
-COBA035  BCTR  4,0                 EX wants length-1
-         EX    4,COBAMVC
+         LH    5,ACCCARD           one card's worth
+COBA035  BCTR  5,0                 EX wants length-1
+         EX    5,COBAMVC
+         LA    2,1(5,2)            past what was stored
+         LA    5,1(5)
+         SR    4,5
+         B     COBA005
 COBA040  L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
 COBAMVC  MVC   0(0,2),ACCBUF       patched by EX
+ACCCARD  DC    H'80'               a card
 *
 * COBTERM -- close SYSOUT if COBDISP ever opened it.
 *
