@@ -52,14 +52,16 @@ T0004    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'30'     permanent error
-         B     G0002
+         B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0002    DS    0H
+         B     G0002
+G0003    DS    0H
          DROP  8
+G0002    DS    0H
 T0005    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -105,18 +107,20 @@ T0010    DS    0H
 * CLOSE ESDS-FILE
          CLOSE (FD001)
          LTR   15,15               VSAM request succeeded?
-         BZ    G0003
+         BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'30'     permanent error
-         B     G0004
-G0003    DS    0H
+         B     G0006
+G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0004    DS    0H
+         B     G0005
+G0006    DS    0H
          DROP  8
+G0005    DS    0H
 T0011    DS    0H
 * MOVE RECORD-COUNTER -> COUNTER-EDIT
          L     8,BL0000            base locator
@@ -201,81 +205,85 @@ T0021    DS    0H
          LTR   15,15               stored?
          BNZ   L0005
          LTR   15,15               VSAM request succeeded?
-         BZ    G0005
+         BZ    G0007
          SHOWCB RPL=FD001R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'08'        duplicate key
-         BE    G0007
-         CLI   VSFB+3,X'0C'        key out of sequence
-         BE    G0008
-         CLI   VSFB+3,X'1C'        cluster is full
          BE    G0009
+         CLI   VSFB+3,X'0C'        key out of sequence
+         BE    G0010
+         CLI   VSFB+3,X'1C'        cluster is full
+         BE    G0011
          MVC   D0002(2),=C'30'     permanent error
-         B     G0006
-G0007    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0002(2),=C'22'     duplicate key
-         B     G0006
-G0008    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0002(2),=C'21'     key out of sequence
-         B     G0006
+         B     G0012
 G0009    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'24'     cluster is full
-         B     G0006
-G0005    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0002(2),=C'00'
-G0006    DS    0H
-         DROP  8
-         B     L0006
-L0005    DS    0H                  INVALID KEY
-         LTR   15,15               VSAM request succeeded?
-         BZ    G0010
-         SHOWCB RPL=FD001R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
-         CLI   VSFB+3,X'08'        duplicate key
-         BE    G0012
-         CLI   VSFB+3,X'0C'        key out of sequence
-         BE    G0013
-         CLI   VSFB+3,X'1C'        cluster is full
-         BE    G0014
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0002(2),=C'30'     permanent error
-         B     G0011
-G0012    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
          MVC   D0002(2),=C'22'     duplicate key
-         B     G0011
-G0013    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0002(2),=C'21'     key out of sequence
-         B     G0011
-G0014    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0002(2),=C'24'     cluster is full
-         B     G0011
+         B     G0012
 G0010    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0002(2),=C'21'     key out of sequence
+         B     G0012
 G0011    DS    0H
          DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0002(2),=C'24'     cluster is full
+         B     G0012
+G0007    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0002(2),=C'00'
+         B     G0008
+G0012    DS    0H
+         DROP  8
+G0008    DS    0H
+         B     L0006
+L0005    DS    0H                  INVALID KEY
+         LTR   15,15               VSAM request succeeded?
+         BZ    G0013
+         SHOWCB RPL=FD001R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
+         CLI   VSFB+3,X'08'        duplicate key
+         BE    G0015
+         CLI   VSFB+3,X'0C'        key out of sequence
+         BE    G0016
+         CLI   VSFB+3,X'1C'        cluster is full
+         BE    G0017
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0002(2),=C'30'     permanent error
+         B     G0018
+G0015    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0002(2),=C'22'     duplicate key
+         B     G0018
+G0016    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0002(2),=C'21'     key out of sequence
+         B     G0018
+G0017    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0002(2),=C'24'     cluster is full
+         B     G0018
+G0013    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0002(2),=C'00'
+         B     G0014
+G0018    DS    0H
+         DROP  8
+G0014    DS    0H
 T0022    DS    0H
 * MOVE Y -> WRITE-FAILED-SWITCH
          L     8,BL0000            base locator

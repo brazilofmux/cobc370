@@ -49,14 +49,16 @@ T0003    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0002
+         B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0002    DS    0H
+         B     G0002
+G0003    DS    0H
          DROP  8
+G0002    DS    0H
 * 010-PROCESS.
 P0001    DS    0H
 T0004    DS    0H
@@ -107,18 +109,20 @@ T0010    DS    0H
 * CLOSE KSDS-FILE
          CLOSE (FD000)
          LTR   15,15               VSAM request succeeded?
-         BZ    G0003
+         BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0004
-G0003    DS    0H
+         B     G0006
+G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0004    DS    0H
+         B     G0005
+G0006    DS    0H
          DROP  8
+G0005    DS    0H
 T0011    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
@@ -145,61 +149,65 @@ T0014    DS    0H
 * READ KSDS-FILE
          MODCB RPL=FD000R,OPTCD=(DIR,NSP)  by key
          LTR   15,15
-         BZ    G0005
+         BZ    G0007
          MVC   D0003(2),=C'30'     could not set the request type
-         B     G0006
-G0005    DS    0H
+         B     G0008
+G0007    DS    0H
          DROP  8
          GET   RPL=FD000R          VSAM retrieval by key
          LTR   15,15               got a record?
          BNZ   L0001
          LTR   15,15               VSAM request succeeded?
-         BZ    G0007
+         BZ    G0009
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0009
+         BE    G0011
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0008
+         B     G0012
+G0011    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'23'     no such record
+         B     G0012
 G0009    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'23'     no such record
-         B     G0008
-G0007    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0008    DS    0H
+         B     G0010
+G0012    DS    0H
          DROP  8
+G0010    DS    0H
          B     L0002
 L0001    DS    0H                  INVALID KEY
          LTR   15,15               VSAM request succeeded?
-         BZ    G0010
+         BZ    G0013
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0012
+         BE    G0015
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0011
-G0012    DS    0H
+         B     G0016
+G0015    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     no such record
-         B     G0011
-G0010    DS    0H
+         B     G0016
+G0013    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0011    DS    0H
+         B     G0014
+G0016    DS    0H
          DROP  8
-G0006    DS    0H
+G0014    DS    0H
+G0008    DS    0H
 T0015    DS    0H
 * MOVE Y -> MISSING-SWITCH
          L     8,BL0000            base locator
@@ -311,63 +319,67 @@ T0028    DS    0H
 * READ KSDS-FILE
          MODCB RPL=FD000R,OPTCD=(SEQ)  next
          LTR   15,15
-         BZ    G0013
+         BZ    G0017
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     could not set the request type
-         B     G0014
-G0013    DS    0H
+         B     G0018
+G0017    DS    0H
          DROP  8
          GET   RPL=FD000R          VSAM sequential retrieval
          LTR   15,15               got a record?
          BNZ   L0005
          LTR   15,15               VSAM request succeeded?
-         BZ    G0015
+         BZ    G0019
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        end of data
-         BE    G0017
+         BE    G0021
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0016
-G0017    DS    0H
+         B     G0022
+G0021    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'10'     end of data
-         B     G0016
-G0015    DS    0H
+         B     G0022
+G0019    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0016    DS    0H
+         B     G0020
+G0022    DS    0H
          DROP  8
+G0020    DS    0H
          B     L0006
 L0005    DS    0H                  AT END
          LTR   15,15               VSAM request succeeded?
-         BZ    G0018
+         BZ    G0023
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        end of data
-         BE    G0020
+         BE    G0025
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0019
-G0020    DS    0H
+         B     G0026
+G0025    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'10'     end of data
-         B     G0019
-G0018    DS    0H
+         B     G0026
+G0023    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0019    DS    0H
+         B     G0024
+G0026    DS    0H
          DROP  8
-G0014    DS    0H
+G0024    DS    0H
+G0018    DS    0H
 T0029    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator

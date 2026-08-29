@@ -31,14 +31,16 @@ T0000    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'30'     permanent error
-         B     G0002
+         B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0002    DS    0H
+         B     G0002
+G0003    DS    0H
          DROP  8
+G0002    DS    0H
 T0001    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0001
@@ -64,25 +66,27 @@ T0003    DS    0H
          LTR   15,15               got a record?
          BNZ   L0001
          LTR   15,15               VSAM request succeeded?
-         BZ    G0003
+         BZ    G0004
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0005
+         BE    G0006
          MVC   D0002(2),=C'30'     permanent error
-         B     G0004
-G0005    DS    0H
+         B     G0007
+G0006    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'23'     no such record
-         B     G0004
-G0003    DS    0H
+         B     G0007
+G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0004    DS    0H
+         B     G0005
+G0007    DS    0H
          DROP  8
+G0005    DS    0H
 *  and the number VSAM used back into the RELATIVE KEY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -95,27 +99,29 @@ G0004    DS    0H
 L0001    DS    0H                  INVALID KEY
          DROP  8
          LTR   15,15               VSAM request succeeded?
-         BZ    G0006
+         BZ    G0008
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0008
+         BE    G0010
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'30'     permanent error
-         B     G0007
-G0008    DS    0H
+         B     G0011
+G0010    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'23'     no such record
-         B     G0007
-G0006    DS    0H
+         B     G0011
+G0008    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0007    DS    0H
+         B     G0009
+G0011    DS    0H
          DROP  8
+G0009    DS    0H
 L0002    DS    0H
 T0004    DS    0H
 * MOVE RRDS-RECORD -> SEEN
@@ -148,25 +154,27 @@ T0007    DS    0H
          LTR   15,15               got a record?
          BNZ   L0003
          LTR   15,15               VSAM request succeeded?
-         BZ    G0009
+         BZ    G0012
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0011
+         BE    G0014
          MVC   D0002(2),=C'30'     permanent error
-         B     G0010
-G0011    DS    0H
+         B     G0015
+G0014    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'23'     no such record
-         B     G0010
-G0009    DS    0H
+         B     G0015
+G0012    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0010    DS    0H
+         B     G0013
+G0015    DS    0H
          DROP  8
+G0013    DS    0H
 *  and the number VSAM used back into the RELATIVE KEY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -179,27 +187,29 @@ G0010    DS    0H
 L0003    DS    0H                  INVALID KEY
          DROP  8
          LTR   15,15               VSAM request succeeded?
-         BZ    G0012
+         BZ    G0016
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0014
+         BE    G0018
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'30'     permanent error
-         B     G0013
-G0014    DS    0H
+         B     G0019
+G0018    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'23'     no such record
-         B     G0013
-G0012    DS    0H
+         B     G0019
+G0016    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0013    DS    0H
+         B     G0017
+G0019    DS    0H
          DROP  8
+G0017    DS    0H
 L0004    DS    0H
 T0008    DS    0H
 * MOVE RRDS-RECORD -> SEEN
@@ -232,25 +242,27 @@ T0011    DS    0H
          LTR   15,15               got a record?
          BNZ   L0005
          LTR   15,15               VSAM request succeeded?
-         BZ    G0015
+         BZ    G0020
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0017
+         BE    G0022
          MVC   D0002(2),=C'30'     permanent error
-         B     G0016
-G0017    DS    0H
+         B     G0023
+G0022    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'23'     no such record
-         B     G0016
-G0015    DS    0H
+         B     G0023
+G0020    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0016    DS    0H
+         B     G0021
+G0023    DS    0H
          DROP  8
+G0021    DS    0H
 *  and the number VSAM used back into the RELATIVE KEY
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -263,27 +275,29 @@ G0016    DS    0H
 L0005    DS    0H                  INVALID KEY
          DROP  8
          LTR   15,15               VSAM request succeeded?
-         BZ    G0018
+         BZ    G0024
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
-         BE    G0020
+         BE    G0026
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'30'     permanent error
-         B     G0019
-G0020    DS    0H
+         B     G0027
+G0026    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'23'     no such record
-         B     G0019
-G0018    DS    0H
+         B     G0027
+G0024    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0019    DS    0H
+         B     G0025
+G0027    DS    0H
          DROP  8
+G0025    DS    0H
 L0006    DS    0H
 T0012    DS    0H
 * DISPLAY
@@ -298,16 +312,18 @@ T0013    DS    0H
 * CLOSE RRDS-FILE
          CLOSE (FD000)
          LTR   15,15               VSAM request succeeded?
-         BZ    G0021
+         BZ    G0028
          MVC   D0002(2),=C'30'     permanent error
-         B     G0022
-G0021    DS    0H
+         B     G0030
+G0028    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0002(2),=C'00'
-G0022    DS    0H
+         B     G0029
+G0030    DS    0H
          DROP  8
+G0029    DS    0H
 T0014    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0007

@@ -201,17 +201,23 @@ the first version of the `LINAGE` code learned twice -- a margin count kept in
 R14 across the eject, and the `END-OF-PAGE` answer kept in R15 across the
 line itself.
 
-### Tier 4 -- Relative and Indexed I-O, Level 1 closure (1 item, shared)
+### Tier 4 -- Relative and Indexed I-O, Level 1 closure -- DONE 2026-08-29
 
-`USE AFTER STANDARD ERROR PROCEDURE ON file-name` for relative and indexed
-files. Declaratives exist for sequential files; the dispatch has to reach the
-VSAM and ISAM error paths, which today go straight to `FILE STATUS`. **M.**
-Closes both modules at Level 1 in one piece of work.
+`USE AFTER STANDARD ERROR PROCEDURE ON file-name`, and by mode, for relative
+and indexed files, VSAM and ISAM. The rule (V-30, VI-32): a phrase on the
+statement takes the error it is for; a `USE` procedure takes what no phrase
+does. So every I/O statement now records whether it carried `AT END` or
+`INVALID KEY`, and the VSAM status routine's failure path -- after the FILE
+STATUS is set -- performs the applicable declarative when the statement had
+none. The two ISAM error labels do the same. `OPEN` and `CLOSE`, which have
+no phrase to carry, always route a failure to the `USE`.
 
-Also in the same area, from the CCVS histogram: the "this SELECT clause is not
-implemented" bucket (35 programs) was decomposed once and found to be mostly
-COBOL-85 spellings, correctly refused. Re-decompose it after Tier 3; whatever
-is left that is COBOL-74 belongs here.
+Relative I-O and Indexed I-O are both complete at level 1 with this; both
+already stood above it on `ACCESS DYNAMIC`, `READ NEXT` and `START`.
+
+The "this SELECT clause is not implemented" bucket in the CCVS histogram was
+not re-decomposed here; that is optimisation-phase housekeeping, since what is
+left of it is COBOL-85 spellings and `ALTERNATE RECORD KEY`.
 
 ### Tier 5 -- Inter-Program Communication, both levels (3 items)
 

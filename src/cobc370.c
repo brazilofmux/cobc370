@@ -640,6 +640,7 @@ typedef struct {
     int  eop;               /* WRITE ... AT END-OF-PAGE; lab2 continues */
     int  close_opt;         /* CLOSE: 0 plain, 1 NO REWIND (LEAVE), 2 REEL/UNIT (FEOV) */
     int  had_atend;         /* ST_READ: the statement carried AT END itself */
+    int  had_invalid;       /* the statement carried INVALID KEY itself */
     int  ins_first, ins_n;  /* ST_INSPECT: its slice of the operation table */
     int  line;              /* the source line, for the program-check table */
     int  lab3;              /* ST_SEARCH: the end label */
@@ -3521,6 +3522,7 @@ static void parse_one_statement(void)
         st->lab1 = ++nlabel;                 /* AT END */
         st->lab2 = ++nlabel;                 /* continue */
         if (is("INVALID")) {
+            st->had_invalid = 1;
             next(); expect("KEY");
             parse_stmt_list(1);
         } else if (is("AT") || is("END")) {
@@ -3603,6 +3605,7 @@ static void parse_one_statement(void)
         if (is("INVALID")) {
             if (!files[fi].isam && !files[fi].vsam)
                 die("INVALID KEY on WRITE needs an INDEXED file");
+            st->had_invalid = 1;
             next(); expect("KEY");
             parse_stmt_list(1);
         } else {
@@ -3627,6 +3630,7 @@ static void parse_one_statement(void)
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
         if (is("INVALID")) {
+            st->had_invalid = 1;
             /* A sequential REWRITE has no key to be invalid, and the standard
              * gives it no INVALID KEY phrase. Refusing it is kinder than
              * generating a branch that can never be taken. */
@@ -3650,7 +3654,7 @@ static void parse_one_statement(void)
         st->dst = fi;
         st->lab1 = ++nlabel;
         st->lab2 = ++nlabel;
-        if (is("INVALID")) { next(); expect("KEY"); parse_stmt_list(1); }
+        if (is("INVALID")) { st->had_invalid = 1; next(); expect("KEY"); parse_stmt_list(1); }
         else eat_period();
         new_stmt(ST_LABEL)->dst = st->lab2;
         return;
@@ -3698,7 +3702,7 @@ static void parse_one_statement(void)
         }
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
-        if (is("INVALID")) { next(); expect("KEY"); parse_stmt_list(1); }
+        if (is("INVALID")) { st->had_invalid = 1; next(); expect("KEY"); parse_stmt_list(1); }
         else eat_period();
         new_stmt(ST_LABEL)->dst = st->lab2;
         return;
@@ -4257,7 +4261,6 @@ static int decl_for(int fi)
         if ((decls[d].mode == 1 && f->opened_input)  ||
             (decls[d].mode == 2 && f->opened_output) ||
             (decls[d].mode == 3 && f->opened_io)     ||
-            (decls[d].mode == 4 && f->opened_extend) ||
             (decls[d].mode == 4 && f->opened_extend)) return d;
     }
     return -1;
@@ -4812,6 +4815,21 @@ static const char *rpl_name(const File *f, int inserting, char *buf, size_t n)
 
 static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab);
 
+/* The USE procedure that applies to the statement being generated, or -1:
+ * set per statement, and only when the statement carries no AT END or
+ * INVALID KEY of its own -- a phrase takes the error, a USE takes what no
+ * phrase does (V-30, VI-32). */
+static int gen_use_decl = -1;
+static int *gen_use_nret;
+static void gen_call_range(int a, int b, int *nret);
+
+static void gen_use_call(void)
+{
+    if (gen_use_decl < 0) return;
+    asm_comment("  no phrase for this: the USE procedure");
+    gen_call_range(decls[gen_use_decl].sect, section_end(decls[gen_use_decl].sect), gen_use_nret);
+}
+
 static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
 {
     char b[128], fd[64];
@@ -4851,17 +4869,24 @@ static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
         asm_line("", "CLI", b, tab[i].why);
         asm_line("", "BE", acase[i], "");
     }
+    char afail[16]; snprintf(afail, sizeof afail, "G%04d", ++gen_edited_labels);
     VS_SET("30", "permanent error");
-    asm_line("", "B", adone, "");
+    asm_line("", "B", afail, "");
     for (int i = 0; i < ncase; i++) {
         asm_line(acase[i], "DS", "0H", "");
         reset_bases();          /* arrived by branch: nothing is loaded */
         VS_SET(tab[i].status, tab[i].why);
-        asm_line("", "B", adone, "");
+        asm_line("", "B", afail, "");
     }
     asm_line(aok, "DS", "0H", "");
     reset_bases();
     VS_SET("00", "");
+    asm_line("", "B", adone, "");
+    /* Failed, status set: the USE procedure, when one applies and the
+     * statement had no phrase of its own to take this. */
+    asm_line(afail, "DS", "0H", "");
+    reset_bases();
+    gen_use_call();
     asm_line(adone, "DS", "0H", "");
     reset_bases();
     #undef VS_SET
@@ -6949,6 +6974,7 @@ static void generate(void)
     }
 
     int ndlit = 0, cur_para = -1, nret = 0;
+    gen_use_nret = &nret;
     genlabel = nlabel;
     if (ndecl > 0 && decl_end_para >= 0) {
         /* Declaratives come first in the source and must not be fallen into --
@@ -6959,6 +6985,16 @@ static void generate(void)
     }
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
+        /* Which USE procedure could take an error on this statement. */
+        gen_use_decl = -1;
+        switch (st->op) {
+        case ST_READ: case ST_WRITE: case ST_REWRITE: case ST_DELETE: case ST_START:
+            if (!st->had_atend && !st->had_invalid) gen_use_decl = decl_for(st->dst);
+            break;
+        case ST_OPEN: case ST_CLOSE:
+            gen_use_decl = decl_for(st->dst);
+            break;
+        }
         /* One label per statement, so a program check can be reported as a
          * line number rather than an address. The label costs nothing in the
          * object; the table it feeds is emitted at the end and is what the
@@ -7138,6 +7174,8 @@ static void generate(void)
                 }
                 asm_line("", "B", lc, "");
                 asm_line(le, "DS", "0H", "INVALID KEY");
+                reset_bases();
+                gen_use_call();
                 reset_bases();
                 break;
             }
@@ -7632,6 +7670,7 @@ static void generate(void)
                 asm_line("", "B", wlc, "");
                 asm_line(wle, "DS", "0H", "INVALID KEY");
                 reset_bases();
+                gen_use_call();
                 break;
             }
             if (f->print) {

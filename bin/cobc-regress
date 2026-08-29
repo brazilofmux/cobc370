@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -29,6 +29,7 @@ prereq_for() {
         ksdsnat|ksdsnats|ksdsnatu|ksdsnatr|ksdsnatx) echo ksdsnatl ;;
         esdsnatr|esdsnatu|esdsnata)         echo esdsnatl ;;
         rrdsnatr|rrdsnatd|rrdsnats|rrdsdisp)         echo rrdsnatl ;;
+        usevsam)                                     echo "ksdsnatl rrdsnatl" ;;
     esac
 }
 if [ $# -gt 0 ]; then
@@ -78,7 +79,7 @@ for t in $TESTS; do
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
         case "$t" in isamseq|isamrnd)
             printf '//GO.GLACCT DD  DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003\n' ;;
-        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr|ksdsnats|ksdsnatx)
+        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr|ksdsnats|ksdsnatx|usevsam)
             # The VSAM trio is stateful and runs in this order: ksdsnatl loads
             # the cluster, ksdsnat reads back what it wrote, ksdsnatu updates
             # it in place, ksdsnatr adds and deletes by key. ksdsnats only
@@ -101,7 +102,7 @@ for t in $TESTS; do
             # it empties the cluster and the group is repeatable.
             printf '//GO.ESDSF01 DD  DSN=VSTEST.ESDS.CLUSTER,DISP=OLD\n' ;;
         esac
-        case "$t" in rrdsnatl|rrdsnatr|rrdsnatd|rrdsnats|rrdsdisp)
+        case "$t" in rrdsnatl|rrdsnatr|rrdsnatd|rrdsnats|rrdsdisp|usevsam)
             printf '//GO.RRDSF01 DD  DSN=VSTEST.RRDS.CLUSTER,DISP=OLD\n' ;;
         esac
         if [ "$t" = rrdsnatl ] || [ "$t" = esdsnatl ]; then

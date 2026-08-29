@@ -49,14 +49,16 @@ T0003    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0002
+         B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0002    DS    0H
+         B     G0002
+G0003    DS    0H
          DROP  8
+G0002    DS    0H
 * 010-PROCESS.
 P0001    DS    0H
 T0004    DS    0H
@@ -81,18 +83,20 @@ T0005    DS    0H
 * CLOSE KSDS-FILE
          CLOSE (FD000)
          LTR   15,15               VSAM request succeeded?
-         BZ    G0003
+         BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0004
-G0003    DS    0H
+         B     G0006
+G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0004    DS    0H
+         B     G0005
+G0006    DS    0H
          DROP  8
+G0005    DS    0H
 T0006    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
@@ -109,51 +113,55 @@ T0007    DS    0H
          LTR   15,15               got a record?
          BNZ   L0001
          LTR   15,15               VSAM request succeeded?
-         BZ    G0005
+         BZ    G0007
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        end of data
-         BE    G0007
+         BE    G0009
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0006
+         B     G0010
+G0009    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'10'     end of data
+         B     G0010
 G0007    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'10'     end of data
-         B     G0006
-G0005    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0006    DS    0H
+         B     G0008
+G0010    DS    0H
          DROP  8
+G0008    DS    0H
          B     L0002
 L0001    DS    0H                  AT END
          LTR   15,15               VSAM request succeeded?
-         BZ    G0008
+         BZ    G0011
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        end of data
-         BE    G0010
+         BE    G0013
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0009
-G0010    DS    0H
+         B     G0014
+G0013    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'10'     end of data
-         B     G0009
-G0008    DS    0H
+         B     G0014
+G0011    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0009    DS    0H
+         B     G0012
+G0014    DS    0H
          DROP  8
+G0012    DS    0H
 T0008    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator

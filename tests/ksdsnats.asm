@@ -49,14 +49,16 @@ T0003    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0002
+         B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0002    DS    0H
+         B     G0002
+G0003    DS    0H
          DROP  8
+G0002    DS    0H
 T0004    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -99,18 +101,20 @@ T0008    DS    0H
 * CLOSE KSDS-FILE
          CLOSE (FD000)
          LTR   15,15               VSAM request succeeded?
-         BZ    G0003
+         BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0004
-G0003    DS    0H
+         B     G0006
+G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0004    DS    0H
+         B     G0005
+G0006    DS    0H
          DROP  8
+G0005    DS    0H
 T0009    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
@@ -145,65 +149,69 @@ T0013    DS    0H
          LTR   15,15               positioned?
          BNZ   L0002
          LTR   15,15               VSAM request succeeded?
-         BZ    G0005
+         BZ    G0007
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        nothing at or after the key
-         BE    G0007
+         BE    G0009
          CLI   VSFB+3,X'10'        no such record
-         BE    G0008
+         BE    G0010
          MVC   D0003(2),=C'30'     permanent error
-         B     G0006
-G0007    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0006
-G0008    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'23'     no such record
-         B     G0006
-G0005    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'00'
-G0006    DS    0H
-         DROP  8
-         B     L0003
-L0002    DS    0H                  INVALID KEY
-         LTR   15,15               VSAM request succeeded?
-         BZ    G0009
-         SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
-         CLI   VSFB+3,X'04'        nothing at or after the key
-         BE    G0011
-         CLI   VSFB+3,X'10'        no such record
-         BE    G0012
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
-         B     G0010
-G0011    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0010
-G0012    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'23'     no such record
-         B     G0010
+         B     G0011
 G0009    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'00'
+         MVC   D0003(2),=C'23'     nothing at or after the key
+         B     G0011
 G0010    DS    0H
          DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'23'     no such record
+         B     G0011
+G0007    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'00'
+         B     G0008
+G0011    DS    0H
+         DROP  8
+G0008    DS    0H
+         B     L0003
+L0002    DS    0H                  INVALID KEY
+         LTR   15,15               VSAM request succeeded?
+         BZ    G0012
+         SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
+         CLI   VSFB+3,X'04'        nothing at or after the key
+         BE    G0014
+         CLI   VSFB+3,X'10'        no such record
+         BE    G0015
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'30'     permanent error
+         B     G0016
+G0014    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'23'     nothing at or after the key
+         B     G0016
+G0015    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'23'     no such record
+         B     G0016
+G0012    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'00'
+         B     G0013
+G0016    DS    0H
+         DROP  8
+G0013    DS    0H
 T0014    DS    0H
 * MOVE Y -> START-FAILED-SWITCH
          L     8,BL0000            base locator
@@ -243,65 +251,69 @@ T0019    DS    0H
          LTR   15,15               positioned?
          BNZ   L0004
          LTR   15,15               VSAM request succeeded?
-         BZ    G0013
-         SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
-         CLI   VSFB+3,X'04'        nothing at or after the key
-         BE    G0015
-         CLI   VSFB+3,X'10'        no such record
-         BE    G0016
-         MVC   D0003(2),=C'30'     permanent error
-         B     G0014
-G0015    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0014
-G0016    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'23'     no such record
-         B     G0014
-G0013    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'00'
-G0014    DS    0H
-         DROP  8
-         B     L0005
-L0004    DS    0H                  INVALID KEY
-         LTR   15,15               VSAM request succeeded?
          BZ    G0017
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        nothing at or after the key
          BE    G0019
          CLI   VSFB+3,X'10'        no such record
          BE    G0020
-         L     8,BL0000            base locator
-         USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0018
+         B     G0021
 G0019    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0018
+         B     G0021
 G0020    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     no such record
-         B     G0018
+         B     G0021
 G0017    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0018    DS    0H
+         B     G0018
+G0021    DS    0H
          DROP  8
+G0018    DS    0H
+         B     L0005
+L0004    DS    0H                  INVALID KEY
+         LTR   15,15               VSAM request succeeded?
+         BZ    G0022
+         SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
+         CLI   VSFB+3,X'04'        nothing at or after the key
+         BE    G0024
+         CLI   VSFB+3,X'10'        no such record
+         BE    G0025
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'30'     permanent error
+         B     G0026
+G0024    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'23'     nothing at or after the key
+         B     G0026
+G0025    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'23'     no such record
+         B     G0026
+G0022    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'00'
+         B     G0023
+G0026    DS    0H
+         DROP  8
+G0023    DS    0H
 T0020    DS    0H
 * MOVE Y -> START-FAILED-SWITCH
          L     8,BL0000            base locator
@@ -341,65 +353,69 @@ T0025    DS    0H
          LTR   15,15               positioned?
          BNZ   L0006
          LTR   15,15               VSAM request succeeded?
-         BZ    G0021
+         BZ    G0027
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        nothing at or after the key
-         BE    G0023
+         BE    G0029
          CLI   VSFB+3,X'10'        no such record
-         BE    G0024
+         BE    G0030
          MVC   D0003(2),=C'30'     permanent error
-         B     G0022
-G0023    DS    0H
+         B     G0031
+G0029    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0022
-G0024    DS    0H
+         B     G0031
+G0030    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     no such record
-         B     G0022
-G0021    DS    0H
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'00'
-G0022    DS    0H
-         DROP  8
-         B     L0007
-L0006    DS    0H                  INVALID KEY
-         LTR   15,15               VSAM request succeeded?
-         BZ    G0025
-         SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
-         CLI   VSFB+3,X'04'        nothing at or after the key
-         BE    G0027
-         CLI   VSFB+3,X'10'        no such record
-         BE    G0028
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
-         B     G0026
+         B     G0031
 G0027    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0026
+         MVC   D0003(2),=C'00'
+         B     G0028
+G0031    DS    0H
+         DROP  8
 G0028    DS    0H
+         B     L0007
+L0006    DS    0H                  INVALID KEY
+         LTR   15,15               VSAM request succeeded?
+         BZ    G0032
+         SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
+         CLI   VSFB+3,X'04'        nothing at or after the key
+         BE    G0034
+         CLI   VSFB+3,X'10'        no such record
+         BE    G0035
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'30'     permanent error
+         B     G0036
+G0034    DS    0H
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0003(2),=C'23'     nothing at or after the key
+         B     G0036
+G0035    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     no such record
-         B     G0026
-G0025    DS    0H
+         B     G0036
+G0032    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0026    DS    0H
+         B     G0033
+G0036    DS    0H
          DROP  8
+G0033    DS    0H
 T0026    DS    0H
 * MOVE Y -> START-FAILED-SWITCH
          L     8,BL0000            base locator
@@ -439,65 +455,69 @@ T0031    DS    0H
          LTR   15,15               positioned?
          BNZ   L0008
          LTR   15,15               VSAM request succeeded?
-         BZ    G0029
+         BZ    G0037
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        nothing at or after the key
-         BE    G0031
+         BE    G0039
          CLI   VSFB+3,X'10'        no such record
-         BE    G0032
+         BE    G0040
          MVC   D0003(2),=C'30'     permanent error
-         B     G0030
-G0031    DS    0H
+         B     G0041
+G0039    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0030
-G0032    DS    0H
+         B     G0041
+G0040    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     no such record
-         B     G0030
-G0029    DS    0H
+         B     G0041
+G0037    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0030    DS    0H
+         B     G0038
+G0041    DS    0H
          DROP  8
+G0038    DS    0H
          B     L0009
 L0008    DS    0H                  INVALID KEY
          LTR   15,15               VSAM request succeeded?
-         BZ    G0033
+         BZ    G0042
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        nothing at or after the key
-         BE    G0035
+         BE    G0044
          CLI   VSFB+3,X'10'        no such record
-         BE    G0036
+         BE    G0045
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0034
-G0035    DS    0H
+         B     G0046
+G0044    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     nothing at or after the key
-         B     G0034
-G0036    DS    0H
+         B     G0046
+G0045    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'23'     no such record
-         B     G0034
-G0033    DS    0H
+         B     G0046
+G0042    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0034    DS    0H
+         B     G0043
+G0046    DS    0H
          DROP  8
+G0043    DS    0H
 T0032    DS    0H
 * MOVE Y -> START-FAILED-SWITCH
          L     8,BL0000            base locator
@@ -618,51 +638,55 @@ T0045    DS    0H
          LTR   15,15               got a record?
          BNZ   L0012
          LTR   15,15               VSAM request succeeded?
-         BZ    G0037
+         BZ    G0047
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        end of data
-         BE    G0039
+         BE    G0049
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0038
-G0039    DS    0H
+         B     G0050
+G0049    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'10'     end of data
-         B     G0038
-G0037    DS    0H
+         B     G0050
+G0047    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0038    DS    0H
+         B     G0048
+G0050    DS    0H
          DROP  8
+G0048    DS    0H
          B     L0013
 L0012    DS    0H                  AT END
          LTR   15,15               VSAM request succeeded?
-         BZ    G0040
+         BZ    G0051
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'04'        end of data
-         BE    G0042
+         BE    G0053
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'30'     permanent error
-         B     G0041
-G0042    DS    0H
+         B     G0054
+G0053    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'10'     end of data
-         B     G0041
-G0040    DS    0H
+         B     G0054
+G0051    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0003(2),=C'00'
-G0041    DS    0H
+         B     G0052
+G0054    DS    0H
          DROP  8
+G0052    DS    0H
 T0046    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator
