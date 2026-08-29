@@ -95,6 +95,7 @@ T0008    DS    0H
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
 L0002    DS    0H
+L0003    DS    0H
          BAL   14,RG001
 T0009    DS    0H
 * GO TO LOOP-PARA
@@ -104,8 +105,8 @@ P0002    DS    0H
 T0010    DS    0H
 * TERMINATE SIMPLE-RPT
          CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
-         BE    L0003               no: nothing to do
-L0003    DS    0H
+         BE    L0004               no: nothing to do
+L0004    DS    0H
 T0011    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -151,19 +152,19 @@ RG000    ST    14,RGS000           save the return
 * report group DETAIL-LINE
 RG001    ST    14,RGS001           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0005
+         BE    L0006
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0005             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0004               fits
+         BNH   L0005               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0005    DS    0H
+L0006    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0004               none: the first group on a page fits
+         BZ    L0005               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0005             into LINE-COUNTER
@@ -171,24 +172,24 @@ L0005    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0004               fits
+         BNH   L0005               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0004    DS    0H
+L0005    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0005             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0006
+         BE    L0007
          LA    2,1(2)              LINE PLUS n
-         B     L0007
-L0006    DS    0H
+         B     L0008
+L0007    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
-         B     L0007
+         B     L0008
          LA    2,1(2)              yes: the line after it
-L0007    DS    0H
+L0008    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
@@ -266,6 +267,7 @@ RRH000   DC    X'00'               the REPORT HEADING is on this page
 RPF000   DC    X'00'               the PAGE FOOTING is on this page
 RSNG000  DC    F'0'                saved next group integer
 RPHY000  DC    F'0'                the physical line
+RBRK000  DC    X'00'               the level of the control break
 RADVS000 DS    F                   page advance return
 REJCS000 DS    F                   eject return
 RTGT     DS    F                   target line

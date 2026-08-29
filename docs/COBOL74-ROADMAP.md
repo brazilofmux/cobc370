@@ -453,6 +453,24 @@ generated per report from the `CONTROL` hierarchy.
    most major control followed by `RF`; prior values supplied to `CF`
    `SOURCE` clauses (2.21.4(13)); `NEXT GROUP` ignored on a `CF` below the
    break level (2.15.4(3)). **L** -- this is the small language of its own.
+   -- DONE 2026-08-30. Each control data item gets a hidden clone of its
+   own description; the clones are the values the next `GENERATE` senses
+   against and the prior values a `CONTROL FOOTING` or `REPORT FOOTING`
+   `SOURCE` reads. Sensing is major to minor by the item's category (`CP`
+   for numeric, `CLC` otherwise) and stops at the first change, which is the
+   highest level that changed; the report's break cell holds the level, the
+   footings and headings each test it, and `TERMINATE` sets it to the most
+   major level. `tests/rptctl` covers `CONTROL FINAL DEPT ACCT` with a
+   heading and footing at each level, footings past `LAST DETAIL`, and a
+   footing's `NEXT GROUP` applied at its own level and ignored below the
+   break. GnuCOBOL 3 produced doubled headings and could not serve as an
+   oracle at all; the oracle was derived from the text by hand, and IKFCBL00
+   then produced the identical sequence with identical `LINE-COUNTER`
+   values. One blank line in the captured output matched neither derivation
+   nor either compiler's arithmetic -- stamps on every line proved `COBWRL`
+   had written none -- and turned out to be the capture converting the
+   printer's `CR LF` into two line breaks; fixed in `tk5-run`, in the
+   operator repository.
 4. **`SUM`.** Sum counters as named numeric items, zeroed by `INITIATE`;
    subtotalling on `GENERATE` with `UPON` selectivity; crossfooting and
    rolling forward at `CF` processing in the order of 2.21.4(10) and

@@ -814,7 +814,8 @@ enum { NG_NONE, NG_ABS, NG_REL, NG_PAGE };         /* the NEXT GROUP clause */
 
 typedef struct { int column, sym, src; Node *sub; char lit[MAXTOK]; int litlen; } RField;
 typedef struct { int absolute, n, next_page, first_fld, nfld; } RLine;
-typedef struct { char name[31]; int report, type, first_line, nline, ng_kind, ng_n; } RGroup;
+typedef struct { char name[31]; int report, type, first_line, nline, ng_kind, ng_n, ctl_level; } RGroup;
+#define MAXCTL 9                                    /* FINAL and eight data-names */
 typedef struct {
     char name[31];
     int  file;
@@ -822,6 +823,11 @@ typedef struct {
     int  page_limit, heading, first_detail, last_detail, footing;
     int  lc_sym, pc_sym;                /* LINE-COUNTER, PAGE-COUNTER */
     int  rh_group, ph_group, pf_group, rf_group;   /* the singleton groups, or -1 */
+    int  nctl, ctl_final;               /* the control hierarchy: levels 1 (major) to nctl */
+    int  ctl_sym[MAXCTL + 1];           /* the control data item at each level; -1 at FINAL */
+    int  ctl_clone[MAXCTL + 1];         /* its saved copy: the prior values of 2.21.4(13) */
+    int  ch_group[MAXCTL + 1], cf_group[MAXCTL + 1];   /* CONTROL HEADING/FOOTING per level */
+    char lbl_brk[9];                    /* the level of the current control break */
     char lbl_ctl[9];                    /* pending carriage control byte */
     char lbl_body[9];                   /* a body group is on this page */
     char lbl_gen[9];                    /* the first GENERATE has happened */
@@ -1309,6 +1315,7 @@ static int is_numeric_literal(const char *t)
 /* ---- DATA DIVISION ----------------------------------------------------- */
 
 static Node *opt_subscript(void);
+static int var_len(const Sym *y);
 
 /* LINE-COUNTER and PAGE-COUNTER for a report: unsigned binary items able to
  * hold 999999 (VIII 1.2), under a hidden group named for the report so that
@@ -1326,6 +1333,35 @@ static int make_counter(const char *name, int gparent)
     sy->bytes = sy->elem = 4;
     sy->offset = wslen; wslen += 4;
     return nsym++;
+}
+
+/* The saved copy of a control data item: the same description at another
+ * address, so a SOURCE in a CONTROL FOOTING can read the prior value
+ * through the ordinary MOVE path. Unnameable from COBOL. */
+static int make_control_clone(int src)
+{
+    if (nsym >= MAXSYM) die("too many data items");
+    const Sym *o = &syms[src];
+    if (o->bytes > 256) die("a control data item may be at most 256 bytes here");
+    Sym *c = &syms[nsym];
+    *c = *o;
+    snprintf(c->name, sizeof c->name, "*PRIOR");
+    snprintf(c->label, sizeof c->label, "D%04d", nsym);
+    c->level = 1; c->gparent = -1; c->parent = -1;
+    c->occurs = 0; c->occ_parent = -1; c->occ_depth = 0;
+    c->alias = 0; c->linkage = 0; c->fd_file = -1; c->has_value = 0;
+    c->index_sym = -1; c->askey_sym = -1; c->nkeys = 0;
+    c->odo_dep = -1; c->odo_tab = 0; c->is_88 = 0;
+    c->offset = wslen; wslen += c->bytes;
+    return nsym++;
+}
+
+/* The level of a control name in a report's hierarchy, or 0. */
+static int control_level(const Report *rp, int sym, int final)
+{
+    for (int k = 1; k <= rp->nctl; k++)
+        if (final ? rp->ctl_sym[k] < 0 : rp->ctl_sym[k] == sym) return k;
+    return 0;
 }
 
 /* REPORT SECTION. Structure is recognised by the clauses rather than by fixed
@@ -1372,8 +1408,31 @@ static void parse_report_section(void)
                 else if (is("FIRST")) { next(); expect("DETAIL"); rp->first_detail = atoi(tok.text); next(); }
                 else if (is("LAST"))  { next(); expect("DETAIL"); rp->last_detail  = atoi(tok.text); next(); }
                 else if (is("FOOTING")) { next(); rp->footing = atoi(tok.text); next(); }
-                else if (is("CONTROL") || is("CONTROLS"))
-                    die("CONTROL clauses and control break groups are not implemented yet");
+                else if (is("CONTROL") || is("CONTROLS")) {
+                    /* VIII 2.10: FINAL, if given, is the highest level;
+                     * then data-name-1 the major control down to the last,
+                     * the minor. Each gets a saved copy for break sensing
+                     * and for the prior values of 2.21.4(13). */
+                    next(); if (is("IS") || is("ARE")) next();
+                    if (rp->nctl) die("one CONTROL clause per RD");
+                    if (is("FINAL")) { next(); rp->ctl_final = 1; rp->nctl = 1; rp->ctl_sym[1] = -1; }
+                    while (!tok.eof && !is(".") && !is("PAGE") && !is("HEADING") && !is("FIRST")
+                           && !is("LAST") && !is("FOOTING") && !is("CODE")) {
+                        if (rp->nctl >= MAXCTL) die("too many levels in the CONTROL clause");
+                        int cs = consume_sym();
+                        const Sym *cy = &syms[cs];
+                        if (cy->occ_parent >= 0 || cy->occurs > 0)
+                            die("a control data item may not be subscripted -- VIII 2.10.3(1)");
+                        if (var_len(cy)) die("a control data item may not be of variable size -- VIII 2.10.3(3)");
+                        for (int k = 1; k <= rp->nctl; k++)
+                            if (rp->ctl_sym[k] == cs) die("each CONTROL data-name must be a different item -- VIII 2.10.3(2)");
+                        rp->nctl++;
+                        rp->ctl_sym[rp->nctl] = cs;
+                        rp->ctl_clone[rp->nctl] = make_control_clone(cs);
+                    }
+                    if (rp->nctl == 0 || (rp->ctl_final && rp->nctl == 1 && 0))
+                        die("the CONTROL clause needs FINAL or a data-name");
+                }
                 else if (is("CODE"))
                     die("the CODE clause is not implemented yet");
                 else die("this RD clause is not implemented yet");
@@ -1407,7 +1466,7 @@ static void parse_report_section(void)
          * COLUMN (or PICTURE) makes a printable item -- and an entry may
          * do more than one of those. */
         char nm[31] = "";
-        int has_type = 0, ty = -1;
+        int has_type = 0, ty = -1, ctl_level = 0;
         int has_line = 0, l_abs = 0, l_n = 0, l_np = 0;
         int ng_kind = NG_NONE, ng_n = 0;
         int has_col = 0, column = 0, src = -1; Node *sub = NULL;
@@ -1430,8 +1489,21 @@ static void parse_report_section(void)
                 else if (is("RF")) { ty = RG_REPORT_FOOTING; next(); }
                 else if (is("PAGE")) { next(); if (is("HEADING")) ty = RG_PAGE_HEADING; else if (is("FOOTING")) ty = RG_PAGE_FOOTING; else die("TYPE PAGE must be PAGE HEADING or PAGE FOOTING"); next(); }
                 else if (is("REPORT")) { next(); if (is("HEADING")) ty = RG_REPORT_HEADING; else if (is("FOOTING")) ty = RG_REPORT_FOOTING; else die("TYPE REPORT must be REPORT HEADING or REPORT FOOTING"); next(); }
-                else if (is("CONTROL") || is("CH") || is("CF"))
-                    die("CONTROL HEADING and CONTROL FOOTING groups are not implemented yet");
+                else if (is("CONTROL") || is("CH") || is("CF")) {
+                    if (is("CH")) { ty = RG_CONTROL_HEADING; next(); }
+                    else if (is("CF")) { ty = RG_CONTROL_FOOTING; next(); }
+                    else {
+                        next();
+                        if (is("HEADING")) ty = RG_CONTROL_HEADING;
+                        else if (is("FOOTING")) ty = RG_CONTROL_FOOTING;
+                        else die("TYPE CONTROL must be CONTROL HEADING or CONTROL FOOTING");
+                        next();
+                    }
+                    if (!rp->nctl) die("a CONTROL HEADING or FOOTING needs a CONTROL clause in the RD -- VIII 2.21.3(4)");
+                    if (is("FINAL")) { next(); ctl_level = control_level(rp, -1, 1); }
+                    else ctl_level = control_level(rp, consume_sym(), 0);
+                    if (!ctl_level) die("the control named on a CONTROL HEADING or FOOTING must be in the CONTROL clause -- VIII 2.21.3(4)");
+                }
                 else die("unknown report group TYPE");
             } else if (is("LINE")) {
                 next(); if (is("NUMBER")) next(); if (is("IS")) next();
@@ -1493,9 +1565,11 @@ static void parse_report_section(void)
             default: break;
             }
             int *slot = ty == RG_REPORT_HEADING ? &rp->rh_group : ty == RG_PAGE_HEADING ? &rp->ph_group
-                      : ty == RG_PAGE_FOOTING ? &rp->pf_group : ty == RG_REPORT_FOOTING ? &rp->rf_group : NULL;
+                      : ty == RG_PAGE_FOOTING ? &rp->pf_group : ty == RG_REPORT_FOOTING ? &rp->rf_group
+                      : ty == RG_CONTROL_HEADING ? &rp->ch_group[ctl_level]
+                      : ty == RG_CONTROL_FOOTING ? &rp->cf_group[ctl_level] : NULL;
             if (slot) {
-                if (*slot >= 0) die("a report may have only one group of that TYPE -- VIII 2.21.3(2)");
+                if (*slot >= 0) die("a report may have only one group of that TYPE for that control -- VIII 2.21.3(2),(4)");
                 *slot = nrgroup;
             }
             if (ng_kind != NG_NONE) {
@@ -1511,7 +1585,7 @@ static void parse_report_section(void)
             snprintf(g->name, sizeof g->name, "%s", nm);
             g->report = cur_report; g->type = ty;
             g->first_line = nrline;
-            g->ng_kind = ng_kind; g->ng_n = ng_n;
+            g->ng_kind = ng_kind; g->ng_n = ng_n; g->ctl_level = ctl_level;
             cur_group = nrgroup++; cur_line = -1;
         } else if (ng_kind != NG_NONE)
             die("the NEXT GROUP clause belongs on the report group entry -- VIII 2.5.2, Format 1");
@@ -1732,6 +1806,8 @@ static void parse_data_division(void)
                     snprintf(rp->lbl_pf,   sizeof rp->lbl_pf,   "RPF%03d",   nreport);
                     snprintf(rp->lbl_sng,  sizeof rp->lbl_sng,  "RSNG%03d",  nreport);
                     snprintf(rp->lbl_phy,  sizeof rp->lbl_phy,  "RPHY%03d",  nreport);
+                    snprintf(rp->lbl_brk,  sizeof rp->lbl_brk,  "RBRK%03d",  nreport);
+                    for (int k = 0; k <= MAXCTL; k++) { rp->ctl_sym[k] = rp->ctl_clone[k] = -1; rp->ch_group[k] = rp->cf_group[k] = -1; }
                     rp->file = cur_file;
                     rp->lc_sym = rp->pc_sym = -1;
                     rp->rh_group = rp->ph_group = rp->pf_group = rp->rf_group = -1;
@@ -7610,6 +7686,19 @@ static const char *rw_counter(const Report *rp, int page)
     return sy->label;
 }
 
+/* The item a SOURCE reads: in a CONTROL FOOTING or REPORT FOOTING, a control
+ * data item is read from its saved copy -- the prior values of VIII
+ * 2.21.4(13). Everything else reads the item itself. */
+static int rw_source_sym(int gi, int src)
+{
+    const RGroup *g = &rgroups[gi];
+    const Report *rp = &reports[g->report];
+    if (g->type != RG_CONTROL_FOOTING && g->type != RG_REPORT_FOOTING) return src;
+    for (int k = 1; k <= rp->nctl; k++)
+        if (rp->ctl_sym[k] == src) return rp->ctl_clone[k];
+    return src;
+}
+
 /* Build one print line of a group from its fields and hand it to COBWRL,
  * with the target line already in R2. */
 static void emit_report_line(int gi, const RLine *l)
@@ -7622,7 +7711,7 @@ static void emit_report_line(int gi, const RLine *l)
         RField *f = &rfields[fi];
         const Sym *fs = &syms[f->sym];
         if (f->src >= 0) {
-            emit_move(fs, NULL, &syms[f->src], f->sub);
+            emit_move(fs, NULL, &syms[rw_source_sym(gi, f->src)], f->sub);
             reset_bases();
             need_sym_base(fs);
             snprintf(b, sizeof b, "RBUF+%d(%d),%s", f->column, fs->bytes, fs->label);
@@ -7801,7 +7890,15 @@ static void emit_report_group(int gi)
         emit_report_line(gi, l);
     }
 
-    /* The final LINE-COUNTER setting. */
+    /* The final LINE-COUNTER setting. A CONTROL FOOTING below the level of
+     * the break keeps rule 6d -- its NEXT GROUP is ignored (2.15.4(3)). */
+    char lng[16]; lng[0] = 0;
+    if (g->type == RG_CONTROL_FOOTING && g->ng_kind != NG_NONE) {
+        snprintf(lng, sizeof lng, "L%04d", ++genlabel);
+        snprintf(b, sizeof b, "%s,%d", rp->lbl_brk, g->ctl_level);
+        asm_line("", "CLI", b, "the break is at this level?");
+        asm_line("", "BNE", lng, "no: NEXT GROUP does not apply");
+    }
     if (body || g->type == RG_REPORT_HEADING || g->type == RG_PAGE_FOOTING) {
         switch (g->ng_kind) {
         case NG_ABS:
@@ -7853,6 +7950,7 @@ static void emit_report_group(int gi)
         default: break;
         }
     }
+    if (lng[0]) asm_line(lng, "DS", "0H", "");
     if (body) {
         snprintf(b, sizeof b, "%s,X'01'", rp->lbl_body);
         asm_line("", "MVI", b, "a body group is on this page");
@@ -7892,6 +7990,76 @@ static void emit_report_eject(int ri)
     snprintf(b, sizeof b, "14,%s", rp->lbl_ejcs);
     asm_line("", "L", b, "");
     asm_line("", "BR", "14", "");
+}
+
+/* Save the control data items: the values the next GENERATE senses against,
+ * and the prior values a CONTROL FOOTING reads. */
+static void emit_save_controls(const Report *rp)
+{
+    char b[160], fd[64], fs[64];
+    for (int k = 1; k <= rp->nctl; k++) {
+        if (rp->ctl_sym[k] < 0) continue;
+        const Sym *o = &syms[rp->ctl_sym[k]], *c = &syms[rp->ctl_clone[k]];
+        need_sym_base(o); need_sym_base(c);
+        field_ref_m(c, NULL, FR_SS_LEN, c->bytes, 6, fd, sizeof fd);
+        field_ref_m(o, NULL, FR_SS_NOLEN, o->bytes, 7, fs, sizeof fs);
+        snprintf(b, sizeof b, "%s,%s", fd, fs);
+        asm_line("", "MVC", b, o->name);
+    }
+    reset_bases();
+}
+
+/* Sense a control break, VIII 2.10.4(3): each control data item against its
+ * saved value, major to minor, by the relation-condition rules of its
+ * category. The first difference is the break, at the highest level that
+ * changed; FINAL never changes by comparison. Branches to lbrk with the
+ * level in the report's break cell, or falls through with none. */
+static void emit_sense_break(const Report *rp, const char *lbrk)
+{
+    char b[160], fl[64], fr[64], lk[16];
+    for (int k = 1; k <= rp->nctl; k++) {
+        if (rp->ctl_sym[k] < 0) continue;
+        const Sym *o = &syms[rp->ctl_sym[k]], *c = &syms[rp->ctl_clone[k]];
+        snprintf(lk, sizeof lk, "L%04d", ++genlabel);
+        if (o->is_group || o->is_alpha) {
+            need_sym_base(o); need_sym_base(c);
+            field_ref_m(o, NULL, FR_SS_LEN, o->bytes, 6, fl, sizeof fl);
+            field_ref_m(c, NULL, FR_SS_NOLEN, c->bytes, 7, fr, sizeof fr);
+            snprintf(b, sizeof b, "%s,%s", fl, fr);
+            asm_line("", "CLC", b, o->name);
+        } else {
+            need_sym_base(o); gen_load(o, NULL, "PWK1");
+            need_sym_base(c); gen_load(c, NULL, "PWK2");
+            asm_line("", "CP", "PWK1(16),PWK2(16)", o->name);
+        }
+        asm_line("", "BE", lk, "unchanged");
+        snprintf(b, sizeof b, "%s,%d", rp->lbl_brk, k);
+        asm_line("", "MVI", b, "a control break at this level");
+        asm_line("", "B", lbrk, "");
+        asm_line(lk, "DS", "0H", "");
+        reset_bases();
+    }
+}
+
+/* The CONTROL FOOTINGs from the minor level up to the break level, or the
+ * CONTROL HEADINGs from the break level down to the minor: every group at
+ * a level not more major than the break. */
+static void emit_control_groups(const Report *rp, int footings)
+{
+    char b[160], ls[16];
+    for (int i = 0; i < rp->nctl; i++) {
+        int k = footings ? rp->nctl - i : i + 1;
+        int gi = footings ? rp->cf_group[k] : rp->ch_group[k];
+        if (gi < 0) continue;
+        snprintf(ls, sizeof ls, "L%04d", ++genlabel);
+        snprintf(b, sizeof b, "%s,%d", rp->lbl_brk, k);
+        asm_line("", "CLI", b, "the break is at least this major?");
+        asm_line("", "BH", ls, "no: this level did not break");
+        snprintf(b, sizeof b, "14,RG%03d", gi);
+        asm_line("", "BAL", b, footings ? "CONTROL FOOTING" : "CONTROL HEADING");
+        asm_line(ls, "DS", "0H", "");
+        reset_bases();
+    }
 }
 
 /* Page advance processing for one report, VIII 2.21.4(12): the PAGE
@@ -8439,6 +8607,13 @@ static void generate(void)
             snprintf(b, sizeof b, "%s,X'00'", rp->lbl_gen);
             asm_line("", "CLI", b, "any GENERATE since INITIATE?");
             asm_line("", "BE", ldone, "no: nothing to do");
+            if (rp->nctl) {
+                /* 3.4.4(1): as though a break in the most major control:
+                 * every CONTROL FOOTING, minor to major, with prior values. */
+                snprintf(b, sizeof b, "%s,X'01'", rp->lbl_brk);
+                asm_line("", "MVI", b, "a break at the most major level");
+                emit_control_groups(rp, 1);
+            }
             if (rp->pf_group >= 0) {
                 snprintf(b, sizeof b, "14,RG%03d", rp->pf_group);
                 asm_line("", "BAL", b, "PAGE FOOTING, the last group of the page");
@@ -8485,7 +8660,31 @@ static void generate(void)
                 snprintf(b, sizeof b, "14,RG%03d", rp->ph_group);
                 asm_line("", "BAL", b, "the first page heading");
             }
-            asm_line(lnf, "DS", "0H", "");
+            reset_bases();
+            char ldet[16]; snprintf(ldet, sizeof ldet, "L%04d", ++genlabel);
+            if (rp->nctl) {
+                /* 3.1.4(5): save the control values, then every CONTROL
+                 * HEADING, major to minor. */
+                emit_save_controls(rp);
+                snprintf(b, sizeof b, "%s,X'01'", rp->lbl_brk);
+                asm_line("", "MVI", b, "every level, for the headings");
+                emit_control_groups(rp, 0);
+                asm_line("", "B", ldet, "");
+                asm_line(lnf, "DS", "0H", "");
+                /* 3.1.4(6): sense a break; on one, the CONTROL FOOTINGs minor
+                 * to major with the prior values, the new values saved, then
+                 * the CONTROL HEADINGs major to minor. */
+                char lbrk[16]; snprintf(lbrk, sizeof lbrk, "L%04d", ++genlabel);
+                emit_sense_break(rp, lbrk);
+                asm_line("", "B", ldet, "no control break");
+                asm_line(lbrk, "DS", "0H", "");
+                reset_bases();
+                emit_control_groups(rp, 1);
+                emit_save_controls(rp);
+                emit_control_groups(rp, 0);
+            } else asm_line(lnf, "DS", "0H", "");
+            asm_line(ldet, "DS", "0H", "");
+            reset_bases();
             snprintf(b, sizeof b, "14,RG%03d", st->dst);
             asm_line("", "BAL", b, "");
             reset_bases();
@@ -9834,6 +10033,7 @@ static void generate(void)
             asm_line(reports[i].lbl_pf,   "DC", "X'00'", "the PAGE FOOTING is on this page");
             asm_line(reports[i].lbl_sng,  "DC", "F'0'",  "saved next group integer");
             asm_line(reports[i].lbl_phy,  "DC", "F'0'",  "the physical line");
+            asm_line(reports[i].lbl_brk,  "DC", "X'00'", "the level of the control break");
             asm_line(reports[i].lbl_advs, "DS", "F",     "page advance return");
             asm_line(reports[i].lbl_ejcs, "DS", "F",     "eject return");
         }

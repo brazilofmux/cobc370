@@ -141,19 +141,24 @@ Present: `REPORT IS` on the FD; `RD` with the `PAGE` clause entire -- `LIMIT`,
 `HEADING`, `FIRST DETAIL`, `LAST DETAIL`, `FOOTING`, with the implicit values
 of 2.16.4(2) -- and without it, a single page of indefinite length;
 `LINE-COUNTER` and `PAGE-COUNTER` as special registers, qualifiable by the
-report-name, usable in `SOURCE` and in the Procedure Division; report groups
-of `TYPE REPORT HEADING`, `PAGE HEADING`, `DETAIL`, `PAGE FOOTING` and
-`REPORT FOOTING`, presented by Tables 1 to 5 of 2.5.5 (the fit tests, the
-first-line rules, the saved next group integer, the final `LINE-COUNTER`
-settings, page advance processing); `LINE NUMBER` absolute, `PLUS` and
-`NEXT PAGE`; `NEXT GROUP` absolute, `PLUS` and `NEXT PAGE`; report entries
-with their clauses in any order (2.5.3(2)); `COLUMN NUMBER`; `SOURCE` with
-subscripts; `VALUE`; `USAGE DISPLAY`; `GENERATE data-name`, `INITIATE`,
-`TERMINATE`.
+report-name, usable in `SOURCE` and in the Procedure Division; the `CONTROL`
+clause with `FINAL` and a data-name series (2.10), breaks sensed by the
+relation-condition rules of each item's category; report groups of every
+`TYPE` -- `REPORT HEADING`, `PAGE HEADING`, `CONTROL HEADING`, `DETAIL`,
+`CONTROL FOOTING`, `PAGE FOOTING`, `REPORT FOOTING` -- presented by Tables
+1 to 5 of 2.5.5 (the fit tests, the first-line rules, the saved next group
+integer, the final `LINE-COUNTER` settings, page advance processing) and
+sequenced by 3.1.4 and 3.4.4 (footings minor to major up to the break,
+headings major to minor from it; `TERMINATE` as a break at the most major
+level); prior values of the controls for `CONTROL FOOTING` and `REPORT
+FOOTING` `SOURCE`s (2.21.4(13)); `LINE NUMBER` absolute, `PLUS` and `NEXT
+PAGE`; `NEXT GROUP` absolute, `PLUS` and `NEXT PAGE`, ignored on a footing
+below the break level (2.15.4(3)); report entries with their clauses in any
+order (2.5.3(2)); `COLUMN NUMBER`; `SOURCE` with subscripts; `VALUE`;
+`USAGE DISPLAY`; `GENERATE data-name`, `INITIATE`, `TERMINATE`.
 
-Missing, each refused with a message: `CONTROL` clauses; `TYPE CONTROL
-HEADING` and `CONTROL FOOTING`; the `SUM` clause and sum counters, with
-subtotalling, crossfooting and rolling forward; `GROUP INDICATE`;
+Missing, each refused with a message: the `SUM` clause and sum counters,
+with subtotalling, crossfooting and rolling forward; `GROUP INDICATE`;
 `JUSTIFIED` and `BLANK WHEN ZERO` on report items; `CODE`; `REPORTS ARE`;
 `GENERATE report-name`; `SUPPRESS`; `USE BEFORE REPORTING`.
 

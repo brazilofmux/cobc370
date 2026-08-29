@@ -57,6 +57,7 @@ T0003    DS    0H
          BAL   14,REJC000          it had the first page to itself
          BAL   14,RG001            the first page heading
 L0001    DS    0H
+L0002    DS    0H
          BAL   14,RG002
 T0004    DS    0H
 * PERFORM SHOW-LC
@@ -75,12 +76,13 @@ T0006    DS    0H
 * GENERATE NORMAL
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0004
+         BNE   L0005
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          BAL   14,REJC000          it had the first page to itself
          BAL   14,RG001            the first page heading
-L0004    DS    0H
+L0005    DS    0H
+L0006    DS    0H
          BAL   14,RG002
 T0007    DS    0H
 * PERFORM SHOW-LC
@@ -99,12 +101,13 @@ T0009    DS    0H
 * GENERATE FORCED
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0007
+         BNE   L0009
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          BAL   14,REJC000          it had the first page to itself
          BAL   14,RG001            the first page heading
-L0007    DS    0H
+L0009    DS    0H
+L0010    DS    0H
          BAL   14,RG003
 T0010    DS    0H
 * PERFORM SHOW-LC
@@ -123,12 +126,13 @@ T0012    DS    0H
 * GENERATE FORCED
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0010
+         BNE   L0013
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          BAL   14,REJC000          it had the first page to itself
          BAL   14,RG001            the first page heading
-L0010    DS    0H
+L0013    DS    0H
+L0014    DS    0H
          BAL   14,RG003
 T0013    DS    0H
 * PERFORM SHOW-LC
@@ -147,12 +151,13 @@ T0015    DS    0H
 * GENERATE NORMAL
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0013
+         BNE   L0017
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          BAL   14,REJC000          it had the first page to itself
          BAL   14,RG001            the first page heading
-L0013    DS    0H
+L0017    DS    0H
+L0018    DS    0H
          BAL   14,RG002
 T0016    DS    0H
 * PERFORM SHOW-LC
@@ -165,10 +170,10 @@ R0005    DS    0H
 T0017    DS    0H
 * TERMINATE NEXT-RPT
          CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
-         BE    L0016               no: nothing to do
+         BE    L0021               no: nothing to do
          BAL   14,REJC000          REPORT FOOTING on a page by itself
          BAL   14,RG004            REPORT FOOTING
-L0016    DS    0H
+L0021    DS    0H
 T0018    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -247,19 +252,19 @@ RG001    ST    14,RGS001           save the return
 * report group NORMAL
 RG002    ST    14,RGS002           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0018
+         BE    L0023
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0003             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0017               fits
+         BNH   L0022               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0018    DS    0H
+L0023    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0017               none: the first group on a page fits
+         BZ    L0022               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0003             into LINE-COUNTER
@@ -267,24 +272,24 @@ L0018    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0017               fits
+         BNH   L0022               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0017    DS    0H
+L0022    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0003             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0019
+         BE    L0024
          LA    2,1(2)              LINE PLUS n
-         B     L0020
-L0019    DS    0H
+         B     L0025
+L0024    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,3                 no: the first line is FIRST DETAIL
-         B     L0020
+         B     L0025
          LA    2,1(2)              yes: the line after it
-L0020    DS    0H
+L0025    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
@@ -309,22 +314,22 @@ L0020    DS    0H
 RG003    ST    14,RGS003           save the return
          DROP  8
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0022
+         BE    L0027
          BAL   14,RADV000          page advance processing
-L0022    DS    0H
+L0027    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0021               none: the first group on a page fits
+         BZ    L0026               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0003             into LINE-COUNTER
          SR    3,3
          ST    3,RSNG000           and cleared
          C     2,FC004             below the group's first line?
-         BL    L0021               fits
+         BL    L0026               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0021    DS    0H
+L0026    DS    0H
          LA    2,4                 LINE n
          ST    2,RTGT
          MVI   RBUF+1,C' '
@@ -435,6 +440,7 @@ RRH000   DC    X'00'               the REPORT HEADING is on this page
 RPF000   DC    X'00'               the PAGE FOOTING is on this page
 RSNG000  DC    F'0'                saved next group integer
 RPHY000  DC    F'0'                the physical line
+RBRK000  DC    X'00'               the level of the control break
 RADVS000 DS    F                   page advance return
 REJCS000 DS    F                   eject return
 RTGT     DS    F                   target line

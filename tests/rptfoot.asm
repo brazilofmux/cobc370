@@ -201,6 +201,7 @@ T0013    DS    0H
          BAL   14,RG000            REPORT HEADING
          BAL   14,RG001            the first page heading
 L0014    DS    0H
+L0015    DS    0H
          BAL   14,RG002
 * end of a PERFORM range: return through its cell
          L     15,X0001
@@ -221,11 +222,12 @@ T0015    DS    0H
 * GENERATE JUMPER
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0015
+         BNE   L0016
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          BAL   14,RG001            the first page heading
-L0015    DS    0H
+L0016    DS    0H
+L0017    DS    0H
          BAL   14,RG003
 * end of a PERFORM range: return through its cell
          L     15,X0002
@@ -278,15 +280,15 @@ RG000    ST    14,RGS000           save the return
 RG001    ST    14,RGS001           save the return
          DROP  8
          CLI   RRH000,X'00'        a REPORT HEADING on this page?
-         BE    L0016
+         BE    L0018
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          LA    2,1(2)              LINE PLUS n after it
-         B     L0017
-L0016    DS    0H
+         B     L0019
+L0018    DS    0H
          LA    2,1                 LINE PLUS n from HEADING
-L0017    DS    0H
+L0019    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
@@ -312,19 +314,19 @@ L0017    DS    0H
 * report group SPACED
 RG002    ST    14,RGS002           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0019
+         BE    L0021
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0018               fits
+         BNH   L0020               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0019    DS    0H
+L0021    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0018               none: the first group on a page fits
+         BZ    L0020               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0004             into LINE-COUNTER
@@ -332,24 +334,24 @@ L0019    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0018               fits
+         BNH   L0020               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0018    DS    0H
+L0020    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0020
+         BE    L0022
          LA    2,1(2)              LINE PLUS n
-         B     L0021
-L0020    DS    0H
+         B     L0023
+L0022    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
-         B     L0021
+         B     L0023
          LA    2,1(2)              yes: the line after it
-L0021    DS    0H
+L0023    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
@@ -368,9 +370,9 @@ L0021    DS    0H
          L     2,D0004             the last line printed
          LA    2,1(2)              plus NEXT GROUP's integer
          C     2,FC004
-         BL    L0022
+         BL    L0024
          LA    2,13                FOOTING at most
-L0022    DS    0H
+L0024    DS    0H
          ST    2,D0004             LINE-COUNTER
          MVI   RBODY000,X'01'      a body group is on this page
          L     14,RGS002
@@ -379,19 +381,19 @@ L0022    DS    0H
 RG003    ST    14,RGS003           save the return
          DROP  8
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0024
+         BE    L0026
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0023               fits
+         BNH   L0025               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0024    DS    0H
+L0026    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0023               none: the first group on a page fits
+         BZ    L0025               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0004             into LINE-COUNTER
@@ -399,24 +401,24 @@ L0024    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0023               fits
+         BNH   L0025               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0023    DS    0H
+L0025    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0025
+         BE    L0027
          LA    2,1(2)              LINE PLUS n
-         B     L0026
-L0025    DS    0H
+         B     L0028
+L0027    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
-         B     L0026
+         B     L0028
          LA    2,1(2)              yes: the line after it
-L0026    DS    0H
+L0028    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
@@ -434,14 +436,14 @@ L0026    DS    0H
          USING WSC0000,8
          L     2,D0004             the last line printed
          C     2,FC005             before NEXT GROUP's line?
-         BNL   L0027
+         BNL   L0029
          LA    2,10                then that is LINE-COUNTER
-         B     L0028
-L0027    DS    0H
+         B     L0030
+L0029    DS    0H
          LA    3,10
          ST    3,RSNG000           saved for the next page
          LA    2,13                and LINE-COUNTER is FOOTING
-L0028    DS    0H
+L0030    DS    0H
          ST    2,D0004             LINE-COUNTER
          MVI   RBODY000,X'01'      a body group is on this page
          L     14,RGS003
@@ -477,15 +479,15 @@ RG004    ST    14,RGS004           save the return
 * report group RPT-FOOT
 RG005    ST    14,RGS005           save the return
          CLI   RPF000,X'00'        a PAGE FOOTING on this page?
-         BE    L0029
+         BE    L0031
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          LA    2,1(2)              LINE PLUS n after it
-         B     L0030
-L0029    DS    0H
+         B     L0032
+L0031    DS    0H
          LA    2,14                LINE PLUS n from FOOTING
-L0030    DS    0H
+L0032    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
@@ -569,6 +571,7 @@ RRH000   DC    X'00'               the REPORT HEADING is on this page
 RPF000   DC    X'00'               the PAGE FOOTING is on this page
 RSNG000  DC    F'0'                saved next group integer
 RPHY000  DC    F'0'                the physical line
+RBRK000  DC    X'00'               the level of the control break
 RADVS000 DS    F                   page advance return
 REJCS000 DS    F                   eject return
 RTGT     DS    F                   target line
