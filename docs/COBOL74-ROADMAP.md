@@ -173,8 +173,8 @@ with it, and `VALUE ALL literal` because the test used one.
 
 | element | size | note |
 |---|---|---|
-| serial `SEARCH`, with `VARYING`, `AT END`, `WHEN` series | S | `SEARCH ALL` exists; this is the simpler loop |
-| `OCCURS ... ASCENDING/DESCENDING KEY` series | S | one key already works |
+| serial `SEARCH`, with `VARYING`, `AT END`, `WHEN` series | DONE 2026-08-29 | `VARYING` an integer item counts the steps, as III-9 says; GnuCOBOL sets it to the index instead, and the oracle was corrected by hand |
+| `OCCURS ... ASCENDING/DESCENDING KEY` series | DONE 2026-08-29 | keys ranked in the order written; `SEARCH ALL` compares them lexicographically, inverting the bound step for a `DESCENDING` one, and its `WHEN` may be a conjunction over the keys in order |
 | `OCCURS integer-1 TO integer-2 DEPENDING ON data-name` | **L** | variable-length groups: the containing group's size becomes a run-time value, which reaches `MOVE`, `WRITE`, comparison and subscript bounds. The one item in this plan that touches the symbol table's assumptions. Do it last in its tier, with the design written down first |
 
 ### Tier 3 -- Sequential I-O Level 2 (about 10 items)

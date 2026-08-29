@@ -501,7 +501,8 @@ typedef struct {
     int  gparent;     /* enclosing group, -1 at 01/77 -- for OF/IN qualification */
     int  sync;        /* SYNCHRONIZED: alignment is promised, so it is checked */
     int  index_sym;   /* INDEXED BY item for this OCCURS table, -1 if none */
-    int  askey_sym;   /* ASCENDING KEY field, -1 if none */
+    int  askey_sym;   /* the first KEY field, -1 if none */
+    int  keys[8], keydesc[8], nkeys;  /* ASCENDING/DESCENDING KEY series, in order */
     int  linkage;     /* declared in the LINKAGE SECTION: storage belongs to the caller */
     int  link_area;   /* which linkage 01 it sits in, so it gets the right base */
     char cvalue[MAXTOK];
@@ -646,6 +647,8 @@ typedef struct {
     int  ndop;              /* DISPLAY operands */
     struct { int sym; char lit[MAXTOK]; int litlen; Node *sub; int part_off, part_len; } dop[8];
     int  upon_console;      /* DISPLAY UPON CONSOLE: a WTO rather than SYSOUT */
+    int  serial;            /* ST_SEARCH: a serial SEARCH rather than SEARCH ALL */
+    struct Cond *whens[8]; int when_lab[8]; int nwhen;   /* serial SEARCH: WHEN series */
     int  acc_from;          /* ACCEPT FROM: 0 SYSIN, 1 DATE, 2 DAY, 3 TIME, 4 CONSOLE */
 } Stmt;
 
@@ -825,7 +828,7 @@ static int nstmt;
  * it inside the table's own storage. So they are recorded and appended to
  * WORKING-STORAGE once the data division is finished. */
 #define MAXIDX 16
-static struct { char name[31], key[31]; int table; } pend_idx[MAXIDX];
+static struct { char name[31], key[31]; int table, desc; } pend_idx[MAXIDX];
 static int npend_idx;
 
 #define MAXLINK 16
@@ -1581,15 +1584,21 @@ static void parse_data_division(void)
                 if (is("TIMES")) next();
                 if (is("DEPENDING")) die("OCCURS DEPENDING ON is not implemented yet");
                 for (;;) {
-                    if (is("DESCENDING"))
-                        die("DESCENDING KEY is not implemented yet");
-                    if (is("ASCENDING")) {
+                    if (is("ASCENDING") || is("DESCENDING")) {
+                        /* A series of key names under one word, and any
+                         * number of the clauses: the keys are ranked in the
+                         * order written. */
+                        int desc = is("DESCENDING");
                         next(); if (is("KEY")) next(); if (is("IS")) next();
-                        if (npend_idx >= MAXIDX) die("too many indexed tables");
-                        snprintf(pend_idx[npend_idx].key,
-                                 sizeof pend_idx[0].key, "%s", tok.text);
-                        pend_idx[npend_idx].table = nsym;
-                        next();
+                        do {
+                            if (npend_idx >= MAXIDX) die("too many indexed tables");
+                            snprintf(pend_idx[npend_idx].key,
+                                     sizeof pend_idx[0].key, "%s", tok.text);
+                            pend_idx[npend_idx].table = nsym;
+                            pend_idx[npend_idx].desc = desc;
+                            npend_idx++;
+                            next();
+                        } while (!tok.eof && !is(".") && !is_data_clause());
                         continue;
                     }
                     if (is("INDEXED")) {
@@ -1868,6 +1877,16 @@ static void parse_data_division(void)
      * which is what the subscript machinery already expects and is
      * indistinguishable from outside since nothing else may touch it. */
     for (int k = 0; k < npend_idx; k++) {
+        if (!pend_idx[k].name[0]) {
+            /* a KEY entry: no index item, just the key on the table */
+            int ks = lookup(pend_idx[k].key);
+            if (ks < 0) die("ASCENDING/DESCENDING KEY names an item that was not declared");
+            Sym *tb = &syms[pend_idx[k].table];
+            if (tb->nkeys >= 8) die("too many KEY items on one table");
+            if (tb->askey_sym < 0) tb->askey_sym = ks;
+            tb->keys[tb->nkeys] = ks; tb->keydesc[tb->nkeys] = pend_idx[k].desc; tb->nkeys++;
+            continue;
+        }
         if (nsym >= MAXSYM) die("too many data items");
         Sym *ix = &syms[nsym];
         memset(ix, 0, sizeof *ix);
@@ -1884,11 +1903,6 @@ static void parse_data_division(void)
         if (syms[pend_idx[k].table].index_sym < 0)
             syms[pend_idx[k].table].index_sym = nsym;   /* the first one wins */
         nsym++;
-        if (pend_idx[k].key[0]) {
-            int ks = lookup(pend_idx[k].key);
-            if (ks < 0) die("ASCENDING KEY names an item that was not declared");
-            syms[pend_idx[k].table].askey_sym = ks;
-        }
     }
 
     for (int i = 0; i < nfile; i++) {
@@ -3554,20 +3568,64 @@ static void parse_one_statement(void)
 
     if (is("SEARCH")) {
         next();
-        if (!is("ALL"))
-            die("only SEARCH ALL is implemented; the corpus has no serial SEARCH");
+        if (!is("ALL")) {
+            /* Serial SEARCH (III-7): from the index's current value up to the
+             * last occurrence, the WHEN conditions are tried in order at
+             * each; the first true one runs its statements and ends the
+             * search, none true steps the index (and the VARYING item) and
+             * goes round, and stepping past the table is AT END. */
+            int t = consume_sym();
+            const Sym *tb = &syms[t];
+            if (tb->occurs < 1) die("SEARCH names something that is not a table");
+            if (tb->index_sym < 0) die("SEARCH needs the table to have INDEXED BY");
+            Stmt *st = new_stmt(ST_SEARCH);
+            st->serial = 1;
+            st->dst  = t;
+            st->vary_sym = -1;
+            st->lab1 = ++nlabel;             /* AT END */
+            st->lab3 = ++nlabel;             /* past the whole statement */
+            if (is("VARYING")) {
+                next();
+                st->vary_sym = consume_sym();
+                if (syms[st->vary_sym].is_alpha || syms[st->vary_sym].is_group || syms[st->vary_sym].scale)
+                    die("SEARCH VARYING needs an index-name or an integer item");
+            }
+            int have_atend = 0;
+            if (is("AT") || is("END")) {
+                if (is("AT")) next();
+                expect("END");
+                have_atend = 1;
+            }
+            new_stmt(ST_LABEL)->dst = st->lab1;
+            if (have_atend) parse_stmt_list(1);
+            new_stmt(ST_BRANCH)->dst = st->lab3;
+            if (!is("WHEN")) die("SEARCH needs at least one WHEN");
+            while (is("WHEN")) {
+                next();
+                if (st->nwhen >= 8) die("too many WHEN phrases on one SEARCH");
+                st->whens[st->nwhen] = parse_cond();
+                st->when_lab[st->nwhen] = ++nlabel;
+                new_stmt(ST_LABEL)->dst = st->when_lab[st->nwhen];
+                st->nwhen++;
+                parse_stmt_list(1);
+                new_stmt(ST_BRANCH)->dst = st->lab3;
+            }
+            new_stmt(ST_LABEL)->dst = st->lab3;
+            eat_period();
+            return;
+        }
         next();
         int t = consume_sym();
         const Sym *tb = &syms[t];
         if (tb->occurs < 1) die("SEARCH ALL names something that is not a table");
         if (tb->index_sym < 0) die("SEARCH ALL needs the table to have INDEXED BY");
-        if (tb->askey_sym < 0) die("SEARCH ALL needs the table to have ASCENDING KEY");
+        if (tb->nkeys < 1) die("SEARCH ALL needs the table to have an ASCENDING or DESCENDING KEY");
         Stmt *st = new_stmt(ST_SEARCH);
         st->dst  = t;
         st->lab1 = ++nlabel;             /* AT END */
         st->lab2 = ++nlabel;             /* the WHEN body */
         st->lab3 = ++nlabel;             /* past the whole statement */
-        st->src  = ++nlabel;             /* where "key < value" lands */
+        st->src  = ++nlabel;             /* where "mid sorts before the target" lands */
         int have_atend = 0;
         if (is("AT") || is("END")) {
             if (is("AT")) next();
@@ -3580,14 +3638,44 @@ static void parse_one_statement(void)
         if (have_atend) parse_stmt_list(1);
         new_stmt(ST_BRANCH)->dst = st->lab3;
         expect("WHEN");
+        /* WHEN key-1 (index) = value-1 [AND key-2 (index) = value-2]...: the
+         * keys named must be the table's, in order from the first. The binary
+         * search needs "does the middle element sort before the target": for
+         * one key that is key < value (or > for DESCENDING); for several it
+         * is the first key deciding, or equal there and the next deciding. */
         Cond *c = parse_cond();
-        if (c->kind != C_REL || c->op != REL_EQ)
-            die("SEARCH ALL wants a WHEN of the form  key (index) = value");
+        Cond *eqs[8]; int neq = 0;
+        for (Cond *w = c; ; w = w->cl) {
+            Cond *leaf = (w->kind == C_AND) ? w->cr : w;
+            if (leaf->kind != C_REL || leaf->op != REL_EQ)
+                die("SEARCH ALL wants a WHEN of key (index) = value, joined by AND");
+            if (neq >= 8) die("too many keys in a SEARCH ALL WHEN");
+            eqs[neq++] = leaf;
+            if (w->kind != C_AND) break;
+        }
+        /* they were collected right to left */
+        for (int a = 0, z = neq - 1; a < z; a++, z--) { Cond *x = eqs[a]; eqs[a] = eqs[z]; eqs[z] = x; }
+        if (neq > tb->nkeys) die("SEARCH ALL names more keys than the table has");
+        for (int k = 0; k < neq; k++) {
+            if (eqs[k]->l->kind != N_SYM || eqs[k]->l->sym != tb->keys[k])
+                die("SEARCH ALL: the WHEN must name the table's keys in the order declared, each as key (index) = value");
+        }
         st->cond = c;
-        st->cond2 = cnode(C_REL);
-        st->cond2->op = REL_LT;
-        st->cond2->l = c->l;
-        st->cond2->r = c->r;
+        /* before = LESS1 or (EQ1 and (LESS2 or (EQ2 and ...))) */
+        Cond *before = NULL;
+        for (int k = neq - 1; k >= 0; k--) {
+            Cond *less = cnode(C_REL);
+            less->op = tb->keydesc[k] ? REL_GT : REL_LT;
+            less->l = eqs[k]->l; less->r = eqs[k]->r;
+            if (!before) before = less;
+            else {
+                Cond *eq = cnode(C_REL); eq->op = REL_EQ; eq->l = eqs[k]->l; eq->r = eqs[k]->r;
+                Cond *and_ = cnode(C_AND); and_->cl = eq; and_->cr = before;
+                Cond *or_ = cnode(C_OR); or_->cl = less; or_->cr = and_;
+                before = or_;
+            }
+        }
+        st->cond2 = before;
         new_stmt(ST_LABEL)->dst = st->lab2;
         parse_stmt_list(1);
         new_stmt(ST_LABEL)->dst = st->lab3;
@@ -7566,11 +7654,45 @@ static void generate(void)
             break;
         }
         case ST_SEARCH: {
-            /* Binary search over an ASCENDING KEY table. Low and high live in
-             * storage rather than registers because gen_cond is free to use
-             * any work register, so nothing may stay live across it. */
             const Sym *tb = &syms[st->dst];
             const Sym *ix = &syms[tb->index_sym];
+            if (st->serial) {
+                char lp[16], le[16], fx[64];
+                int ltop = ++genlabel;
+                snprintf(lp, sizeof lp, "L%04d", ltop);
+                snprintf(le, sizeof le, "L%04d", st->lab1);
+                snprintf(b, sizeof b, " SEARCH %s", tb->name);
+                asm_comment(b);
+                asm_line(lp, "DS", "0H", "");
+                reset_bases();
+                need_sym_base(ix);
+                field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, fx, sizeof fx);
+                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "LH", b, "the index");
+                snprintf(b, sizeof b, "1,=H'%d'", tb->occurs);
+                asm_line("", "CH", b, "past the last occurrence?");
+                asm_line("", "BH", le, "AT END");
+                for (int k = 0; k < st->nwhen; k++) {
+                    reset_bases();
+                    gen_cond(st->whens[k], st->when_lab[k], 1);
+                }
+                reset_bases();
+                need_sym_base(ix);
+                field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, fx, sizeof fx);
+                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "LH", b, "");
+                asm_line("", "LA", "1,1(1)", "next occurrence");
+                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "STH", b, "");
+                if (st->vary_sym >= 0) {
+                    /* VARYING: stepped in step with the index, whatever it is */
+                    Node *one = node(N_LIT); strcpy(one->lit, "1"); one->litscale = 0;
+                    emit_set_from_expr(&syms[st->vary_sym], one, 1);
+                }
+                asm_line("", "B", lp, "");
+                reset_bases();
+                break;
+            }
+            /* Binary search over a KEY table. Low and high live in storage
+             * rather than registers because gen_cond is free to use any work
+             * register, so nothing may stay live across it. */
             char lo[16], hi[16], lp[16], up[16];
             snprintf(lo, sizeof lo, "SL%03d", i);
             snprintf(hi, sizeof hi, "SH%03d", i);
