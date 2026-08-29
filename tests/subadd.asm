@@ -29,11 +29,7 @@ T0000    DS    0H
 * MOVE IN-VAL -> WS-T
          L     8,PBL0000           parameter address
          USING LS0000,8
-         L     2,D0002
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0002             binary move, no decimal detour
          L     9,BL0000            base locator
          USING WSC0000,9
          ST    2,D0000
@@ -49,11 +45,7 @@ T0001    DS    0H
          ST    2,D0000
 T0002    DS    0H
 * MOVE WS-T -> OUT-VAL
-         L     2,D0000
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0000             binary move, no decimal detour
          DROP  8
          L     8,PBL0001           parameter address
          USING LS0001,8

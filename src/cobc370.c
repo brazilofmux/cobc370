@@ -4826,6 +4826,26 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
     if (sv->is_alpha || sv->is_group)
         die("MOVE of an alphanumeric item to a numeric one is legal but not "
             "implemented yet -- the characters would have to be packed");
+    if (sv->usage == U_COMP && d->usage == U_COMP && sv->scale == d->scale
+        && !d->edited) {
+        /* Binary to binary at the same scale is a copy. The general path spends
+         * CVD, a ZAP into a 16-byte work area, a ZAP back out and CVB -- six
+         * instructions and two decimal operations to move a fullword.
+         *
+         * The result is identical, not merely close. A narrowing move goes CVB
+         * into a register and STH, which keeps the low halfword; a direct L and
+         * STH keeps the same low halfword. Neither path forces a sign on an
+         * unsigned receiver or truncates to the declared digit count, so the
+         * stored bytes agree in every case. */
+        char bb[128], fs[64], fd[64];
+        field_ref(sv, ssub, 0, 7, fs, sizeof fs);
+        snprintf(bb, sizeof bb, "2,%s", fs);
+        asm_line("", sv->elem == 2 ? "LH" : "L", bb, "binary move, no decimal detour");
+        field_ref(d, dsub, 0, 6, fd, sizeof fd);
+        snprintf(bb, sizeof bb, "2,%s", fd);
+        asm_line("", d->elem == 2 ? "STH" : "ST", bb, "");
+        return;
+    }
     gen_load(sv, ssub, "PWK1");
     gen_rescale("PWK1", sv->scale, d->scale);
     gen_store(d, dsub, "PWK1");
@@ -6046,9 +6066,18 @@ static void generate(void)
                     emit_move(d, st->dsub, sv, st->ssub);
                     break;
                 }
-                if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK1"); }
-                else { gen_load(&syms[st->src], st->ssub, "PWK1"); gen_rescale("PWK1", syms[st->src].scale, d->scale); }
-                gen_store(d, st->dsub, "PWK1");
+                if (st->imm) {
+                    gen_load_imm(intern_const(st->immdigits), "PWK1");
+                    gen_store(d, st->dsub, "PWK1");
+                } else {
+                    /* Item to item, through the same dispatcher the
+                     * alphanumeric categories use. This was an inline copy of
+                     * emit_move's tail -- load, rescale, store -- which meant a
+                     * numeric MOVE never saw anything emit_move learned. That
+                     * is the second time a duplicate of this path has gone
+                     * stale; there is now only one. */
+                    emit_move(d, st->dsub, &syms[st->src], st->ssub);
+                }
             } else {
                 /* Compute at the wider of the two scales, then truncate once on
                    store. Rescaling the source down first would lose digits that

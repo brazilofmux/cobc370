@@ -114,11 +114,7 @@ T0011    DS    0H
 * MOVE IX -> SAVED-IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0010             binary move, no decimal detour
          ST    2,D0002
 T0012    DS    0H
 * SUBTRACT 2 -> IX
@@ -143,11 +139,7 @@ T0014    DS    0H
 * MOVE SAVED-IX -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0002
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0002             binary move, no decimal detour
          STH   2,D0010
 T0015    DS    0H
 * PERFORM SHOW
@@ -176,19 +168,11 @@ T0017    DS    0H
          BALR  14,15
 T0018    DS    0H
 * MOVE SAVED-IX -> OTHER-IX
-         L     2,D0002
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0002             binary move, no decimal detour
          ST    2,D0003
 T0019    DS    0H
 * MOVE OTHER-IX -> IX
-         L     2,D0003
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         L     2,D0003             binary move, no decimal detour
          STH   2,D0010
 T0020    DS    0H
 * PERFORM SHOW

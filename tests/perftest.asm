@@ -272,11 +272,7 @@ T0021    DS    0H
 * MOVE WS-IDX -> ENT-YEAR
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0003
-         CVD   2,DWK               binary -> packed
-         ZAP   PWK1(16),DWK(8)
-         ZAP   DWK(8),PWK1(16)
-         CVB   2,DWK               packed -> binary
+         LH    2,D0003             binary move, no decimal detour
          LH    6,D0003             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
