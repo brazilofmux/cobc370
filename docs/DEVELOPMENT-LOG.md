@@ -3,7 +3,7 @@
 **Goal.** A compiler that runs on the Mac, reads COBOL, and emits S/370
 assembler; MVS assembles and links that into the program's load module. The
 compiler never runs on MVS. `COBUCL` gets replaced by an `ASMFCL`-shaped proc,
-and the editing workflow in `~/majesty` is unchanged — `.ASM` ships up instead
+and the editing workflow in the private source tree is unchanged — `.ASM` ships up instead
 of `.COBOL`.
 
 **Why.** IKFCBL00 has no VSAM, no de-editing of numeric fields, and no dynamic
@@ -114,7 +114,7 @@ Two things to think about early:
 
 ## The oracle
 
-The same 30 programs exist in GnuCOBOL under `~/majesty/src/cobol`, over the same
+The same 30 programs exist in GnuCOBOL in that tree as well, over the same
 data, with a C++ third implementation and an established byte-identical report
 bar. Acceptance testing is: compile the report suite, run it on MVS, diff the
 printed output. Few compiler projects get an oracle this good.

@@ -1,6 +1,6 @@
 # What the compiler actually has to accept
 
-Measured across the 30 programs in `~/majesty/mvs/SVD001.DEFTLY.COBOL`, which
+Measured across the 30 programs of a private production corpus, which
 are the specification: they compile under IKFCBL00 today and produce reports
 that match the GnuCOBOL and C++ implementations byte for byte.
 
