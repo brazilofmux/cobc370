@@ -91,6 +91,29 @@ static int lex_parens;
  * nowhere else. So the parser says when a picture is coming. */
 static int lex_picture;
 
+/* SPECIAL-NAMES clauses that change how every PICTURE and numeric literal is
+ * read. CURRENCY SIGN names the character that stands where '$' stands in the
+ * standard's own examples; DECIMAL-POINT IS COMMA exchanges the roles of the
+ * period and the comma in pictures and in numeric literals. Both are Nucleus
+ * level 1. */
+static char currency_sym = '$';
+static int  decimal_is_comma;
+
+/* Host character to EBCDIC (CP037), for the one byte a CURRENCY SIGN puts in
+ * an ED pattern. Printable ASCII only; the standard forbids everything else. */
+static unsigned char host_ebcdic(char c)
+{
+    static const unsigned char t[95] = {
+        0x40,0x5A,0x7F,0x7B,0x5B,0x6C,0x50,0x7D,0x4D,0x5D,0x5C,0x4E,0x6B,0x60,0x4B,0x61,
+        0xF0,0xF1,0xF2,0xF3,0xF4,0xF5,0xF6,0xF7,0xF8,0xF9,0x7A,0x5E,0x4C,0x7E,0x6E,0x6F,
+        0x7C,0xC1,0xC2,0xC3,0xC4,0xC5,0xC6,0xC7,0xC8,0xC9,0xD1,0xD2,0xD3,0xD4,0xD5,0xD6,
+        0xD7,0xD8,0xD9,0xE2,0xE3,0xE4,0xE5,0xE6,0xE7,0xE8,0xE9,0xBA,0xE0,0xBB,0xB0,0x6D,
+        0x79,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x91,0x92,0x93,0x94,0x95,0x96,
+        0x97,0x98,0x99,0xA2,0xA3,0xA4,0xA5,0xA6,0xA7,0xA8,0xA9,0xC0,0x4F,0xD0,0xA1 };
+    unsigned char u = (unsigned char)c;
+    return (u >= 0x20 && u <= 0x7E) ? t[u - 0x20] : 0x40;
+}
+
 /* Move a nonnumeric literal onto its continuation line, or return 0 if the
  * next line is not one. I-106, 5.8.2.2: a hyphen in the indicator area, area A
  * blank, and -- because the literal has no closing quotation mark yet -- the
@@ -154,7 +177,7 @@ static void next(void)
      * "the decimal point must not be the rightmost character" is the only
      * placement rule, so .1 is legal. A period used as a separator is always
      * followed by a space, so the two cannot be confused. */
-    if (*src.p == '.' && !isdigit((unsigned char)src.p[1])) {
+    if (*src.p == '.' && (decimal_is_comma || !isdigit((unsigned char)src.p[1]))) {
         src.p++; strcpy(tok.text, "."); tok.len = 1; return;
     }
     if (*src.p == '(' || *src.p == ')') {
@@ -208,9 +231,22 @@ static void next(void)
             if (lex_picture) {
                 char nx = *(src.p + 1);
                 if (!nx || isspace((unsigned char)nx)) break;
-            } else if (!(isdigit((unsigned char)*(src.p + 1))
-                         && (i == 0 || isdigit((unsigned char)tok.text[i-1]))))
+            } else if (decimal_is_comma
+                       || !(isdigit((unsigned char)*(src.p + 1))
+                            && (i == 0 || isdigit((unsigned char)tok.text[i-1]))))
                 break;   /* a decimal point: leading, as in .1, or between digits */
+        }
+        if (decimal_is_comma && !lex_picture && *src.p == ','
+            && isdigit((unsigned char)*(src.p + 1))
+            && i > 0 && isdigit((unsigned char)tok.text[i-1])) {
+            /* DECIMAL-POINT IS COMMA: a comma between digits is the decimal
+             * point. It is stored as the period so that nothing downstream
+             * has to know -- every place that scales a literal looks for '.'.
+             * A comma followed by a space is still a separator, and never
+             * reaches here. */
+            tok.text[i++] = '.';
+            src.p++;
+            continue;
         }
         if (i >= MAXTOK - 1) die("word too long");
         tok.text[i++] = (char)toupper((unsigned char)*src.p);
@@ -232,6 +268,34 @@ static int is_data_clause(void)
         "RENAMES", "IS", 0
     };
     for (int i = 0; w[i]; i++) if (is(w[i])) return 1;
+    return 0;
+}
+
+/* pic_analyse with the SPECIAL-NAMES substitutions applied on the way in and
+ * undone on the way out. The picture module itself knows only the standard's
+ * own spellings: '$' for the currency symbol, '.' for the decimal point and ','
+ * for the insertion comma. A program that says otherwise has its picture
+ * rewritten into those spellings here, and the ED pattern that comes back has
+ * the bytes exchanged again -- so the printed result carries the program's
+ * character and the arithmetic is unaffected. */
+static int analyse_picture(const char *pic, PicInfo *pi)
+{
+    char p[PIC_MAXITEM * 4];
+    snprintf(p, sizeof p, "%s", pic);
+    for (char *q = p; *q; q++) {
+        char c = (char)toupper((unsigned char)*q);
+        if (currency_sym != '$' && c == currency_sym) *q = '$';
+        else if (decimal_is_comma && *q == '.') *q = ',';
+        else if (decimal_is_comma && *q == ',') *q = '.';
+    }
+    int rc = pic_analyse(p, pi);
+    if (rc < 0) return rc;
+    for (int k = 0; k < pi->masklen; k++) {
+        unsigned char m = pi->mask[k];
+        if (m == 0x5B && currency_sym != '$') pi->mask[k] = host_ebcdic(currency_sym);
+        else if (decimal_is_comma && m == 0x4B) pi->mask[k] = 0x6B;
+        else if (decimal_is_comma && m == 0x6B) pi->mask[k] = 0x4B;
+    }
     return 0;
 }
 
@@ -838,9 +902,29 @@ static void parse_special_names(void)
 {
     while (!tok.eof && !is("INPUT-OUTPUT") && !is("DATA") && !is("PROCEDURE")) {
         if (is(".")) { next(); continue; }
-        if (is("CURRENCY") || is("DECIMAL-POINT"))
-            die("the CURRENCY SIGN and DECIMAL-POINT clauses are not "
-                "implemented; they change how every PICTURE is read");
+        if (is("CURRENCY")) {
+            next();
+            if (is("SIGN")) next();
+            if (is("IS")) next();
+            if (!tok.literal || tok.len != 1)
+                die("CURRENCY SIGN IS takes a one-character nonnumeric literal");
+            char c = (char)toupper((unsigned char)tok.text[0]);
+            /* II-8: not a digit, not A B C D P R S V X Z, not space, and not
+             * any of the editing and punctuation characters. */
+            if (isdigit((unsigned char)c) || strchr("ABCDPRSVXZ +-,.*/;()\"'=", c))
+                die("that character cannot be a CURRENCY SIGN: it already means "
+                    "something in a PICTURE");
+            currency_sym = c;
+            next();
+            continue;
+        }
+        if (is("DECIMAL-POINT")) {
+            next();
+            if (is("IS")) next();
+            expect("COMMA");
+            decimal_is_comma = 1;
+            continue;
+        }
         char nm[31];
         snprintf(nm, sizeof nm, "%s", tok.text);
         int bit = -1;
@@ -1034,7 +1118,7 @@ static void parse_report_section(void)
             snprintf(sy->name, sizeof sy->name, "RPT%d", nrfield);
             sy->level = 49; sy->occ_parent = -1;
             PicInfo pi;
-            if (pic_analyse(pic, &pi) < 0) die(pi.err);
+            if (analyse_picture(pic, &pi) < 0) die(pi.err);
             sy->digits = pi.digits; sy->scale = pi.scale;
             sy->is_signed = pi.is_signed; sy->is_alpha = pi.is_alpha;
             sy->is_alphabetic = pi.is_alphabetic;
@@ -1496,7 +1580,7 @@ static void parse_data_division(void)
 
         {
             PicInfo pi;
-            if (pic_analyse(pic, &pi) < 0) die(pi.err);
+            if (analyse_picture(pic, &pi) < 0) die(pi.err);
             sy->digits = pi.digits; sy->scale = pi.scale;
             sy->is_signed = pi.is_signed; sy->is_alpha = pi.is_alpha;
             sy->is_alphabetic = pi.is_alphabetic;
@@ -3816,6 +3900,14 @@ static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
         snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
         asm_line("", "EDMK", b, "");
         asm_line("", "BCTR", "1,0", "one left of the first significant digit");
+        if (sy->sign_char == '$') {
+            /* A floating currency symbol is not a sign: it goes in whatever
+             * the value. Written as hex so that the CURRENCY SIGN character
+             * never has to survive the assembler's quoting rules. */
+            snprintf(b, sizeof b, "0(1),X'%02X'", host_ebcdic(currency_sym));
+            asm_line("", "MVI", b, "the floating currency symbol");
+            goto floated;
+        }
         int l1 = ++gen_edited_labels, l2 = ++gen_edited_labels;
         char la[16], lb[16];
         snprintf(la, sizeof la, "G%04d", l1);
@@ -3829,6 +3921,7 @@ static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
         } else {
             asm_line(la, "DS", "0H", "");
         }
+    floated: ;
     } else {
         snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
         asm_line("", "ED", b, "");
