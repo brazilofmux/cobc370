@@ -38,7 +38,7 @@ T0001    DS    0H
          STCM  1,7,FD000+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD000,D0000         QSAM move mode
+         GET   FD000,D0001         QSAM move mode
          B     L0002
 L0001    DS    0H                  AT END
          DROP  8
@@ -50,12 +50,12 @@ T0003    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0009             binary, same scale: in the register
+         LH    2,D0010             binary, same scale: in the register
          AH    2,H0001
-         STH   2,D0009
+         STH   2,D0010
 T0004    DS    0H
 * IF
-         LH    2,D0009
+         LH    2,D0010
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0001+15(1)  literal
@@ -70,15 +70,15 @@ T0006    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(16),D0002(6)
-         UNPK  D0008(10),PWK1(16)  packed -> zoned
-         OI    D0008+9,X'F0'       unsigned: force an F zone
+         ZAP   PWK1(16),D0003(6)
+         UNPK  D0009(10),PWK1(16)  packed -> zoned
+         OI    D0009+9,X'F0'       unsigned: force an F zone
 T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0001
-         MVC   DSPBUF+4(10),D0008+0
+         MVC   DSPBUF+4(10),D0009+0
          MVC   DSPBUF+14(1),S0002
-         MVC   DSPBUF+15(40),D0007+0
+         MVC   DSPBUF+15(40),D0008+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -205,18 +205,20 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL57               GLAC-RECORD (01 group)
-D0001    DC    CL1' '              GLAC-DELETE PIC X(1)
-D0002    DC    XL6'00000000000F'   GLAC-KEY PIC 9(10)v0 COMP-3
-D0003    DC    PL1'0'              GLAC-CRDB PIC S9(1)v0 COMP-3
-D0004    DC    CL1' '              GLAC-CLASS PIC X(1)
-D0005    DC    CL2' '              GLAC-SUBCLASS PIC X(2)
-D0006    DC    PL6'0'              GLAC-BALANCE PIC S9(11)v2 COMP-3
-D0007    DC    CL40' '             GLAC-NAME PIC X(40)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL57               GLAC-RECORD (01 group)
+D0002    DC    CL1' '              GLAC-DELETE PIC X(1)
+D0003    DC    XL6'00000000000F'   GLAC-KEY PIC 9(10)v0 COMP-3
+D0004    DC    PL1'0'              GLAC-CRDB PIC S9(1)v0 COMP-3
+D0005    DC    CL1' '              GLAC-CLASS PIC X(1)
+D0006    DC    CL2' '              GLAC-SUBCLASS PIC X(2)
+D0007    DC    PL6'0'              GLAC-BALANCE PIC S9(11)v2 COMP-3
+D0008    DC    CL40' '             GLAC-NAME PIC X(40)
          DS    XL7                 reserve the rest of a table
-D0008    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
+D0009    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
          DS    XL6                 reserve the rest of a table
-D0009    DC    HL2'0'              WS-CNT PIC S9(4)v0 COMP
+D0010    DC    HL2'0'              WS-CNT PIC S9(4)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

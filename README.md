@@ -43,7 +43,7 @@ aggregate on the measurement in `docs/MEASUREMENTS.md`, a third on the later
 full build -- and, after the optimization pass, the CPU time of the COBOL steps
 is at IBM's (0.6s either way, at the noise floor of the step accounting).
 
-100 regression tests, all green, every one diffed against an oracle -- and
+101 regression tests, all green, every one diffed against an oracle -- and
 for the Report Writer the oracle is the 1974 text itself, hand-derived from
 its presentation-rule tables, with IBM's own compiler run on the same
 source wherever its 1968-vintage Report Writer reaches.
@@ -52,7 +52,7 @@ source wherever its 1968-vintage Report Writer reaches.
 |---|---|
 | data | `DISPLAY`, `COMP` (to 9 digits), `COMP-3`, `INDEX`; edited pictures; `REDEFINES`, `RENAMES`, `OCCURS` to three levels with `INDEXED BY`, `KEY`, and `DEPENDING ON`; `SIGN`, `SYNCHRONIZED`, `JUSTIFIED`, `BLANK WHEN ZERO`; levels 01-49, 66, 77, 88; `OF`/`IN` qualification; `CURRENCY SIGN`, `DECIMAL-POINT IS COMMA`; up to 18 digits |
 | verbs | `MOVE` (with `CORRESPONDING`), `ADD SUBTRACT MULTIPLY DIVIDE COMPUTE` with `GIVING`, `ROUNDED`, `REMAINDER`, `ON SIZE ERROR`, `**`; `IF` with class, sign, condition-name and abbreviated conditions; `PERFORM` (`TIMES`, `UNTIL`, `VARYING ... AFTER ... AFTER`, `THRU`); `GO TO` (`DEPENDING ON`, `ALTER`); `SEARCH` and `SEARCH ALL`; `SET`; `STRING`, `UNSTRING`, `INSPECT`; `DISPLAY`/`ACCEPT` with `UPON`/`FROM` and `DATE`/`DAY`/`TIME`; `CALL literal` and `CALL identifier` with `USING`, `CANCEL`, `EXIT PROGRAM`, `GOBACK`; `COPY ... REPLACING` (host side, `-I`) |
-| QSAM | sequential read, write, rewrite; blocked and unblocked; `OPTIONAL`, `EXTEND`, `WRITE ... ADVANCING` with ASA carriage control, `LINAGE` with `END-OF-PAGE`, `USE` declaratives |
+| QSAM | sequential read, write, rewrite; fixed and variable-length records (`RECORDING MODE`, `RECORD CONTAINS m TO n`), blocked and unblocked, `BLOCK CONTAINS 0`; `OPTIONAL`, `EXTEND`, `WRITE ... ADVANCING` with ASA carriage control, `LINAGE` with `END-OF-PAGE`, `USE` declaratives |
 | ISAM | QISAM load and sequential read, BISAM random read |
 | **VSAM KSDS** | read, load, update in place, read/write/delete by key, `START`, `ACCESS IS DYNAMIC` (with `OPEN I-O` too); `ALTERNATE RECORD KEY ... WITH DUPLICATES` on VSAM alternate indexes and paths -- `READ`/`START ... KEY IS` an alternate, the key of reference for `READ NEXT`, statuses `02`/`22`/`23` |
 | **VSAM ESDS** | read, load, update in place, extend |
@@ -161,7 +161,7 @@ what each change was, are under Optimization in `docs/COBOL74-ROADMAP.md`.
 ## Layout
 
     src/     the compiler: one C file, plus a Ragel scanner for PICTURE
-    tests/   108 COBOL programs and their oracles
+    tests/   109 COBOL programs and their oracles
     bin/     the regression harness, the three round-trip checks, and
              cobc-ccvs to run the NIST CCVS-85 corpus through the front end
     bench/   the micro-benchmarks

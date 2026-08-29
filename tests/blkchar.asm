@@ -60,7 +60,7 @@ T0004    DS    0H
 L0008    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0003(1),S0001      alphanumeric compare
+         CLC   D0004(1),S0001      alphanumeric compare
          BE    L0009
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
@@ -79,7 +79,7 @@ T0006    DS    0H
          MVC   DSPBUF+0(6),S0002
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+6(1),D0002+0
+         MVC   DSPBUF+6(1),D0003+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -98,19 +98,19 @@ T0008    DS    0H
 * ADD 1 -> I
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0001(1)   zoned -> packed
+         PACK  PWK1(16),D0002(1)   zoned -> packed
          ZAP   PWK2(16),K0002(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0001(1),PWK1(16)   packed -> zoned
-         OI    D0001+0,X'F0'       unsigned: force an F zone
+         UNPK  D0002(1),PWK1(16)   packed -> zoned
+         OI    D0002+0,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * MOVE I -> L-NUM
-         MVC   D0006(1),D0001      zoned to zoned, same picture
+         MVC   D0007(1),D0002      zoned to zoned, same picture
 T0010    DS    0H
 * WRITE BLK-REC
 *  FROM: fill the record area first
-         MVC   D0000(80),D0004     alphanumeric move
-         PUT   FD000,D0000
+         MVC   D0001(80),D0005     alphanumeric move
+         PUT   FD000,D0001
          DROP  8
 L0002    DS    0H
 * end of a PERFORM range: return through its cell
@@ -125,7 +125,7 @@ T0011    DS    0H
          STCM  1,7,FD000+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD000,D0000         QSAM move mode
+         GET   FD000,D0001         QSAM move mode
          B     L0004
 L0003    DS    0H                  AT END
          DROP  8
@@ -133,29 +133,29 @@ T0012    DS    0H
 * MOVE Y -> EOF-FLAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(1),S0001      literal move, space padded
+         MVC   D0004(1),S0001      literal move, space padded
          DROP  8
 L0004    DS    0H
 T0013    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0003(1),S0001      alphanumeric compare
+         CLC   D0004(1),S0001      alphanumeric compare
          BE    L0005
 T0014    DS    0H
 * ADD 1 -> N
-         PACK  PWK1(16),D0002(1)   zoned -> packed
+         PACK  PWK1(16),D0003(1)   zoned -> packed
          ZAP   PWK2(16),K0002(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0002(1),PWK1(16)   packed -> zoned
-         OI    D0002+0,X'F0'       unsigned: force an F zone
+         UNPK  D0003(1),PWK1(16)   packed -> zoned
+         OI    D0003+0,X'F0'       unsigned: force an F zone
 T0015    DS    0H
 * MOVE BLK-REC -> SEEN
-         MVC   D0008(8),D0000      alphanumeric move
+         MVC   D0009(8),D0001      alphanumeric move
 T0016    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0003
-         MVC   DSPBUF+4(8),D0008+0
+         MVC   DSPBUF+4(8),D0009+0
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -285,18 +285,20 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL80' '             BLK-REC PIC X(80)
-D0001    DC    CL1'0'              I PIC 9(1)v0 DISP
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    CL80' '             BLK-REC PIC X(80)
+D0002    DC    CL1'0'              I PIC 9(1)v0 DISP
          DS    XL7                 reserve the rest of a table
-D0002    DC    CL1'0'              N PIC 9(1)v0 DISP
+D0003    DC    CL1'0'              N PIC 9(1)v0 DISP
          DS    XL7                 reserve the rest of a table
-D0003    DC    CL1'N'              EOF-FLAG PIC X(1)
+D0004    DC    CL1'N'              EOF-FLAG PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0004    DS    0CL80               LINE-OUT (01 group)
-D0005    DC    CL7'RECORD '        FILL0005 PIC X(7)
-D0006    DC    CL1'0'              L-NUM PIC 9(1)v0 DISP
-D0007    DC    CL72' '             FILL0007 PIC X(72)
-D0008    DC    CL8' '              SEEN PIC X(8)
+D0005    DS    0CL80               LINE-OUT (01 group)
+D0006    DC    CL7'RECORD '        FILL0006 PIC X(7)
+D0007    DC    CL1'0'              L-NUM PIC 9(1)v0 DISP
+D0008    DC    CL72' '             FILL0008 PIC X(72)
+D0009    DC    CL8' '              SEEN PIC X(8)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

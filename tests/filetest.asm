@@ -51,14 +51,14 @@ T0005    DS    0H
 * MOVE REC-COUNT -> OUT-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0002
+         L     2,D0004
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0003(5),PWK1(16)   packed -> zoned
-         OI    D0003+4,X'F0'       unsigned: force an F zone
+         UNPK  D0005(5),PWK1(16)   packed -> zoned
+         OI    D0005+4,X'F0'       unsigned: force an F zone
 T0006    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(5),D0003+0
+         MVC   DSPBUF+0(5),D0005+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -79,7 +79,7 @@ T0008    DS    0H
          STCM  1,7,FD000+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD000,D0000         QSAM move mode
+         GET   FD000,D0001         QSAM move mode
          B     L0002
 L0001    DS    0H                  AT END
          DROP  8
@@ -91,15 +91,15 @@ T0010    DS    0H
 * ADD 1 -> REC-COUNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0002             binary, same scale: in the register
+         L     2,D0004             binary, same scale: in the register
          AH    2,H0001
-         ST    2,D0002
+         ST    2,D0004
 T0011    DS    0H
 * MOVE IN-REC -> OUT-REC
-         MVC   D0001(80),D0000     alphanumeric move
+         MVC   D0003(80),D0001     alphanumeric move
 T0012    DS    0H
 * WRITE OUT-REC
-         PUT   FD001,D0001
+         PUT   FD001,D0003
          DROP  8
 L0004    DS    0H
 T0013    DS    0H
@@ -223,11 +223,15 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL80' '             IN-REC PIC X(80)
-D0001    DC    CL80' '             OUT-REC PIC X(80)
-D0002    DC    FL4'0'              REC-COUNT PIC S9(5)v0 COMP
          DS    XL4                 reserve the rest of a table
-D0003    DC    CL5'00000'          OUT-NUM PIC 9(5)v0 DISP
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    CL80' '             IN-REC PIC X(80)
+         DS    XL4                 reserve the rest of a table
+D0002    DC    CL4' '              *RDW PIC X(4)
+D0003    DC    CL80' '             OUT-REC PIC X(80)
+D0004    DC    FL4'0'              REC-COUNT PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0005    DC    CL5'00000'          OUT-NUM PIC 9(5)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

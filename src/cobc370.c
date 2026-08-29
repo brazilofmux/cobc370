@@ -763,6 +763,11 @@ typedef struct {
     int  rrn_via_cell; /* the RELATIVE KEY is not a fullword, so convert it */
     int  blk_records;  /* BLOCK CONTAINS n RECORDS, 0 when unblocked */
     int  blk_chars;    /* BLOCK CONTAINS n CHARACTERS: the block size outright */
+    int  blk_zero;     /* BLOCK CONTAINS 0: the block size from the DD or the label */
+    int  varrec;       /* variable-length records: RECFM=V, a 4-byte RDW ahead of the record */
+    int  recmode;      /* RECORDING MODE: 0 to infer, else 'F', 'V', 'U', 'S' */
+    int  rec_min, rec_max;  /* RECORD CONTAINS m TO n; 0 when not given */
+    int  rdw_sym;      /* the hidden RDW cell just before the record area */
     int  linage, footing, top, bottom;  /* LINAGE clause; linage 0 when absent */
     int  lc_sym;       /* the LINAGE-COUNTER item, -1 if none */
     int  optional;     /* SELECT OPTIONAL: the DD may be absent */
@@ -1391,7 +1396,7 @@ static int make_counter(const char *name, int gparent)
     memset(sy, 0, sizeof *sy);
     snprintf(sy->name, sizeof sy->name, "%s", name);
     snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
-    sy->level = 2; sy->gparent = gparent; sy->occ_parent = -1;
+    sy->level = 2; sy->gparent = gparent; sy->occ_parent = -1; sy->fd_file = -1;
     sy->usage = U_COMP; sy->digits = 6;
     sy->bytes = sy->elem = 4;
     sy->offset = wslen; wslen += 4;
@@ -1452,7 +1457,7 @@ static void parse_report_section(void)
                 memset(g, 0, sizeof *g);
                 snprintf(g->name, sizeof g->name, "%s", rp->name);
                 snprintf(g->label, sizeof g->label, "D%04d", nsym);
-                g->level = 1; g->is_group = 1; g->gparent = -1; g->occ_parent = -1;
+                g->level = 1; g->is_group = 1; g->gparent = -1; g->occ_parent = -1; g->fd_file = -1;
                 wslen = (wslen + 3) & ~3;             /* fullword counters */
                 g->offset = wslen; g->bytes = g->elem = 8;
                 int gi = nsym++;
@@ -1717,7 +1722,7 @@ static void parse_report_section(void)
                 snprintf(gs->name, sizeof gs->name, "%s", nm);
                 snprintf(gs->label, sizeof gs->label, "D%04d", nsym);
                 gs->level = 2; gs->is_group = 1; gs->gparent = rp->lc_sym >= 0 ? syms[rp->lc_sym].gparent : -1;
-                gs->occ_parent = -1; gs->offset = wslen;
+                gs->occ_parent = -1; gs->offset = wslen; gs->fd_file = -1;
                 g->name_sym = nsym++;
             } else g->name_sym = -1;
             g->first_line = nrline;
@@ -1771,7 +1776,7 @@ static void parse_report_section(void)
             memset(cs, 0, sizeof *cs);
             snprintf(cs->name, sizeof cs->name, "%s", nm[0] ? nm : "*SUM");
             snprintf(cs->label, sizeof cs->label, "D%04d", nsym);
-            cs->level = 3; cs->occ_parent = -1;
+            cs->level = 3; cs->occ_parent = -1; cs->fd_file = -1;
             cs->gparent = rgroups[cur_group].name_sym >= 0 ? rgroups[cur_group].name_sym
                         : (rp->lc_sym >= 0 ? syms[rp->lc_sym].gparent : -1);
             cs->usage = U_COMP3; cs->digits = pi.digits; cs->scale = pi.scale; cs->is_signed = 1;
@@ -1808,7 +1813,7 @@ static void parse_report_section(void)
             memset(sy, 0, sizeof *sy);
             snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
             snprintf(sy->name, sizeof sy->name, "RPT%d", nrfield);
-            sy->level = 49; sy->occ_parent = -1;
+            sy->level = 49; sy->occ_parent = -1; sy->fd_file = -1;
             PicInfo pi;
             if (analyse_picture(pic, &pi) < 0) die(pi.err);
             sy->digits = pi.digits; sy->scale = pi.scale;
@@ -2076,6 +2081,13 @@ static void parse_data_division(void)
                         if (!is_numeric_literal(tok.text)) die("BLOCK CONTAINS n TO m");
                         nrec = atoi(tok.text); next();
                     }
+                    if (nrec == 0) {
+                        /* BLOCK CONTAINS 0: the block size is the DD's or the
+                         * label's business -- the DCB leaves it zero. */
+                        if (is("RECORDS") || is("CHARACTERS")) next();
+                        files[cur_file].blk_zero = 1;
+                        continue;
+                    }
                     /* General rule 3 on IV-11: CHARACTERS states the physical
                      * record size outright, in character positions. RECORDS
                      * states how many logical records it holds. Rule 1 says the
@@ -2090,9 +2102,58 @@ static void parse_data_division(void)
                     files[cur_file].blk_records = nrec;
                     continue;
                 }
+                if (is("RECORD")) {
+                    /* RECORD CONTAINS n [TO m] CHARACTERS, IV-16: a range says
+                     * the records vary in length. The record descriptions say
+                     * how long each is; the clause is documentation and, with
+                     * TO, the mark of a variable-length file. The RECORD of
+                     * DATA RECORD IS is not this clause. */
+                    next();
+                    if (is("CONTAINS")) next();
+                    else if (!is_numeric_literal(tok.text)) continue;
+                    files[cur_file].rec_min = files[cur_file].rec_max = atoi(tok.text); next();
+                    if (is("TO")) {
+                        next();
+                        if (!is_numeric_literal(tok.text)) die("RECORD CONTAINS m TO n");
+                        files[cur_file].rec_max = atoi(tok.text); next();
+                    }
+                    if (is("CHARACTERS")) next();
+                    continue;
+                }
+                if (is("RECORDING")) {
+                    /* RECORDING MODE IS F, V, U or S: IBM's spelling of the
+                     * record format, overriding what the descriptions imply. */
+                    next(); if (is("MODE")) next(); if (is("IS")) next();
+                    if (is("F") || is("V") || is("U") || is("S")) files[cur_file].recmode = tok.text[0];
+                    else die("RECORDING MODE must be F, V, U or S");
+                    next();
+                    continue;
+                }
                 next();
             }
             expect(".");
+            /* The record descriptor word for a variable-length record sits
+             * in the four bytes before the record area, where QSAM expects
+             * it in move mode. Every file gets the cell; only a variable
+             * one uses it. */
+            {
+                if (nsym >= MAXSYM) die("too many data items");
+                /* 01 items start on a doubleword; the RDW takes the four
+                 * bytes before the one the record will get. */
+                if (cursor > wslen) wslen = cursor;
+                cursor = ((wslen + 4 + 7) & ~7) - 4;
+                Sym *rw = &syms[nsym];
+                memset(rw, 0, sizeof *rw);
+                snprintf(rw->name, sizeof rw->name, "*RDW");
+                snprintf(rw->label, sizeof rw->label, "D%04d", nsym);
+                rw->level = 1; rw->is_alpha = 1; rw->gparent = -1; rw->occ_parent = -1;
+                rw->fd_file = -1; rw->index_sym = rw->askey_sym = -1; rw->odo_dep = -1;
+                rw->redef_from = rw->redef_cap = -1;
+                rw->bytes = rw->elem = 4; rw->offset = cursor;
+                cursor += 4;
+                if (cursor > wslen) wslen = cursor;
+                files[cur_file].rdw_sym = nsym++;
+            }
             continue;
         }
         if (!isdigit((unsigned char)tok.text[0]))
@@ -2704,9 +2765,26 @@ static void parse_data_division(void)
         }
         if (files[i].rec_sym < 0) die("an FD has no record description");
         files[i].reclen = 0;
+        int minrec = 0;
         for (int k = 0; k < nsym; k++)
-            if (syms[k].fd_file == i && syms[k].bytes > files[i].reclen)
-                files[i].reclen = syms[k].bytes;
+            if (syms[k].fd_file == i) {
+                if (syms[k].bytes > files[i].reclen) files[i].reclen = syms[k].bytes;
+                if (syms[k].level == 1 && (!minrec || syms[k].bytes < minrec)) minrec = syms[k].bytes;
+            }
+        /* Variable-length records, as IBM's compilers decide it: RECORDING
+         * MODE V says so; RECORD CONTAINS m TO n says so; record descriptions
+         * of different lengths say so unless RECORDING MODE F. */
+        if (files[i].recmode == 'U' || files[i].recmode == 'S')
+            die("RECORDING MODE U and S are not implemented -- undefined-length and spanned records");
+        if (files[i].vsam || files[i].isam) files[i].varrec = 0;   /* their records carry no RDW */
+        else if (files[i].recmode == 'V') files[i].varrec = 1;
+        else if (files[i].recmode == 'F') files[i].varrec = 0;
+        else if (files[i].rec_max > files[i].rec_min || minrec != files[i].reclen) files[i].varrec = 1;
+        if (files[i].varrec && files[i].rec_max > files[i].reclen) files[i].reclen = files[i].rec_max;
+        if (files[i].recmode == 'V' && (files[i].vsam || files[i].isam))
+            die("RECORDING MODE V is for sequential (QSAM) files; VSAM and ISAM records carry no RDW");
+        if (files[i].varrec && files[i].print)
+            die("a print file with variable-length records is not implemented");
         if (keyname[i][0]) files[i].key_sym = need_sym(keyname[i]);
         for (int k = 0; k < files[i].nalt; k++) {
             files[i].alt_sym[k] = need_sym(altname[i][k]);
@@ -9277,8 +9355,22 @@ static void generate(void)
                 asm_line("", "GET", f->label, "QSAM locate mode");
                 snprintf(b, sizeof b, "1,U%03d", st->dst);
                 asm_line("", "ST", b, "remember where the record sits");
-                snprintf(b, sizeof b, "%s(%d),0(1)", syms[f->rec_sym].label, f->reclen);
-                asm_line("", "MVC", b, "into the record area");
+                if (f->varrec) {
+                    /* The record and its RDW, as long as the RDW says. */
+                    need_sym_base(&syms[f->rdw_sym]);
+                    snprintf(b, sizeof b, "2,%s", syms[f->rdw_sym].label); asm_line("", "LA", b, "the RDW cell");
+                    asm_line("", "LH", "3,0(0,1)", "the record's length, RDW included");
+                    asm_line("", "LR", "4,1", "");
+                    asm_line("", "LR", "5,3", "");
+                    asm_line("", "MVCL", "2,4", "into the record area");
+                } else {
+                    snprintf(b, sizeof b, "%s(%d),0(1)", syms[f->rec_sym].label, f->reclen);
+                    asm_line("", "MVC", b, "into the record area");
+                }
+            } else if (f->varrec) {
+                need_sym_base(&syms[f->rdw_sym]);
+                snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rdw_sym].label);
+                asm_line("", "GET", b, "QSAM move mode: RDW, then the record");
             } else {
                 snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
                 asm_line("", "GET", b, "QSAM move mode");
@@ -9801,6 +9893,19 @@ static void generate(void)
                 }
                 break;
             }
+            if (f->varrec) {
+                /* The RDW carries the length of the record description named
+                 * (IV-33: that is the record written), plus its own four. */
+                const Sym *rw = &syms[f->rdw_sym];
+                need_sym_base(rw);
+                snprintf(b, sizeof b, "%s(2),%s", rw->label, intern_half(wrec->bytes + 4));
+                asm_line("", "MVC", b, "RDW: the length of this record");
+                snprintf(b, sizeof b, "%s+2(2),%s+2", rw->label, rw->label);
+                asm_line("", "XC", b, "");
+                snprintf(b, sizeof b, "%s,%s", f->label, rw->label);
+                asm_line("", "PUT", b, "variable-length record");
+                break;
+            }
             need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
             asm_line("", "PUT", b, "");
@@ -10017,8 +10122,19 @@ static void generate(void)
                 need_sym_base(&syms[f->rec_sym]);
                 snprintf(b, sizeof b, "1,U%03d", st->dst);
                 asm_line("", "L", b, "where the last READ left the record");
-                snprintf(b, sizeof b, "0(%d,1),%s", f->reclen, syms[f->rec_sym].label);
-                asm_line("", "MVC", b, "back into the buffer");
+                if (f->varrec) {
+                    /* The record goes back at the length it was read with:
+                     * IV-29, the rewritten record is the same size. */
+                    need_sym_base(&syms[f->rdw_sym]);
+                    asm_line("", "LR", "2,1", "");
+                    asm_line("", "LH", "3,0(0,1)", "the length in the buffer's RDW");
+                    snprintf(b, sizeof b, "4,%s", syms[f->rdw_sym].label); asm_line("", "LA", b, "");
+                    asm_line("", "LR", "5,3", "");
+                    asm_line("", "MVCL", "2,4", "back into the buffer");
+                } else {
+                    snprintf(b, sizeof b, "0(%d,1),%s", f->reclen, syms[f->rec_sym].label);
+                    asm_line("", "MVC", b, "back into the buffer");
+                }
                 asm_line("", "PUTX", f->label, "write that block back");
                 break;
             }
@@ -11143,11 +11259,18 @@ static void generate(void)
         {
             /* A print file's records carry an ASA control byte the program
              * never sees, so the physical record is one longer than the 01. */
-            const char *recfm = (f->report >= 0 || f->print) ? "FBA" : "FB";
-            int lrecl = f->reclen + (f->print ? 1 : 0);
+            /* Variable-length: RECFM=V, LRECL counting the RDW, a block that
+             * holds BLOCK CONTAINS records of the longest kind plus its BDW
+             * -- or V unblocked, LRECL plus the BDW. BLOCK CONTAINS 0 leaves
+             * BLKSIZE to the DD or the label. */
+            const char *recfm = (f->report >= 0 || f->print) ? "FBA"
+                              : f->varrec ? ((f->blk_records > 1 || f->blk_chars > 0 || f->blk_zero) ? "VB" : "V")
+                              : "FB";
+            int lrecl = f->reclen + (f->print ? 1 : 0) + (f->varrec ? 4 : 0);
             int blk = f->blk_chars > 0 ? f->blk_chars
+                    : f->varrec ? (f->blk_records > 1 ? lrecl * f->blk_records + 4 : lrecl + 4)
                     : lrecl * (f->blk_records > 0 ? f->blk_records : 1);
-            if (f->blk_chars > 0 && f->blk_chars % lrecl)
+            if (!f->varrec && f->blk_chars > 0 && f->blk_chars % lrecl)
                 die("BLOCK CONTAINS n CHARACTERS must be a whole number of "
                     "records for a fixed-length file");
             /* A file the program both writes and reads needs both macros: a
@@ -11158,8 +11281,10 @@ static void generate(void)
                      "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(%s),RECFM=%s,",
                      f->label, f->ddname, macrf, recfm);
             char second[80];
-            if (f->reserve) snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d,BUFNO=%d", lrecl, blk, f->reserve);
+            if (f->blk_zero) snprintf(second, sizeof second, "LRECL=%d%s%d", lrecl, f->reserve ? ",BUFNO=" : "", f->reserve);
+            else if (f->reserve) snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d,BUFNO=%d", lrecl, blk, f->reserve);
             else snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", lrecl, blk);
+            if (f->blk_zero && !f->reserve) second[strlen(second) - 1] = 0;   /* drop the trailing 0 */
             asm_cont(first, second);
         }
     }

@@ -39,14 +39,14 @@ T0001    DS    0H
          ZAP   PWK1(16),K0001(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   D0008(6),PWK1(16)
-         OI    D0008+5,X'0F'       unsigned: force an F sign
+         ZAP   D0009(6),PWK1(16)
+         OI    D0009+5,X'0F'       unsigned: force an F sign
 T0002    DS    0H
 * READ GLACCT
          MVI   ISFLG,X'00'
          XC    DB000(4),DB000      clear the ECB before each READ
          XC    DB000+24(2),DB000+24  and the exception code
-         LA    1,D0008             NOMINAL KEY
+         LA    1,D0009             NOMINAL KEY
          ST    1,DB000+20          into the DECB
          LA    1,DB000             R1 -> DECB, as the READ macro does
          L     15,FD000+88         DCBLRAN: read-write K module
@@ -57,7 +57,7 @@ T0002    DS    0H
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0001
          L     1,DB000+16          record pointer word
-         MVC   D0000(57),0(1)      block-relative record into the FD ar
+         MVC   D0001(57),0(1)      block-relative record into the FD ar
          B     L0002
 L0001    DS    0H                  INVALID KEY
          DROP  8
@@ -69,15 +69,15 @@ T0004    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(16),D0002(6)
-         UNPK  D0009(10),PWK1(16)  packed -> zoned
-         OI    D0009+9,X'F0'       unsigned: force an F zone
+         ZAP   PWK1(16),D0003(6)
+         UNPK  D0010(10),PWK1(16)  packed -> zoned
+         OI    D0010+9,X'F0'       unsigned: force an F zone
 T0005    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0001
-         MVC   DSPBUF+4(10),D0009+0
+         MVC   DSPBUF+4(10),D0010+0
          MVC   DSPBUF+14(1),S0002
-         MVC   DSPBUF+15(40),D0007+0
+         MVC   DSPBUF+15(40),D0008+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -100,14 +100,14 @@ T0008    DS    0H
          ZAP   PWK1(16),K0002(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   D0008(6),PWK1(16)
-         OI    D0008+5,X'0F'       unsigned: force an F sign
+         ZAP   D0009(6),PWK1(16)
+         OI    D0009+5,X'0F'       unsigned: force an F sign
 T0009    DS    0H
 * READ GLACCT
          MVI   ISFLG,X'00'
          XC    DB000(4),DB000      clear the ECB before each READ
          XC    DB000+24(2),DB000+24  and the exception code
-         LA    1,D0008             NOMINAL KEY
+         LA    1,D0009             NOMINAL KEY
          ST    1,DB000+20          into the DECB
          LA    1,DB000             R1 -> DECB, as the READ macro does
          L     15,FD000+88         DCBLRAN: read-write K module
@@ -118,7 +118,7 @@ T0009    DS    0H
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0003
          L     1,DB000+16          record pointer word
-         MVC   D0000(57),0(1)      block-relative record into the FD ar
+         MVC   D0001(57),0(1)      block-relative record into the FD ar
          B     L0004
 L0003    DS    0H                  INVALID KEY
          DROP  8
@@ -130,15 +130,15 @@ T0011    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(16),D0002(6)
-         UNPK  D0009(10),PWK1(16)  packed -> zoned
-         OI    D0009+9,X'F0'       unsigned: force an F zone
+         ZAP   PWK1(16),D0003(6)
+         UNPK  D0010(10),PWK1(16)  packed -> zoned
+         OI    D0010+9,X'F0'       unsigned: force an F zone
 T0012    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0001
-         MVC   DSPBUF+4(10),D0009+0
+         MVC   DSPBUF+4(10),D0010+0
          MVC   DSPBUF+14(1),S0002
-         MVC   DSPBUF+15(40),D0007+0
+         MVC   DSPBUF+15(40),D0008+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -161,14 +161,14 @@ T0015    DS    0H
          ZAP   PWK1(16),K0003(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   D0008(6),PWK1(16)
-         OI    D0008+5,X'0F'       unsigned: force an F sign
+         ZAP   D0009(6),PWK1(16)
+         OI    D0009+5,X'0F'       unsigned: force an F sign
 T0016    DS    0H
 * READ GLACCT
          MVI   ISFLG,X'00'
          XC    DB000(4),DB000      clear the ECB before each READ
          XC    DB000+24(2),DB000+24  and the exception code
-         LA    1,D0008             NOMINAL KEY
+         LA    1,D0009             NOMINAL KEY
          ST    1,DB000+20          into the DECB
          LA    1,DB000             R1 -> DECB, as the READ macro does
          L     15,FD000+88         DCBLRAN: read-write K module
@@ -179,7 +179,7 @@ T0016    DS    0H
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0005
          L     1,DB000+16          record pointer word
-         MVC   D0000(57),0(1)      block-relative record into the FD ar
+         MVC   D0001(57),0(1)      block-relative record into the FD ar
          B     L0006
 L0005    DS    0H                  INVALID KEY
          DROP  8
@@ -191,15 +191,15 @@ T0018    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         ZAP   PWK1(16),D0002(6)
-         UNPK  D0009(10),PWK1(16)  packed -> zoned
-         OI    D0009+9,X'F0'       unsigned: force an F zone
+         ZAP   PWK1(16),D0003(6)
+         UNPK  D0010(10),PWK1(16)  packed -> zoned
+         OI    D0010+9,X'F0'       unsigned: force an F zone
 T0019    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0001
-         MVC   DSPBUF+4(10),D0009+0
+         MVC   DSPBUF+4(10),D0010+0
          MVC   DSPBUF+14(1),S0002
-         MVC   DSPBUF+15(40),D0007+0
+         MVC   DSPBUF+15(40),D0008+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
@@ -380,18 +380,20 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL57               GLAC-RECORD (01 group)
-D0001    DC    CL1' '              GLAC-DELETE PIC X(1)
-D0002    DC    XL6'00000000000F'   GLAC-KEY PIC 9(10)v0 COMP-3
-D0003    DC    PL1'0'              GLAC-CRDB PIC S9(1)v0 COMP-3
-D0004    DC    CL1' '              GLAC-CLASS PIC X(1)
-D0005    DC    CL2' '              GLAC-SUBCLASS PIC X(2)
-D0006    DC    PL6'0'              GLAC-BALANCE PIC S9(11)v2 COMP-3
-D0007    DC    CL40' '             GLAC-NAME PIC X(40)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL57               GLAC-RECORD (01 group)
+D0002    DC    CL1' '              GLAC-DELETE PIC X(1)
+D0003    DC    XL6'00000000000F'   GLAC-KEY PIC 9(10)v0 COMP-3
+D0004    DC    PL1'0'              GLAC-CRDB PIC S9(1)v0 COMP-3
+D0005    DC    CL1' '              GLAC-CLASS PIC X(1)
+D0006    DC    CL2' '              GLAC-SUBCLASS PIC X(2)
+D0007    DC    PL6'0'              GLAC-BALANCE PIC S9(11)v2 COMP-3
+D0008    DC    CL40' '             GLAC-NAME PIC X(40)
          DS    XL7                 reserve the rest of a table
-D0008    DC    XL6'00000000000F'   WS-NOMKEY PIC 9(10)v0 COMP-3
+D0009    DC    XL6'00000000000F'   WS-NOMKEY PIC 9(10)v0 COMP-3
          DS    XL2                 reserve the rest of a table
-D0009    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
+D0010    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

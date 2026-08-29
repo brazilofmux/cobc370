@@ -40,13 +40,13 @@ T0000    DS    0H
          BZ    G0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0002
 G0003    DS    0H
          DROP  8
@@ -56,7 +56,7 @@ T0001    DS    0H
          MVC   DSPBUF+0(12),S0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+12(2),D0006+0
+         MVC   DSPBUF+12(2),D0007+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -66,12 +66,12 @@ T0002    DS    0H
          ZAP   PWK1(16),WK0+15(1)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0007
+         STH   2,D0008
 L0003    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0007
+         LH    2,D0008
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0002+15(1)  literal
@@ -88,13 +88,13 @@ R0001    DS    0H
          ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0007
+         LH    2,D0008
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0007
+         STH   2,D0008
          B     L0003
 L0004    DS    0H
          DROP  8
@@ -111,13 +111,13 @@ L0006    DS    0H
          BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0006
 G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0005
 G0006    DS    0H
          DROP  8
@@ -127,7 +127,7 @@ T0004    DS    0H
          MVC   DSPBUF+0(6),S0002
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+6(2),D0006+0
+         MVC   DSPBUF+6(2),D0007+0
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -146,21 +146,21 @@ T0006    DS    0H
 * MOVE SPACES -> AIX-RECORD
          L     8,BL0000            base locator
          USING WSC0000,8
-         LA    1,D0000             SPACES
+         LA    1,D0001             SPACES
          MVI   0(1),C' '
          MVC   1(79,1),0(1)        propagate across the item
 T0007    DS    0H
 * MOVE WS-IMAGE -> AIX-RECORD
-         LH    7,D0007             subscript
+         LH    7,D0008             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
-         LA    7,D0016(7)          element address
-         MVC   D0000(20),0(7)      alphanumeric move
-         MVI   D0000+20,C' '       space fill the remainder
-         MVC   D0000+21(59),D0000+20
+         LA    7,D0017(7)          element address
+         MVC   D0001(20),0(7)      alphanumeric move
+         MVI   D0001+20,C' '       space fill the remainder
+         MVC   D0001+21(59),D0001+20
 T0008    DS    0H
 * MOVE record text -> AIX-TEXT
-         MVC   D0005(63),S0003     literal move, space padded
+         MVC   D0006(63),S0003     literal move, space padded
 T0009    DS    0H
 * WRITE AIX-RECORD
          PUT   RPL=FD000R          VSAM sequential store
@@ -176,35 +176,35 @@ T0009    DS    0H
          BE    G0010
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0011
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0012
 G0009    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'22'     duplicate key
+         MVC   D0007(2),=C'22'     duplicate key
          B     G0012
 G0010    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     key out of sequence
+         MVC   D0007(2),=C'21'     key out of sequence
          B     G0012
 G0011    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0012
 G0007    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0013
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0013    DS    0H
          DROP  8
          B     G0008
@@ -228,31 +228,31 @@ L0001    DS    0H                  INVALID KEY
          BE    G0018
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0019
 G0016    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'22'     duplicate key
+         MVC   D0007(2),=C'22'     duplicate key
          B     G0019
 G0017    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     key out of sequence
+         MVC   D0007(2),=C'21'     key out of sequence
          B     G0019
 G0018    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0019
 G0014    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0015
 G0019    DS    0H
          DROP  8
@@ -268,9 +268,9 @@ T0010    DS    0H
          MVC   DSPBUF+0(6),S0004
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+6(5),D0001+0
+         MVC   DSPBUF+6(5),D0002+0
          MVC   DSPBUF+11(1),S0005
-         MVC   DSPBUF+12(2),D0006+0
+         MVC   DSPBUF+12(2),D0007+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -308,17 +308,17 @@ WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=AIXBAS,MACRF=(KEY,SEQ,OUT)  VSAM access method co
 FD000RA  DC    F'0'                has carried a request
-FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
+FD000R   RPL   ACB=FD000,AREA=D0001,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(KEY,SEQ,NUP,MVE)
 FD000P1  ACB   DDNAME=AIXBA01,MACRF=(KEY,SEQ,DIR,IN)  AIX-DEPT
 FD000Q1A DC    F'0'                has carried a request
-FD000Q1   RPL   ACB=FD000P1,AREA=D0000,                                X
-               AREALEN=80,RECLEN=80,ARG=D0003,KEYLEN=3,OPTCD=(KEY,SEQ, X
+FD000Q1   RPL   ACB=FD000P1,AREA=D0001,                                X
+               AREALEN=80,RECLEN=80,ARG=D0004,KEYLEN=3,OPTCD=(KEY,SEQ, X
                NUP,MVE)
 FD000P2  ACB   DDNAME=AIXBA02,MACRF=(KEY,SEQ,DIR,IN)  AIX-CODE
 FD000Q2A DC    F'0'                has carried a request
-FD000Q2   RPL   ACB=FD000P2,AREA=D0000,                                X
-               AREALEN=80,RECLEN=80,ARG=D0004,KEYLEN=4,OPTCD=(KEY,SEQ, X
+FD000Q2   RPL   ACB=FD000P2,AREA=D0001,                                X
+               AREALEN=80,RECLEN=80,ARG=D0005,KEYLEN=4,OPTCD=(KEY,SEQ, X
                NUP,MVE)
 FD000X   DC    A(FD000R)           the key of reference's RPL
 FD000V   DC    X'00'               the paths are open
@@ -413,25 +413,27 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL80               AIX-RECORD (01 group)
-D0001    DC    CL5' '              AIX-KEY PIC X(5)
-D0002    DC    CL5' '              FILL0002 PIC X(5)
-D0003    DC    CL3' '              AIX-DEPT PIC X(3)
-D0004    DC    CL4' '              AIX-CODE PIC X(4)
-D0005    DC    CL63' '             AIX-TEXT PIC X(63)
-D0006    DC    CL2'00'             WS-STATUS PIC X(2)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL80               AIX-RECORD (01 group)
+D0002    DC    CL5' '              AIX-KEY PIC X(5)
+D0003    DC    CL5' '              FILL0003 PIC X(5)
+D0004    DC    CL3' '              AIX-DEPT PIC X(3)
+D0005    DC    CL4' '              AIX-CODE PIC X(4)
+D0006    DC    CL63' '             AIX-TEXT PIC X(63)
+D0007    DC    CL2'00'             WS-STATUS PIC X(2)
          DS    XL6                 reserve the rest of a table
-D0007    DC    HL2'0'              WS-IDX PIC S9(4)v0 COMP
+D0008    DC    HL2'0'              WS-IDX PIC S9(4)v0 COMP
          DS    XL6                 reserve the rest of a table
-D0008    DS    0CL120              WS-IMAGES (01 group)
-D0009    DC    CL20'K0001     BBBC300  '  FILL0009 PIC X(20)
-D0010    DC    CL20'K0002     AAAC100  '  FILL0010 PIC X(20)
-D0011    DC    CL20'K0003     CCCC500  '  FILL0011 PIC X(20)
-D0012    DC    CL20'K0004     AAAC400  '  FILL0012 PIC X(20)
-D0013    DC    CL20'K0005     BBBC200  '  FILL0013 PIC X(20)
-D0014    DC    CL20'K0006     AAAC600  '  FILL0014 PIC X(20)
-D0015    EQU   COBWS+96            WS-TABLE REDEFINES
-D0016    EQU   COBWS+96            WS-IMAGE REDEFINES
+D0009    DS    0CL120              WS-IMAGES (01 group)
+D0010    DC    CL20'K0001     BBBC300  '  FILL0010 PIC X(20)
+D0011    DC    CL20'K0002     AAAC100  '  FILL0011 PIC X(20)
+D0012    DC    CL20'K0003     CCCC500  '  FILL0012 PIC X(20)
+D0013    DC    CL20'K0004     AAAC400  '  FILL0013 PIC X(20)
+D0014    DC    CL20'K0005     BBBC200  '  FILL0014 PIC X(20)
+D0015    DC    CL20'K0006     AAAC600  '  FILL0015 PIC X(20)
+D0016    EQU   COBWS+104           WS-TABLE REDEFINES
+D0017    EQU   COBWS+104           WS-IMAGE REDEFINES
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

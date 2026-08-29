@@ -34,10 +34,10 @@ T0001    DS    0H
 * MOVE LINE ONE   -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(10),S0001     literal move, space padded
+         MVC   D0001(10),S0001     literal move, space padded
 T0002    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0000   the record, behind its control byte
+         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -57,10 +57,10 @@ T0004    DS    0H
 * MOVE LINE TWO   -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(10),S0003     literal move, space padded
+         MVC   D0001(10),S0003     literal move, space padded
 T0005    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0000   the record, behind its control byte
+         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -80,10 +80,10 @@ T0007    DS    0H
 * MOVE LINE THREE -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(10),S0005     literal move, space padded
+         MVC   D0001(10),S0005     literal move, space padded
 T0008    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0000   the record, behind its control byte
+         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -105,10 +105,10 @@ T0010    DS    0H
 * MOVE LINE FOUR  -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(10),S0006     literal move, space padded
+         MVC   D0001(10),S0006     literal move, space padded
 T0011    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0000   the record, behind its control byte
+         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -130,10 +130,10 @@ T0013    DS    0H
 * MOVE LINE FIVE  -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(10),S0007     literal move, space padded
+         MVC   D0001(10),S0007     literal move, space padded
 T0014    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0000   the record, behind its control byte
+         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -153,25 +153,25 @@ T0016    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0013
+         LH    2,D0019
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0010(1),PWK1(16)   packed -> zoned
-         OI    D0010+0,X'F0'       unsigned: force an F zone
+         UNPK  D0016(1),PWK1(16)   packed -> zoned
+         OI    D0016+0,X'F0'       unsigned: force an F zone
 T0017    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(14),S0009
-         MVC   DSPBUF+14(1),D0010+0
+         MVC   DSPBUF+14(1),D0016+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 T0018    DS    0H
 * MOVE LINE SIX   -> PRT-REC
-         MVC   D0000(10),S0010     literal move, space padded
+         MVC   D0001(10),S0010     literal move, space padded
 T0019    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0000   the record, behind its control byte
-         PACK  PWK1(16),D0009(1)   zoned -> packed
+         MVC   FP000+1(10),D0001   the record, behind its control byte
+         PACK  PWK1(16),D0015(1)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
          CVB   1,DWK               ADVANCING identifier LINES
          STH   1,FP000Q            this line's request
@@ -184,24 +184,24 @@ T0020    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0013
+         LH    2,D0019
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0010(1),PWK1(16)   packed -> zoned
-         OI    D0010+0,X'F0'       unsigned: force an F zone
+         UNPK  D0016(1),PWK1(16)   packed -> zoned
+         OI    D0016+0,X'F0'       unsigned: force an F zone
 T0021    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(11),S0011
-         MVC   DSPBUF+11(1),D0010+0
+         MVC   DSPBUF+11(1),D0016+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
 T0022    DS    0H
 * MOVE LINE SEVEN -> PRT-REC
-         MVC   D0000(10),S0012     literal move, space padded
+         MVC   D0001(10),S0012     literal move, space padded
 T0023    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0000   the record, behind its control byte
+         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1001              AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -213,15 +213,15 @@ T0024    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0013
+         LH    2,D0019
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0010(1),PWK1(16)   packed -> zoned
-         OI    D0010+0,X'F0'       unsigned: force an F zone
+         UNPK  D0016(1),PWK1(16)   packed -> zoned
+         OI    D0016+0,X'F0'       unsigned: force an F zone
 T0025    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(13),S0013
-         MVC   DSPBUF+13(1),D0010+0
+         MVC   DSPBUF+13(1),D0016+0
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
@@ -240,7 +240,7 @@ T0028    DS    0H
          STCM  1,7,FD001+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD001,D0001         QSAM move mode
+         GET   FD001,D0003         QSAM move mode
          B     L0011
 L0010    DS    0H                  AT END
          DROP  8
@@ -253,9 +253,9 @@ T0030    DS    0H
          MVC   DSPBUF+0(1),S0014
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+1(1),D0002+0
+         MVC   DSPBUF+1(1),D0004+0
          MVC   DSPBUF+2(2),S0015
-         MVC   DSPBUF+4(10),D0003+0
+         MVC   DSPBUF+4(10),D0005+0
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
@@ -286,7 +286,7 @@ T0034    DS    0H
          STCM  1,7,FD002+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD002,D0004         QSAM move mode
+         GET   FD002,D0007         QSAM move mode
          B     L0013
 L0012    DS    0H                  AT END
          DROP  8
@@ -321,7 +321,7 @@ T0038    DS    0H
          STCM  1,7,FD003+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD003,D0005         QSAM move mode
+         GET   FD003,D0009         QSAM move mode
          B     L0015
 L0014    DS    0H                  AT END
          DROP  8
@@ -336,11 +336,11 @@ T0040    DS    0H
 * MOVE OPT2-REC -> CARD-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0012(12),D0005     alphanumeric move
+         MVC   D0018(12),D0009     alphanumeric move
 T0041    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(6),S0018
-         MVC   DSPBUF+6(12),D0012+0
+         MVC   DSPBUF+6(12),D0018+0
          MVC   DSPBUF+18(1),S0019
          LA    1,PARM0010
          L     15,VDISP
@@ -359,20 +359,20 @@ T0044    DS    0H
 * MOVE E1 -> EXT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(10),S0020     literal move, space padded
+         MVC   D0011(10),S0020     literal move, space padded
 T0045    DS    0H
 * WRITE EXT-REC
-         PUT   FD004,D0006
+         PUT   FD004,D0011
          DROP  8
 L0017    DS    0H
 T0046    DS    0H
 * MOVE E2 -> EXT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(10),S0021     literal move, space padded
+         MVC   D0011(10),S0021     literal move, space padded
 T0047    DS    0H
 * WRITE EXT-REC
-         PUT   FD004,D0006
+         PUT   FD004,D0011
          DROP  8
 L0019    DS    0H
 T0048    DS    0H
@@ -385,10 +385,10 @@ T0050    DS    0H
 * MOVE E3 -> EXT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(10),S0022     literal move, space padded
+         MVC   D0011(10),S0022     literal move, space padded
 T0051    DS    0H
 * WRITE EXT-REC
-         PUT   FD004,D0006
+         PUT   FD004,D0011
          DROP  8
 L0021    DS    0H
 T0052    DS    0H
@@ -405,7 +405,7 @@ T0054    DS    0H
          STCM  1,7,FD005+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD005,D0007         QSAM move mode
+         GET   FD005,D0013         QSAM move mode
          B     L0023
 L0022    DS    0H                  AT END
          DROP  8
@@ -417,11 +417,11 @@ T0056    DS    0H
 * ADD 1 -> CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0011(1)   zoned -> packed
+         PACK  PWK1(16),D0017(1)   zoned -> packed
          ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0011(1),PWK1(16)   packed -> zoned
-         OI    D0011+0,X'F0'       unsigned: force an F zone
+         UNPK  D0017(1),PWK1(16)   packed -> zoned
+         OI    D0017+0,X'F0'       unsigned: force an F zone
 T0057    DS    0H
 * GO TO EXT-LOOP
          B     P0003
@@ -436,7 +436,7 @@ T0059    DS    0H
          MVC   DSPBUF+0(10),S0023
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+10(1),D0011+0
+         MVC   DSPBUF+10(1),D0017+0
          LA    1,PARM0011
          L     15,VDISP
          BALR  14,15
@@ -455,15 +455,15 @@ T0061    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0013
+         LH    2,D0019
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0010(1),PWK1(16)   packed -> zoned
-         OI    D0010+0,X'F0'       unsigned: force an F zone
+         UNPK  D0016(1),PWK1(16)   packed -> zoned
+         OI    D0016+0,X'F0'       unsigned: force an F zone
 T0062    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0024
-         MVC   DSPBUF+10(1),D0010+0
+         MVC   DSPBUF+10(1),D0016+0
          LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
@@ -542,7 +542,7 @@ FP000P   DC    A(FD000)            COBADV parameter list
          DC    A(FP000O)
          DC    A(FP000Q)
          DC    A(FP000G)           LINAGE cells
-         DC    X'80',AL3(D0013)    LINAGE-COUNTER
+         DC    X'80',AL3(D0019)    LINAGE-COUNTER
 FP000L   DC    H'10'               the record length
 FP000O   DC    H'0'                lines a BEFORE left owing
 FP000Q   DS    H                   this line's request
@@ -709,29 +709,38 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL10' '             PRT-REC PIC X(10)
-         DS    XL6                 reserve the rest of a table
-D0001    DS    0CL11               RAW-REC (01 group)
-D0002    DC    CL1' '              R-CTL PIC X(1)
-D0003    DC    CL10' '             R-TEXT PIC X(10)
-         DS    XL5                 reserve the rest of a table
-D0004    DC    CL80' '             OPT-REC PIC X(80)
-D0005    DC    CL80' '             OPT2-REC PIC X(80)
-D0006    DC    CL10' '             EXT-REC PIC X(10)
-         DS    XL6                 reserve the rest of a table
-D0007    DC    CL10' '             EXT-IN-REC PIC X(10)
-         DS    XL6                 reserve the rest of a table
-D0008    DC    CL1'N'              EOF-FLAG PIC X(1)
-         DS    XL7                 reserve the rest of a table
-D0009    DC    CL1'2'              N PIC 9(1)v0 DISP
-         DS    XL7                 reserve the rest of a table
-D0010    DC    CL1'0'              LC-SHOW PIC 9(1)v0 DISP
-         DS    XL7                 reserve the rest of a table
-D0011    DC    CL1'0'              CNT PIC 9(1)v0 DISP
-         DS    XL7                 reserve the rest of a table
-D0012    DC    CL12' '             CARD-SHOW PIC X(12)
          DS    XL4                 reserve the rest of a table
-D0013    DC    HL2'1'              LINAGE-COUNTER PIC 9(4)v0 COMP
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    CL10' '             PRT-REC PIC X(10)
+         DS    XL2                 reserve the rest of a table
+D0002    DC    CL4' '              *RDW PIC X(4)
+D0003    DS    0CL11               RAW-REC (01 group)
+D0004    DC    CL1' '              R-CTL PIC X(1)
+D0005    DC    CL10' '             R-TEXT PIC X(10)
+         DS    XL1                 reserve the rest of a table
+D0006    DC    CL4' '              *RDW PIC X(4)
+D0007    DC    CL80' '             OPT-REC PIC X(80)
+         DS    XL4                 reserve the rest of a table
+D0008    DC    CL4' '              *RDW PIC X(4)
+D0009    DC    CL80' '             OPT2-REC PIC X(80)
+         DS    XL4                 reserve the rest of a table
+D0010    DC    CL4' '              *RDW PIC X(4)
+D0011    DC    CL10' '             EXT-REC PIC X(10)
+         DS    XL2                 reserve the rest of a table
+D0012    DC    CL4' '              *RDW PIC X(4)
+D0013    DC    CL10' '             EXT-IN-REC PIC X(10)
+         DS    XL6                 reserve the rest of a table
+D0014    DC    CL1'N'              EOF-FLAG PIC X(1)
+         DS    XL7                 reserve the rest of a table
+D0015    DC    CL1'2'              N PIC 9(1)v0 DISP
+         DS    XL7                 reserve the rest of a table
+D0016    DC    CL1'0'              LC-SHOW PIC 9(1)v0 DISP
+         DS    XL7                 reserve the rest of a table
+D0017    DC    CL1'0'              CNT PIC 9(1)v0 DISP
+         DS    XL7                 reserve the rest of a table
+D0018    DC    CL12' '             CARD-SHOW PIC X(12)
+         DS    XL4                 reserve the rest of a table
+D0019    DC    HL2'1'              LINAGE-COUNTER PIC 9(4)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

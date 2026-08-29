@@ -46,7 +46,7 @@ T0003    DS    0H
 L0007    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0007(1),S0001      alphanumeric compare
+         CLC   D0009(1),S0001      alphanumeric compare
          BE    L0008
          LA    15,R0002            return here
          ST    15,X0003            into the range's exit cell
@@ -85,7 +85,7 @@ T0008    DS    0H
          STCM  1,7,FD001+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD001,D0004         QSAM move mode
+         GET   FD001,D0006         QSAM move mode
          B     L0002
 L0001    DS    0H                  AT END
          DROP  8
@@ -93,7 +93,7 @@ T0009    DS    0H
 * MOVE Y -> WS-EOF-FLAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(1),S0001      literal move, space padded
+         MVC   D0009(1),S0001      literal move, space padded
          DROP  8
 L0002    DS    0H
 * A002-READ-END.
@@ -110,14 +110,14 @@ T0011    DS    0H
 * MOVE IN-KEY -> DESC-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(10),D0005     zoned to zoned, same picture
+         MVC   D0003(10),D0007     zoned to zoned, same picture
 T0012    DS    0H
 * MOVE IN-TEXT -> DESC-TEXT
-         MVC   D0003(70),D0006     alphanumeric move
+         MVC   D0004(70),D0008     alphanumeric move
 T0013    DS    0H
 * WRITE DESC-RECORD
          MVI   ISFLG,X'00'
-         PUT   FD000,D0000         QISAM load
+         PUT   FD000,D0001         QISAM load
          CLI   ISFLG,X'00'         sequence or duplicate?
          BNE   L0003
          B     L0004
@@ -133,7 +133,7 @@ T0015    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+0(10),D0002+0
+         MVC   DSPBUF+0(10),D0003+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -143,9 +143,9 @@ T0016    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0009             binary, same scale: in the register
+         LH    2,D0011             binary, same scale: in the register
          AH    2,H0001
-         STH   2,D0009
+         STH   2,D0011
 T0017    DS    0H
 * PERFORM A002-READ THRU A002-READ-END
          LA    15,R0003            return here
@@ -288,17 +288,20 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL81               DESC-RECORD (01 group)
-D0001    DC    CL1' '              DESC-DELETE PIC X(1)
-D0002    DC    CL10'0000000000'    DESC-KEY PIC 9(10)v0 DISP
-D0003    DC    CL70' '             DESC-TEXT PIC X(70)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL81               DESC-RECORD (01 group)
+D0002    DC    CL1' '              DESC-DELETE PIC X(1)
+D0003    DC    CL10'0000000000'    DESC-KEY PIC 9(10)v0 DISP
+D0004    DC    CL70' '             DESC-TEXT PIC X(70)
+         DS    XL3                 reserve the rest of a table
+D0005    DC    CL4' '              *RDW PIC X(4)
+D0006    DS    0CL80               INPUT-RECORD (01 group)
+D0007    DC    CL10'0000000000'    IN-KEY PIC 9(10)v0 DISP
+D0008    DC    CL70' '             IN-TEXT PIC X(70)
+D0009    DC    CL1'N'              WS-EOF-FLAG PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0004    DS    0CL80               INPUT-RECORD (01 group)
-D0005    DC    CL10'0000000000'    IN-KEY PIC 9(10)v0 DISP
-D0006    DC    CL70' '             IN-TEXT PIC X(70)
-D0007    DC    CL1'N'              WS-EOF-FLAG PIC X(1)
-         DS    XL7                 reserve the rest of a table
-D0009    DC    HL2'0'              WS-CNT PIC S9(4)v0 COMP
+D0011    DC    HL2'0'              WS-CNT PIC S9(4)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

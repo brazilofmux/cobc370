@@ -33,19 +33,19 @@ T0000    DS    0H
          MH    6,H0001             times element size
          L     8,BL0000            base locator
          USING WSC0000,8
-         LA    6,D0004(6)          element address
+         LA    6,D0005(6)          element address
          MVC   0(6,6),S0001        literal move, space padded
 T0001    DS    0H
 * MOVE BETA   -> WS-NAME
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
-         LA    6,D0004(6)          element address
+         LA    6,D0005(6)          element address
          MVC   0(6,6),S0002        literal move, space padded
 T0002    DS    0H
 * MOVE GAMMA  -> WS-NAME
          LA    6,2                 subscript-1
          MH    6,H0001             times element size
-         LA    6,D0004(6)          element address
+         LA    6,D0005(6)          element address
          MVC   0(6,6),S0003        literal move, space padded
 T0003    DS    0H
 * OPEN OUTPUT PRINT-FILE
@@ -56,10 +56,10 @@ T0004    DS    0H
          SR    2,2
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0007             LINE-COUNTER = 0
+         ST    2,D0008             LINE-COUNTER = 0
          ST    2,RSNG000           no saved next group integer
          LA    2,1
-         ST    2,D0008             PAGE-COUNTER = 1
+         ST    2,D0009             PAGE-COUNTER = 1
          MVI   RBODY000,X'00'
          MVI   RRH000,X'00'
          MVI   RPF000,X'00'
@@ -74,12 +74,12 @@ T0005    DS    0H
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0000
+         STH   2,D0001
 L0002    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0002+15(1)  literal
@@ -96,13 +96,13 @@ R0001    DS    0H
          ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         STH   2,D0001
          B     L0002
 L0003    DS    0H
          DROP  8
@@ -110,17 +110,17 @@ T0006    DS    0H
 * MOVE LINE-COUNTER -> WS-LC
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007
+         L     2,D0008
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0001       load the ED pattern
          ED    EDWK(4),EDSRC
-         MVC   D0002(3),EDWK+1     the edited result
+         MVC   D0003(3),EDWK+1     the edited result
 T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(24),S0004
-         MVC   DSPBUF+24(3),D0002+0
+         MVC   DSPBUF+24(3),D0003+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -130,12 +130,12 @@ T0008    DS    0H
          ZAP   PWK1(16),WK0+15(1)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         STH   2,D0001
 L0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0004+15(1)  literal
@@ -152,13 +152,13 @@ R0002    DS    0H
          ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         STH   2,D0001
          B     L0004
 L0005    DS    0H
          DROP  8
@@ -179,12 +179,12 @@ T0010    DS    0H
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0000
+         STH   2,D0001
 L0008    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+14(2),K0006+14(2)  literal
@@ -201,13 +201,13 @@ R0003    DS    0H
          ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         STH   2,D0001
          B     L0008
 L0009    DS    0H
          DROP  8
@@ -218,19 +218,19 @@ T0011    DS    0H
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0008
+         ST    2,D0009
 T0012    DS    0H
 * PERFORM TWO-PARA
          ZAP   WK0+14(2),K0008+14(2)  literal
          ZAP   PWK1(16),WK0+14(2)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         STH   2,D0001
 L0010    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+14(2),K0009+14(2)  literal
@@ -247,13 +247,13 @@ R0004    DS    0H
          ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         STH   2,D0001
          B     L0010
 L0011    DS    0H
          DROP  8
@@ -279,27 +279,27 @@ T0016    DS    0H
 * MOVE WS-IDX -> WS-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0001(3),PWK1(16)   packed -> zoned
-         OI    D0001+2,X'F0'       unsigned: force an F zone
+         UNPK  D0002(3),PWK1(16)   packed -> zoned
+         OI    D0002+2,X'F0'       unsigned: force an F zone
 T0017    DS    0H
 * ADD 1 -> WS-K
-         PACK  PWK1(16),D0005(1)   zoned -> packed
+         PACK  PWK1(16),D0006(1)   zoned -> packed
          ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0005(1),PWK1(16)   packed -> zoned
-         OI    D0005+0,X'F0'       unsigned: force an F zone
+         UNPK  D0006(1),PWK1(16)   packed -> zoned
+         OI    D0006+0,X'F0'       unsigned: force an F zone
 T0018    DS    0H
 * IF
-         PACK  WK0+15(1),D0005(1)  zoned -> packed
+         PACK  WK0+15(1),D0006(1)  zoned -> packed
          ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+15(1),WK1+15(1)  numeric compare
          BNH   L0001
 T0019    DS    0H
 * MOVE 1 -> WS-K
-         MVC   D0005(1),S0005      numeric literal as zoned digits
+         MVC   D0006(1),S0005      numeric literal as zoned digits
          DROP  8
 L0001    DS    0H
 T0020    DS    0H
@@ -321,11 +321,11 @@ T0021    DS    0H
 * MOVE WS-IDX -> WS-NUM
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000
+         LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0001(3),PWK1(16)   packed -> zoned
-         OI    D0001+2,X'F0'       unsigned: force an F zone
+         UNPK  D0002(3),PWK1(16)   packed -> zoned
+         OI    D0002+2,X'F0'       unsigned: force an F zone
 T0022    DS    0H
 * GENERATE ONE-LINER
          DROP  8
@@ -350,24 +350,24 @@ RG000    ST    14,RGS000           save the return
          MVC   RBUF+20(4),S0007    COLUMN literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0008
+         L     2,D0009
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0001       load the ED pattern
          ED    EDWK(4),EDSRC
-         MVC   D0012(3),EDWK+1     the edited result
+         MVC   D0013(3),EDWK+1     the edited result
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+25(3),D0012    COLUMN placement
+         MVC   RBUF+25(3),D0013    COLUMN placement
          LA    1,RGP000
          L     15,VWRL
          BALR  14,15
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007             LINE-COUNTER
+         L     2,D0008             LINE-COUNTER
          LA    2,1(2)              LINE PLUS n
          ST    2,RTGT
          MVI   RBUF+1,C' '
@@ -387,7 +387,7 @@ RG001    ST    14,RGS001           save the return
          BE    L0018
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007             LINE-COUNTER
+         L     2,D0008             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
          BNH   L0017               fits
@@ -399,7 +399,7 @@ L0018    DS    0H
          BZ    L0017               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0007             into LINE-COUNTER
+         ST    2,D0008             into LINE-COUNTER
          SR    3,3
          ST    3,RSNG000           and cleared
          LA    2,2(2)              plus one, plus the later LINE intege
@@ -410,7 +410,7 @@ L0018    DS    0H
 L0017    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007             LINE-COUNTER
+         L     2,D0008             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
          BE    L0019
          LA    2,1(2)              LINE PLUS n
@@ -425,28 +425,28 @@ L0020    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
-         MVC   D0016(3),D0001      zoned to zoned, same picture
+         MVC   D0017(3),D0002      zoned to zoned, same picture
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+1(3),D0016     COLUMN placement
-         PACK  DWK(8),D0005(1)     subscript
+         MVC   RBUF+1(3),D0017     COLUMN placement
+         PACK  DWK(8),D0006(1)     subscript
          CVB   7,DWK
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
-         LA    7,D0004(7)          element address
-         MVC   D0017(6),0(7)       alphanumeric move
+         LA    7,D0005(7)          element address
+         MVC   D0018(6),0(7)       alphanumeric move
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+8(6),D0017     COLUMN placement
+         MVC   RBUF+8(6),D0018     COLUMN placement
          LA    1,RGP001
          L     15,VWRL
          BALR  14,15
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007             LINE-COUNTER
+         L     2,D0008             LINE-COUNTER
          LA    2,1(2)              LINE PLUS n
          ST    2,RTGT
          MVI   RBUF+1,C' '
@@ -466,7 +466,7 @@ RG002    ST    14,RGS002           save the return
          BE    L0022
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007             LINE-COUNTER
+         L     2,D0008             LINE-COUNTER
          A     2,FC004             plus every LINE integer
          C     2,FC002             against the lower limit
          BNH   L0021               fits
@@ -478,7 +478,7 @@ L0022    DS    0H
          BZ    L0021               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0007             into LINE-COUNTER
+         ST    2,D0008             into LINE-COUNTER
          SR    3,3
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
@@ -489,7 +489,7 @@ L0022    DS    0H
 L0021    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007             LINE-COUNTER
+         L     2,D0008             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
          BE    L0023
          LA    2,1(2)              LINE PLUS n
@@ -504,11 +504,11 @@ L0024    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
-         MVC   D0020(3),D0001      zoned to zoned, same picture
+         MVC   D0021(3),D0002      zoned to zoned, same picture
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+1(3),D0020     COLUMN placement
+         MVC   RBUF+1(3),D0021     COLUMN placement
          MVC   RBUF+8(6),S0011     COLUMN literal
          LA    1,RGP002
          L     15,VWRL
@@ -522,7 +522,7 @@ L0024    DS    0H
 RG003    ST    14,RGS003           save the return
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0007             LINE-COUNTER
+         L     2,D0008             LINE-COUNTER
          C     2,FC005             below the group's first line?
          BL    L0025               fits
          BAL   14,RADV000          page advance processing
@@ -532,7 +532,7 @@ RG003    ST    14,RGS003           save the return
          BZ    L0025               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0007             into LINE-COUNTER
+         ST    2,D0008             into LINE-COUNTER
          SR    3,3
          ST    3,RSNG000           and cleared
          C     2,FC005             below the group's first line?
@@ -557,11 +557,11 @@ REJC000  ST    14,REJCS000
          MVI   RCTL000,C'1'        eject before the next line
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0008             PAGE-COUNTER
+         L     2,D0009             PAGE-COUNTER
          LA    2,1(2)
-         ST    2,D0008
+         ST    2,D0009
          SR    2,2
-         ST    2,D0007             LINE-COUNTER = 0
+         ST    2,D0008             LINE-COUNTER = 0
          MVI   RBODY000,X'00'      no body group on the new page
          MVI   RRH000,X'00'        no REPORT HEADING on it
          MVI   RPF000,X'00'        no PAGE FOOTING on it
@@ -580,7 +580,7 @@ RGP000   DC    A(FD000)            PAGE-HEAD
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    A(D0007)            LINE-COUNTER
+         DC    A(D0008)            LINE-COUNTER
          DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS000   DS    F                   return address
 RGP001   DC    A(FD000)            TWO-LINER
@@ -588,7 +588,7 @@ RGP001   DC    A(FD000)            TWO-LINER
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    A(D0007)            LINE-COUNTER
+         DC    A(D0008)            LINE-COUNTER
          DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS001   DS    F                   return address
 RGP002   DC    A(FD000)            ONE-LINER
@@ -596,7 +596,7 @@ RGP002   DC    A(FD000)            ONE-LINER
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    A(D0007)            LINE-COUNTER
+         DC    A(D0008)            LINE-COUNTER
          DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS002   DS    F                   return address
 RGP003   DC    A(FD000)            FIXED-LINER
@@ -604,7 +604,7 @@ RGP003   DC    A(FD000)            FIXED-LINER
          DC    A(RTGT)
          DC    A(RBUF)
          DC    A(RCTL000)          pending carriage control
-         DC    A(D0007)            LINE-COUNTER
+         DC    A(D0008)            LINE-COUNTER
          DC    X'80',AL3(RTBLNK)   the blank line; last parameter
 RGS003   DS    F                   return address
 RSUPPR   DC    X'00'               SUPPRESS PRINTING was executed
@@ -766,35 +766,37 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    HL2'0'              WS-IDX PIC S9(4)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    HL2'0'              WS-IDX PIC S9(4)v0 COMP
          DS    XL6                 reserve the rest of a table
-D0001    DC    CL3'000'            WS-NUM PIC 9(3)v0 DISP
+D0002    DC    CL3'000'            WS-NUM PIC 9(3)v0 DISP
          DS    XL5                 reserve the rest of a table
-D0002    DC    CL3' '              WS-LC edited, 3 chars
+D0003    DC    CL3' '              WS-LC edited, 3 chars
          DS    XL5                 reserve the rest of a table
-D0003    DS    0CL18               WS-TAB (01 group)
-D0004    DC    3CL6' '             WS-NAME PIC X(6) table
+D0004    DS    0CL18               WS-TAB (01 group)
+D0005    DC    3CL6' '             WS-NAME PIC X(6) table
          DS    XL6                 reserve the rest of a table
-D0005    DC    CL1'0'              WS-K PIC 9(1)v0 DISP
+D0006    DC    CL1'0'              WS-K PIC 9(1)v0 DISP
          DS    XL3                 reserve the rest of a table
-D0006    DS    0CL8                PAGED-RPT (01 group)
-D0007    DC    FL4'0'              LINE-COUNTER PIC 9(6)v0 COMP
-D0008    DC    FL4'0'              PAGE-COUNTER PIC 9(6)v0 COMP
-D0009    DS    0C                  PAGE-HEAD (02 group)
-D0010    DC    CL12' '             RPT0 PIC X(12)
-D0011    DC    CL4' '              RPT1 PIC X(4)
-D0012    DC    CL3' '              RPT2 edited, 3 chars
-D0013    DC    CL3' '              RPT3 PIC X(3)
-D0014    DC    CL4' '              RPT4 PIC X(4)
-D0015    DS    0C                  TWO-LINER (02 group)
-D0016    DC    CL3'000'            RPT5 PIC 9(3)v0 DISP
-D0017    DC    CL6' '              RPT6 PIC X(6)
-D0018    DC    CL9' '              RPT7 PIC X(9)
-D0019    DS    0C                  ONE-LINER (02 group)
-D0020    DC    CL3'000'            RPT8 PIC 9(3)v0 DISP
-D0021    DC    CL6' '              RPT9 PIC X(6)
-D0022    DS    0C                  FIXED-LINER (02 group)
-D0023    DC    CL13' '             RPT10 PIC X(13)
+D0007    DS    0CL8                PAGED-RPT (01 group)
+D0008    DC    FL4'0'              LINE-COUNTER PIC 9(6)v0 COMP
+D0009    DC    FL4'0'              PAGE-COUNTER PIC 9(6)v0 COMP
+D0010    DS    0C                  PAGE-HEAD (02 group)
+D0011    DC    CL12' '             RPT0 PIC X(12)
+D0012    DC    CL4' '              RPT1 PIC X(4)
+D0013    DC    CL3' '              RPT2 edited, 3 chars
+D0014    DC    CL3' '              RPT3 PIC X(3)
+D0015    DC    CL4' '              RPT4 PIC X(4)
+D0016    DS    0C                  TWO-LINER (02 group)
+D0017    DC    CL3'000'            RPT5 PIC 9(3)v0 DISP
+D0018    DC    CL6' '              RPT6 PIC X(6)
+D0019    DC    CL9' '              RPT7 PIC X(9)
+D0020    DS    0C                  ONE-LINER (02 group)
+D0021    DC    CL3'000'            RPT8 PIC 9(3)v0 DISP
+D0022    DC    CL6' '              RPT9 PIC X(6)
+D0023    DS    0C                  FIXED-LINER (02 group)
+D0024    DC    CL13' '             RPT10 PIC X(13)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

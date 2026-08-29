@@ -37,13 +37,13 @@ T0000    DS    0H
          BZ    G0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0002
 G0003    DS    0H
          DROP  8
@@ -53,17 +53,17 @@ T0001    DS    0H
          MVC   DSPBUF+0(7),S0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+7(2),D0002+0
+         MVC   DSPBUF+7(2),D0003+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 T0002    DS    0H
 * MOVE 3 -> WS-RRN
-         MVC   D0001(5),S0002      numeric literal as zoned digits
+         MVC   D0002(5),S0002      numeric literal as zoned digits
 T0003    DS    0H
 * READ RRDS-FILE
 *  the RELATIVE KEY into VSAM's search argument
-         PACK  PWK1(16),D0001(5)   zoned -> packed
+         PACK  PWK1(16),D0002(5)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,FD000K
@@ -76,19 +76,19 @@ T0003    DS    0H
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
          BE    G0006
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0007
 G0006    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'23'     no such record
+         MVC   D0003(2),=C'23'     no such record
          B     G0007
 G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0005
 G0007    DS    0H
          DROP  8
@@ -104,8 +104,8 @@ G0005    DS    0H
          L     2,FD000K
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
-         OI    D0001+4,X'F0'       unsigned: force an F zone
+         UNPK  D0002(5),PWK1(16)   packed -> zoned
+         OI    D0002+4,X'F0'       unsigned: force an F zone
          B     L0002
 L0001    DS    0H                  INVALID KEY
          DROP  8
@@ -116,19 +116,19 @@ L0001    DS    0H                  INVALID KEY
          BE    G0010
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0011
 G0010    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'23'     no such record
+         MVC   D0003(2),=C'23'     no such record
          B     G0011
 G0008    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0009
 G0011    DS    0H
          DROP  8
@@ -143,24 +143,24 @@ T0004    DS    0H
 * MOVE RRDS-RECORD -> SEEN
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(20),D0000     alphanumeric move
+         MVC   D0004(20),D0001     alphanumeric move
 T0005    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0003
-         MVC   DSPBUF+7(2),D0002+0
+         MVC   DSPBUF+7(2),D0003+0
          MVC   DSPBUF+9(2),S0004
-         MVC   DSPBUF+11(20),D0003+0
+         MVC   DSPBUF+11(20),D0004+0
          MVC   DSPBUF+31(1),S0005
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
 T0006    DS    0H
 * MOVE 1 -> WS-RRN
-         MVC   D0001(5),S0006      numeric literal as zoned digits
+         MVC   D0002(5),S0006      numeric literal as zoned digits
 T0007    DS    0H
 * READ RRDS-FILE
 *  the RELATIVE KEY into VSAM's search argument
-         PACK  PWK1(16),D0001(5)   zoned -> packed
+         PACK  PWK1(16),D0002(5)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,FD000K
@@ -173,19 +173,19 @@ T0007    DS    0H
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
          BE    G0014
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0015
 G0014    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'23'     no such record
+         MVC   D0003(2),=C'23'     no such record
          B     G0015
 G0012    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0013
 G0015    DS    0H
          DROP  8
@@ -201,8 +201,8 @@ G0013    DS    0H
          L     2,FD000K
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
-         OI    D0001+4,X'F0'       unsigned: force an F zone
+         UNPK  D0002(5),PWK1(16)   packed -> zoned
+         OI    D0002+4,X'F0'       unsigned: force an F zone
          B     L0004
 L0003    DS    0H                  INVALID KEY
          DROP  8
@@ -213,19 +213,19 @@ L0003    DS    0H                  INVALID KEY
          BE    G0018
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0019
 G0018    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'23'     no such record
+         MVC   D0003(2),=C'23'     no such record
          B     G0019
 G0016    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0017
 G0019    DS    0H
          DROP  8
@@ -240,24 +240,24 @@ T0008    DS    0H
 * MOVE RRDS-RECORD -> SEEN
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(20),D0000     alphanumeric move
+         MVC   D0004(20),D0001     alphanumeric move
 T0009    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0007
-         MVC   DSPBUF+7(2),D0002+0
+         MVC   DSPBUF+7(2),D0003+0
          MVC   DSPBUF+9(2),S0004
-         MVC   DSPBUF+11(20),D0003+0
+         MVC   DSPBUF+11(20),D0004+0
          MVC   DSPBUF+31(1),S0005
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 T0010    DS    0H
 * MOVE 99999 -> WS-RRN
-         MVC   D0001(5),S0008      numeric literal as zoned digits
+         MVC   D0002(5),S0008      numeric literal as zoned digits
 T0011    DS    0H
 * READ RRDS-FILE
 *  the RELATIVE KEY into VSAM's search argument
-         PACK  PWK1(16),D0001(5)   zoned -> packed
+         PACK  PWK1(16),D0002(5)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,FD000K
@@ -270,19 +270,19 @@ T0011    DS    0H
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
          BE    G0022
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0023
 G0022    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'23'     no such record
+         MVC   D0003(2),=C'23'     no such record
          B     G0023
 G0020    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0021
 G0023    DS    0H
          DROP  8
@@ -298,8 +298,8 @@ G0021    DS    0H
          L     2,FD000K
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
-         OI    D0001+4,X'F0'       unsigned: force an F zone
+         UNPK  D0002(5),PWK1(16)   packed -> zoned
+         OI    D0002+4,X'F0'       unsigned: force an F zone
          B     L0006
 L0005    DS    0H                  INVALID KEY
          DROP  8
@@ -310,19 +310,19 @@ L0005    DS    0H                  INVALID KEY
          BE    G0026
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0027
 G0026    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'23'     no such record
+         MVC   D0003(2),=C'23'     no such record
          B     G0027
 G0024    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0025
 G0027    DS    0H
          DROP  8
@@ -338,7 +338,7 @@ T0012    DS    0H
          MVC   DSPBUF+0(7),S0009
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+7(2),D0002+0
+         MVC   DSPBUF+7(2),D0003+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -347,13 +347,13 @@ T0013    DS    0H
          CLOSE (FD000)
          LTR   15,15               VSAM request succeeded?
          BZ    G0028
-         MVC   D0002(2),=C'30'     permanent error
+         MVC   D0003(2),=C'30'     permanent error
          B     G0030
 G0028    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(2),=C'00'
+         MVC   D0003(2),=C'00'
          B     G0029
 G0030    DS    0H
          DROP  8
@@ -363,7 +363,7 @@ T0014    DS    0H
          MVC   DSPBUF+0(7),S0010
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+7(2),D0002+0
+         MVC   DSPBUF+7(2),D0003+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
@@ -410,7 +410,7 @@ WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=RRDSF01,MACRF=(KEY,DIR,IN)  VSAM access method co
 FD000RA  DC    F'0'                has carried a request
-FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
+FD000R   RPL   ACB=FD000,AREA=D0001,                                   X
                AREALEN=80,RECLEN=80,ARG=FD000K,OPTCD=(KEY,DIR,KEQ,NUP, X
                MVE)
 FD000K   DS    F                   relative record number
@@ -511,12 +511,14 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL80' '             RRDS-RECORD PIC X(80)
-D0001    DC    CL5'00000'          WS-RRN PIC 9(5)v0 DISP
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    CL80' '             RRDS-RECORD PIC X(80)
+D0002    DC    CL5'00000'          WS-RRN PIC 9(5)v0 DISP
          DS    XL3                 reserve the rest of a table
-D0002    DC    CL2'00'             WS-STATUS PIC X(2)
+D0003    DC    CL2'00'             WS-STATUS PIC X(2)
          DS    XL6                 reserve the rest of a table
-D0003    DC    CL20' '             SEEN PIC X(20)
+D0004    DC    CL20' '             SEEN PIC X(20)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

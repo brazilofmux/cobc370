@@ -600,3 +600,64 @@ place of `30`; it is how every code above was read.
 
 With this the Indexed I-O module is at Level 2 -- the one caveat being the
 I-O split above -- and the map's last exception is gone.
+
+## Dataset formats: variable-length records
+
+Done 2026-08-30, the first of the dataset-format items discussed after the
+alternate keys. The facts first, because the online threads about "COBOL
+and blocking" are confusing only until the three layers are separated:
+
+1. **The DCB merge is MVS's, and precise.** Each DCB field is filled from the
+   program's DCB, then the DD statement's `DCB=`, then the label -- and a
+   field already non-zero is never overwritten. For output the merged
+   result becomes the label.
+2. **What the compiler puts in the DCB is the compiler's table.** IBM's:
+   `RECORD CONTAINS n` gives `LRECL`; a `TO` range, records of different
+   lengths, or `RECORDING MODE V` give `RECFM=V` with `LRECL` four more (the
+   RDW); `BLOCK CONTAINS n RECORDS` gives `RECFM=FB`/`VB` and the block
+   size (for V, n records plus the BDW); `BLOCK CONTAINS` omitted asserts
+   unblocked -- the classic trap on input, because the program's `F/LRECL`
+   then wins the merge against a blocked label; `BLOCK CONTAINS 0` leaves
+   the block size to the DD or the label.
+3. **QSAM does the rest**: move mode copies `LRECL` bytes; a V block is
+   walked by its RDWs; a block longer than `BLKSIZE` is S001-4.
+
+cobc370's table, now: input DCBs state nothing, so the label decides
+(unchanged, and the reason none of the input traps apply). Output states
+`RECFM`, `LRECL` and `BLKSIZE` from the FD as IBM does, and now knows
+variable-length records: `RECORDING MODE IS F/V` (IBM's clause; `U` and `S`
+refused), `RECORD CONTAINS m TO n`, and IBM's inference from record
+descriptions of different lengths. A V file gets a four-byte RDW cell in
+the doubleword before its record area, which is where QSAM's move mode
+wants it: `READ` gets the record behind its RDW, `WRITE` sets the RDW to the
+length of the record description named (IV-33) and puts from it, and the
+update-mode `READ`/`REWRITE` copy the record at the length in the buffer's
+RDW with `MVCL`, so a rewritten record keeps its size (IV-29). `BLOCK
+CONTAINS 0` came along: `BLKSIZE` is left out of the DCB.
+
+Checked three ways. `tests/vrec` writes five records of two lengths blocked
+three to a block, reads them back, rewrites one of each length in place,
+and reads again; GnuCOBOL agrees line for line. Then the same dataset,
+written and rewritten by cobc370, was read by IKFCBL00 and dumped by
+IDCAMS: all five records, the right lengths (`X'28'` data bytes for the
+long ones), the rewritten text. One implementation-defined difference
+showed itself there and is worth knowing: what a program sees in the
+record area *beyond* a short record. IBM's compiler reads V files in locate
+mode with the record description over the buffer, so beyond a short record
+it shows the next record's RDW and text; cobc370 moves the record into its
+area and leaves the rest as it was. The standard defines neither -- IV-24
+says only that the record is made available -- and a program that looks
+there is wrong under both.
+
+Found on the way, by the production batch and nothing else: the hidden items
+the Report Writer creates (the counter group, the sum counters, the printable
+items) had `fd_file` left at zero by `memset`, and zero is file number 0.
+Nothing had read that field for them until the record-format inference
+did, and then the first FD of every report program had an eight-byte
+"record" and was taken for variable-length: every step ended CC 0000 and
+every report was a heading on an empty page. The sweep's 101 tests passed
+throughout. The batch is the safety net for exactly this.
+
+Still to do from that discussion: a probe matrix on the guest -- F/FB/V/VB
+by stated and unstated blocking by input and output -- run under both
+compilers and written into the conformance map as the table.

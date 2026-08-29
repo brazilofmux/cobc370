@@ -55,13 +55,13 @@ T0003    DS    0H
          BZ    G0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
+         MVC   D0004(2),=C'30'     permanent error
          B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'00'
+         MVC   D0004(2),=C'00'
          B     G0002
 G0003    DS    0H
          DROP  8
@@ -72,7 +72,7 @@ T0004    DS    0H
 * MOVE 2522284049 -> KR-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0004     literal move, space padded
+         MVC   D0002(10),S0004     literal move, space padded
 T0005    DS    0H
 * PERFORM 100-SEEK-THEN-WALK THRU 109-EXIT
          LA    15,R0001            return here
@@ -86,7 +86,7 @@ T0006    DS    0H
 * MOVE 0994201010 -> KR-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0005     literal move, space padded
+         MVC   D0002(10),S0005     literal move, space padded
 T0007    DS    0H
 * PERFORM 100-SEEK-THEN-WALK THRU 109-EXIT
          LA    15,R0002            return here
@@ -100,7 +100,7 @@ T0008    DS    0H
 * MOVE 9999999999 -> KR-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0006     literal move, space padded
+         MVC   D0002(10),S0006     literal move, space padded
 T0009    DS    0H
 * PERFORM 100-SEEK-THEN-WALK THRU 109-EXIT
          LA    15,R0003            return here
@@ -119,13 +119,13 @@ T0010    DS    0H
          BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
+         MVC   D0004(2),=C'30'     permanent error
          B     G0006
 G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'00'
+         MVC   D0004(2),=C'00'
          B     G0005
 G0006    DS    0H
          DROP  8
@@ -145,19 +145,19 @@ T0012    DS    0H
          MVC   DSPBUF+0(12),S0007
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+12(10),D0001+0
+         MVC   DSPBUF+12(10),D0002+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 T0013    DS    0H
 * MOVE N -> MISSING-SWITCH
-         MVC   D0006(1),S0008      literal move, space padded
+         MVC   D0007(1),S0008      literal move, space padded
 T0014    DS    0H
 * READ KSDS-FILE
          MODCB RPL=FD000R,OPTCD=(DIR,NSP)  by key
          LTR   15,15
          BZ    G0007
-         MVC   D0003(2),=C'30'     could not set the request type
+         MVC   D0004(2),=C'30'     could not set the request type
          B     G0008
 G0007    DS    0H
          DROP  8
@@ -172,19 +172,19 @@ G0007    DS    0H
          BE    G0011
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
+         MVC   D0004(2),=C'30'     permanent error
          B     G0012
 G0011    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'23'     no such record
+         MVC   D0004(2),=C'23'     no such record
          B     G0012
 G0009    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'00'
+         MVC   D0004(2),=C'00'
          B     G0010
 G0012    DS    0H
          DROP  8
@@ -203,19 +203,19 @@ L0001    DS    0H                  INVALID KEY
          BE    G0015
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
+         MVC   D0004(2),=C'30'     permanent error
          B     G0016
 G0015    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'23'     no such record
+         MVC   D0004(2),=C'23'     no such record
          B     G0016
 G0013    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'00'
+         MVC   D0004(2),=C'00'
          B     G0014
 G0016    DS    0H
          DROP  8
@@ -230,19 +230,19 @@ T0015    DS    0H
 * MOVE Y -> MISSING-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(1),S0009      literal move, space padded
+         MVC   D0007(1),S0009      literal move, space padded
          DROP  8
 L0002    DS    0H
 T0016    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0006(1),S0009      alphanumeric compare
+         CLC   D0007(1),S0009      alphanumeric compare
          BNE   L0003
 T0017    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(23),S0010
-         MVC   DSPBUF+23(2),D0003+0
+         MVC   DSPBUF+23(2),D0004+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
@@ -258,7 +258,7 @@ T0019    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0006(1),S0009      alphanumeric compare
+         CLC   D0007(1),S0009      alphanumeric compare
          BE    L0004
 T0020    DS    0H
 * PERFORM 102-WALK THRU 103-EXIT
@@ -285,26 +285,26 @@ T0022    DS    0H
          MVC   DSPBUF+0(10),S0011
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+10(80),D0000+0
+         MVC   DSPBUF+10(80),D0001+0
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 T0023    DS    0H
 * MOVE 0 -> RECORD-COUNTER
          ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0008(8),PWK1(16)   packed -> zoned
+         UNPK  D0009(8),PWK1(16)   packed -> zoned
 T0024    DS    0H
 * MOVE N -> END-OF-FILE-SWITCH
-         MVC   D0004(1),S0008      literal move, space padded
+         MVC   D0005(1),S0008      literal move, space padded
 T0025    DS    0H
 * PERFORM 104-NEXT THRU 105-EXIT
 L0018    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0004(1),S0009      alphanumeric compare
+         CLC   D0005(1),S0009      alphanumeric compare
          BE    L0019
-         PACK  WK0+11(5),D0008(8)  zoned -> packed
+         PACK  WK0+11(5),D0009(8)  zoned -> packed
          ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+11(5),WK1+15(1)  numeric compare
          BH    L0019
@@ -340,7 +340,7 @@ T0028    DS    0H
          BZ    G0017
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'30'     could not set the request type
+         MVC   D0004(2),=C'30'     could not set the request type
          B     G0018
 G0017    DS    0H
          DROP  8
@@ -355,19 +355,19 @@ G0017    DS    0H
          BE    G0021
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
+         MVC   D0004(2),=C'30'     permanent error
          B     G0022
 G0021    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'10'     end of data
+         MVC   D0004(2),=C'10'     end of data
          B     G0022
 G0019    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'00'
+         MVC   D0004(2),=C'00'
          B     G0020
 G0022    DS    0H
          DROP  8
@@ -386,19 +386,19 @@ L0005    DS    0H                  AT END
          BE    G0025
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'30'     permanent error
+         MVC   D0004(2),=C'30'     permanent error
          B     G0026
 G0025    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'10'     end of data
+         MVC   D0004(2),=C'10'     end of data
          B     G0026
 G0023    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(2),=C'00'
+         MVC   D0004(2),=C'00'
          B     G0024
 G0026    DS    0H
          DROP  8
@@ -413,19 +413,19 @@ T0029    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0004(1),S0009      literal move, space padded
+         MVC   D0005(1),S0009      literal move, space padded
          DROP  8
 L0006    DS    0H
 T0030    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0004(1),S0009      alphanumeric compare
+         CLC   D0005(1),S0009      alphanumeric compare
          BE    L0007
 T0031    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0012
-         MVC   DSPBUF+10(80),D0000+0
+         MVC   DSPBUF+10(80),D0001+0
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
@@ -435,10 +435,10 @@ T0032    DS    0H
 * ADD 1 -> RECORD-COUNTER
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0008(8)   zoned -> packed
+         PACK  PWK1(16),D0009(8)   zoned -> packed
          ZAP   PWK2(16),K0003(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0008(8),PWK1(16)   packed -> zoned
+         UNPK  D0009(8),PWK1(16)   packed -> zoned
          DROP  8
 * 105-EXIT.
 P0008    DS    0H
@@ -498,8 +498,8 @@ WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=KSDSF01,MACRF=(KEY,SEQ,DIR,IN)  VSAM access metho
 FD000RA  DC    F'0'                has carried a request
-FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
-               AREALEN=80,RECLEN=80,ARG=D0001,KEYLEN=10,OPTCD=(KEY,SEQ,X
+FD000R   RPL   ACB=FD000,AREA=D0001,                                   X
+               AREALEN=80,RECLEN=80,ARG=D0002,KEYLEN=10,OPTCD=(KEY,SEQ,X
                KEQ,NUP,MVE)
 K0001    DC    PL16'0'             numeric constants
 K0002    DC    PL16'2'
@@ -621,16 +621,18 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL80               KSDS-RECORD (01 group)
-D0001    DC    CL10' '             KR-KEY PIC X(10)
-D0002    DC    CL70' '             FILL0002 PIC X(70)
-D0003    DC    CL2'00'             WS-STATUS PIC X(2)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL80               KSDS-RECORD (01 group)
+D0002    DC    CL10' '             KR-KEY PIC X(10)
+D0003    DC    CL70' '             FILL0003 PIC X(70)
+D0004    DC    CL2'00'             WS-STATUS PIC X(2)
          DS    XL6                 reserve the rest of a table
-D0004    DC    CL1'N'              END-OF-FILE-SWITCH PIC X(1)
+D0005    DC    CL1'N'              END-OF-FILE-SWITCH PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0006    DC    CL1'N'              MISSING-SWITCH PIC X(1)
+D0007    DC    CL1'N'              MISSING-SWITCH PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0008    DC    ZL8'0'              RECORD-COUNTER PIC S9(8)v0 DISP
+D0009    DC    ZL8'0'              RECORD-COUNTER PIC S9(8)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

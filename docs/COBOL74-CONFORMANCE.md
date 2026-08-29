@@ -114,6 +114,14 @@ RECORD AREA`, `MULTIPLE FILE TAPE`, `REVERSED`, the `CLOSE` options -- was
 added on 2026-08-29. `REVERSED` and `CLOSE REEL`/`NO REWIND` are generated
 and untested, being tape-only.
 
+Variable-length records (`RECFM=V`/`VB`) were added on 2026-08-30: `RECORD
+CONTAINS m TO n`, records of different lengths under one FD, and IBM's
+`RECORDING MODE IS F/V` (`U` and `S` refused); `WRITE` writes the length of
+the record named, `REWRITE` in update mode keeps the record's length, and
+a dataset written by cobc370 reads back under IKFCBL00. `BLOCK CONTAINS 0`
+leaves the block size to the DD or the label. The roadmap's closing section
+sets out the DCB rules this rests on.
+
 ### Relative I-O — Level 2, complete
 
 RRDS through VSAM. `ORGANIZATION RELATIVE`, `ACCESS SEQUENTIAL/RANDOM`,

@@ -35,14 +35,14 @@ T0000    DS    0H
 * ADD 1 -> DECL-COUNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0003(1)   zoned -> packed
+         PACK  PWK1(16),D0004(1)   zoned -> packed
          ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0003(1),PWK1(16)   packed -> zoned
-         OI    D0003+0,X'F0'       unsigned: force an F zone
+         UNPK  D0004(1),PWK1(16)   packed -> zoned
+         OI    D0004+0,X'F0'       unsigned: force an F zone
 T0001    DS    0H
 * MOVE Y -> EOF-FLAG
-         MVC   D0005(1),S0001      literal move, space padded
+         MVC   D0006(1),S0001      literal move, space padded
 * end of a PERFORM range: return through its cell
          L     15,X0001
          BR    15
@@ -66,7 +66,7 @@ T0004    DS    0H
 L0004    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0005(1),S0001      alphanumeric compare
+         CLC   D0006(1),S0001      alphanumeric compare
          BE    L0005
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
@@ -85,14 +85,14 @@ T0006    DS    0H
          MVC   DSPBUF+0(7),S0003
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+7(1),D0004+0
+         MVC   DSPBUF+7(1),D0005+0
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
 T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0004
-         MVC   DSPBUF+7(1),D0003+0
+         MVC   DSPBUF+7(1),D0004+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -113,7 +113,7 @@ T0009    DS    0H
          STCM  1,7,FD000+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD000,D0000         QSAM move mode
+         GET   FD000,D0001         QSAM move mode
          B     L0002
 L0001    DS    0H                  AT END
          DROP  8
@@ -128,19 +128,19 @@ T0010    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0005(1),S0001      alphanumeric compare
+         CLC   D0006(1),S0001      alphanumeric compare
          BE    L0003
 T0011    DS    0H
 * ADD 1 -> READ-COUNT
-         PACK  PWK1(16),D0004(1)   zoned -> packed
+         PACK  PWK1(16),D0005(1)   zoned -> packed
          ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0004(1),PWK1(16)   packed -> zoned
-         OI    D0004+0,X'F0'       unsigned: force an F zone
+         UNPK  D0005(1),PWK1(16)   packed -> zoned
+         OI    D0005+0,X'F0'       unsigned: force an F zone
 T0012    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0005
-         MVC   DSPBUF+7(20),D0001+0
+         MVC   DSPBUF+7(20),D0002+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -271,14 +271,16 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL80               IN-REC (01 group)
-D0001    DC    CL20' '             IN-KEY PIC X(20)
-D0002    DC    CL60' '             FILL0002 PIC X(60)
-D0003    DC    CL1'0'              DECL-COUNT PIC 9(1)v0 DISP
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL80               IN-REC (01 group)
+D0002    DC    CL20' '             IN-KEY PIC X(20)
+D0003    DC    CL60' '             FILL0003 PIC X(60)
+D0004    DC    CL1'0'              DECL-COUNT PIC 9(1)v0 DISP
          DS    XL7                 reserve the rest of a table
-D0004    DC    CL1'0'              READ-COUNT PIC 9(1)v0 DISP
+D0005    DC    CL1'0'              READ-COUNT PIC 9(1)v0 DISP
          DS    XL7                 reserve the rest of a table
-D0005    DC    CL1'N'              EOF-FLAG PIC X(1)
+D0006    DC    CL1'N'              EOF-FLAG PIC X(1)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

@@ -38,7 +38,7 @@ T0001    DS    0H
          STCM  1,7,FD000+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD000,D0000         QSAM move mode
+         GET   FD000,D0001         QSAM move mode
          B     L0002
 L0001    DS    0H                  AT END
          DROP  8
@@ -50,13 +50,13 @@ T0003    DS    0H
 * MOVE DESC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0004(10),D0002     zoned to zoned, same picture
+         MVC   D0005(10),D0003     zoned to zoned, same picture
 T0004    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0001
-         MVC   DSPBUF+5(10),D0004+0
+         MVC   DSPBUF+5(10),D0005+0
          MVC   DSPBUF+15(1),S0002
-         MVC   DSPBUF+16(70),D0003+0
+         MVC   DSPBUF+16(70),D0004+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -178,12 +178,14 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL81               DESC-RECORD (01 group)
-D0001    DC    CL1' '              DESC-DELETE PIC X(1)
-D0002    DC    CL10'0000000000'    DESC-KEY PIC 9(10)v0 DISP
-D0003    DC    CL70' '             DESC-TEXT PIC X(70)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL81               DESC-RECORD (01 group)
+D0002    DC    CL1' '              DESC-DELETE PIC X(1)
+D0003    DC    CL10'0000000000'    DESC-KEY PIC 9(10)v0 DISP
+D0004    DC    CL70' '             DESC-TEXT PIC X(70)
          DS    XL7                 reserve the rest of a table
-D0004    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
+D0005    DC    CL10'0000000000'    OUT-KEY PIC 9(10)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

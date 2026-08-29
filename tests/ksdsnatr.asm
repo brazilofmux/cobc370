@@ -58,13 +58,13 @@ T0004    DS    0H
          BZ    G0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0002
 G0003    DS    0H
          DROP  8
@@ -73,18 +73,18 @@ T0005    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0007(2),S0004      alphanumeric compare
+         CLC   D0009(2),S0004      alphanumeric compare
          BE    L0001
 T0006    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(31),S0005
-         MVC   DSPBUF+31(2),D0007+0
+         MVC   DSPBUF+31(2),D0009+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 T0007    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
-         MVC   D0008(1),S0006      literal move, space padded
+         MVC   D0010(1),S0006      literal move, space padded
          DROP  8
 L0001    DS    0H
 * 010-PROCESS.
@@ -94,7 +94,7 @@ T0008    DS    0H
 L0028    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0008(1),S0006      alphanumeric compare
+         CLC   D0010(1),S0006      alphanumeric compare
          BE    L0029
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
@@ -117,13 +117,13 @@ T0010    DS    0H
          BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0006
 G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0005
 G0006    DS    0H
          DROP  8
@@ -144,7 +144,7 @@ T0012    DS    0H
          STCM  1,7,FD000+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD000,D0000         QSAM move mode
+         GET   FD000,D0001         QSAM move mode
          B     L0003
 L0002    DS    0H                  AT END
          DROP  8
@@ -152,14 +152,14 @@ T0013    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0008(1),S0006      literal move, space padded
+         MVC   D0010(1),S0006      literal move, space padded
          DROP  8
 L0003    DS    0H
 T0014    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0008(1),S0006      alphanumeric compare
+         CLC   D0010(1),S0006      alphanumeric compare
          BE    L0004
 T0015    DS    0H
 * PERFORM 111-DISPATCH THRU 112-EXIT
@@ -185,7 +185,7 @@ T0017    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0001(1),S0007      alphanumeric compare
+         CLC   D0002(1),S0007      alphanumeric compare
          BNE   L0005
 T0018    DS    0H
 * PERFORM 120-ADD-PROCESS THRU 129-EXIT
@@ -201,7 +201,7 @@ T0019    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0001(1),S0008      alphanumeric compare
+         CLC   D0002(1),S0008      alphanumeric compare
          BNE   L0006
 T0020    DS    0H
 * PERFORM 130-CHANGE-PROCESS THRU 139-EXIT
@@ -217,7 +217,7 @@ T0021    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0001(1),S0009      alphanumeric compare
+         CLC   D0002(1),S0009      alphanumeric compare
          BNE   L0007
 T0022    DS    0H
 * PERFORM 140-DELETE-PROCESS THRU 149-EXIT
@@ -243,19 +243,19 @@ T0024    DS    0H
 * MOVE RI-IMAGE -> KSDS-RECORD
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0004(78),D0003     alphanumeric move
-         MVI   D0004+78,C' '       space fill the remainder
-         MVC   D0004+79(1),D0004+78
+         MVC   D0006(78),D0004     alphanumeric move
+         MVI   D0006+78,C' '       space fill the remainder
+         MVC   D0006+79(1),D0006+78
 T0025    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(8),S0010
-         MVC   DSPBUF+8(80),D0004+0
+         MVC   DSPBUF+8(80),D0006+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
 T0026    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
-         MVC   D0012(1),S0011      literal move, space padded
+         MVC   D0014(1),S0011      literal move, space padded
 T0027    DS    0H
 * WRITE KSDS-RECORD
          PUT   RPL=FD001N          VSAM insert by key
@@ -271,31 +271,31 @@ T0027    DS    0H
          BE    G0010
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0011
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0012
 G0009    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'22'     duplicate key
+         MVC   D0009(2),=C'22'     duplicate key
          B     G0012
 G0010    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'21'     key out of sequence
+         MVC   D0009(2),=C'21'     key out of sequence
          B     G0012
 G0011    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'24'     cluster is full
+         MVC   D0009(2),=C'24'     cluster is full
          B     G0012
 G0007    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0008
 G0012    DS    0H
          DROP  8
@@ -318,31 +318,31 @@ L0008    DS    0H                  INVALID KEY
          BE    G0017
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0018
 G0015    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'22'     duplicate key
+         MVC   D0009(2),=C'22'     duplicate key
          B     G0018
 G0016    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'21'     key out of sequence
+         MVC   D0009(2),=C'21'     key out of sequence
          B     G0018
 G0017    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'24'     cluster is full
+         MVC   D0009(2),=C'24'     cluster is full
          B     G0018
 G0013    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0014
 G0018    DS    0H
          DROP  8
@@ -356,14 +356,14 @@ T0028    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0012(1),S0006      literal move, space padded
+         MVC   D0014(1),S0006      literal move, space padded
          DROP  8
 L0009    DS    0H
 T0029    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0012(1),S0006      alphanumeric compare
+         CLC   D0014(1),S0006      alphanumeric compare
          BE    L0010
 T0030    DS    0H
 * DISPLAY
@@ -377,9 +377,9 @@ T0031    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0012(1),S0006      alphanumeric compare
+         CLC   D0014(1),S0006      alphanumeric compare
          BNE   L0011
-         CLC   D0007(2),S0013      alphanumeric compare
+         CLC   D0009(2),S0013      alphanumeric compare
          BNE   L0011
 T0032    DS    0H
 * DISPLAY
@@ -393,14 +393,14 @@ T0033    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0012(1),S0006      alphanumeric compare
+         CLC   D0014(1),S0006      alphanumeric compare
          BNE   L0012
-         CLC   D0007(2),S0013      alphanumeric compare
+         CLC   D0009(2),S0013      alphanumeric compare
          BE    L0012
 T0034    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(28),S0015
-         MVC   DSPBUF+28(2),D0007+0
+         MVC   DSPBUF+28(2),D0009+0
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
@@ -434,7 +434,7 @@ T0038    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0010(1),S0006      alphanumeric compare
+         CLC   D0012(1),S0006      alphanumeric compare
          BE    L0013
 T0039    DS    0H
 * DISPLAY
@@ -454,7 +454,7 @@ T0041    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0010(1),S0006      alphanumeric compare
+         CLC   D0012(1),S0006      alphanumeric compare
          BNE   L0014
 T0042    DS    0H
 * PERFORM 132-DO-CHANGE THRU 133-EXIT
@@ -480,7 +480,7 @@ T0044    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+0(80),D0004+0
+         MVC   DSPBUF+0(80),D0006+0
          LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
@@ -492,12 +492,12 @@ T0045    DS    0H
          BALR  14,15
 T0046    DS    0H
 * MOVE RI-IMAGE -> KSDS-RECORD
-         MVC   D0004(78),D0003     alphanumeric move
-         MVI   D0004+78,C' '       space fill the remainder
-         MVC   D0004+79(1),D0004+78
+         MVC   D0006(78),D0004     alphanumeric move
+         MVI   D0006+78,C' '       space fill the remainder
+         MVC   D0006+79(1),D0006+78
 T0047    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
-         MVC   D0012(1),S0011      literal move, space padded
+         MVC   D0014(1),S0011      literal move, space padded
 T0048    DS    0H
 * REWRITE KSDS-RECORD
          PUT   RPL=FD001R          put the held record back
@@ -513,31 +513,31 @@ T0048    DS    0H
          BE    G0022
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0023
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0024
 G0021    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'21'     prime key changed
+         MVC   D0009(2),=C'21'     prime key changed
          B     G0024
 G0022    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'23'     no such record
+         MVC   D0009(2),=C'23'     no such record
          B     G0024
 G0023    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'24'     cluster is full
+         MVC   D0009(2),=C'24'     cluster is full
          B     G0024
 G0019    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0020
 G0024    DS    0H
          DROP  8
@@ -560,31 +560,31 @@ L0015    DS    0H                  INVALID KEY
          BE    G0029
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0030
 G0027    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'21'     prime key changed
+         MVC   D0009(2),=C'21'     prime key changed
          B     G0030
 G0028    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'23'     no such record
+         MVC   D0009(2),=C'23'     no such record
          B     G0030
 G0029    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'24'     cluster is full
+         MVC   D0009(2),=C'24'     cluster is full
          B     G0030
 G0025    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0026
 G0030    DS    0H
          DROP  8
@@ -598,18 +598,18 @@ T0049    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0012(1),S0006      literal move, space padded
+         MVC   D0014(1),S0006      literal move, space padded
          DROP  8
 L0016    DS    0H
 T0050    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0012(1),S0006      alphanumeric compare
+         CLC   D0014(1),S0006      alphanumeric compare
          BE    L0017
 T0051    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(80),D0004+0
+         MVC   DSPBUF+0(80),D0006+0
          LA    1,PARM0014
          L     15,VDISP
          BALR  14,15
@@ -625,12 +625,12 @@ T0053    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0012(1),S0006      alphanumeric compare
+         CLC   D0014(1),S0006      alphanumeric compare
          BNE   L0018
 T0054    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(30),S0019
-         MVC   DSPBUF+30(2),D0007+0
+         MVC   DSPBUF+30(2),D0009+0
          LA    1,PARM0016
          L     15,VDISP
          BALR  14,15
@@ -664,7 +664,7 @@ T0058    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0010(1),S0006      alphanumeric compare
+         CLC   D0012(1),S0006      alphanumeric compare
          BE    L0019
 T0059    DS    0H
 * DISPLAY
@@ -684,7 +684,7 @@ T0061    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0010(1),S0006      alphanumeric compare
+         CLC   D0012(1),S0006      alphanumeric compare
          BNE   L0020
 T0062    DS    0H
 * PERFORM 142-DO-DELETE THRU 143-EXIT
@@ -710,7 +710,7 @@ T0064    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+0(80),D0004+0
+         MVC   DSPBUF+0(80),D0006+0
          LA    1,PARM0020
          L     15,VDISP
          BALR  14,15
@@ -722,7 +722,7 @@ T0065    DS    0H
          BALR  14,15
 T0066    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
-         MVC   D0012(1),S0011      literal move, space padded
+         MVC   D0014(1),S0011      literal move, space padded
 T0067    DS    0H
 * DELETE KSDS-FILE
          ERASE RPL=FD001R          erase the held record
@@ -738,31 +738,31 @@ T0067    DS    0H
          BE    G0034
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0035
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0036
 G0033    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'21'     prime key changed
+         MVC   D0009(2),=C'21'     prime key changed
          B     G0036
 G0034    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'23'     no such record
+         MVC   D0009(2),=C'23'     no such record
          B     G0036
 G0035    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'24'     cluster is full
+         MVC   D0009(2),=C'24'     cluster is full
          B     G0036
 G0031    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0032
 G0036    DS    0H
          DROP  8
@@ -785,31 +785,31 @@ L0021    DS    0H                  INVALID KEY
          BE    G0041
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0042
 G0039    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'21'     prime key changed
+         MVC   D0009(2),=C'21'     prime key changed
          B     G0042
 G0040    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'23'     no such record
+         MVC   D0009(2),=C'23'     no such record
          B     G0042
 G0041    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'24'     cluster is full
+         MVC   D0009(2),=C'24'     cluster is full
          B     G0042
 G0037    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0038
 G0042    DS    0H
          DROP  8
@@ -823,14 +823,14 @@ T0068    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0012(1),S0006      literal move, space padded
+         MVC   D0014(1),S0006      literal move, space padded
          DROP  8
 L0022    DS    0H
 T0069    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0012(1),S0006      alphanumeric compare
+         CLC   D0014(1),S0006      alphanumeric compare
          BE    L0023
 T0070    DS    0H
 * DISPLAY
@@ -844,12 +844,12 @@ T0071    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0012(1),S0006      alphanumeric compare
+         CLC   D0014(1),S0006      alphanumeric compare
          BNE   L0024
 T0072    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(29),S0022
-         MVC   DSPBUF+29(2),D0007+0
+         MVC   DSPBUF+29(2),D0009+0
          LA    1,PARM0023
          L     15,VDISP
          BALR  14,15
@@ -875,19 +875,19 @@ T0075    DS    0H
 * MOVE RI-IMAGE -> KSDS-RECORD
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0004(78),D0003     alphanumeric move
-         MVI   D0004+78,C' '       space fill the remainder
-         MVC   D0004+79(1),D0004+78
+         MVC   D0006(78),D0004     alphanumeric move
+         MVI   D0006+78,C' '       space fill the remainder
+         MVC   D0006+79(1),D0006+78
 T0076    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(20),S0023
-         MVC   DSPBUF+20(10),D0005+0
+         MVC   DSPBUF+20(10),D0007+0
          LA    1,PARM0025
          L     15,VDISP
          BALR  14,15
 T0077    DS    0H
 * MOVE Y -> FOUND-SWITCH
-         MVC   D0010(1),S0006      literal move, space padded
+         MVC   D0012(1),S0006      literal move, space padded
 T0078    DS    0H
 * READ KSDS-FILE
          GET   RPL=FD001R          VSAM retrieval by key
@@ -899,19 +899,19 @@ T0078    DS    0H
          SHOWCB RPL=FD001R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  why did it f
          CLI   VSFB+3,X'10'        no such record
          BE    G0045
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0046
 G0045    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'23'     no such record
+         MVC   D0009(2),=C'23'     no such record
          B     G0046
 G0043    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0044
 G0046    DS    0H
          DROP  8
@@ -930,19 +930,19 @@ L0025    DS    0H                  INVALID KEY
          BE    G0049
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'30'     permanent error
+         MVC   D0009(2),=C'30'     permanent error
          B     G0050
 G0049    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'23'     no such record
+         MVC   D0009(2),=C'23'     no such record
          B     G0050
 G0047    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(2),=C'00'
+         MVC   D0009(2),=C'00'
          B     G0048
 G0050    DS    0H
          DROP  8
@@ -956,21 +956,21 @@ T0079    DS    0H
 * MOVE N -> FOUND-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0010(1),S0011      literal move, space padded
+         MVC   D0012(1),S0011      literal move, space padded
          DROP  8
 L0026    DS    0H
 T0080    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0010(1),S0006      alphanumeric compare
+         CLC   D0012(1),S0006      alphanumeric compare
          BE    L0027
-         CLC   D0007(2),S0024      alphanumeric compare
+         CLC   D0009(2),S0024      alphanumeric compare
          BE    L0027
 T0081    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(27),S0025
-         MVC   DSPBUF+27(2),D0007+0
+         MVC   DSPBUF+27(2),D0009+0
          LA    1,PARM0026
          L     15,VDISP
          BALR  14,15
@@ -1091,12 +1091,12 @@ WK5      DS    PL16
 FD000    DCB   DDNAME=CARDIN,DSORG=PS,MACRF=(GM)
 FD001    ACB   DDNAME=KSDSF01,MACRF=(KEY,DIR,OUT)  VSAM access method c
 FD001RA  DC    F'0'                has carried a request
-FD001R   RPL   ACB=FD001,AREA=D0004,                                   X
-               AREALEN=80,RECLEN=80,ARG=D0005,KEYLEN=10,OPTCD=(KEY,DIR,X
+FD001R   RPL   ACB=FD001,AREA=D0006,                                   X
+               AREALEN=80,RECLEN=80,ARG=D0007,KEYLEN=10,OPTCD=(KEY,DIR,X
                KEQ,UPD,MVE)
 FD001NA  DC    F'0'                has carried a request
-FD001N   RPL   ACB=FD001,AREA=D0004,                                   X
-               AREALEN=80,RECLEN=80,ARG=D0005,KEYLEN=10,OPTCD=(KEY,DIR,X
+FD001N   RPL   ACB=FD001,AREA=D0006,                                   X
+               AREALEN=80,RECLEN=80,ARG=D0007,KEYLEN=10,OPTCD=(KEY,DIR,X
                KEQ,NUP,MVE)
 S0001    DC    CL34'KSDSRAND: READ/REWRITE KSDS DIRECT'  nonnumeric con
 S0002    DC    CL34'----------------------------------'
@@ -1277,20 +1277,24 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL80               RECORD-IMAGE (01 group)
-D0001    DC    CL1' '              RI-ACTION PIC X(1)
-D0002    DC    CL1' '              FILL0002 PIC X(1)
-D0003    DC    CL78' '             RI-IMAGE PIC X(78)
-D0004    DS    0CL80               KSDS-RECORD (01 group)
-D0005    DC    CL10' '             KR-KEY PIC X(10)
-D0006    DC    CL70' '             FILL0006 PIC X(70)
-D0007    DC    CL2'00'             WS-STATUS PIC X(2)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL80               RECORD-IMAGE (01 group)
+D0002    DC    CL1' '              RI-ACTION PIC X(1)
+D0003    DC    CL1' '              FILL0003 PIC X(1)
+D0004    DC    CL78' '             RI-IMAGE PIC X(78)
+         DS    XL4                 reserve the rest of a table
+D0005    DC    CL4' '              *RDW PIC X(4)
+D0006    DS    0CL80               KSDS-RECORD (01 group)
+D0007    DC    CL10' '             KR-KEY PIC X(10)
+D0008    DC    CL70' '             FILL0008 PIC X(70)
+D0009    DC    CL2'00'             WS-STATUS PIC X(2)
          DS    XL6                 reserve the rest of a table
-D0008    DC    CL1'N'              END-OF-FILE-SWITCH PIC X(1)
+D0010    DC    CL1'N'              END-OF-FILE-SWITCH PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0010    DC    CL1'Y'              FOUND-SWITCH PIC X(1)
+D0012    DC    CL1'Y'              FOUND-SWITCH PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0012    DC    CL1'N'              OP-FAILED-SWITCH PIC X(1)
+D0014    DC    CL1'N'              OP-FAILED-SWITCH PIC X(1)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

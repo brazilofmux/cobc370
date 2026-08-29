@@ -51,22 +51,22 @@ T0005    DS    0H
 * MOVE CNT -> SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0009
+         L     2,D0011
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0010(5),PWK1(16)   packed -> zoned
-         OI    D0010+4,X'F0'       unsigned: force an F zone
+         UNPK  D0012(5),PWK1(16)   packed -> zoned
+         OI    D0012+4,X'F0'       unsigned: force an F zone
 T0006    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(6),S0001
-         MVC   DSPBUF+6(5),D0010+0
+         MVC   DSPBUF+6(5),D0012+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(6),S0002
-         MVC   DSPBUF+6(6),D0003+0
+         MVC   DSPBUF+6(6),D0005+0
          MVC   DSPBUF+12(1),S0003
          LA    1,PARM0002
          L     15,VDISP
@@ -88,9 +88,9 @@ T0009    DS    0H
          STCM  1,7,FD000+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD000,D0000         QSAM move mode
+         GET   FD000,D0001         QSAM move mode
 *  INTO: only reached when a record was read
-         MVC   D0002(80),D0000     alphanumeric move
+         MVC   D0004(80),D0001     alphanumeric move
          B     L0002
 L0001    DS    0H                  AT END
          DROP  8
@@ -102,25 +102,25 @@ T0011    DS    0H
 * ADD 1 -> CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0009             binary, same scale: in the register
+         L     2,D0011             binary, same scale: in the register
          AH    2,H0001
-         ST    2,D0009
+         ST    2,D0011
 T0012    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0004
-         MVC   DSPBUF+5(6),D0003+0
+         MVC   DSPBUF+5(6),D0005+0
          MVC   DSPBUF+11(1),S0003
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 T0013    DS    0H
 * MOVE WS-TAG -> WO-TAG
-         MVC   D0007(6),D0003      alphanumeric move
+         MVC   D0009(6),D0005      alphanumeric move
 T0014    DS    0H
 * WRITE OUT-REC
 *  FROM: fill the record area first
-         MVC   D0001(80),D0005     alphanumeric move
-         PUT   FD001,D0001
+         MVC   D0003(80),D0007     alphanumeric move
+         PUT   FD001,D0003
          DROP  8
 L0004    DS    0H
 T0015    DS    0H
@@ -256,18 +256,22 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL80' '             IN-REC PIC X(80)
-D0001    DC    CL80' '             OUT-REC PIC X(80)
-D0002    DS    0CL80               WS-BUF (01 group)
-D0003    DC    CL6' '              WS-TAG PIC X(6)
-D0004    DC    CL74' '             WS-REST PIC X(74)
-D0005    DS    0CL80               WS-OUT (01 group)
-D0006    DC    CL3'>> '            WO-MARK PIC X(3)
-D0007    DC    CL6' '              WO-TAG PIC X(6)
-D0008    DC    CL71' '             FILL0008 PIC X(71)
-D0009    DC    FL4'0'              CNT PIC S9(5)v0 COMP
          DS    XL4                 reserve the rest of a table
-D0010    DC    CL5'00000'          SHOW PIC 9(5)v0 DISP
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    CL80' '             IN-REC PIC X(80)
+         DS    XL4                 reserve the rest of a table
+D0002    DC    CL4' '              *RDW PIC X(4)
+D0003    DC    CL80' '             OUT-REC PIC X(80)
+D0004    DS    0CL80               WS-BUF (01 group)
+D0005    DC    CL6' '              WS-TAG PIC X(6)
+D0006    DC    CL74' '             WS-REST PIC X(74)
+D0007    DS    0CL80               WS-OUT (01 group)
+D0008    DC    CL3'>> '            WO-MARK PIC X(3)
+D0009    DC    CL6' '              WO-TAG PIC X(6)
+D0010    DC    CL71' '             FILL0010 PIC X(71)
+D0011    DC    FL4'0'              CNT PIC S9(5)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0012    DC    CL5'00000'          SHOW PIC 9(5)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

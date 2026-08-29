@@ -40,13 +40,13 @@ T0000    DS    0H
          BZ    G0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0002
 G0003    DS    0H
          DROP  8
@@ -56,18 +56,18 @@ T0001    DS    0H
          MVC   DSPBUF+0(9),S0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+9(2),D0006+0
+         MVC   DSPBUF+9(2),D0007+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 T0002    DS    0H
 * MOVE SPACES -> AIX-RECORD
-         LA    1,D0000             SPACES
+         LA    1,D0001             SPACES
          MVI   0(1),C' '
          MVC   1(79,1),0(1)        propagate across the item
 T0003    DS    0H
 * MOVE K0007     DDDC300 dup code -> AIX-RECORD
-         MVC   D0000(80),S0002     literal move, space padded
+         MVC   D0001(80),S0002     literal move, space padded
 T0004    DS    0H
 * WRITE AIX-RECORD
          PUT   RPL=FD000N          VSAM insert by key
@@ -83,35 +83,35 @@ T0004    DS    0H
          BE    G0007
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0008
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0009
 G0006    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'22'     duplicate key
+         MVC   D0007(2),=C'22'     duplicate key
          B     G0009
 G0007    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     key out of sequence
+         MVC   D0007(2),=C'21'     key out of sequence
          B     G0009
 G0008    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0009
 G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000N,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0010
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0010    DS    0H
          DROP  8
          B     G0005
@@ -135,31 +135,31 @@ L0001    DS    0H                  INVALID KEY
          BE    G0015
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0016
 G0013    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'22'     duplicate key
+         MVC   D0007(2),=C'22'     duplicate key
          B     G0016
 G0014    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     key out of sequence
+         MVC   D0007(2),=C'21'     key out of sequence
          B     G0016
 G0015    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0016
 G0011    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0012
 G0016    DS    0H
          DROP  8
@@ -174,7 +174,7 @@ T0005    DS    0H
          MVC   DSPBUF+0(20),S0003
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+20(2),D0006+0
+         MVC   DSPBUF+20(2),D0007+0
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -184,12 +184,12 @@ T0006    DS    0H
 * MOVE SPACES -> AIX-RECORD
          L     8,BL0000            base locator
          USING WSC0000,8
-         LA    1,D0000             SPACES
+         LA    1,D0001             SPACES
          MVI   0(1),C' '
          MVC   1(79,1),0(1)        propagate across the item
 T0007    DS    0H
 * MOVE K0008     AAAC800 dup dept -> AIX-RECORD
-         MVC   D0000(80),S0004     literal move, space padded
+         MVC   D0001(80),S0004     literal move, space padded
 T0008    DS    0H
 * WRITE AIX-RECORD
          PUT   RPL=FD000N          VSAM insert by key
@@ -205,35 +205,35 @@ T0008    DS    0H
          BE    G0020
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0021
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0022
 G0019    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'22'     duplicate key
+         MVC   D0007(2),=C'22'     duplicate key
          B     G0022
 G0020    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     key out of sequence
+         MVC   D0007(2),=C'21'     key out of sequence
          B     G0022
 G0021    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0022
 G0017    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000N,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0023
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0023    DS    0H
          DROP  8
          B     G0018
@@ -257,31 +257,31 @@ L0003    DS    0H                  INVALID KEY
          BE    G0028
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0029
 G0026    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'22'     duplicate key
+         MVC   D0007(2),=C'22'     duplicate key
          B     G0029
 G0027    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     key out of sequence
+         MVC   D0007(2),=C'21'     key out of sequence
          B     G0029
 G0028    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0029
 G0024    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0025
 G0029    DS    0H
          DROP  8
@@ -296,7 +296,7 @@ T0009    DS    0H
          MVC   DSPBUF+0(20),S0005
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+20(2),D0006+0
+         MVC   DSPBUF+20(2),D0007+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
@@ -307,13 +307,13 @@ T0010    DS    0H
          MVC   DSPBUF+0(12),S0006
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+12(2),D0006+0
+         MVC   DSPBUF+12(2),D0007+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 T0011    DS    0H
 * MOVE K0001 -> AIX-KEY
-         MVC   D0001(5),S0007      literal move, space padded
+         MVC   D0002(5),S0007      literal move, space padded
 T0012    DS    0H
 * READ AIX-FILE
          LA    1,FD000R
@@ -321,7 +321,7 @@ T0012    DS    0H
          MODCB RPL=FD000R,OPTCD=(DIR,UPD)  by key
          LTR   15,15
          BZ    G0030
-         MVC   D0006(2),=C'30'     could not set the request type
+         MVC   D0007(2),=C'30'     could not set the request type
          B     G0031
 G0030    DS    0H
          DROP  8
@@ -336,23 +336,23 @@ G0030    DS    0H
          BE    G0034
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0035
 G0034    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0035
 G0032    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0036
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0036    DS    0H
          DROP  8
          B     G0033
@@ -372,23 +372,23 @@ L0005    DS    0H                  INVALID KEY
          BE    G0039
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0040
 G0039    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0040
 G0037    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0041
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0041    DS    0H
          DROP  8
          B     G0038
@@ -419,7 +419,7 @@ T0015    DS    0H
 * MOVE AAA -> AIX-DEPT
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(3),S0009      literal move, space padded
+         MVC   D0004(3),S0009      literal move, space padded
 T0016    DS    0H
 * REWRITE AIX-RECORD
          PUT   RPL=FD000R          put the held record back
@@ -435,35 +435,35 @@ T0016    DS    0H
          BE    G0045
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0046
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0047
 G0044    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     prime key changed
+         MVC   D0007(2),=C'21'     prime key changed
          B     G0047
 G0045    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0047
 G0046    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0047
 G0042    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0048
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0048    DS    0H
          DROP  8
          B     G0043
@@ -487,31 +487,31 @@ L0007    DS    0H                  INVALID KEY
          BE    G0053
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0054
 G0051    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     prime key changed
+         MVC   D0007(2),=C'21'     prime key changed
          B     G0054
 G0052    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0054
 G0053    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0054
 G0049    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0050
 G0054    DS    0H
          DROP  8
@@ -526,7 +526,7 @@ T0017    DS    0H
          MVC   DSPBUF+0(16),S0010
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+16(2),D0006+0
+         MVC   DSPBUF+16(2),D0007+0
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
@@ -537,13 +537,13 @@ T0018    DS    0H
          MVC   DSPBUF+0(8),S0011
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+8(2),D0006+0
+         MVC   DSPBUF+8(2),D0007+0
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 T0019    DS    0H
 * MOVE K0005 -> AIX-KEY
-         MVC   D0001(5),S0012      literal move, space padded
+         MVC   D0002(5),S0012      literal move, space padded
 T0020    DS    0H
 * READ AIX-FILE
          LA    1,FD000R
@@ -551,7 +551,7 @@ T0020    DS    0H
          MODCB RPL=FD000R,OPTCD=(DIR,UPD)  by key
          LTR   15,15
          BZ    G0055
-         MVC   D0006(2),=C'30'     could not set the request type
+         MVC   D0007(2),=C'30'     could not set the request type
          B     G0056
 G0055    DS    0H
          DROP  8
@@ -566,23 +566,23 @@ G0055    DS    0H
          BE    G0059
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0060
 G0059    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0060
 G0057    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0061
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0061    DS    0H
          DROP  8
          B     G0058
@@ -602,23 +602,23 @@ L0009    DS    0H                  INVALID KEY
          BE    G0064
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0065
 G0064    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0065
 G0062    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0066
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0066    DS    0H
          DROP  8
          B     G0063
@@ -662,31 +662,31 @@ T0023    DS    0H
          BE    G0070
          CLI   VSFB+3,X'1C'        cluster is full
          BE    G0071
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0072
 G0069    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     prime key changed
+         MVC   D0007(2),=C'21'     prime key changed
          B     G0072
 G0070    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0072
 G0071    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0072
 G0067    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0068
 G0072    DS    0H
          DROP  8
@@ -709,31 +709,31 @@ L0011    DS    0H                  INVALID KEY
          BE    G0077
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0078
 G0075    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'21'     prime key changed
+         MVC   D0007(2),=C'21'     prime key changed
          B     G0078
 G0076    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0078
 G0077    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'24'     cluster is full
+         MVC   D0007(2),=C'24'     cluster is full
          B     G0078
 G0073    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0074
 G0078    DS    0H
          DROP  8
@@ -748,7 +748,7 @@ T0024    DS    0H
          MVC   DSPBUF+0(15),S0014
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+15(2),D0006+0
+         MVC   DSPBUF+15(2),D0007+0
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
@@ -759,13 +759,13 @@ T0025    DS    0H
          MVC   DSPBUF+0(7),S0015
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+7(2),D0006+0
+         MVC   DSPBUF+7(2),D0007+0
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
 T0026    DS    0H
 * MOVE K0003 -> AIX-KEY
-         MVC   D0001(5),S0016      literal move, space padded
+         MVC   D0002(5),S0016      literal move, space padded
 T0027    DS    0H
 * READ AIX-FILE
          LA    1,FD000R
@@ -773,7 +773,7 @@ T0027    DS    0H
          MODCB RPL=FD000R,OPTCD=(DIR,UPD)  by key
          LTR   15,15
          BZ    G0079
-         MVC   D0006(2),=C'30'     could not set the request type
+         MVC   D0007(2),=C'30'     could not set the request type
          B     G0080
 G0079    DS    0H
          DROP  8
@@ -788,23 +788,23 @@ G0079    DS    0H
          BE    G0083
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0084
 G0083    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0084
 G0081    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0085
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0085    DS    0H
          DROP  8
          B     G0082
@@ -824,23 +824,23 @@ L0013    DS    0H                  INVALID KEY
          BE    G0088
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0089
 G0088    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'23'     no such record
+         MVC   D0007(2),=C'23'     no such record
          B     G0089
 G0086    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          SHOWCB RPL=FD000R,FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate
          CLI   VSFB+3,X'08'
          BNE   G0090
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0090    DS    0H
          DROP  8
          B     G0087
@@ -893,13 +893,13 @@ L0039    DS    0H
          BZ    G0091
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0093
 G0091    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          B     G0092
 G0093    DS    0H
          DROP  8
@@ -909,7 +909,7 @@ T0031    DS    0H
          MVC   DSPBUF+0(6),S0018
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+6(2),D0006+0
+         MVC   DSPBUF+6(2),D0007+0
          LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
@@ -939,7 +939,7 @@ L0041    DS    0H
          BZ    G0094
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     could not set the request type
+         MVC   D0007(2),=C'30'     could not set the request type
          B     G0095
 G0094    DS    0H
          DROP  8
@@ -958,24 +958,24 @@ G0094    DS    0H
          BE    G0098
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0099
 G0098    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'10'     end of data
+         MVC   D0007(2),=C'10'     end of data
          B     G0099
 G0096    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          L     1,FD000X            the key of reference's RPL
          SHOWCB RPL=(1),FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate alt
          CLI   VSFB+3,X'08'
          BNE   G0100
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0100    DS    0H
          DROP  8
          B     G0097
@@ -999,24 +999,24 @@ L0015    DS    0H                  AT END
          BE    G0103
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'30'     permanent error
+         MVC   D0007(2),=C'30'     permanent error
          B     G0104
 G0103    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'10'     end of data
+         MVC   D0007(2),=C'10'     end of data
          B     G0104
 G0101    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0006(2),=C'00'
+         MVC   D0007(2),=C'00'
          L     1,FD000X            the key of reference's RPL
          SHOWCB RPL=(1),FIELDS=FDBK,AREA=VSFB,LENGTH=4  a duplicate alt
          CLI   VSFB+3,X'08'
          BNE   G0105
-         MVC   D0006(2),=C'02'     successful, duplicate alternate key
+         MVC   D0007(2),=C'02'     successful, duplicate alternate key
 G0105    DS    0H
          DROP  8
          B     G0102
@@ -1036,7 +1036,7 @@ T0034    DS    0H
          MVC   DSPBUF+0(7),S0019
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+7(2),D0006+0
+         MVC   DSPBUF+7(2),D0007+0
          LA    1,PARM0013
          L     15,VDISP
          BALR  14,15
@@ -1046,7 +1046,7 @@ T0035    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0006(2),S0020      alphanumeric compare
+         CLC   D0007(2),S0020      alphanumeric compare
          BE    L0017
 T0036    DS    0H
 * PERFORM SHOW
@@ -1068,13 +1068,13 @@ T0037    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+0(2),D0006+0
+         MVC   DSPBUF+0(2),D0007+0
          MVC   DSPBUF+2(1),S0021
-         MVC   DSPBUF+3(5),D0001+0
+         MVC   DSPBUF+3(5),D0002+0
          MVC   DSPBUF+8(1),S0021
-         MVC   DSPBUF+9(3),D0003+0
+         MVC   DSPBUF+9(3),D0004+0
          MVC   DSPBUF+12(1),S0021
-         MVC   DSPBUF+13(4),D0004+0
+         MVC   DSPBUF+13(4),D0005+0
          LA    1,PARM0014
          L     15,VDISP
          BALR  14,15
@@ -1147,22 +1147,22 @@ WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=AIXBAS,MACRF=(KEY,SEQ,DIR,OUT)  VSAM access metho
 FD000RA  DC    F'0'                has carried a request
-FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
-               AREALEN=80,RECLEN=80,ARG=D0001,KEYLEN=5,OPTCD=(KEY,SEQ, X
+FD000R   RPL   ACB=FD000,AREA=D0001,                                   X
+               AREALEN=80,RECLEN=80,ARG=D0002,KEYLEN=5,OPTCD=(KEY,SEQ, X
                KEQ,UPD,MVE)
 FD000NA  DC    F'0'                has carried a request
-FD000N   RPL   ACB=FD000,AREA=D0000,                                   X
-               AREALEN=80,RECLEN=80,ARG=D0001,KEYLEN=5,OPTCD=(KEY,DIR, X
+FD000N   RPL   ACB=FD000,AREA=D0001,                                   X
+               AREALEN=80,RECLEN=80,ARG=D0002,KEYLEN=5,OPTCD=(KEY,DIR, X
                KEQ,NUP,MVE)
 FD000P1  ACB   DDNAME=AIXBA01,MACRF=(KEY,SEQ,DIR,IN)  AIX-DEPT
 FD000Q1A DC    F'0'                has carried a request
-FD000Q1   RPL   ACB=FD000P1,AREA=D0000,                                X
-               AREALEN=80,RECLEN=80,ARG=D0003,KEYLEN=3,OPTCD=(KEY,SEQ, X
+FD000Q1   RPL   ACB=FD000P1,AREA=D0001,                                X
+               AREALEN=80,RECLEN=80,ARG=D0004,KEYLEN=3,OPTCD=(KEY,SEQ, X
                KEQ,NUP,MVE)
 FD000P2  ACB   DDNAME=AIXBA02,MACRF=(KEY,SEQ,DIR,IN)  AIX-CODE
 FD000Q2A DC    F'0'                has carried a request
-FD000Q2   RPL   ACB=FD000P2,AREA=D0000,                                X
-               AREALEN=80,RECLEN=80,ARG=D0004,KEYLEN=4,OPTCD=(KEY,SEQ, X
+FD000Q2   RPL   ACB=FD000P2,AREA=D0001,                                X
+               AREALEN=80,RECLEN=80,ARG=D0005,KEYLEN=4,OPTCD=(KEY,SEQ, X
                KEQ,NUP,MVE)
 FD000X   DC    A(FD000R)           the key of reference's RPL
 FD000V   DC    X'00'               the paths are open
@@ -1299,13 +1299,15 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL80               AIX-RECORD (01 group)
-D0001    DC    CL5' '              AIX-KEY PIC X(5)
-D0002    DC    CL5' '              FILL0002 PIC X(5)
-D0003    DC    CL3' '              AIX-DEPT PIC X(3)
-D0004    DC    CL4' '              AIX-CODE PIC X(4)
-D0005    DC    CL63' '             AIX-TEXT PIC X(63)
-D0006    DC    CL2'00'             WS-STATUS PIC X(2)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL80               AIX-RECORD (01 group)
+D0002    DC    CL5' '              AIX-KEY PIC X(5)
+D0003    DC    CL5' '              FILL0003 PIC X(5)
+D0004    DC    CL3' '              AIX-DEPT PIC X(3)
+D0005    DC    CL4' '              AIX-CODE PIC X(4)
+D0006    DC    CL63' '             AIX-TEXT PIC X(63)
+D0007    DC    CL2'00'             WS-STATUS PIC X(2)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

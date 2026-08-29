@@ -32,10 +32,10 @@ T0001    DS    0H
 * MOVE PAGE                 -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0001     literal move, space padded
+         MVC   D0001(20),S0001     literal move, space padded
 T0002    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,999               AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -47,10 +47,10 @@ T0003    DS    0H
 * MOVE ONE                  -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0002     literal move, space padded
+         MVC   D0001(20),S0002     literal move, space padded
 T0004    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -62,10 +62,10 @@ T0005    DS    0H
 * MOVE TWO                  -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0003     literal move, space padded
+         MVC   D0001(20),S0003     literal move, space padded
 T0006    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,2                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -77,10 +77,10 @@ T0007    DS    0H
 * MOVE THREE                -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0004     literal move, space padded
+         MVC   D0001(20),S0004     literal move, space padded
 T0008    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,3                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -92,10 +92,10 @@ T0009    DS    0H
 * MOVE OVERPRINT            -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0005     literal move, space padded
+         MVC   D0001(20),S0005     literal move, space padded
 T0010    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,0                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -107,10 +107,10 @@ T0011    DS    0H
 * MOVE FIVE                 -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0006     literal move, space padded
+         MVC   D0001(20),S0006     literal move, space padded
 T0012    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,5                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -122,10 +122,10 @@ T0013    DS    0H
 * MOVE DEFAULT              -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0007     literal move, space padded
+         MVC   D0001(20),S0007     literal move, space padded
 T0014    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -137,10 +137,10 @@ T0015    DS    0H
 * MOVE BEFORE2              -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0008     literal move, space padded
+         MVC   D0001(20),S0008     literal move, space padded
 T0016    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,2                 BEFORE
          LCR   1,1                 negative marks a BEFORE
          STH   1,FP000Q            this line's request
@@ -153,10 +153,10 @@ T0017    DS    0H
 * MOVE OWES2                -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0009     literal move, space padded
+         MVC   D0001(20),S0009     literal move, space padded
 T0018    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -168,10 +168,10 @@ T0019    DS    0H
 * MOVE BEFOREPG             -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0010     literal move, space padded
+         MVC   D0001(20),S0010     literal move, space padded
 T0020    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,999               BEFORE
          LCR   1,1                 negative marks a BEFORE
          STH   1,FP000Q            this line's request
@@ -184,10 +184,10 @@ T0021    DS    0H
 * MOVE AFTERPG              -> PRT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(20),S0011     literal move, space padded
+         MVC   D0001(20),S0011     literal move, space padded
 T0022    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(20),D0000   the record, behind its control byte
+         MVC   FP000+1(20),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -206,7 +206,7 @@ T0025    DS    0H
 L0026    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0004(1),S0012      alphanumeric compare
+         CLC   D0006(1),S0012      alphanumeric compare
          BE    L0027
          LA    15,R0001            return here
          ST    15,X0000            into the range's exit cell
@@ -236,7 +236,7 @@ T0028    DS    0H
          STCM  1,7,FD001+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD001,D0001         QSAM move mode
+         GET   FD001,D0003         QSAM move mode
          B     L0024
 L0023    DS    0H                  AT END
          DROP  8
@@ -244,29 +244,29 @@ T0029    DS    0H
 * MOVE Y -> EOF-FLAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0004(1),S0012      literal move, space padded
+         MVC   D0006(1),S0012      literal move, space padded
          DROP  8
 L0024    DS    0H
 T0030    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0004(1),S0012      alphanumeric compare
+         CLC   D0006(1),S0012      alphanumeric compare
          BE    L0025
 T0031    DS    0H
 * ADD 1 -> SEQ
-         PACK  PWK1(16),D0005(2)   zoned -> packed
+         PACK  PWK1(16),D0007(2)   zoned -> packed
          ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0005(2),PWK1(16)   packed -> zoned
-         OI    D0005+1,X'F0'       unsigned: force an F zone
+         UNPK  D0007(2),PWK1(16)   packed -> zoned
+         OI    D0007+1,X'F0'       unsigned: force an F zone
 T0032    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(2),D0005+0
+         MVC   DSPBUF+0(2),D0007+0
          MVC   DSPBUF+2(2),S0013
-         MVC   DSPBUF+4(1),D0002+0
+         MVC   DSPBUF+4(1),D0004+0
          MVC   DSPBUF+5(2),S0014
-         MVC   DSPBUF+7(20),D0003+0
+         MVC   DSPBUF+7(20),D0005+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -430,15 +430,17 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL20' '             PRT-REC PIC X(20)
          DS    XL4                 reserve the rest of a table
-D0001    DS    0CL21               RAW-REC (01 group)
-D0002    DC    CL1' '              R-CTL PIC X(1)
-D0003    DC    CL20' '             R-TEXT PIC X(20)
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    CL20' '             PRT-REC PIC X(20)
+D0002    DC    CL4' '              *RDW PIC X(4)
+D0003    DS    0CL21               RAW-REC (01 group)
+D0004    DC    CL1' '              R-CTL PIC X(1)
+D0005    DC    CL20' '             R-TEXT PIC X(20)
          DS    XL3                 reserve the rest of a table
-D0004    DC    CL1'N'              EOF-FLAG PIC X(1)
+D0006    DC    CL1'N'              EOF-FLAG PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0005    DC    CL2'00'             SEQ PIC 9(2)v0 DISP
+D0007    DC    CL2'00'             SEQ PIC 9(2)v0 DISP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

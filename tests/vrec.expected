@@ -1,0 +1,12 @@
+WRITTEN 5
+L001 [first long record, thirty-six chars.]
+S002 [short2long record, thirty-six chars.]
+L003 [third long record, also thirty-six. ]
+S004 [short4long record, also thirty-six. ]
+S005 [short5long record, also thirty-six. ]
+REWRITTEN 2
+L001 [first long record, thirty-six chars.]
+S002 [SHORT2long record, thirty-six chars.]
+L003 [THIRD LONG RECORD, REWRITTEN IN PLAC]
+S004 [short4LONG RECORD, REWRITTEN IN PLAC]
+S005 [short5LONG RECORD, REWRITTEN IN PLAC]

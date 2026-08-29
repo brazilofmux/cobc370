@@ -31,39 +31,39 @@ T0001    DS    0H
 * MOVE HDR  -> H-TAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(4),S0001      literal move, space padded
+         MVC   D0002(4),S0001      literal move, space padded
 T0002    DS    0H
 * MOVE A HEADER LINE              -> H-TEXT
-         MVC   D0002(26),S0002     literal move, space padded
+         MVC   D0003(26),S0002     literal move, space padded
 T0003    DS    0H
 * WRITE HEADER-REC
-         PUT   FD000,D0000
+         PUT   FD000,D0001
          DROP  8
 L0002    DS    0H
 T0004    DS    0H
 * MOVE DTL  -> D-TAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0004(4),S0003      literal move, space padded
+         MVC   D0005(4),S0003      literal move, space padded
 T0005    DS    0H
 * MOVE 42 -> D-NUM
-         MVC   D0005(6),S0004      numeric literal as zoned digits
+         MVC   D0006(6),S0004      numeric literal as zoned digits
 T0006    DS    0H
 * MOVE FORTY-TWO            -> D-NAME
-         MVC   D0006(20),S0005     literal move, space padded
+         MVC   D0007(20),S0005     literal move, space padded
 T0007    DS    0H
 * WRITE DETAIL-REC
-         PUT   FD000,D0000
+         PUT   FD000,D0001
          DROP  8
 L0004    DS    0H
 T0008    DS    0H
 * MOVE WHOLEREC WRITTEN AS ONE FIELD  -> WHOLE-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(30),S0006     literal move, space padded
+         MVC   D0008(30),S0006     literal move, space padded
 T0009    DS    0H
 * WRITE WHOLE-REC
-         PUT   FD000,D0000
+         PUT   FD000,D0001
          DROP  8
 L0006    DS    0H
 T0010    DS    0H
@@ -71,15 +71,15 @@ T0010    DS    0H
 *  FROM: fill the record area first
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(30),D0008     alphanumeric move
-         PUT   FD000,D0000
+         MVC   D0004(30),D0009     alphanumeric move
+         PUT   FD000,D0001
          DROP  8
 L0008    DS    0H
 T0011    DS    0H
 * WRITE WHOLE-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         PUT   FD000,D0000
+         PUT   FD000,D0001
          DROP  8
 L0010    DS    0H
 T0012    DS    0H
@@ -197,14 +197,16 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DS    0CL30               HEADER-REC (01 group)
-D0001    DC    CL4' '              H-TAG PIC X(4)
-D0002    DC    CL26' '             H-TEXT PIC X(26)
-D0003    EQU   COBWS+0             DETAIL-REC REDEFINES
-D0004    EQU   COBWS+0             D-TAG REDEFINES
-D0005    EQU   COBWS+4             D-NUM REDEFINES
-D0006    EQU   COBWS+10            D-NAME REDEFINES
-D0007    EQU   COBWS+0             WHOLE-REC REDEFINES
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DS    0CL30               HEADER-REC (01 group)
+D0002    DC    CL4' '              H-TAG PIC X(4)
+D0003    DC    CL26' '             H-TEXT PIC X(26)
+D0004    EQU   COBWS+8             DETAIL-REC REDEFINES
+D0005    EQU   COBWS+8             D-TAG REDEFINES
+D0006    EQU   COBWS+12            D-NUM REDEFINES
+D0007    EQU   COBWS+18            D-NAME REDEFINES
+D0008    EQU   COBWS+8             WHOLE-REC REDEFINES
          DS    XL2                 reserve the rest of a table
-D0008    DC    CL30'FROMBUILT IN WORKING-STORAGE  '  BUILT PIC X(30)
+D0009    DC    CL30'FROMBUILT IN WORKING-STORAGE  '  BUILT PIC X(30)
          END

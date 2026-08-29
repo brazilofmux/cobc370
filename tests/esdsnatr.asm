@@ -55,13 +55,13 @@ T0003    DS    0H
          BZ    G0001
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'30'     permanent error
+         MVC   D0002(2),=C'30'     permanent error
          B     G0003
 G0001    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'00'
+         MVC   D0002(2),=C'00'
          B     G0002
 G0003    DS    0H
          DROP  8
@@ -73,7 +73,7 @@ T0004    DS    0H
 L0004    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0002(1),S0004      alphanumeric compare
+         CLC   D0003(1),S0004      alphanumeric compare
          BE    L0005
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
@@ -93,13 +93,13 @@ T0005    DS    0H
          BZ    G0004
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'30'     permanent error
+         MVC   D0002(2),=C'30'     permanent error
          B     G0006
 G0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'00'
+         MVC   D0002(2),=C'00'
          B     G0005
 G0006    DS    0H
          DROP  8
@@ -127,19 +127,19 @@ T0007    DS    0H
          BE    G0009
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'30'     permanent error
+         MVC   D0002(2),=C'30'     permanent error
          B     G0010
 G0009    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'10'     end of data
+         MVC   D0002(2),=C'10'     end of data
          B     G0010
 G0007    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'00'
+         MVC   D0002(2),=C'00'
          B     G0008
 G0010    DS    0H
          DROP  8
@@ -158,19 +158,19 @@ L0001    DS    0H                  AT END
          BE    G0013
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'30'     permanent error
+         MVC   D0002(2),=C'30'     permanent error
          B     G0014
 G0013    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'10'     end of data
+         MVC   D0002(2),=C'10'     end of data
          B     G0014
 G0011    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(2),=C'00'
+         MVC   D0002(2),=C'00'
          B     G0012
 G0014    DS    0H
          DROP  8
@@ -184,33 +184,33 @@ T0008    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0002(1),S0004      literal move, space padded
+         MVC   D0003(1),S0004      literal move, space padded
          DROP  8
 L0002    DS    0H
 T0009    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0002(1),S0004      alphanumeric compare
+         CLC   D0003(1),S0004      alphanumeric compare
          BE    L0003
 T0010    DS    0H
 * ADD 1 -> RECORD-COUNTER
-         PACK  PWK1(16),D0004(8)   zoned -> packed
+         PACK  PWK1(16),D0005(8)   zoned -> packed
          ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0004(8),PWK1(16)   packed -> zoned
+         UNPK  D0005(8),PWK1(16)   packed -> zoned
 T0011    DS    0H
 * MOVE RECORD-COUNTER -> COUNTER-EDIT
-         PACK  PWK1(16),D0004(8)   zoned -> packed
+         PACK  PWK1(16),D0005(8)   zoned -> packed
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
-         MVC   D0005(10),EDWK+2    the edited result
+         MVC   D0006(10),EDWK+2    the edited result
 T0012    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),D0005+0
+         MVC   DSPBUF+0(10),D0006+0
          MVC   DSPBUF+10(2),S0005
-         MVC   DSPBUF+12(80),D0000+0
+         MVC   DSPBUF+12(80),D0001+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -257,7 +257,7 @@ WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=ESDSF01,MACRF=(ADR,SEQ,IN)  VSAM access method co
 FD000RA  DC    F'0'                has carried a request
-FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
+FD000R   RPL   ACB=FD000,AREA=D0001,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(ADR,SEQ,NUP,MVE)
 K0001    DC    PL16'1'             numeric constants
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
@@ -351,13 +351,15 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL80' '             ESDS-RECORD PIC X(80)
-D0001    DC    CL2'00'             WS-STATUS PIC X(2)
+         DS    XL4                 reserve the rest of a table
+D0000    DC    CL4' '              *RDW PIC X(4)
+D0001    DC    CL80' '             ESDS-RECORD PIC X(80)
+D0002    DC    CL2'00'             WS-STATUS PIC X(2)
          DS    XL6                 reserve the rest of a table
-D0002    DC    CL1'N'              END-OF-FILE-SWITCH PIC X(1)
+D0003    DC    CL1'N'              END-OF-FILE-SWITCH PIC X(1)
          DS    XL7                 reserve the rest of a table
-D0004    DC    ZL8'0'              RECORD-COUNTER PIC S9(8)v0 DISP
-D0005    DC    CL10' '             COUNTER-EDIT edited, 10 chars
+D0005    DC    ZL8'0'              RECORD-COUNTER PIC S9(8)v0 DISP
+D0006    DC    CL10' '             COUNTER-EDIT edited, 10 chars
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the
