@@ -808,23 +808,34 @@ static int file_index(const char *n)
  * all five phrases. Not yet: the other five TYPEs, NEXT GROUP, LINE NEXT
  * PAGE, CONTROL, SUM, GROUP INDICATE, USE BEFORE REPORTING, SUPPRESS.
  */
-enum { RG_PAGE_HEADING, RG_DETAIL };
+enum { RG_REPORT_HEADING, RG_PAGE_HEADING, RG_CONTROL_HEADING, RG_DETAIL,
+       RG_CONTROL_FOOTING, RG_PAGE_FOOTING, RG_REPORT_FOOTING };
+enum { NG_NONE, NG_ABS, NG_REL, NG_PAGE };         /* the NEXT GROUP clause */
 
 typedef struct { int column, sym, src; Node *sub; char lit[MAXTOK]; int litlen; } RField;
-typedef struct { int absolute, n, first_fld, nfld; } RLine;
-typedef struct { char name[31]; int report, type, first_line, nline; } RGroup;
+typedef struct { int absolute, n, next_page, first_fld, nfld; } RLine;
+typedef struct { char name[31]; int report, type, first_line, nline, ng_kind, ng_n; } RGroup;
 typedef struct {
     char name[31];
     int  file;
     int  has_page;                      /* a PAGE clause was given */
     int  page_limit, heading, first_detail, last_detail, footing;
     int  lc_sym, pc_sym;                /* LINE-COUNTER, PAGE-COUNTER */
-    int  ph_group;                      /* the PAGE HEADING group, or -1 */
+    int  rh_group, ph_group, pf_group, rf_group;   /* the singleton groups, or -1 */
     char lbl_ctl[9];                    /* pending carriage control byte */
     char lbl_body[9];                   /* a body group is on this page */
     char lbl_gen[9];                    /* the first GENERATE has happened */
+    char lbl_rh[9], lbl_pf[9];          /* the RH / the PF is on this page */
+    char lbl_sng[9];                    /* saved next group integer, VIII 2.5.5.5 */
+    char lbl_phy[9];                    /* the line the paper is really at */
     char lbl_adv[9], lbl_advs[9];       /* page-advance routine, its return */
+    char lbl_ejc[9], lbl_ejcs[9];       /* the eject alone, its return */
 } Report;
+
+static int rg_is_body(int type)
+{
+    return type == RG_CONTROL_HEADING || type == RG_DETAIL || type == RG_CONTROL_FOOTING;
+}
 
 #define MAXREPORT 4
 #define MAXRGROUP 32
@@ -1387,108 +1398,163 @@ static void parse_report_section(void)
         if (!isdigit((unsigned char)tok.text[0]))
             die("expected a level number or RD in the REPORT SECTION");
         next();                                   /* the level number itself */
+        if (cur_report < 0) die("a report group entry outside any RD");
+        Report *rp = &reports[cur_report];
 
+        /* One entry: an optional data-name, then clauses in any order
+         * (VIII 2.5.3(2)). What the entry creates follows from the clauses
+         * it has -- a TYPE makes a group, a LINE makes a print line, a
+         * COLUMN (or PICTURE) makes a printable item -- and an entry may
+         * do more than one of those. */
         char nm[31] = "";
-        if (!is("LINE") && !is("COLUMN") && !is("TYPE")) {
+        int has_type = 0, ty = -1;
+        int has_line = 0, l_abs = 0, l_n = 0, l_np = 0;
+        int ng_kind = NG_NONE, ng_n = 0;
+        int has_col = 0, column = 0, src = -1; Node *sub = NULL;
+        char pic[64] = "", lit[MAXTOK]; int litlen = -1;
+        if (!is("TYPE") && !is("LINE") && !is("NEXT") && !is("COLUMN") && !is("PIC")
+            && !is("PICTURE") && !is("SOURCE") && !is("VALUE") && !is("SUM")
+            && !is("GROUP") && !is("USAGE") && !is("DISPLAY") && !is("JUSTIFIED")
+            && !is("JUST") && !is("BLANK") && !is(".")) {
             snprintf(nm, sizeof nm, "%s", tok.text);
             next();
         }
+        while (!tok.eof && !is(".")) {
+            if (is("TYPE")) {
+                next(); if (is("IS")) next();
+                has_type = 1;
+                if (is("DETAIL") || is("DE")) { ty = RG_DETAIL; next(); }
+                else if (is("PH")) { ty = RG_PAGE_HEADING; next(); }
+                else if (is("PF")) { ty = RG_PAGE_FOOTING; next(); }
+                else if (is("RH")) { ty = RG_REPORT_HEADING; next(); }
+                else if (is("RF")) { ty = RG_REPORT_FOOTING; next(); }
+                else if (is("PAGE")) { next(); if (is("HEADING")) ty = RG_PAGE_HEADING; else if (is("FOOTING")) ty = RG_PAGE_FOOTING; else die("TYPE PAGE must be PAGE HEADING or PAGE FOOTING"); next(); }
+                else if (is("REPORT")) { next(); if (is("HEADING")) ty = RG_REPORT_HEADING; else if (is("FOOTING")) ty = RG_REPORT_FOOTING; else die("TYPE REPORT must be REPORT HEADING or REPORT FOOTING"); next(); }
+                else if (is("CONTROL") || is("CH") || is("CF"))
+                    die("CONTROL HEADING and CONTROL FOOTING groups are not implemented yet");
+                else die("unknown report group TYPE");
+            } else if (is("LINE")) {
+                next(); if (is("NUMBER")) next(); if (is("IS")) next();
+                if (has_line) die("an entry may carry one LINE clause -- VIII 2.5.3(9)");
+                has_line = 1;
+                if (is("PLUS")) { next(); l_abs = 0; }
+                else l_abs = 1;
+                l_n = atoi(tok.text); next();
+                if (is("ON")) next();
+                if (is("NEXT")) {
+                    /* LINE n NEXT PAGE -- or the NEXT GROUP clause that may
+                     * follow a LINE clause on the same entry. */
+                    next();
+                    if (is("PAGE")) { next(); l_np = 1; if (!l_abs) die("NEXT PAGE goes with an absolute LINE number"); }
+                    else if (is("GROUP")) goto next_group;
+                    else die("expected NEXT PAGE or NEXT GROUP");
+                }
+            } else if (is("NEXT")) {
+                next();
+            next_group:
+                expect("GROUP"); if (is("IS")) next();
+                if (is("NEXT")) { next(); expect("PAGE"); ng_kind = NG_PAGE; }
+                else if (is("PLUS")) { next(); ng_kind = NG_REL; ng_n = atoi(tok.text); next(); }
+                else { ng_kind = NG_ABS; ng_n = atoi(tok.text); next(); }
+            } else if (is("COLUMN")) {
+                next(); if (is("NUMBER")) next(); if (is("IS")) next();
+                has_col = 1; column = atoi(tok.text); next();
+            } else if (is("PIC") || is("PICTURE")) {
+                next_pic();
+                snprintf(pic, sizeof pic, "%s", tok.text); next();
+            } else if (is("SOURCE")) {
+                next(); if (is("IS")) next();
+                src = consume_sym();
+                sub = opt_subscript();
+            } else if (is("VALUE")) {
+                next(); if (is("IS")) next();
+                if (!tok.literal) die("a report VALUE must be a nonnumeric literal");
+                memcpy(lit, tok.text, (size_t)tok.len + 1);
+                litlen = tok.len; next();
+            } else if (is("SUM"))
+                die("the SUM clause is not implemented yet");
+            else if (is("GROUP"))
+                die("GROUP INDICATE is not implemented yet");
+            else if (is("JUSTIFIED") || is("JUST") || is("BLANK"))
+                die("JUSTIFIED and BLANK WHEN ZERO on report items are not implemented yet");
+            else if (is("USAGE") || is("DISPLAY")) {
+                if (is("USAGE")) { next(); if (is("IS")) next(); }
+                expect("DISPLAY");
+            } else die("this report entry clause is not implemented yet");
+        }
+        expect(".");
 
-        if (is("TYPE")) {
-            next(); if (is("IS")) next();
-            int ty;
-            if (is("DETAIL") || is("DE")) { ty = RG_DETAIL; next(); }
-            else if (is("PAGE") || is("PH")) {
-                if (is("PAGE")) { next(); expect("HEADING"); } else next();
-                ty = RG_PAGE_HEADING;
-                if (cur_report >= 0 && !reports[cur_report].has_page)
-                    die("a PAGE HEADING group needs a PAGE clause in its RD -- VIII 2.21.3(3)");
-                if (cur_report >= 0 && reports[cur_report].ph_group >= 0)
-                    die("a report may have only one PAGE HEADING group -- VIII 2.21.3(2)");
-            }
-            else if (is("REPORT") || is("RH") || is("RF") || is("PF"))
-                die("REPORT HEADING, PAGE FOOTING and REPORT FOOTING groups are not implemented yet");
-            else if (is("CONTROL") || is("CH") || is("CF"))
-                die("CONTROL HEADING and CONTROL FOOTING groups are not implemented yet");
-            else die("unknown report group TYPE");
-            if (cur_report < 0) die("a report group outside any RD");
+        if (has_type) {
             if (nrgroup >= MAXRGROUP) die("too many report groups");
+            switch (ty) {
+            case RG_PAGE_HEADING: case RG_PAGE_FOOTING:
+                if (!rp->has_page) die("PAGE HEADING and PAGE FOOTING groups need a PAGE clause in the RD -- VIII 2.21.3(3)");
+                break;
+            default: break;
+            }
+            int *slot = ty == RG_REPORT_HEADING ? &rp->rh_group : ty == RG_PAGE_HEADING ? &rp->ph_group
+                      : ty == RG_PAGE_FOOTING ? &rp->pf_group : ty == RG_REPORT_FOOTING ? &rp->rf_group : NULL;
+            if (slot) {
+                if (*slot >= 0) die("a report may have only one group of that TYPE -- VIII 2.21.3(2)");
+                *slot = nrgroup;
+            }
+            if (ng_kind != NG_NONE) {
+                if (ty == RG_PAGE_HEADING || ty == RG_REPORT_FOOTING)
+                    die("NEXT GROUP may not appear on a PAGE HEADING or REPORT FOOTING group -- VIII 2.15.3(5)");
+                if (ty == RG_PAGE_FOOTING && ng_kind == NG_PAGE)
+                    die("NEXT GROUP NEXT PAGE may not appear on a PAGE FOOTING group -- VIII 2.15.3(4)");
+                if (!rp->has_page && ng_kind != NG_REL)
+                    die("without a PAGE clause only NEXT GROUP PLUS may be used -- VIII 2.15.3(3)");
+            }
             RGroup *g = &rgroups[nrgroup];
             memset(g, 0, sizeof *g);
             snprintf(g->name, sizeof g->name, "%s", nm);
             g->report = cur_report; g->type = ty;
             g->first_line = nrline;
-            if (ty == RG_PAGE_HEADING) reports[cur_report].ph_group = nrgroup;
+            g->ng_kind = ng_kind; g->ng_n = ng_n;
             cur_group = nrgroup++; cur_line = -1;
-            while (!tok.eof && !is(".")) {
-                if (is("NEXT")) die("the NEXT GROUP clause is not implemented yet");
-                if (is("LINE")) die("a LINE clause on the TYPE entry itself is not implemented yet; put it on a subordinate entry");
-                die("this report group clause is not implemented yet");
-            }
-            expect(".");
-            continue;
-        }
+        } else if (ng_kind != NG_NONE)
+            die("the NEXT GROUP clause belongs on the report group entry -- VIII 2.5.2, Format 1");
 
-        if (is("LINE")) {
-            next(); if (is("NUMBER")) next(); if (is("IS")) next();
+        if (has_line) {
             if (cur_group < 0) die("a LINE outside any report group");
             if (nrline >= MAXRLINE) die("too many report lines");
-            RLine *l = &rlines[nrline];
-            memset(l, 0, sizeof *l);
-            if (is("PLUS")) { next(); l->absolute = 0; }
-            else l->absolute = 1;
-            l->n = atoi(tok.text); next();
-            if (is("NEXT")) die("LINE ... NEXT PAGE is not implemented yet");
-            if (cur_report >= 0 && !reports[cur_report].has_page && l->absolute)
-                die("without a PAGE clause only LINE PLUS may be used -- VIII 2.14.3(5)");
             RGroup *g = &rgroups[cur_group];
+            if (!rp->has_page && l_abs)
+                die("without a PAGE clause only LINE PLUS may be used -- VIII 2.14.3(5)");
+            if (l_np) {
+                if (g->nline > 0) die("NEXT PAGE may appear only in a group's first LINE clause -- VIII 2.14.3(6)");
+                if (!rg_is_body(g->type) && g->type != RG_REPORT_FOOTING)
+                    die("LINE ... NEXT PAGE is for body groups and the REPORT FOOTING -- VIII 2.14.3(6)");
+            }
+            if (g->type == RG_PAGE_FOOTING && g->nline == 0 && !l_abs)
+                die("the first LINE of a PAGE FOOTING must be absolute -- VIII 2.14.3(8)");
             if (g->nline > 0) {
                 const RLine *prev = &rlines[nrline - 1];
-                if (l->absolute && !prev->absolute)
+                if (l_abs && !prev->absolute)
                     die("absolute LINE clauses must precede relative ones in a group -- VIII 2.14.3(3)");
-                if (l->absolute && prev->absolute && l->n <= prev->n)
+                if (l_abs && prev->absolute && l_n <= prev->n)
                     die("absolute LINE numbers in a group must ascend -- VIII 2.14.3(4)");
             }
+            RLine *l = &rlines[nrline];
+            memset(l, 0, sizeof *l);
+            l->absolute = l_abs; l->n = l_n; l->next_page = l_np;
             l->first_fld = nrfield;
             cur_line = nrline++;
             g->nline++;
-            expect(".");
-            continue;
         }
 
-        if (is("COLUMN")) {
-            next(); if (is("NUMBER")) next(); if (is("IS")) next();
-            if (cur_line < 0) die("a COLUMN outside any LINE");
+        if (has_col || pic[0] || src >= 0 || litlen >= 0) {
+            if (!has_col) die("a PICTURE without COLUMN would be a sum counter, which is not implemented yet");
+            if (cur_line < 0) die("a COLUMN outside any LINE -- VIII 2.5.3(10c)");
             if (nrfield >= MAXRFIELD) die("too many report fields");
+            if (!pic[0]) die("a COLUMN entry needs a PICTURE");
+            if (src < 0 && litlen < 0) die("a COLUMN entry needs a SOURCE or a VALUE");
+            if (src >= 0 && litlen >= 0) die("a COLUMN entry takes SOURCE or VALUE, not both");
             RField *fl = &rfields[nrfield];
             memset(fl, 0, sizeof *fl);
-            fl->column = atoi(tok.text); fl->src = -1;
-            next();
-            char pic[64] = "";
-            while (!tok.eof && !is(".")) {
-                if (is("PIC") || is("PICTURE")) {
-                    next_pic();
-                    snprintf(pic, sizeof pic, "%s", tok.text); next();
-                } else if (is("SOURCE")) {
-                    next(); if (is("IS")) next();
-                    fl->src = consume_sym();
-                    fl->sub = opt_subscript();
-                } else if (is("VALUE")) {
-                    next(); if (is("IS")) next();
-                    if (!tok.literal) die("a report VALUE must be a nonnumeric literal");
-                    memcpy(fl->lit, tok.text, (size_t)tok.len + 1);
-                    fl->litlen = tok.len; next();
-                } else if (is("SUM"))
-                    die("the SUM clause is not implemented yet");
-                else if (is("GROUP"))
-                    die("GROUP INDICATE is not implemented yet");
-                else if (is("USAGE") || is("DISPLAY")) {
-                    if (is("USAGE")) { next(); if (is("IS")) next(); }
-                    expect("DISPLAY");
-                } else die("this COLUMN clause is not implemented yet");
-            }
-            expect(".");
-            if (!pic[0]) die("a COLUMN entry needs a PICTURE");
+            fl->column = column; fl->src = src; fl->sub = sub;
+            if (litlen >= 0) { memcpy(fl->lit, lit, (size_t)litlen + 1); fl->litlen = litlen; }
             /* The field becomes an ordinary hidden item, so SOURCE placement
                reuses the existing MOVE path, editing and all. */
             if (nsym >= MAXSYM) die("too many data items");
@@ -1513,10 +1579,12 @@ static void parse_report_section(void)
             fl->sym = nsym++;
             rlines[cur_line].nfld++;
             nrfield++;
-            continue;
-        }
-        die("unexpected entry in the REPORT SECTION");
+        } else if (!has_type && !has_line)
+            die("a report entry with nothing in it");
     }
+    for (int k = 0; k < nrgroup; k++)
+        if (rgroups[k].ng_kind != NG_NONE && rgroups[k].nline == 0)
+            die("a NEXT GROUP clause needs a LINE clause in its group -- VIII 2.15.3(1)");
     lex_parens = saved_parens;
     for (int r = 0; r < nreport; r++) {
         int body = 0;
@@ -1658,8 +1726,15 @@ static void parse_data_division(void)
                     snprintf(rp->lbl_gen,  sizeof rp->lbl_gen,  "RFGEN%03d", nreport);
                     snprintf(rp->lbl_adv,  sizeof rp->lbl_adv,  "RADV%03d",  nreport);
                     snprintf(rp->lbl_advs, sizeof rp->lbl_advs, "RADVS%03d", nreport);
+                    snprintf(rp->lbl_ejc,  sizeof rp->lbl_ejc,  "REJC%03d",  nreport);
+                    snprintf(rp->lbl_ejcs, sizeof rp->lbl_ejcs, "REJCS%03d", nreport);
+                    snprintf(rp->lbl_rh,   sizeof rp->lbl_rh,   "RRH%03d",   nreport);
+                    snprintf(rp->lbl_pf,   sizeof rp->lbl_pf,   "RPF%03d",   nreport);
+                    snprintf(rp->lbl_sng,  sizeof rp->lbl_sng,  "RSNG%03d",  nreport);
+                    snprintf(rp->lbl_phy,  sizeof rp->lbl_phy,  "RPHY%03d",  nreport);
                     rp->file = cur_file;
-                    rp->lc_sym = rp->pc_sym = -1; rp->ph_group = -1;
+                    rp->lc_sym = rp->pc_sym = -1;
+                    rp->rh_group = rp->ph_group = rp->pf_group = rp->rf_group = -1;
                     files[cur_file].report = nreport;
                     nreport++;
                     next();
@@ -6752,11 +6827,13 @@ static void emit_runtime(void)
     asm_line("RTSAVE4", "DS", "18F", "");
     asm_comment("");
     asm_comment(" COBWRL -- position the paper and write one report line.");
-    asm_comment("   R1 -> A(dcb), A(LINE-COUNTER), A(target line), A(buffer),");
-    asm_comment("         A(pending carriage control)");
-    asm_comment(" A pending eject rides on the line itself when the target is");
-    asm_comment(" line 1; otherwise a blank line ejects first, so the blanks");
-    asm_comment(" that space down to the target land on the new page.");
+    asm_comment("   R1 -> A(dcb), A(physical line), A(target line), A(buffer),");
+    asm_comment("         A(pending carriage control), A(LINE-COUNTER)");
+    asm_comment(" The physical line is where the paper is; LINE-COUNTER is the");
+    asm_comment(" standard's register, which NEXT GROUP moves without moving");
+    asm_comment(" paper. Both end at the line printed. A pending eject rides on");
+    asm_comment(" the line itself when the target is line 1; otherwise a blank");
+    asm_comment(" line ejects first, so the spacing blanks land on the new page.");
     asm_comment("");
     asm_line("COBWRL", "STM", "14,12,12(13)", "");
     asm_line("", "BALR", "12,0", "");
@@ -6766,11 +6843,12 @@ static void emit_runtime(void)
     asm_line("", "ST", "11,8(13)", "");
     asm_line("", "LR", "13,11", "");
     asm_line("", "L", "2,0(0,1)", "A(dcb)");
-    asm_line("", "L", "3,4(0,1)", "A(LINE-COUNTER)");
+    asm_line("", "L", "3,4(0,1)", "A(physical line)");
     asm_line("", "L", "4,8(0,1)", "A(target line)");
     asm_line("", "L", "5,12(0,1)", "A(buffer)");
     asm_line("", "L", "9,16(0,1)", "A(pending control)");
-    asm_line("", "L", "6,0(0,3)", "the current line");
+    asm_line("", "L", "10,20(0,1)", "A(LINE-COUNTER)");
+    asm_line("", "L", "6,0(0,3)", "the physical line");
     asm_line("", "L", "7,0(0,4)", "the target");
     asm_line("", "MVI", "0(5),C' '", "single space unless told otherwise");
     asm_line("", "CLI", "0(9),C'1'", "an eject pending?");
@@ -6783,14 +6861,18 @@ static void emit_runtime(void)
     asm_line("", "B", "COBW020", "");
     asm_line("COBW005", "PUT", "(2),RTEJCT", "a blank line at the top of a new page");
     asm_line("", "LA", "6,1", "");
-    asm_line("COBW010", "LA", "8,1(0,6)", "");
+    asm_line("COBW010", "CR", "7,6", "a target behind the paper?");
+    asm_line("", "BH", "COBW012", "");
+    asm_line("", "LA", "7,1(0,6)", "then the next line");
+    asm_line("COBW012", "LA", "8,1(0,6)", "");
     asm_line("", "CR", "8,7", "already at the line before the target?");
     asm_line("", "BNL", "COBW020", "");
     asm_line("", "PUT", "(2),RTBLNK", "skip a line");
     asm_line("", "LA", "6,1(0,6)", "");
-    asm_line("", "B", "COBW010", "");
+    asm_line("", "B", "COBW012", "");
     asm_line("COBW020", "PUT", "(2),(5)", "");
-    asm_line("", "ST", "7,0(0,3)", "LINE-COUNTER = the line just printed");
+    asm_line("", "ST", "7,0(0,3)", "the paper is at the line just printed");
+    asm_line("", "ST", "7,0(0,10)", "and so is LINE-COUNTER");
     asm_line("", "L", "13,4(13)", "");
     asm_line("", "LM", "14,12,12(13)", "");
     asm_line("", "SR", "15,15", "");
@@ -7558,24 +7640,31 @@ static void emit_report_line(int gi, const RLine *l)
     reset_bases();
 }
 
-/* Render one report group, by the presentation rules of VIII 2.5.5.
+/* Render one report group, by the presentation rules of VIII 2.5.5. The
+ * group's TYPE and the shape of its LINE sequence pick a row of the tables,
+ * and the renderer carries exactly that row's rules:
  *
- * A body group first decides whether it fits (Table 3, fit test 3a for a
- * group whose first LINE is absolute, 3b for one whose lines are all
- * relative) and calls the report's page-advance routine if not. Its first
- * line then goes where rule 4a or 4b says: an absolute LINE where it says;
- * a relative one at LINE-COUNTER plus the integer once a body group is on
- * the page, and on a fresh page at FIRST DETAIL, or the line after
- * LINE-COUNTER if the heading ran past it. Later lines follow the previous
- * one. A PAGE HEADING follows Table 2: an absolute first LINE where it says,
- * a relative one at the integer plus HEADING minus one. COBWRL leaves
- * LINE-COUNTER at each line printed, which is final-setting rule 6d / 4a. */
+ *   body groups (Table 3): a fit test -- 3a when the first LINE is
+ *     absolute, 3b when relative, 3c when it says NEXT PAGE -- with the
+ *     saved next group integer of 2.5.5.5 consulted on a fresh page; first
+ *     print line by 4a or 4b; and a final LINE-COUNTER by 6a, 6b, 6c or 6f
+ *     from the NEXT GROUP clause, 6d being what COBWRL leaves.
+ *   PAGE HEADING (Table 2): an absolute first LINE where it says, a
+ *     relative one after the REPORT HEADING if that is on the page, else at
+ *     the integer plus HEADING minus one.
+ *   REPORT HEADING (Table 1): like the PAGE HEADING's fresh-page case, then
+ *     5a or 5b from its NEXT GROUP; NEXT PAGE is the caller's business.
+ *   PAGE FOOTING (Table 4): at its absolute LINE, then 5a or 5b.
+ *   REPORT FOOTING (Table 5): after the PAGE FOOTING when that is on the
+ *     page, else from FOOTING; NEXT PAGE is the caller's business.
+ * Later lines follow the previous one. COBWRL leaves LINE-COUNTER at each
+ * line printed. */
 static void emit_report_group(int gi)
 {
     char b[160], lab[16], lfit[16], l2[16], l3[16];
     RGroup *g = &rgroups[gi];
     Report *rp = &reports[g->report];
-    int body = g->type == RG_DETAIL;
+    int body = rg_is_body(g->type);
     snprintf(lab, sizeof lab, "RG%03d", gi);
     snprintf(b, sizeof b, " report group %s", g->name);
     asm_comment(b);
@@ -7584,29 +7673,68 @@ static void emit_report_group(int gi)
     reset_bases();
     if (g->nline == 0) { asm_line("", "L", b, ""); asm_line("", "BR", "14", "not printable"); return; }
     const RLine *first = &rlines[g->first_line];
+    int limit = g->type == RG_CONTROL_FOOTING ? rp->footing : rp->last_detail;
+    int sum = 0;
+    for (int k = g->first_line; k < g->first_line + g->nline; k++) sum += rlines[k].n;
 
     if (body && rp->has_page) {
         snprintf(lfit, sizeof lfit, "L%04d", ++genlabel);
-        if (first->absolute) {
+        snprintf(l2, sizeof l2, "L%04d", ++genlabel);
+        if (first->next_page) {
+            /* 3c: a body group already on the page means a new one. */
+            snprintf(b, sizeof b, "%s,X'00'", rp->lbl_body);
+            asm_line("", "CLI", b, "a body group on this page yet?");
+            asm_line("", "BE", l2, "");
+            snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
+            asm_line("", "BAL", b, "page advance processing");
+            reset_bases();
+            asm_line(l2, "DS", "0H", "");
+        } else if (first->absolute) {
             /* 3a: fits while LINE-COUNTER is below the first absolute line. */
             snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "L", b, "LINE-COUNTER");
             snprintf(b, sizeof b, "2,%s", intern_full(first->n));
             asm_line("", "C", b, "below the group's first line?");
             asm_line("", "BL", lfit, "fits");
+            snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
+            asm_line("", "BAL", b, "page advance processing");
+            reset_bases();
         } else {
             /* 3b: the first body group on a page is presented; after that the
              * trial sum LINE-COUNTER + all the LINE integers must not pass
-             * the lower limit -- LAST DETAIL for a DETAIL group. */
-            int sum = 0;
-            for (int k = g->first_line; k < g->first_line + g->nline; k++) sum += rlines[k].n;
+             * the lower limit. */
             snprintf(b, sizeof b, "%s,X'00'", rp->lbl_body);
             asm_line("", "CLI", b, "a body group on this page yet?");
-            asm_line("", "BE", lfit, "no: the first one always fits");
+            asm_line("", "BE", l2, "");
             snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "L", b, "LINE-COUNTER");
             snprintf(b, sizeof b, "2,%s", intern_full(sum));
             asm_line("", "A", b, "plus every LINE integer");
-            snprintf(b, sizeof b, "2,%s", intern_full(rp->last_detail));
-            asm_line("", "C", b, "against LAST DETAIL");
+            snprintf(b, sizeof b, "2,%s", intern_full(limit));
+            asm_line("", "C", b, "against the lower limit");
+            asm_line("", "BNH", lfit, "fits");
+            snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
+            asm_line("", "BAL", b, "page advance processing");
+            reset_bases();
+            asm_line(l2, "DS", "0H", "");
+        }
+        /* A fresh page: was a NEXT GROUP integer saved when the last body
+         * group of the previous page was presented (rule 6a)? Then it is the
+         * LINE-COUNTER now, and the fit test is applied once more. */
+        snprintf(b, sizeof b, "2,%s", rp->lbl_sng);
+        asm_line("", "L", b, "the saved next group integer");
+        asm_line("", "LTR", "2,2", "");
+        asm_line("", "BZ", lfit, "none: the first group on a page fits");
+        snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "ST", b, "into LINE-COUNTER");
+        asm_line("", "SR", "3,3", "");
+        snprintf(b, sizeof b, "3,%s", rp->lbl_sng); asm_line("", "ST", b, "and cleared");
+        if (first->absolute) {
+            snprintf(b, sizeof b, "2,%s", intern_full(first->n));
+            asm_line("", "C", b, "below the group's first line?");
+            asm_line("", "BL", lfit, "fits");
+        } else {
+            snprintf(b, sizeof b, "2,%d(2)", 1 + sum - first->n);
+            asm_line("", "LA", b, "plus one, plus the later LINE integers");
+            snprintf(b, sizeof b, "2,%s", intern_full(limit));
+            asm_line("", "C", b, "against the lower limit");
             asm_line("", "BNH", lfit, "fits");
         }
         snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
@@ -7621,15 +7749,13 @@ static void emit_report_group(int gi)
         if (l->absolute) {
             snprintf(b, sizeof b, "2,%d", l->n);
             asm_line("", "LA", b, "LINE n");
-        } else if (li != g->first_line || !rp->has_page || !body) {
+        } else if (li != g->first_line || !rp->has_page) {
             snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "L", b, "LINE-COUNTER");
             /* R2, not R0: register 0 as a base or index contributes nothing,
                so LA 0,n(0) loads n rather than adding to it. */
-            int n = l->n;
-            if (li == g->first_line && !body) n += rp->heading - 1;   /* Table 2, 3b */
-            snprintf(b, sizeof b, "2,%d(2)", n);
-            asm_line("", "LA", b, li == g->first_line && !body ? "LINE PLUS n, from HEADING" : "LINE PLUS n");
-        } else {
+            snprintf(b, sizeof b, "2,%d(2)", l->n);
+            asm_line("", "LA", b, "LINE PLUS n");
+        } else if (body) {
             /* Table 3 rule 4b, the relative first line of a body group. */
             snprintf(l2, sizeof l2, "L%04d", ++genlabel);
             snprintf(l3, sizeof l3, "L%04d", ++genlabel);
@@ -7649,21 +7775,128 @@ static void emit_report_group(int gi)
             asm_line("", "B", l3, "");
             asm_line("", "LA", "2,1(2)", "yes: the line after it");
             asm_line(l3, "DS", "0H", "");
+        } else if (g->type == RG_PAGE_HEADING || g->type == RG_REPORT_FOOTING) {
+            /* Table 2 rule 3b / Table 5 rule 3b: after the REPORT HEADING or
+             * the PAGE FOOTING when that is on this page, else from HEADING
+             * or FOOTING. */
+            int ph = g->type == RG_PAGE_HEADING;
+            snprintf(l2, sizeof l2, "L%04d", ++genlabel);
+            snprintf(l3, sizeof l3, "L%04d", ++genlabel);
+            snprintf(b, sizeof b, "%s,X'00'", ph ? rp->lbl_rh : rp->lbl_pf);
+            asm_line("", "CLI", b, ph ? "a REPORT HEADING on this page?" : "a PAGE FOOTING on this page?");
+            asm_line("", "BE", l2, "");
+            snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "L", b, "LINE-COUNTER");
+            snprintf(b, sizeof b, "2,%d(2)", l->n);
+            asm_line("", "LA", b, "LINE PLUS n after it");
+            asm_line("", "B", l3, "");
+            asm_line(l2, "DS", "0H", "");
+            snprintf(b, sizeof b, "2,%d", l->n + (ph ? rp->heading - 1 : rp->footing));
+            asm_line("", "LA", b, ph ? "LINE PLUS n from HEADING" : "LINE PLUS n from FOOTING");
+            asm_line(l3, "DS", "0H", "");
+        } else {
+            /* Table 1 rule 3b: the REPORT HEADING from HEADING. */
+            snprintf(b, sizeof b, "2,%d", l->n + rp->heading - 1);
+            asm_line("", "LA", b, "LINE PLUS n from HEADING");
         }
         emit_report_line(gi, l);
+    }
+
+    /* The final LINE-COUNTER setting. */
+    if (body || g->type == RG_REPORT_HEADING || g->type == RG_PAGE_FOOTING) {
+        switch (g->ng_kind) {
+        case NG_ABS:
+            if (body) {
+                /* 6a: the integer if it is past the last line; else FOOTING,
+                 * and the integer is saved for the next page. */
+                snprintf(l2, sizeof l2, "L%04d", ++genlabel);
+                snprintf(l3, sizeof l3, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "L", b, "the last line printed");
+                snprintf(b, sizeof b, "2,%s", intern_full(g->ng_n));
+                asm_line("", "C", b, "before NEXT GROUP's line?");
+                asm_line("", "BNL", l2, "");
+                snprintf(b, sizeof b, "2,%d", g->ng_n);
+                asm_line("", "LA", b, "then that is LINE-COUNTER");
+                asm_line("", "B", l3, "");
+                asm_line(l2, "DS", "0H", "");
+                snprintf(b, sizeof b, "3,%d", g->ng_n); asm_line("", "LA", b, "");
+                snprintf(b, sizeof b, "3,%s", rp->lbl_sng); asm_line("", "ST", b, "saved for the next page");
+                snprintf(b, sizeof b, "2,%d", rp->footing); asm_line("", "LA", b, "and LINE-COUNTER is FOOTING");
+                asm_line(l3, "DS", "0H", "");
+            } else {
+                /* Table 1 / Table 4 rule 5a. */
+                snprintf(b, sizeof b, "2,%d", g->ng_n); asm_line("", "LA", b, "NEXT GROUP's line");
+            }
+            snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "ST", b, "LINE-COUNTER");
+            break;
+        case NG_REL:
+            snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "L", b, "the last line printed");
+            snprintf(b, sizeof b, "2,%d(2)", g->ng_n); asm_line("", "LA", b, "plus NEXT GROUP's integer");
+            if (body && rp->has_page) {
+                /* 6b: but no further than FOOTING. */
+                snprintf(l2, sizeof l2, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "2,%s", intern_full(rp->footing));
+                asm_line("", "C", b, "");
+                asm_line("", "BL", l2, "");
+                snprintf(b, sizeof b, "2,%d", rp->footing); asm_line("", "LA", b, "FOOTING at most");
+                asm_line(l2, "DS", "0H", "");
+            }
+            snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "ST", b, "LINE-COUNTER");
+            break;
+        case NG_PAGE:
+            if (body) {
+                /* 6c: FOOTING, so the next body group starts a page. */
+                snprintf(b, sizeof b, "2,%d", rp->footing); asm_line("", "LA", b, "NEXT GROUP NEXT PAGE: FOOTING");
+                snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "ST", b, "LINE-COUNTER");
+            }
+            /* A REPORT HEADING's NEXT PAGE is done by the first GENERATE. */
+            break;
+        default: break;
+        }
     }
     if (body) {
         snprintf(b, sizeof b, "%s,X'01'", rp->lbl_body);
         asm_line("", "MVI", b, "a body group is on this page");
+    } else if (g->type == RG_REPORT_HEADING) {
+        snprintf(b, sizeof b, "%s,X'01'", rp->lbl_rh);
+        asm_line("", "MVI", b, "the REPORT HEADING is on this page");
+    } else if (g->type == RG_PAGE_FOOTING) {
+        snprintf(b, sizeof b, "%s,X'01'", rp->lbl_pf);
+        asm_line("", "MVI", b, "the PAGE FOOTING is on this page");
     }
     snprintf(b, sizeof b, "14,RGS%03d", gi);
     asm_line("", "L", b, "");
     asm_line("", "BR", "14", "");
 }
 
-/* Page advance processing for one report: eject, count the page, clear the
- * line counter and the body flag, and present the PAGE HEADING. The PAGE
- * FOOTING, when there is one, will go first. */
+/* The eject alone: arm the carriage control, count the page, clear the
+ * line counter and the page flags. */
+static void emit_report_eject(int ri)
+{
+    char b[160];
+    Report *rp = &reports[ri];
+    snprintf(b, sizeof b, " eject, report %s", rp->name);
+    asm_comment(b);
+    snprintf(b, sizeof b, "14,%s", rp->lbl_ejcs);
+    asm_line(rp->lbl_ejc, "ST", b, "");
+    reset_bases();
+    snprintf(b, sizeof b, "%s,C'1'", rp->lbl_ctl);
+    asm_line("", "MVI", b, "eject before the next line");
+    snprintf(b, sizeof b, "2,%s", rw_counter(rp, 1)); asm_line("", "L", b, "PAGE-COUNTER");
+    asm_line("", "LA", "2,1(2)", "");
+    snprintf(b, sizeof b, "2,%s", rw_counter(rp, 1)); asm_line("", "ST", b, "");
+    asm_line("", "SR", "2,2", "");
+    snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "ST", b, "LINE-COUNTER = 0");
+    snprintf(b, sizeof b, "%s,X'00'", rp->lbl_body); asm_line("", "MVI", b, "no body group on the new page");
+    snprintf(b, sizeof b, "%s,X'00'", rp->lbl_rh);   asm_line("", "MVI", b, "no REPORT HEADING on it");
+    snprintf(b, sizeof b, "%s,X'00'", rp->lbl_pf);   asm_line("", "MVI", b, "no PAGE FOOTING on it");
+    snprintf(b, sizeof b, "14,%s", rp->lbl_ejcs);
+    asm_line("", "L", b, "");
+    asm_line("", "BR", "14", "");
+}
+
+/* Page advance processing for one report, VIII 2.21.4(12): the PAGE
+ * FOOTING as the last group of the page, the eject, the PAGE HEADING as
+ * the first group of the next. */
 static void emit_report_advance(int ri)
 {
     char b[160];
@@ -7673,20 +7906,17 @@ static void emit_report_advance(int ri)
     snprintf(b, sizeof b, "14,%s", rp->lbl_advs);
     asm_line(rp->lbl_adv, "ST", b, "");
     reset_bases();
-    snprintf(b, sizeof b, "%s,C'1'", rp->lbl_ctl);
-    asm_line("", "MVI", b, "eject before the next line");
-    snprintf(b, sizeof b, "2,%s", rw_counter(rp, 1)); asm_line("", "L", b, "PAGE-COUNTER");
-    asm_line("", "LA", "2,1(2)", "");
-    snprintf(b, sizeof b, "2,%s", rw_counter(rp, 1)); asm_line("", "ST", b, "");
-    asm_line("", "SR", "2,2", "");
-    snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "ST", b, "LINE-COUNTER = 0");
-    snprintf(b, sizeof b, "%s,X'00'", rp->lbl_body);
-    asm_line("", "MVI", b, "no body group on the new page");
+    if (rp->pf_group >= 0) {
+        snprintf(b, sizeof b, "14,RG%03d", rp->pf_group);
+        asm_line("", "BAL", b, "PAGE FOOTING");
+    }
+    snprintf(b, sizeof b, "14,%s", rp->lbl_ejc);
+    asm_line("", "BAL", b, "the eject");
     if (rp->ph_group >= 0) {
         snprintf(b, sizeof b, "14,RG%03d", rp->ph_group);
         asm_line("", "BAL", b, "PAGE HEADING");
-        reset_bases();
     }
+    reset_bases();
     snprintf(b, sizeof b, "14,%s", rp->lbl_advs);
     asm_line("", "L", b, "");
     asm_line("", "BR", "14", "");
@@ -8177,7 +8407,7 @@ static void generate(void)
         case ST_INITIATE: {
             /* VIII 3.2.4: sum counters to zero (none yet), LINE-COUNTER to
              * zero, PAGE-COUNTER to one. The first page is not "advanced"
-             * to, so the eject is armed here and the heading comes with the
+             * to, so the eject is armed here and the headings come with the
              * first GENERATE. */
             Report *rp = &reports[st->dst];
             snprintf(b, sizeof b, " INITIATE %s", rp->name);
@@ -8185,22 +8415,53 @@ static void generate(void)
             reset_bases();
             asm_line("", "SR", "2,2", "");
             snprintf(b, sizeof b, "2,%s", rw_counter(rp, 0)); asm_line("", "ST", b, "LINE-COUNTER = 0");
+            snprintf(b, sizeof b, "2,%s", rp->lbl_sng);      asm_line("", "ST", b, "no saved next group integer");
             asm_line("", "LA", "2,1", "");
             snprintf(b, sizeof b, "2,%s", rw_counter(rp, 1)); asm_line("", "ST", b, "PAGE-COUNTER = 1");
             snprintf(b, sizeof b, "%s,X'00'", rp->lbl_body); asm_line("", "MVI", b, "");
+            snprintf(b, sizeof b, "%s,X'00'", rp->lbl_rh);   asm_line("", "MVI", b, "");
+            snprintf(b, sizeof b, "%s,X'00'", rp->lbl_pf);   asm_line("", "MVI", b, "");
             snprintf(b, sizeof b, "%s,X'00'", rp->lbl_gen);  asm_line("", "MVI", b, "no GENERATE yet");
             snprintf(b, sizeof b, "%s,C'1'", rp->lbl_ctl);   asm_line("", "MVI", b, "eject before the first page");
             break;
         }
-        case ST_TERMINATE:
-            snprintf(b, sizeof b, " TERMINATE %s (no footings yet)",
-                     reports[st->dst].name);
+        case ST_TERMINATE: {
+            /* VIII 3.4.4: nothing at all unless a GENERATE ran; else the
+             * CONTROL FOOTINGs (not yet), then the PAGE FOOTING as the last
+             * group of the page, then the REPORT FOOTING -- on a page of its
+             * own when its LINE says NEXT PAGE, which is an eject with no
+             * PAGE HEADING after it (2.21.4(3)a). */
+            Report *rp = &reports[st->dst];
+            snprintf(b, sizeof b, " TERMINATE %s", rp->name);
             asm_comment(b);
+            reset_bases();
+            char ldone[16]; snprintf(ldone, sizeof ldone, "L%04d", ++genlabel);
+            snprintf(b, sizeof b, "%s,X'00'", rp->lbl_gen);
+            asm_line("", "CLI", b, "any GENERATE since INITIATE?");
+            asm_line("", "BE", ldone, "no: nothing to do");
+            if (rp->pf_group >= 0) {
+                snprintf(b, sizeof b, "14,RG%03d", rp->pf_group);
+                asm_line("", "BAL", b, "PAGE FOOTING, the last group of the page");
+            }
+            if (rp->rf_group >= 0) {
+                const RGroup *rf = &rgroups[rp->rf_group];
+                if (rf->nline > 0 && rlines[rf->first_line].next_page) {
+                    snprintf(b, sizeof b, "14,%s", rp->lbl_ejc);
+                    asm_line("", "BAL", b, "REPORT FOOTING on a page by itself");
+                }
+                snprintf(b, sizeof b, "14,RG%03d", rp->rf_group);
+                asm_line("", "BAL", b, "REPORT FOOTING");
+            }
+            asm_line(ldone, "DS", "0H", "");
+            reset_bases();
             break;
+        }
         case ST_GENERATE: {
-            /* VIII 3.1.4(5): the first GENERATE presents the PAGE HEADING
-             * (and the REPORT HEADING and CONTROL HEADINGs, when those
-             * exist) before the detail; the renderer does the rest. */
+            /* VIII 3.1.4(5): the first GENERATE presents the REPORT HEADING
+             * -- on a page by itself under NEXT GROUP NEXT PAGE, which is an
+             * eject with no PAGE FOOTING before it (2.21.4(7)a) -- then the
+             * PAGE HEADING, then (not yet) the CONTROL HEADINGs, then the
+             * detail; the renderer does the rest. */
             RGroup *g = &rgroups[st->dst];
             Report *rp = &reports[g->report];
             snprintf(b, sizeof b, " GENERATE %s", g->name);
@@ -8212,6 +8473,14 @@ static void generate(void)
             asm_line("", "BNE", lnf, "");
             snprintf(b, sizeof b, "%s,X'01'", rp->lbl_gen);
             asm_line("", "MVI", b, "");
+            if (rp->rh_group >= 0) {
+                snprintf(b, sizeof b, "14,RG%03d", rp->rh_group);
+                asm_line("", "BAL", b, "REPORT HEADING");
+                if (rgroups[rp->rh_group].ng_kind == NG_PAGE) {
+                    snprintf(b, sizeof b, "14,%s", rp->lbl_ejc);
+                    asm_line("", "BAL", b, "it had the first page to itself");
+                }
+            }
             if (rp->ph_group >= 0) {
                 snprintf(b, sizeof b, "14,RG%03d", rp->ph_group);
                 asm_line("", "BAL", b, "the first page heading");
@@ -9537,7 +9806,8 @@ static void generate(void)
 
     /* ---- report group renderers and page advances, reached only by BAL ---- */
     for (int i = 0; i < nrgroup; i++) emit_report_group(i);
-    for (int i = 0; i < nreport; i++) if (reports[i].lc_sym >= 0) emit_report_advance(i);
+    for (int i = 0; i < nreport; i++)
+        if (reports[i].lc_sym >= 0) { emit_report_eject(i); emit_report_advance(i); }
     if (nreport) {
         asm_line("VWRL", "DC", "V(COBWRL)", "");
         for (int i = 0; i < nrgroup; i++) {
@@ -9546,11 +9816,12 @@ static void generate(void)
             Report *rp = &reports[rgroups[i].report];
             snprintf(b, sizeof b, "A(%s)", files[rp->file].label);
             asm_line(lab, "DC", b, rgroups[i].name);
-            snprintf(b, sizeof b, "A(%s)", syms[rp->lc_sym].label); asm_line("", "DC", b, "LINE-COUNTER");
+            snprintf(b, sizeof b, "A(%s)", rp->lbl_phy); asm_line("", "DC", b, "the physical line");
             asm_line("", "DC", "A(RTGT)", "");
             asm_line("", "DC", "A(RBUF)", "");
-            snprintf(b, sizeof b, "X'80',AL3(%s)", rp->lbl_ctl);
-            asm_line("", "DC", b, "pending carriage control; last parameter");
+            snprintf(b, sizeof b, "A(%s)", rp->lbl_ctl); asm_line("", "DC", b, "pending carriage control");
+            snprintf(b, sizeof b, "X'80',AL3(%s)", syms[rp->lc_sym].label);
+            asm_line("", "DC", b, "LINE-COUNTER; last parameter");
             snprintf(lab, sizeof lab, "RGS%03d", i);
             asm_line(lab, "DS", "F", "return address");
         }
@@ -9559,7 +9830,12 @@ static void generate(void)
             asm_line(reports[i].lbl_ctl,  "DC", "C' '",  reports[i].name);
             asm_line(reports[i].lbl_body, "DC", "X'00'", "a body group is on this page");
             asm_line(reports[i].lbl_gen,  "DC", "X'00'", "the first GENERATE has happened");
+            asm_line(reports[i].lbl_rh,   "DC", "X'00'", "the REPORT HEADING is on this page");
+            asm_line(reports[i].lbl_pf,   "DC", "X'00'", "the PAGE FOOTING is on this page");
+            asm_line(reports[i].lbl_sng,  "DC", "F'0'",  "saved next group integer");
+            asm_line(reports[i].lbl_phy,  "DC", "F'0'",  "the physical line");
             asm_line(reports[i].lbl_advs, "DS", "F",     "page advance return");
+            asm_line(reports[i].lbl_ejcs, "DS", "F",     "eject return");
         }
         asm_line("RTGT", "DS", "F", "target line");
         asm_line("RBUF", "DC", "CL133' '", "ASA byte + 132 columns");

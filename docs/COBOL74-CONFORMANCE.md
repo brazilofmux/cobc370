@@ -142,18 +142,20 @@ Present: `REPORT IS` on the FD; `RD` with the `PAGE` clause entire -- `LIMIT`,
 of 2.16.4(2) -- and without it, a single page of indefinite length;
 `LINE-COUNTER` and `PAGE-COUNTER` as special registers, qualifiable by the
 report-name, usable in `SOURCE` and in the Procedure Division; report groups
-of `TYPE PAGE HEADING` and `TYPE DETAIL`, presented by Tables 2 and 3 of
-2.5.5 (fit tests 3a and 3b, first-line rules 4a and 4b, page advance
-processing); `LINE NUMBER` absolute and `PLUS`; `COLUMN NUMBER`; `SOURCE`
-with subscripts; `VALUE`; `USAGE DISPLAY`; `GENERATE data-name`, `INITIATE`,
+of `TYPE REPORT HEADING`, `PAGE HEADING`, `DETAIL`, `PAGE FOOTING` and
+`REPORT FOOTING`, presented by Tables 1 to 5 of 2.5.5 (the fit tests, the
+first-line rules, the saved next group integer, the final `LINE-COUNTER`
+settings, page advance processing); `LINE NUMBER` absolute, `PLUS` and
+`NEXT PAGE`; `NEXT GROUP` absolute, `PLUS` and `NEXT PAGE`; report entries
+with their clauses in any order (2.5.3(2)); `COLUMN NUMBER`; `SOURCE` with
+subscripts; `VALUE`; `USAGE DISPLAY`; `GENERATE data-name`, `INITIATE`,
 `TERMINATE`.
 
-Missing, each refused with a message: `CONTROL` clauses; `TYPE` for `REPORT
-HEADING`, `CONTROL HEADING`, `CONTROL FOOTING`, `PAGE FOOTING`, `REPORT
-FOOTING`; `NEXT GROUP`; `LINE ... NEXT PAGE`; the `SUM` clause and sum
-counters, with subtotalling, crossfooting and rolling forward; `GROUP
-INDICATE`; `CODE`; `REPORTS ARE`; `GENERATE report-name`; `SUPPRESS`; `USE
-BEFORE REPORTING`.
+Missing, each refused with a message: `CONTROL` clauses; `TYPE CONTROL
+HEADING` and `CONTROL FOOTING`; the `SUM` clause and sum counters, with
+subtotalling, crossfooting and rolling forward; `GROUP INDICATE`;
+`JUSTIFIED` and `BLANK WHEN ZERO` on report items; `CODE`; `REPORTS ARE`;
+`GENERATE report-name`; `SUPPRESS`; `USE BEFORE REPORTING`.
 
 `1 RPW 0,1` is a single level, so the module is not claimed until the list
 above is empty.

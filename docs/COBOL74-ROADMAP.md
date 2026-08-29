@@ -426,7 +426,25 @@ generated per report from the `CONTROL` hierarchy.
    FOOTING`, `NEXT GROUP`, `LINE NEXT PAGE`.** Tables 1, 4 and 5; the three
    `NEXT GROUP` forms with the saved next group integer and final-setting
    rules 6a-6c/6f; `RH` on the first `GENERATE` (on a page by itself under
-   `NEXT GROUP NEXT PAGE`), `RF` from `TERMINATE`. **M.**
+   `NEXT GROUP NEXT PAGE`), `RF` from `TERMINATE`. **M.** -- DONE 2026-08-30.
+   The entry parser became clause-driven on the way (VIII 2.5.3(2): any
+   order), so `LINE` and `NEXT GROUP` on the `01` and `LINE` with `COLUMN` in
+   one entry both work. `tests/rptfoot` and `tests/rptnext` are the checks,
+   with `LINE-COUNTER` displayed after each phase so the oracle pins the
+   final-setting rules and not just the text. Both oracles are the standard's:
+   GnuCOBOL 3's Report Writer ignores `NEXT GROUP PLUS` on a detail (no
+   double spacing), puts the page heading one line early after a `REPORT
+   HEADING` with `NEXT GROUP PLUS 1`, does not start a page for `LINE n NEXT
+   PAGE` when a body group is already on one (rule 3c), skips a page after a
+   `REPORT HEADING` that had one to itself, and prints a `PAGE HEADING` on
+   the `REPORT FOOTING`'s own page (2.21.4(3)a says not). IKFCBL00, the
+   second oracle, agrees with the text on every `LINE-COUNTER` value and on
+   the spacing and the saved next-group integer in `rptfoot`; it places the
+   heading of later pages one line lower (1968 rules) and cannot compile
+   `LINE n NEXT PAGE`. Found on the way: `COBWRL` had used `LINE-COUNTER` as
+   the paper position, and the two diverge the moment `NEXT GROUP` moves the
+   register without moving paper -- each report now carries a physical-line
+   cell that only `COBWRL` maintains.
 3. **`CONTROL`, `CH`/`CF` groups, control breaks.** `CONTROL IS ... FINAL`;
    prior values saved on the first `GENERATE`; break detection by the
    relation-condition rules per category (2.10.4(3)); the `GENERATE`

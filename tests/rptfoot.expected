@@ -1,0 +1,20 @@
+LINE-COUNTER NOW   7
+LINE-COUNTER NOW  13
+LINE-COUNTER NOW  12
+** THE TITLE **
+FOOTED REPORT      PAGE   1
+001    spaced
+002    spaced
+003    spaced
+004    spaced
+-- foot of   1
+FOOTED REPORT      PAGE   2
+005    spaced
+006    spaced
+007    jumper
+008    jumper
+-- foot of   2
+FOOTED REPORT      PAGE   3
+009    spaced
+-- foot of   3
+** END OF REPORT

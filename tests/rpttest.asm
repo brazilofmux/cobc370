@@ -36,9 +36,12 @@ T0001    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0005             LINE-COUNTER = 0
+         ST    2,RSNG000           no saved next group integer
          LA    2,1
          ST    2,D0006             PAGE-COUNTER = 1
          MVI   RBODY000,X'00'
+         MVI   RRH000,X'00'
+         MVI   RPF000,X'00'
          MVI   RFGEN000,X'00'      no GENERATE yet
          MVI   RCTL000,C'1'        eject before the first page
 T0002    DS    0H
@@ -99,7 +102,10 @@ T0009    DS    0H
 * DONE-PARA.
 P0002    DS    0H
 T0010    DS    0H
-* TERMINATE SIMPLE-RPT (no footings yet)
+* TERMINATE SIMPLE-RPT
+         CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
+         BE    L0003               no: nothing to do
+L0003    DS    0H
 T0011    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -145,30 +151,44 @@ RG000    ST    14,RGS000           save the return
 * report group DETAIL-LINE
 RG001    ST    14,RGS001           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0003               no: the first one always fits
+         BE    L0005
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0005             LINE-COUNTER
          A     2,FC001             plus every LINE integer
-         C     2,FC002             against LAST DETAIL
-         BNH   L0003               fits
+         C     2,FC002             against the lower limit
+         BNH   L0004               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0003    DS    0H
+L0005    DS    0H
+         L     2,RSNG000           the saved next group integer
+         LTR   2,2
+         BZ    L0004               none: the first group on a page fits
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         ST    2,D0005             into LINE-COUNTER
+         SR    3,3
+         ST    3,RSNG000           and cleared
+         LA    2,1(2)              plus one, plus the later LINE intege
+         C     2,FC002             against the lower limit
+         BNH   L0004               fits
+         BAL   14,RADV000          page advance processing
+         DROP  8
+L0004    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0005             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0004
+         BE    L0006
          LA    2,1(2)              LINE PLUS n
-         B     L0005
-L0004    DS    0H
+         B     L0007
+L0006    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
-         B     L0005
+         B     L0007
          LA    2,1(2)              yes: the line after it
-L0005    DS    0H
+L0007    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
@@ -202,8 +222,8 @@ G0001    DS    0H
          MVI   RBODY000,X'01'      a body group is on this page
          L     14,RGS001
          BR    14
-* page advance, report SIMPLE-RPT
-RADV000  ST    14,RADVS000
+* eject, report SIMPLE-RPT
+REJC000  ST    14,REJCS000
          MVI   RCTL000,C'1'        eject before the next line
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -213,27 +233,41 @@ RADV000  ST    14,RADVS000
          SR    2,2
          ST    2,D0005             LINE-COUNTER = 0
          MVI   RBODY000,X'00'      no body group on the new page
-         BAL   14,RG000            PAGE HEADING
+         MVI   RRH000,X'00'        no REPORT HEADING on it
+         MVI   RPF000,X'00'        no PAGE FOOTING on it
+         L     14,REJCS000
+         BR    14
+* page advance, report SIMPLE-RPT
+RADV000  ST    14,RADVS000
          DROP  8
+         BAL   14,REJC000          the eject
+         BAL   14,RG000            PAGE HEADING
          L     14,RADVS000
          BR    14
 VWRL     DC    V(COBWRL)
 RGP000   DC    A(FD000)            PAGE-HEAD
-         DC    A(D0005)            LINE-COUNTER
+         DC    A(RPHY000)          the physical line
          DC    A(RTGT)
          DC    A(RBUF)
-         DC    X'80',AL3(RCTL000)  pending carriage control; last param
+         DC    A(RCTL000)          pending carriage control
+         DC    X'80',AL3(D0005)    LINE-COUNTER; last parameter
 RGS000   DS    F                   return address
 RGP001   DC    A(FD000)            DETAIL-LINE
-         DC    A(D0005)            LINE-COUNTER
+         DC    A(RPHY000)          the physical line
          DC    A(RTGT)
          DC    A(RBUF)
-         DC    X'80',AL3(RCTL000)  pending carriage control; last param
+         DC    A(RCTL000)          pending carriage control
+         DC    X'80',AL3(D0005)    LINE-COUNTER; last parameter
 RGS001   DS    F                   return address
 RCTL000  DC    C' '                SIMPLE-RPT
 RBODY000 DC    X'00'               a body group is on this page
 RFGEN000 DC    X'00'               the first GENERATE has happened
+RRH000   DC    X'00'               the REPORT HEADING is on this page
+RPF000   DC    X'00'               the PAGE FOOTING is on this page
+RSNG000  DC    F'0'                saved next group integer
+RPHY000  DC    F'0'                the physical line
 RADVS000 DS    F                   page advance return
+REJCS000 DS    F                   eject return
 RTGT     DS    F                   target line
 RBUF     DC    CL133' '            ASA byte + 132 columns
 * work areas for decimal arithmetic
@@ -704,11 +738,13 @@ DTDW     DS    D
 RTSAVE4  DS    18F
 *
 * COBWRL -- position the paper and write one report line.
-*   R1 -> A(dcb), A(LINE-COUNTER), A(target line), A(buffer),
-*         A(pending carriage control)
-* A pending eject rides on the line itself when the target is
-* line 1; otherwise a blank line ejects first, so the blanks
-* that space down to the target land on the new page.
+*   R1 -> A(dcb), A(physical line), A(target line), A(buffer),
+*         A(pending carriage control), A(LINE-COUNTER)
+* The physical line is where the paper is; LINE-COUNTER is the
+* standard's register, which NEXT GROUP moves without moving
+* paper. Both end at the line printed. A pending eject rides on
+* the line itself when the target is line 1; otherwise a blank
+* line ejects first, so the spacing blanks land on the new page.
 *
 COBWRL   STM   14,12,12(13)
          BALR  12,0
@@ -718,11 +754,12 @@ COBWRL   STM   14,12,12(13)
          ST    11,8(13)
          LR    13,11
          L     2,0(0,1)            A(dcb)
-         L     3,4(0,1)            A(LINE-COUNTER)
+         L     3,4(0,1)            A(physical line)
          L     4,8(0,1)            A(target line)
          L     5,12(0,1)           A(buffer)
          L     9,16(0,1)           A(pending control)
-         L     6,0(0,3)            the current line
+         L     10,20(0,1)          A(LINE-COUNTER)
+         L     6,0(0,3)            the physical line
          L     7,0(0,4)            the target
          MVI   0(5),C' '           single space unless told otherwise
          CLI   0(9),C'1'           an eject pending?
@@ -735,14 +772,18 @@ COBWRL   STM   14,12,12(13)
          B     COBW020
 COBW005  PUT   (2),RTEJCT          a blank line at the top of a new pag
          LA    6,1
-COBW010  LA    8,1(0,6)
+COBW010  CR    7,6                 a target behind the paper?
+         BH    COBW012
+         LA    7,1(0,6)            then the next line
+COBW012  LA    8,1(0,6)
          CR    8,7                 already at the line before the targe
          BNL   COBW020
          PUT   (2),RTBLNK          skip a line
          LA    6,1(0,6)
-         B     COBW010
+         B     COBW012
 COBW020  PUT   (2),(5)
-         ST    7,0(0,3)            LINE-COUNTER = the line just printed
+         ST    7,0(0,3)            the paper is at the line just printe
+         ST    7,0(0,10)           and so is LINE-COUNTER
          L     13,4(13)
          LM    14,12,12(13)
          SR    15,15

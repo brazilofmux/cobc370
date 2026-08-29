@@ -1382,11 +1382,13 @@ DTDW     DS    D
 RTSAVE4  DS    18F
 *
 * COBWRL -- position the paper and write one report line.
-*   R1 -> A(dcb), A(LINE-COUNTER), A(target line), A(buffer),
-*         A(pending carriage control)
-* A pending eject rides on the line itself when the target is
-* line 1; otherwise a blank line ejects first, so the blanks
-* that space down to the target land on the new page.
+*   R1 -> A(dcb), A(physical line), A(target line), A(buffer),
+*         A(pending carriage control), A(LINE-COUNTER)
+* The physical line is where the paper is; LINE-COUNTER is the
+* standard's register, which NEXT GROUP moves without moving
+* paper. Both end at the line printed. A pending eject rides on
+* the line itself when the target is line 1; otherwise a blank
+* line ejects first, so the spacing blanks land on the new page.
 *
 COBWRL   STM   14,12,12(13)
          BALR  12,0
@@ -1396,11 +1398,12 @@ COBWRL   STM   14,12,12(13)
          ST    11,8(13)
          LR    13,11
          L     2,0(0,1)            A(dcb)
-         L     3,4(0,1)            A(LINE-COUNTER)
+         L     3,4(0,1)            A(physical line)
          L     4,8(0,1)            A(target line)
          L     5,12(0,1)           A(buffer)
          L     9,16(0,1)           A(pending control)
-         L     6,0(0,3)            the current line
+         L     10,20(0,1)          A(LINE-COUNTER)
+         L     6,0(0,3)            the physical line
          L     7,0(0,4)            the target
          MVI   0(5),C' '           single space unless told otherwise
          CLI   0(9),C'1'           an eject pending?
@@ -1413,14 +1416,18 @@ COBWRL   STM   14,12,12(13)
          B     COBW020
 COBW005  PUT   (2),RTEJCT          a blank line at the top of a new pag
          LA    6,1
-COBW010  LA    8,1(0,6)
+COBW010  CR    7,6                 a target behind the paper?
+         BH    COBW012
+         LA    7,1(0,6)            then the next line
+COBW012  LA    8,1(0,6)
          CR    8,7                 already at the line before the targe
          BNL   COBW020
          PUT   (2),RTBLNK          skip a line
          LA    6,1(0,6)
-         B     COBW010
+         B     COBW012
 COBW020  PUT   (2),(5)
-         ST    7,0(0,3)            LINE-COUNTER = the line just printed
+         ST    7,0(0,3)            the paper is at the line just printe
+         ST    7,0(0,10)           and so is LINE-COUNTER
          L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
