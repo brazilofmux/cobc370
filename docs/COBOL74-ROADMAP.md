@@ -177,21 +177,29 @@ with it, and `VALUE ALL literal` because the test used one.
 | `OCCURS ... ASCENDING/DESCENDING KEY` series | DONE 2026-08-29 | keys ranked in the order written; `SEARCH ALL` compares them lexicographically, inverting the bound step for a `DESCENDING` one, and its `WHEN` may be a conjunction over the keys in order |
 | `OCCURS integer-1 TO integer-2 DEPENDING ON data-name` | DONE 2026-08-29, in `WORKING-STORAGE` and `LINKAGE` | every group containing the table has a run-time length -- the fixed part plus count times element -- and a `MOVE` of one goes through `COBMVL`, a runtime move of any length that space fills. III-3 rule 4 uses the current count on either side of a `MOVE` (COBOL-85 and GnuCOBOL use the maximum for a receiver; the oracle was corrected from the rule). Refused, each with a message: the table in an `FD` record (variable-length records are a separate feature), and a comparison of such a group. `COBMVL` also lifts the old 256-byte limit on alphanumeric moves |
 
-### Tier 3 -- Sequential I-O Level 2 (about 10 items)
+### Tier 3 -- Sequential I-O Level 2 (about 10 items) -- DONE 2026-08-29
 
-The `COBADV` routine already takes its line count at run time, which makes the
-first two nearly free.
+All through `COBADV`, which already took its line count at run time, and one
+self-oracle test that reads its own print file back with the control byte as
+data.
 
-| element | size | note |
-|---|---|---|
-| `WRITE ... ADVANCING identifier LINES` | S | load the identifier instead of a constant |
-| `WRITE ... ADVANCING mnemonic-name` (`C01`..`C12`, `CSP`) | S | ASA channel codes `1`..`C`, `+`; the runtime emits the byte |
-| `LINAGE` with `FOOTING`, `TOP`, `BOTTOM`; `LINAGE-COUNTER`; `WRITE ... AT END-OF-PAGE` | M | logical page kept by `COBADV`; this is where the runtime routine earns its keep |
-| `OPEN EXTEND` on a sequential file | S | the OPEN macro's `EXTEND` option, or `OUTPUT` on a `DISP=MOD` allocation -- verify which MVS 3.8j honours |
-| `OPEN INPUT ... REVERSED` | S | tape only (`RDBACK`); accept, and refuse at run time on DASD |
-| `SELECT OPTIONAL` | M | a missing DD: `RDJFCB` or `DEVTYPE` before `OPEN`, then first `READ` takes `AT END` |
-| `CLOSE ... NO REWIND / REMOVAL / LOCK`, `REEL`/`UNIT` | S | accepted already; verify the macro options are passed rather than ignored |
-| `BLOCK CONTAINS integer-1 TO integer-2`, `VALUE OF`, `SAME RECORD AREA`, `MULTIPLE FILE TAPE`, `RESERVE integer AREAS`, `USE ... ON EXTEND` | -- | all accepted today; `RESERVE` could become `NCP`/`BUFNO` on the DCB |
+| element | how |
+|---|---|
+| `WRITE ... ADVANCING identifier LINES` | the identifier is loaded and passed as the count |
+| `WRITE ... ADVANCING mnemonic-name` | `C01`..`C12` and `CSP` become ASA codes `1`..`9`,`A`..`C` and `+`; a channel skip behaves as `PAGE` does toward what a `BEFORE` left owing |
+| `LINAGE` with `FOOTING`, `LINES AT TOP`, `LINES AT BOTTOM`; `LINAGE-COUNTER`; `WRITE ... AT END-OF-PAGE` | the runtime keeps the counter (a hidden `COMP` halfword, `LINAGE-COUNTER` by name); a count past the body, or any skip, ejects and lays the top margin; `END-OF-PAGE` is the counter reaching `FOOTING`, or a new page when there is no `FOOTING`. Integers only in the clause; `LINAGE-COUNTER OF file` is not implemented, so the name reaches the first `LINAGE` file |
+| `OPEN EXTEND` on a sequential file | the OPEN macro's `EXTEND`, on the output DCB |
+| `OPEN INPUT ... REVERSED` | `RDBACK` -- accepted and generated, untested (tape only) |
+| `SELECT OPTIONAL` | `DEVTYPE` on the ddname before `OPEN`; absent means `READ` takes `AT END` at once and `CLOSE` does nothing |
+| `CLOSE ... WITH NO REWIND`, `REEL`/`UNIT` | `CLOSE LEAVE` and `FEOV` -- generated, untested (tape only); `LOCK` and `FOR REMOVAL` close as usual |
+| `RESERVE integer AREAS` | `BUFNO` on the DCB |
+| `USE ... ON EXTEND` | the declarative is now dispatched for `EXTEND` as for the other modes |
+| `BLOCK CONTAINS m TO n`, `VALUE OF`, `SAME RECORD AREA`, `MULTIPLE FILE TAPE` | accepted, as before |
+
+Found on the way: the QSAM `PUT` macro clobbers R0, R1, R14 and R15, which
+the first version of the `LINAGE` code learned twice -- a margin count kept in
+R14 across the eject, and the `END-OF-PAGE` answer kept in R15 across the
+line itself.
 
 ### Tier 4 -- Relative and Indexed I-O, Level 1 closure (1 item, shared)
 

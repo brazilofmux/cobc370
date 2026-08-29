@@ -636,6 +636,9 @@ typedef struct {
     int  rec;               /* WRITE/REWRITE: the record named, of an FD's several */
     int  adv;               /* WRITE ADVANCING: -2 none, -1 PAGE, else lines */
     int  adv_before;        /* the phrase was BEFORE, so the advance is held */
+    int  adv_sym; Node *adv_sub;  /* ADVANCING identifier LINES, -1 if not */
+    int  eop;               /* WRITE ... AT END-OF-PAGE; lab2 continues */
+    int  close_opt;         /* CLOSE: 0 plain, 1 NO REWIND (LEAVE), 2 REEL/UNIT (FEOV) */
     int  had_atend;         /* ST_READ: the statement carried AT END itself */
     int  ins_first, ins_n;  /* ST_INSPECT: its slice of the operation table */
     int  line;              /* the source line, for the program-check table */
@@ -678,6 +681,11 @@ typedef struct {
     int  rrn_via_cell; /* the RELATIVE KEY is not a fullword, so convert it */
     int  blk_records;  /* BLOCK CONTAINS n RECORDS, 0 when unblocked */
     int  blk_chars;    /* BLOCK CONTAINS n CHARACTERS: the block size outright */
+    int  linage, footing, top, bottom;  /* LINAGE clause; linage 0 when absent */
+    int  lc_sym;       /* the LINAGE-COUNTER item, -1 if none */
+    int  optional;     /* SELECT OPTIONAL: the DD may be absent */
+    int  reserve;      /* RESERVE n AREAS: BUFNO, 0 for the default */
+    int  reversed;     /* OPEN INPUT ... REVERSED: RDBACK */
     /* VSAM. The ANS COBOL system-name says which access method is meant:
      * UT-S-x is QSAM, DA-I-x is ISAM, and a bare name -- or AS-x -- is VSAM.
      * ORGANIZATION then picks the cluster type. */
@@ -1365,6 +1373,40 @@ static void parse_data_division(void)
                     next();
                     continue;
                 }
+                if (is("LINAGE")) {
+                    /* LINAGE n LINES [WITH FOOTING AT f] [LINES AT TOP t]
+                     * [LINES AT BOTTOM b], IV-15: a logical page the runtime
+                     * keeps a line count for. Integers only here; the
+                     * identifier forms are refused with a message. */
+                    next(); if (is("IS")) next();
+                    if (!is_numeric_literal(tok.text)) die("LINAGE by an identifier is not implemented; give an integer");
+                    files[cur_file].linage = atoi(tok.text); next();
+                    if (is("LINES")) next();
+                    for (;;) {
+                        if (is("WITH")) next();
+                        if (is("FOOTING")) {
+                            next(); if (is("AT")) next();
+                            if (!is_numeric_literal(tok.text)) die("FOOTING by an identifier is not implemented; give an integer");
+                            files[cur_file].footing = atoi(tok.text); next();
+                            continue;
+                        }
+                        if (is("LINES")) {
+                            next(); if (is("AT")) next();
+                            int *w = is("TOP") ? &files[cur_file].top : is("BOTTOM") ? &files[cur_file].bottom : NULL;
+                            if (!w) die("LINAGE: LINES AT TOP or LINES AT BOTTOM");
+                            next();
+                            if (!is_numeric_literal(tok.text)) die("LINES AT TOP/BOTTOM by an identifier is not implemented; give an integer");
+                            *w = atoi(tok.text); next();
+                            continue;
+                        }
+                        break;
+                    }
+                    if (files[cur_file].footing > files[cur_file].linage)
+                        die("FOOTING must not exceed LINAGE -- IV-15");
+                    files[cur_file].print = 1;
+                    snprintf(files[cur_file].pbuf, sizeof files[cur_file].pbuf, "FP%03d", cur_file);
+                    continue;
+                }
                 if (is("BLOCK")) {
                     /* Ignorable for QSAM and for reading ISAM, where OPEN takes
                      * everything from the label -- but an ISAM file opened
@@ -1928,6 +1970,31 @@ static void parse_data_division(void)
                 die("an OCCURS DEPENDING ON table must be the last item in its record -- rule 5 on III-2");
     }
 
+    /* LINAGE-COUNTER: one hidden COMP halfword per LINAGE file, starting at 1.
+     * Only the first is reachable by name -- LINAGE-COUNTER OF file-name is
+     * not implemented -- so a program with two LINAGE files is told so. */
+    {
+        int nlin = 0;
+        for (int i = 0; i < nfile; i++) {
+            if (!files[i].linage) continue;
+            if (nsym >= MAXSYM) die("too many data items");
+            Sym *lc = &syms[nsym];
+            memset(lc, 0, sizeof *lc);
+            lc->level = 77;
+            lc->occ_parent = lc->index_sym = lc->askey_sym = lc->gparent = lc->parent = -1;
+            lc->odo_dep = -1; lc->fd_file = lc->redef_from = lc->redef_cap = -1;
+            snprintf(lc->label, sizeof lc->label, "D%04d", nsym);
+            if (nlin++ == 0) snprintf(lc->name, sizeof lc->name, "LINAGE-COUNTER");
+            else snprintf(lc->name, sizeof lc->name, "*LINAGE-COUNTER-%d", i);
+            lc->usage = U_COMP; lc->digits = 4; lc->bytes = lc->elem = 2;
+            wslen = (wslen + 7) & ~7;
+            lc->offset = wslen; wslen += 2;
+            lc->has_value = 1; strcpy(lc->value, "1");
+            files[i].lc_sym = nsym;
+            nsym++;
+        }
+    }
+
     /* Index items, appended after everything the program declared. COBOL says
      * an index holds a displacement; this one holds the occurrence number,
      * which is what the subscript machinery already expects and is
@@ -2050,6 +2117,7 @@ static void parse_environment(void)
                 if (nfile >= MAXFILE) die("too many files");
                 File *f = &files[nfile];
                 memset(f, 0, sizeof *f);
+                if (is("OPTIONAL")) { f->optional = 1; next(); }   /* SELECT OPTIONAL name */
                 snprintf(f->name, sizeof f->name, "%s", tok.text);
                 if (file_index(f->name) >= 0) die("duplicate file name");
                 snprintf(f->label, sizeof f->label, "FD%03d", nfile);
@@ -2057,7 +2125,7 @@ static void parse_environment(void)
                 f->report = -1;
                 f->key_sym = f->nominal_sym = f->status_sym = -1;
                 next();
-                if (is("OPTIONAL")) die("SELECT OPTIONAL is not implemented yet");
+                f->lc_sym = -1;
                 while (!tok.eof && !is(".")) {
                     if (is("ASSIGN")) {
                         /* Syntax rule 1: only SELECT has to come first; the
@@ -2078,10 +2146,14 @@ static void parse_environment(void)
                         next();
                         continue;
                     }
-                    if (is("RESERVE")) {     /* buffering advice; nothing to do */
+                    if (is("RESERVE")) {
+                        /* RESERVE integer AREA(S): the buffer count, which is
+                         * BUFNO on the DCB. RESERVE NO ALTERNATE AREA(S) is the
+                         * older spelling of the default. */
                         next();
+                        if (is_numeric_literal(tok.text)) { f->reserve = atoi(tok.text); next(); }
                         while (!tok.eof && !is(".") && !is("ACCESS") &&
-                               !is("ORGANIZATION")) next();
+                               !is("ORGANIZATION") && !is("FILE") && !is("RECORD")) next();
                         continue;
                     }
                     if (is("ACCESS")) { next(); if (is("IS")) next();
@@ -3377,16 +3449,22 @@ static void parse_one_statement(void)
                    && !is("I-O") && !is("EXTEND")) {
                 int fi = file_index(tok.text);
                 if (fi < 0) die("OPEN names something that is not a file");
-                if (mode == 4 && !files[fi].vsam)
-                    die("OPEN EXTEND is implemented for VSAM files only");
+                if (mode == 4 && files[fi].isam)
+                    die("OPEN EXTEND on an ISAM file is not implemented");
                 if (mode == 3 && !files[fi].vsam && files[fi].isam)
                     die("OPEN I-O on an ISAM file is not implemented");
                 if (mode == 1) files[fi].opened_input = 1;
                 else if (mode == 2) files[fi].opened_output = 1;
                 else if (mode == 3) files[fi].opened_io = 1;
-                else files[fi].opened_extend = 1;
+                else { files[fi].opened_extend = 1; if (!files[fi].vsam) files[fi].opened_output = 1; }
                 Stmt *st = new_stmt(ST_OPEN); st->dst = fi; st->src = mode;
                 any = 1; next();
+                if (is("REVERSED")) {
+                    if (mode != 1) die("REVERSED goes with OPEN INPUT");
+                    files[fi].reversed = 1; next();
+                }
+                if (is("WITH")) next();
+                if (is("NO")) { next(); expect("REWIND"); }
             }
             if (!any) die("OPEN with no file named");
         }
@@ -3400,15 +3478,17 @@ static void parse_one_statement(void)
         while (!tok.eof && !is(".") && !starts_statement()) {
             int fi = file_index(tok.text);
             if (fi < 0) die("CLOSE names something that is not a file");
-            new_stmt(ST_CLOSE)->dst = fi;
+            Stmt *cs = new_stmt(ST_CLOSE); cs->dst = fi;
             any = 1; next();
-            /* REEL and UNIT are level 1 elements about multi-volume tape.
-             * Every file this compiler writes lives on one volume, so there is
-             * nothing to position and the phrase is accepted and ignored --
-             * which is what OS/VS COBOL does for a file that is not a reel. */
+            /* CLOSE REEL/UNIT is a forced end of volume (FEOV); WITH NO REWIND
+             * leaves the tape where it is (CLOSE LEAVE); WITH LOCK and FOR
+             * REMOVAL close as usual -- there is no operator here to tell. */
             while (is("REEL") || is("UNIT") || is("WITH") || is("NO") ||
-                   is("REWIND") || is("LOCK") || is("FOR") || is("REMOVAL"))
+                   is("REWIND") || is("LOCK") || is("FOR") || is("REMOVAL")) {
+                if (is("REEL") || is("UNIT")) cs->close_opt = 2;
+                if (is("REWIND")) cs->close_opt = 1;
                 next();
+            }
         }
         if (!any) die("CLOSE with no file named");
         eat_period();
@@ -3465,7 +3545,7 @@ static void parse_one_statement(void)
         if (fi < 0) die("WRITE names something that is not a file's record");
         files[fi].has_write = 1;
         Stmt *st = new_stmt(ST_WRITE);
-        st->dst = fi; st->rec = i;
+        st->dst = fi; st->rec = i; st->adv_sym = -1;
         if (is("FROM")) {
             /* WRITE r FROM x is MOVE x TO r followed by WRITE r. */
             next();
@@ -3482,9 +3562,24 @@ static void parse_one_statement(void)
                     die("ADVANCING takes 0 to 60 lines");
                 next();
                 if (is("LINE") || is("LINES")) next();
+            } else if (mnem_dev(tok.text)) {
+                /* A mnemonic-name for a channel: C01 through C12 skip to that
+                 * channel, CSP suppresses spacing. Encoded as 1000 + channel,
+                 * 1013 for CSP; the runtime turns those into the ASA code. */
+                const char *dev = mnem_dev(tok.text);
+                if (!strcmp(dev, "CSP")) st->adv = 1013;
+                else if (dev[0] == 'C' && isdigit((unsigned char)dev[1]) && isdigit((unsigned char)dev[2]) && !dev[3]
+                         && atoi(dev + 1) >= 1 && atoi(dev + 1) <= 12) st->adv = 1000 + atoi(dev + 1);
+                else die("ADVANCING mnemonic-name must stand for C01 through C12 or CSP");
+                next();
             } else {
-                die("ADVANCING by an identifier or a mnemonic-name is level 2; "
-                    "this compiler takes an integer or PAGE");
+                /* ADVANCING identifier LINES: the count is read at run time,
+                 * which the runtime was already built for. */
+                st->adv_sym = consume_sym(); st->adv_sub = opt_subscript();
+                if (syms[st->adv_sym].is_alpha || syms[st->adv_sym].is_group || syms[st->adv_sym].scale)
+                    die("ADVANCING needs an integer item");
+                st->adv = 0;
+                if (is("LINE") || is("LINES")) next();
             }
             /* The runtime takes the count, or -1 for PAGE, negated when the
              * phrase was BEFORE -- which is what tells it to hold the advance
@@ -3492,6 +3587,16 @@ static void parse_one_statement(void)
             st->adv_before = !after;
             files[fi].print = 1;
             snprintf(files[fi].pbuf, sizeof files[fi].pbuf, "FP%03d", fi);
+        }
+        if (is("AT") || is("END-OF-PAGE") || is("EOP")) {
+            if (is("AT")) next();
+            if (!is("END-OF-PAGE") && !is("EOP")) die("WRITE ... AT needs END-OF-PAGE");
+            next();
+            if (!files[fi].linage) die("END-OF-PAGE needs a file with a LINAGE clause -- IV-34");
+            st->eop = 1; st->lab2 = ++nlabel;
+            parse_stmt_list(1);
+            new_stmt(ST_LABEL)->dst = st->lab2;
+            return;
         }
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
@@ -4152,6 +4257,7 @@ static int decl_for(int fi)
         if ((decls[d].mode == 1 && f->opened_input)  ||
             (decls[d].mode == 2 && f->opened_output) ||
             (decls[d].mode == 3 && f->opened_io)     ||
+            (decls[d].mode == 4 && f->opened_extend) ||
             (decls[d].mode == 4 && f->opened_extend)) return d;
     }
     return -1;
@@ -4995,7 +5101,7 @@ static void gen_rescale16(const char *wk, int from, int to, int round)
  * the work areas, where the permanent base covers them. */
 static struct { char lab[12], op[8], opd[80], cmt[48]; } pend_dc[MAXSOP * 4];
 static int npend_dc;
-static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt, use_mvl;
+static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt, use_mvl, use_devtype;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
     if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
@@ -5712,35 +5818,79 @@ static void emit_runtime(void)
     asm_line("", "L", "4,8(0,1)", "A(length)");
     asm_line("", "L", "5,12(0,1)", "A(owed)");
     asm_line("", "L", "6,16(0,1)", "A(request)");
+    asm_line("", "L", "10,20(0,1)", "A(LINAGE cells), or 0");
+    asm_line("", "L", "11,24(0,1)", "A(LINAGE-COUNTER), or 0");
     asm_line("", "LH", "7,0(0,4)", "the record length");
     asm_line("", "LTR", "7,7", "");
     asm_line("", "LH", "8,0(0,6)", "the request");
     asm_line("", "LH", "9,0(0,5)", "what the last BEFORE left owing");
     asm_line("", "LTR", "8,8", "BEFORE is the negative side");
     asm_line("", "BM", "ADV100", "");
-    /* AFTER: this line's own count adds to what was owed, and nothing is left. */
-    asm_line("", "CH", "8,ADVPAGE", "AFTER PAGE?");
-    asm_line("", "BE", "ADV020", "");
-    asm_line("", "CH", "9,ADVPAGE", "was a page already owed?");
-    asm_line("", "BE", "ADV030", "then it stays a page, whatever this asks");
+    /* AFTER: this line's own count adds to what was owed, and nothing is left.
+     * A page skip or a channel skip -- anything 999 or more -- swallows what
+     * was owed, and one already owed stays whatever this asks. */
+    asm_line("", "CH", "8,ADVPAGE", "AFTER PAGE, or a channel?");
+    asm_line("", "BNL", "ADV020", "");
+    asm_line("", "CH", "9,ADVPAGE", "was a skip already owed?");
+    asm_line("", "BNL", "ADV030", "then it stays one, whatever this asks");
     asm_line("", "AR", "9,8", "owed plus this one");
     asm_line("", "B", "ADV030", "");
-    asm_line("ADV020", "LH", "9,ADVPAGE", "a page skip swallows what was owed");
+    asm_line("ADV020", "LR", "9,8", "a skip swallows what was owed");
     asm_line("ADV030", "XC", "0(2,5),0(5)", "nothing owed after an AFTER");
-    asm_line("", "B", "ADV200", "");
+    asm_line("", "B", "ADV150", "");
     /* BEFORE: the line goes out on what was owed, and owes its own count. */
     asm_line("ADV100", "LCR", "8,8", "back to a positive request");
-    asm_line("", "CH", "8,ADVPAGE", "BEFORE PAGE?");
-    asm_line("", "BNE", "ADV110", "");
-    asm_line("", "LH", "8,ADVPAGE", "");
     asm_line("ADV110", "STH", "8,0(0,5)", "this is what the next line owes");
     asm_line("", "LTR", "9,9", "nothing owed?");
-    asm_line("", "BNZ", "ADV200", "");
+    asm_line("", "BNZ", "ADV150", "");
     asm_line("", "LH", "9,ADVONE", "then this line simply takes the next one");
-    /* R9 now holds the advance to apply before printing. */
+    /* R9 now holds the advance to apply before printing.
+     *
+     * LINAGE: the logical page. A skip of any kind goes to the first line of
+     * the next page's body; a count that would run past the body does the
+     * same; otherwise the counter advances by the count. END-OF-PAGE is the
+     * counter reaching FOOTING, or, with no FOOTING, a new page. */
+    /* R8 carries the END-OF-PAGE answer from here: the PUTs below clobber
+     * R15 (and R0, R1, R14), so it is moved into R15 only at the end. */
+    asm_line("ADV150", "SR", "8,8", "no END-OF-PAGE yet");
+    asm_line("", "LTR", "10,10", "a LINAGE file?");
+    asm_line("", "BZ", "ADV200", "");
+    asm_line("", "CH", "9,ADVPAGE", "a skip?");
+    asm_line("", "BNL", "ADV160", "");
+    asm_line("", "LH", "14,0(0,11)", "LINAGE-COUNTER");
+    asm_line("", "AR", "14,9", "");
+    asm_line("", "CH", "14,0(0,10)", "past the body?");
+    asm_line("", "BH", "ADV160", "");
+    asm_line("", "STH", "14,0(0,11)", "");
+    asm_line("", "LH", "0,2(0,10)", "FOOTING");
+    asm_line("", "LTR", "0,0", "");
+    asm_line("", "BZ", "ADV200", "no FOOTING: no END-OF-PAGE short of the page");
+    asm_line("", "CR", "14,0", "");
+    asm_line("", "BL", "ADV200", "");
+    asm_line("", "LA", "8,1", "END-OF-PAGE");
+    asm_line("", "B", "ADV200", "");
+    asm_line("ADV160", "LH", "14,ADVONE", "");
+    asm_line("", "STH", "14,0(0,11)", "counter back to 1");
+    asm_line("", "LA", "8,1", "a new page is END-OF-PAGE without FOOTING");
+    asm_line("", "LH", "0,2(0,10)", "");
+    asm_line("", "LTR", "0,0", "");
+    asm_line("", "BZ", "ADV170", "");
+    asm_line("", "SR", "8,8", "with FOOTING, only the footing is");
+    asm_line("ADV170", "LH", "9,4(0,10)", "LINES AT TOP");
+    asm_line("", "LTR", "9,9", "");
+    asm_line("", "BNZ", "ADV175", "");
+    asm_line("", "LH", "9,ADVPAGE", "no top margin: the line itself carries the eject");
+    asm_line("", "B", "ADV200", "");
+    asm_line("ADV175", "PUT", "(2),ADVB1", "eject on a blank line; R9 survives it");
     asm_line("ADV200", "CH", "9,ADVPAGE", "a page skip?");
-    asm_line("", "BNE", "ADV210", "");
+    asm_line("", "BL", "ADV210", "");
+    asm_line("", "BH", "ADV205", "a channel");
     asm_line("", "MVI", "0(3),C'1'", "skip to a new page");
+    asm_line("", "B", "ADV300", "");
+    asm_line("ADV205", "LA", "10,ADVCHAN", "");
+    asm_line("", "AR", "10,9", "");
+    asm_line("", "SH", "10,ADVCHOF", "request 1001 is the first code");
+    asm_line("", "MVC", "0(1,3),0(10)", "the channel's ASA code");
     asm_line("", "B", "ADV300", "");
     asm_line("ADV210", "LTR", "9,9", "");
     asm_line("", "BNM", "ADV220", "");
@@ -5758,11 +5908,15 @@ static void emit_runtime(void)
     asm_line("", "MVC", "0(1,3),0(10)", "'+', ' ', '0' or '-'");
     asm_line("ADV300", "PUT", "(2),(3)", "the line itself");
     asm_line("", "L", "13,4(13)", "");
+    asm_line("", "ST", "8,16(13)", "END-OF-PAGE, into R15's slot for the LM");
     asm_line("", "LM", "14,12,12(13)", "");
-    asm_line("", "SR", "15,15", "");
     asm_line("", "BR", "14", "");
     asm_line("ADVB3", "DC", "C'-'", "a blank line that advances three");
     asm_line("", "DC", "CL132' '", "");
+    asm_line("ADVB1", "DC", "C'1'", "a blank line that ejects");
+    asm_line("", "DC", "CL132' '", "");
+    asm_line("ADVCHAN", "DC", "C'123456789ABC+'", "channels 1-12, CSP");
+    asm_line("ADVCHOF", "DC", "H'1001'", "");
     asm_line("ADVCODE", "DC", "C'+ 0-'", "0, 1, 2 or 3 lines");
     asm_line("ADVONE", "DC", "H'1'", "");
     asm_line("ADVPAGE", "DC", "H'999'", "the page-skip request");
@@ -6870,9 +7024,26 @@ static void generate(void)
                 reset_bases();
                 break;
             }
+            char lskip[16]; lskip[0] = 0;
+            if (f->optional && st->src == 1) {
+                /* SELECT OPTIONAL: the DD may be absent. DEVTYPE says so
+                 * without opening anything; the file is then marked absent,
+                 * READ takes AT END at once and CLOSE does nothing. */
+                use_devtype = 1;
+                snprintf(lskip, sizeof lskip, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "%sN,DVAREA", f->label);
+                asm_line("", "DEVTYPE", b, "is the DD there?");
+                asm_line("", "LTR", "15,15", "");
+                snprintf(b, sizeof b, "%sA,X'00'", f->label); asm_line("", "MVI", b, "present");
+                asm_line("", "BZ", "*+12", "");
+                snprintf(b, sizeof b, "%sA,X'01'", f->label); asm_line("", "MVI", b, "absent: the file is empty");
+                asm_line("", "B", lskip, "");
+            }
             snprintf(b, sizeof b, "(%s,%s)", f->label,
-                     st->src == 3 ? "UPDAT" : st->src == 1 ? "INPUT" : "OUTPUT");
-            asm_line("", "OPEN", b, st->src == 3 ? "QSAM update mode" : "");
+                     st->src == 3 ? "UPDAT" : st->src == 4 ? "EXTEND"
+                     : st->src == 1 ? (f->reversed ? "RDBACK" : "INPUT") : "OUTPUT");
+            asm_line("", "OPEN", b, st->src == 3 ? "QSAM update mode" : st->src == 4 ? "append" : "");
+            if (lskip[0]) { asm_line(lskip, "DS", "0H", ""); reset_bases(); }
             if (f->isam == 2) {
                 /* BISAM reads a whole BLOCK, not a record, and wants 16 bytes
                  * of working room in front of it. BLKSIZE is only known once
@@ -6892,8 +7063,21 @@ static void generate(void)
             File *f = &files[st->dst];
             snprintf(b, sizeof b, " CLOSE %s", f->name);
             asm_comment(b);
-            snprintf(b, sizeof b, "(%s)", f->label);
-            asm_line("", "CLOSE", b, "");
+            char lsk[16]; lsk[0] = 0;
+            if (f->optional) {
+                snprintf(lsk, sizeof lsk, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "%sA,X'01'", f->label);
+                asm_line("", "CLI", b, "absent?");
+                asm_line("", "BE", lsk, "nothing to close");
+            }
+            if (st->close_opt == 2) {
+                snprintf(b, sizeof b, "%s", f->label);
+                asm_line("", "FEOV", b, "CLOSE REEL/UNIT: force end of volume");
+            } else {
+                snprintf(b, sizeof b, st->close_opt == 1 ? "(%s,LEAVE)" : "(%s)", f->label);
+                asm_line("", "CLOSE", b, st->close_opt == 1 ? "WITH NO REWIND" : "");
+            }
+            if (lsk[0]) { asm_line(lsk, "DS", "0H", ""); reset_bases(); }
             if (f->vsam) { gen_vsam_status(f, NULL, vs_simple); reset_bases(); }
             break;
         }
@@ -7026,6 +7210,11 @@ static void generate(void)
             /* COBOL's AT END is per-READ but DCBEODAD is per-file, so patch it
              * before each GET. Offset 33 (X'21') holds the low three bytes of
              * the address -- exactly what IKFCBL00 does. */
+            if (f->optional) {
+                snprintf(b, sizeof b, "%sA,X'01'", f->label);
+                asm_line("", "CLI", b, "absent OPTIONAL file?");
+                asm_line("", "BE", le, "then it is at end");
+            }
             snprintf(b, sizeof b, "1,%s", le);       asm_line("", "LA", b, "this READ's AT END");
             snprintf(b, sizeof b, "1,7,%s+33", f->label); asm_line("", "STCM", b, "into DCBEODAD");
             need_sym_base(&syms[f->rec_sym]);
@@ -7462,9 +7651,17 @@ static void generate(void)
                 need_sym_base(wrec);
                 snprintf(b, sizeof b, "%s+1(%d),%s", f->pbuf, f->reclen, wrec->label);
                 asm_line("", "MVC", b, "the record, behind its control byte");
-                snprintf(b, sizeof b, "1,%d", adv < 0 ? -adv : adv);
-                asm_line("", "LA", b, adv < 0 ? "BEFORE" : "AFTER");
-                if (adv < 0) asm_line("", "LCR", "1,1", "negative marks a BEFORE");
+                if (st->adv_sym >= 0) {
+                    need_sym_base(&syms[st->adv_sym]);
+                    gen_load(&syms[st->adv_sym], st->adv_sub, "PWK1");
+                    asm_line("", "ZAP", "DWK(8),PWK1(16)", "");
+                    asm_line("", "CVB", "1,DWK", "ADVANCING identifier LINES");
+                    if (st->adv_before) asm_line("", "LCR", "1,1", "negative marks a BEFORE");
+                } else {
+                    snprintf(b, sizeof b, "1,%d", adv < 0 ? -adv : adv);
+                    asm_line("", "LA", b, adv < 0 ? "BEFORE" : "AFTER");
+                    if (adv < 0) asm_line("", "LCR", "1,1", "negative marks a BEFORE");
+                }
                 snprintf(b, sizeof b, "1,%sQ", f->pbuf);
                 asm_line("", "STH", b, "this line's request");
                 snprintf(b, sizeof b, "1,%sP", f->pbuf);
@@ -7472,6 +7669,11 @@ static void generate(void)
                 asm_line("", "L", "15,VADV", "");
                 asm_line("", "BALR", "14,15", "carriage control and PUT");
                 reset_bases();
+                if (st->eop) {
+                    snprintf(b, sizeof b, "L%04d", st->lab2);
+                    asm_line("", "LTR", "15,15", "END-OF-PAGE?");
+                    asm_line("", "BZ", b, "no: past the imperative statements");
+                }
                 break;
             }
             need_sym_base(&syms[f->rec_sym]);
@@ -8619,8 +8821,9 @@ static void generate(void)
             snprintf(first, sizeof first,
                      "%-8s DCB   DDNAME=%s,DSORG=PS,MACRF=(%s),RECFM=%s,",
                      f->label, f->ddname, macrf, recfm);
-            char second[64];
-            snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", lrecl, blk);
+            char second[80];
+            if (f->reserve) snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d,BUFNO=%d", lrecl, blk, f->reserve);
+            else snprintf(second, sizeof second, "LRECL=%d,BLKSIZE=%d", lrecl, blk);
             asm_cont(first, second);
         }
     }
@@ -8641,7 +8844,15 @@ static void generate(void)
         snprintf(b, sizeof b, "A(%s)", pb);          asm_line("", "DC", b, "");
         snprintf(b, sizeof b, "A(%sL)", pb);         asm_line("", "DC", b, "");
         snprintf(b, sizeof b, "A(%sO)", pb);         asm_line("", "DC", b, "");
-        snprintf(b, sizeof b, "X'80',AL3(%sQ)", pb); asm_line("", "DC", b, "");
+        snprintf(b, sizeof b, "A(%sQ)", pb);         asm_line("", "DC", b, "");
+        if (files[i].linage) {
+            snprintf(b, sizeof b, "A(%sG)", pb);     asm_line("", "DC", b, "LINAGE cells");
+            snprintf(b, sizeof b, "X'80',AL3(%s)", syms[files[i].lc_sym].label);
+            asm_line("", "DC", b, "LINAGE-COUNTER");
+        } else {
+            asm_line("", "DC", "A(0)", "no LINAGE");
+            asm_line("", "DC", "X'80',AL3(0)", "");
+        }
         snprintf(lab, sizeof lab, "%sL", pb);
         snprintf(b, sizeof b, "H'%d'", files[i].reclen);
         asm_line(lab, "DC", b, "the record length");
@@ -8649,7 +8860,22 @@ static void generate(void)
         asm_line(lab, "DC", "H'0'", "lines a BEFORE left owing");
         snprintf(lab, sizeof lab, "%sQ", pb);
         asm_line(lab, "DS", "H", "this line's request");
+        if (files[i].linage) {
+            snprintf(lab, sizeof lab, "%sG", pb);
+            snprintf(b, sizeof b, "H'%d',H'%d',H'%d',H'%d'", files[i].linage,
+                     files[i].footing, files[i].top, files[i].bottom);
+            asm_line(lab, "DC", b, "LINAGE, FOOTING, TOP, BOTTOM");
+        }
     }
+    for (int i = 0; i < nfile; i++) {
+        if (!files[i].optional) continue;
+        snprintf(b, sizeof b, "CL8'%s'", files[i].ddname);
+        char lab[20]; snprintf(lab, sizeof lab, "%sN", files[i].label);
+        asm_line(lab, "DC", b, "the ddname, for DEVTYPE");
+        snprintf(lab, sizeof lab, "%sA", files[i].label);
+        asm_line(lab, "DC", "X'00'", "1 when the OPTIONAL file is absent");
+    }
+    if (use_devtype) asm_line("DVAREA", "DS", "6F", "DEVTYPE's answer");
     /* A TRT table: X'FF' everywhere, then zeros punched into the ranges the
      * test accepts. ORG is the compact way to say that, and it is how the
      * S/370 assembler manuals write it. */

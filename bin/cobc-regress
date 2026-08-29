@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -157,6 +157,15 @@ for t in $TESTS; do
         if [ "$t" = sequpd ]; then
             printf '//GO.UPDFILE DD  DSN=&&UPD,DISP=(NEW,PASS),UNIT=SYSDA,\n'
             printf '//             SPACE=(TRK,(1,1))\n'
+        fi
+        if [ "$t" = seqlvl2 ]; then
+            printf '//GO.LINFILE DD  DSN=&&LIN,DISP=(NEW,PASS),UNIT=SYSDA,\n'
+            printf '//             SPACE=(TRK,(1,1))\n'
+            printf '//GO.EXTFILE DD  DSN=&&EXT,DISP=(NEW,PASS),UNIT=SYSDA,\n'
+            printf '//             SPACE=(TRK,(1,1))\n'
+            printf '//GO.OPTFILE2 DD *\n'
+            printf '%-80s\n' "FIRST CARD" "SECOND CARD"
+            printf '/*\n'
         fi
         if [ "$t" = advance ]; then
             printf '//GO.PRTFILE DD  DSN=&&PRT,DISP=(NEW,PASS),UNIT=SYSDA,\n'

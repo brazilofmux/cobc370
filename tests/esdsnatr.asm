@@ -399,32 +399,67 @@ COBADV   STM   14,12,12(13)
          L     4,8(0,1)            A(length)
          L     5,12(0,1)           A(owed)
          L     6,16(0,1)           A(request)
+         L     10,20(0,1)          A(LINAGE cells), or 0
+         L     11,24(0,1)          A(LINAGE-COUNTER), or 0
          LH    7,0(0,4)            the record length
          LTR   7,7
          LH    8,0(0,6)            the request
          LH    9,0(0,5)            what the last BEFORE left owing
          LTR   8,8                 BEFORE is the negative side
          BM    ADV100
-         CH    8,ADVPAGE           AFTER PAGE?
-         BE    ADV020
-         CH    9,ADVPAGE           was a page already owed?
-         BE    ADV030              then it stays a page, whatever this
+         CH    8,ADVPAGE           AFTER PAGE, or a channel?
+         BNL   ADV020
+         CH    9,ADVPAGE           was a skip already owed?
+         BNL   ADV030              then it stays one, whatever this ask
          AR    9,8                 owed plus this one
          B     ADV030
-ADV020   LH    9,ADVPAGE           a page skip swallows what was owed
+ADV020   LR    9,8                 a skip swallows what was owed
 ADV030   XC    0(2,5),0(5)         nothing owed after an AFTER
-         B     ADV200
+         B     ADV150
 ADV100   LCR   8,8                 back to a positive request
-         CH    8,ADVPAGE           BEFORE PAGE?
-         BNE   ADV110
-         LH    8,ADVPAGE
 ADV110   STH   8,0(0,5)            this is what the next line owes
          LTR   9,9                 nothing owed?
-         BNZ   ADV200
+         BNZ   ADV150
          LH    9,ADVONE            then this line simply takes the next
+ADV150   SR    8,8                 no END-OF-PAGE yet
+         LTR   10,10               a LINAGE file?
+         BZ    ADV200
+         CH    9,ADVPAGE           a skip?
+         BNL   ADV160
+         LH    14,0(0,11)          LINAGE-COUNTER
+         AR    14,9
+         CH    14,0(0,10)          past the body?
+         BH    ADV160
+         STH   14,0(0,11)
+         LH    0,2(0,10)           FOOTING
+         LTR   0,0
+         BZ    ADV200              no FOOTING: no END-OF-PAGE short of
+         CR    14,0
+         BL    ADV200
+         LA    8,1                 END-OF-PAGE
+         B     ADV200
+ADV160   LH    14,ADVONE
+         STH   14,0(0,11)          counter back to 1
+         LA    8,1                 a new page is END-OF-PAGE without FO
+         LH    0,2(0,10)
+         LTR   0,0
+         BZ    ADV170
+         SR    8,8                 with FOOTING, only the footing is
+ADV170   LH    9,4(0,10)           LINES AT TOP
+         LTR   9,9
+         BNZ   ADV175
+         LH    9,ADVPAGE           no top margin: the line itself carri
+         B     ADV200
+ADV175   PUT   (2),ADVB1           eject on a blank line; R9 survives i
 ADV200   CH    9,ADVPAGE           a page skip?
-         BNE   ADV210
+         BL    ADV210
+         BH    ADV205              a channel
          MVI   0(3),C'1'           skip to a new page
+         B     ADV300
+ADV205   LA    10,ADVCHAN
+         AR    10,9
+         SH    10,ADVCHOF          request 1001 is the first code
+         MVC   0(1,3),0(10)        the channel's ASA code
          B     ADV300
 ADV210   LTR   9,9
          BNM   ADV220
@@ -439,11 +474,15 @@ ADV240   LA    10,ADVCODE
          MVC   0(1,3),0(10)        '+', ' ', '0' or '-'
 ADV300   PUT   (2),(3)             the line itself
          L     13,4(13)
+         ST    8,16(13)            END-OF-PAGE, into R15's slot for the
          LM    14,12,12(13)
-         SR    15,15
          BR    14
 ADVB3    DC    C'-'                a blank line that advances three
          DC    CL132' '
+ADVB1    DC    C'1'                a blank line that ejects
+         DC    CL132' '
+ADVCHAN  DC    C'123456789ABC+'    channels 1-12, CSP
+ADVCHOF  DC    H'1001'
 ADVCODE  DC    C'+ 0-'             0, 1, 2 or 3 lines
 ADVONE   DC    H'1'
 ADVPAGE  DC    H'999'              the page-skip request
