@@ -53,7 +53,7 @@ Ordered so that each tier is a claim the project can make when it closes, and
 so that work sharing the same machinery lands together. Sizes are honest
 guesses: **S** is an afternoon, **M** is a day, **L** is several.
 
-### Tier 0 -- Nucleus Level 1, actually (3 items)
+### Tier 0 -- Nucleus Level 1, actually (3 items) -- DONE 2026-08-29
 
 The map says the Nucleus is complete at Level 1. It is not. Three Level 1
 elements are refused, found by reading the standard's own `1 NUC 1,2` list

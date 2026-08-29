@@ -53,7 +53,7 @@ Level 2 elements while missing Level 1 elements of the same module. That is
 not a defect — it is what "pulled, not pushed" produces — but it does mean no
 conformance claim is currently available, not even the minimum standard.
 
-### Nucleus — Level 1 but for three elements
+### Nucleus — Level 1, complete
 
 Present, and enough to compile the corpus: `ADD SUBTRACT MULTIPLY DIVIDE
 COMPUTE MOVE IF GO PERFORM STOP EXIT DISPLAY`, PICTURE with editing,
@@ -63,16 +63,11 @@ REDEFINES, SIGN, SYNCHRONIZED, USAGE COMP/COMP-3/DISPLAY, VALUE, level 77 and
 `ACCEPT`, `ALTER`, `ENTER`, `INSPECT` (single-character), class conditions and
 switch-status conditions were added on 2026-08-27 and 28.
 
-Still missing from **Level 1**, found on 2026-08-29 by reading the standard's
-`1 NUC 1,2` list against the compiler rather than trusting this map:
-
-    GO TO ... DEPENDING ON      refused: "not implemented yet"
-    CURRENCY SIGN IS literal    refused, with DECIMAL-POINT, as a PICTURE-wide change
-    DECIMAL-POINT IS COMMA      ditto
-
-Three elements, all small. The claim made on the 28th that the Nucleus was
-complete at Level 1 was wrong, and so, therefore, was the claim to the minimum
-standard. `COBOL74-ROADMAP.md` puts them first.
+`GO TO ... DEPENDING ON`, `CURRENCY SIGN` and `DECIMAL-POINT IS COMMA` --
+the three Level 1 elements a check against the standard's own `1 NUC 1,2` list
+found still refused on 2026-08-29 -- were added the same day. The claim made
+on the 28th that the Nucleus was complete had been wrong; this one was made by
+walking the element list.
 
 Already at **Level 2**, above a floor not yet reached: `COMPUTE` (Level 2, not
 1), qualification with `OF`/`IN`, level-88 condition-names, `PERFORM UNTIL`,
@@ -170,10 +165,10 @@ only one with an obvious pull behind it, and it is in the roadmap.
 ## The minimum standard
 
 The minimum standard is `1 NUC` + `1 TBL` + `1 SEQ`, the three modules without
-a null level. Table Handling closed on 2026-08-27 and Sequential I-O on the
-28th. The Nucleus was claimed closed on the 28th and is not: `GO TO ...
-DEPENDING ON`, `CURRENCY SIGN` and `DECIMAL-POINT IS COMMA` are Level 1 and
-refused. Three small items stand between the compiler and the claim.
+a null level. Table Handling closed on 2026-08-27, Sequential I-O on the 28th,
+and the Nucleus on the 29th -- after a first claim on the 28th that turned out
+to be three elements short. All three are complete, each verified against the
+standard's element list.
 
 It was eleven elements when this section was first written — `ACCEPT`, `ALTER`,
 `ENTER`, `INSPECT`, class conditions and switch-status conditions in the
