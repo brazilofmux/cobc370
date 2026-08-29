@@ -508,7 +508,7 @@ static Node *node(int kind)
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT, ST_INSPECT, ST_ALTER, ST_ACCEPT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
-       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO,
+       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH,
        ST_REWRITE, ST_DELETE, ST_START };
 
@@ -2489,7 +2489,28 @@ static void parse_one_statement(void)
         Stmt *st = new_stmt(ST_GOTO);
         snprintf(st->para, sizeof st->para, "%s", tok.text);
         next();
-        if (is("DEPENDING")) die("GO TO ... DEPENDING ON is not implemented yet");
+        if (is("DEPENDING") || (!is(".") && !starts_statement())) {
+            /* GO TO procedure-name series DEPENDING ON identifier: the value 1
+             * selects the first name, 2 the second, and a value outside the
+             * series falls through. The names ride in the DISPLAY operand
+             * slots, which nothing else in a GO TO uses. */
+            st->op = ST_GODEP;
+            st->ndop = 0;
+            snprintf(st->dop[st->ndop++].lit, MAXTOK, "%s", st->para);
+            while (!is("DEPENDING")) {
+                if (tok.eof || is(".")) die("GO TO names several procedures but has no DEPENDING ON");
+                if (st->ndop >= 8) die("GO TO ... DEPENDING ON takes at most eight procedure-names here");
+                snprintf(st->dop[st->ndop++].lit, MAXTOK, "%s", tok.text);
+                next();
+            }
+            next();
+            if (is("ON")) next();
+            st->src = consume_sym();
+            st->ssub = opt_subscript();
+            const Sym *v = &syms[st->src];
+            if (v->is_alpha || v->is_group || v->scale != 0)
+                die("GO TO ... DEPENDING ON needs an elementary numeric integer");
+        }
         eat_period();
         return;
     }
@@ -3074,6 +3095,14 @@ static void parse_procedure(void)
             int a = para_index(stmts[i].para);
             if (a < 0) { char m[96]; snprintf(m, sizeof m, "GO TO names an unknown paragraph '%s'", stmts[i].para); die(m); }
             stmts[i].dst = a;
+            continue;
+        }
+        if (stmts[i].op == ST_GODEP) {
+            for (int k = 0; k < stmts[i].ndop; k++) {
+                int a = para_index(stmts[i].dop[k].lit);
+                if (a < 0) { char m[96]; snprintf(m, sizeof m, "GO TO ... DEPENDING names an unknown paragraph '%s'", stmts[i].dop[k].lit); die(m); }
+                stmts[i].dop[k].sym = a;
+            }
             continue;
         }
         if (stmts[i].op != ST_PERFORM) continue;
@@ -5411,6 +5440,36 @@ static void generate(void)
                 asm_line("", "L", b, "the current target");
                 asm_line("", "BR", "15", "");
             } else asm_line("", "B", p, "");
+            break;
+        }
+        case ST_GODEP: {
+            const Sym *v = &syms[st->src];
+            char lt[16], lx[16];
+            snprintf(lt, sizeof lt, "L%04d", ++genlabel);
+            snprintf(lx, sizeof lx, "L%04d", ++genlabel);
+            snprintf(b, sizeof b, " GO TO ... DEPENDING ON %s", v->name);
+            asm_comment(b);
+            /* The value in a register, then a branch table indexed by it. A
+             * value under 1 or past the last name falls through, which is
+             * what the standard says happens. */
+            need_sym_base(v);
+            gen_load(v, st->ssub, "PWK1");
+            asm_line("", "ZAP", "DWK(8),PWK1(16)", "");
+            asm_line("", "CVB", "2,DWK", "the selector");
+            asm_line("", "BCTR", "2,0", "1 selects the first entry");
+            snprintf(b, sizeof b, "2,=F'%d'", st->ndop);
+            asm_line("", "CL", b, "past the last, or negative -- unsigned covers both");
+            asm_line("", "BNL", lx, "out of range: fall through");
+            asm_line("", "SLL", "2,2", "four bytes per entry");
+            snprintf(b, sizeof b, "%s(2)", lt);
+            asm_line("", "B", b, "into the table");
+            asm_line(lt, "DS", "0H", "");
+            for (int k = 0; k < st->ndop; k++) {
+                snprintf(b, sizeof b, "P%04d", st->dop[k].sym);
+                asm_line("", "B", b, st->dop[k].lit);
+            }
+            asm_line(lx, "DS", "0H", "");
+            reset_bases();
             break;
         }
         case ST_ACCEPT: {
