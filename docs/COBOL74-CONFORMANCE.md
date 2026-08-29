@@ -53,25 +53,26 @@ Level 2 elements while missing Level 1 elements of the same module. That is
 not a defect — it is what "pulled, not pushed" produces — but it does mean no
 conformance claim is currently available, not even the minimum standard.
 
-### Nucleus — below Level 1
+### Nucleus — Level 1 but for three elements
 
 Present, and enough to compile the corpus: `ADD SUBTRACT MULTIPLY DIVIDE
 COMPUTE MOVE IF GO PERFORM STOP EXIT DISPLAY`, PICTURE with editing,
 REDEFINES, SIGN, SYNCHRONIZED, USAGE COMP/COMP-3/DISPLAY, VALUE, level 77 and
 88, relation and sign conditions, `AND`/`OR`/`NOT`.
 
-Missing from **Level 1**:
+`ACCEPT`, `ALTER`, `ENTER`, `INSPECT` (single-character), class conditions and
+switch-status conditions were added on 2026-08-27 and 28.
 
-    ACCEPT              never used by the corpus
-    ALTER               never used by the corpus
-    ENTER               never used by the corpus
-    INSPECT             never used by the corpus
-    class condition     IS NUMERIC / IS ALPHABETIC -- dies with a message
-    switch-status       SPECIAL-NAMES ... ON/OFF STATUS
+Still missing from **Level 1**, found on 2026-08-29 by reading the standard's
+`1 NUC 1,2` list against the compiler rather than trusting this map:
 
-Six elements. The class condition is the only one that feels like an omission
-rather than a decision: `IS NUMERIC` is the natural way a program guards
-itself against the S0C7 that `pgmchk` exists to report.
+    GO TO ... DEPENDING ON      refused: "not implemented yet"
+    CURRENCY SIGN IS literal    refused, with DECIMAL-POINT, as a PICTURE-wide change
+    DECIMAL-POINT IS COMMA      ditto
+
+Three elements, all small. The claim made on the 28th that the Nucleus was
+complete at Level 1 was wrong, and so, therefore, was the claim to the minimum
+standard. `COBOL74-ROADMAP.md` puts them first.
 
 Already at **Level 2**, above a floor not yet reached: `COMPUTE` (Level 2, not
 1), qualification with `OF`/`IN`, level-88 condition-names, `PERFORM UNTIL`,
@@ -82,14 +83,14 @@ Missing from Level 2, beyond the Level 1 gaps: `STRING`, `UNSTRING`,
 `CORRESPONDING` on ADD/SUBTRACT/MOVE, level-66 `RENAMES` (which dies with a
 message), `PERFORM VARYING ... AFTER`.
 
-### Table Handling — below Level 1, with Level 2 features
+### Table Handling — Level 1, with some Level 2 features
 
 `OCCURS`, `INDEXED BY`, and three-level subscripting are there. `SEARCH` and
 `SEARCH ALL` are there — and both are **Level 2** elements.
 
-Missing from Level 1: the `SET` statement, and `USAGE IS INDEX`. This is the
-sharpest illustration of the diagonal: the module's Level 2 search facility
-works, while the Level 1 statement for moving an index does not exist.
+`SET` and `USAGE IS INDEX` were added on 2026-08-27; Level 1 is complete.
+Missing from Level 2: serial `SEARCH` (only `SEARCH ALL` exists),
+`ASCENDING/DESCENDING KEY` series, and `OCCURS ... DEPENDING ON`.
 
 ### Sequential I-O — Level 1, complete
 
@@ -154,18 +155,25 @@ That is true of IBM's ANS COBOL, and false of the standard: `2 IPC 0,2` lists
 `The CALL statement ... identifier` explicitly. A demand-shaped map could not
 have caught that; this is the kind of thing the standard-shaped one is for.
 
+### Segmentation — Level 1
+
+Segment-numbers on sections are accepted, and `ALTER` respects them. Level 2
+adds `SEGMENT-LIMIT`, which is not.
+
 ### Null — nothing implemented
 
-`Sort-Merge`, `Segmentation`, `Library` (no `COPY`), `Debug`, `Communication`.
+`Sort-Merge`, `Library` (no `COPY`), `Debug`, `Communication`.
 
-All five have a null level, so all five are conforming choices. `COPY` is the
-only one with an obvious pull behind it.
+All four have a null level, so all four are conforming choices. `COPY` is the
+only one with an obvious pull behind it, and it is in the roadmap.
 
 ## The minimum standard
 
 The minimum standard is `1 NUC` + `1 TBL` + `1 SEQ`, the three modules without
-a null level. All three are now complete: Table Handling on 2026-08-27, the
-Nucleus and Sequential I-O on the 28th.
+a null level. Table Handling closed on 2026-08-27 and Sequential I-O on the
+28th. The Nucleus was claimed closed on the 28th and is not: `GO TO ...
+DEPENDING ON`, `CURRENCY SIGN` and `DECIMAL-POINT IS COMMA` are Level 1 and
+refused. Three small items stand between the compiler and the claim.
 
 It was eleven elements when this section was first written — `ACCEPT`, `ALTER`,
 `ENTER`, `INSPECT`, class conditions and switch-status conditions in the
