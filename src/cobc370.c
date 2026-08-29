@@ -503,6 +503,9 @@ typedef struct {
     int  index_sym;   /* INDEXED BY item for this OCCURS table, -1 if none */
     int  askey_sym;   /* the first KEY field, -1 if none */
     int  keys[8], keydesc[8], nkeys;  /* ASCENDING/DESCENDING KEY series, in order */
+    int  odo_dep;     /* OCCURS ... DEPENDING ON: the count item, -1 if fixed */
+    int  odo_min;     /* the lower bound of the OCCURS */
+    int  odo_tab;     /* a group: the DEPENDING ON table inside it, 0 if none (sym 0 cannot be one) */
     int  linkage;     /* declared in the LINKAGE SECTION: storage belongs to the caller */
     int  link_area;   /* which linkage 01 it sits in, so it gets the right base */
     char cvalue[MAXTOK];
@@ -829,6 +832,10 @@ static int nstmt;
  * WORKING-STORAGE once the data division is finished. */
 #define MAXIDX 16
 static struct { char name[31], key[31]; int table, desc; } pend_idx[MAXIDX];
+/* DEPENDING ON names, resolved once the data division is complete: the count
+ * item is commonly declared after the table. */
+static struct { char name[31]; int table; } pend_odo[MAXIDX];
+static int npend_odo;
 static int npend_idx;
 
 #define MAXLINK 16
@@ -1528,6 +1535,7 @@ static void parse_data_division(void)
         snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
         sy->occ_parent = -1;
         sy->index_sym = sy->askey_sym = -1;
+        sy->odo_dep = -1; sy->odo_tab = 0;
         sy->redef_from = sy->redef_cap = -1;
         sy->fd_file = -1;
         for (int k = sp - 1; k >= 0; k--)
@@ -1581,8 +1589,31 @@ static void parse_data_division(void)
                 sy->occurs = atoi(tok.text);
                 if (sy->occurs < 1) die("OCCURS count must be positive");
                 next();
-                if (is("TIMES")) next();
-                if (is("DEPENDING")) die("OCCURS DEPENDING ON is not implemented yet");
+                sy->odo_dep = -1;
+                if (is("TO")) {
+                    /* OCCURS integer-1 TO integer-2 TIMES DEPENDING ON name,
+                     * III-2. Storage is laid out for integer-2; the count item
+                     * says how many occurrences exist at any moment, and with
+                     * that the size of every group containing the table. */
+                    next();
+                    if (!is_numeric_literal(tok.text) || strchr(tok.text, '.'))
+                        die("OCCURS ... TO needs a whole-number literal");
+                    sy->odo_min = sy->occurs;
+                    sy->occurs = atoi(tok.text);
+                    if (sy->occurs < sy->odo_min) die("OCCURS ... TO must not go backwards");
+                    next();
+                    if (is("TIMES")) next();
+                    if (!is("DEPENDING")) die("OCCURS ... TO needs DEPENDING ON");
+                    next(); if (is("ON")) next();
+                    if (npend_odo >= MAXIDX) die("too many DEPENDING ON tables");
+                    snprintf(pend_odo[npend_odo].name, sizeof pend_odo[0].name, "%s", tok.text);
+                    pend_odo[npend_odo].table = nsym;
+                    npend_odo++;
+                    sy->odo_dep = -2;                /* resolved later */
+                    if (cur_file >= 0) die("OCCURS DEPENDING ON in a file record means variable-length records, which are not implemented; it is supported in WORKING-STORAGE and LINKAGE");
+                    next();
+                } else if (is("TIMES")) next();
+                if (is("DEPENDING")) die("OCCURS ... DEPENDING ON needs the integer-1 TO integer-2 form -- III-2");
                 for (;;) {
                     if (is("ASCENDING") || is("DESCENDING")) {
                         /* A series of key names under one word, and any
@@ -1870,6 +1901,31 @@ static void parse_data_division(void)
                      need - (e->offset - base) % need);
             die(m);
         }
+    }
+
+    /* DEPENDING ON: find the count item, and mark every group that contains
+     * the table so its size is known to be a run-time quantity. Rule 5 on
+     * III-2 puts the table last in its record, so nothing after it moves. */
+    for (int k = 0; k < npend_odo; k++) {
+        int t = pend_odo[k].table;
+        int dep = lookup(pend_odo[k].name);
+        if (dep < 0) die("DEPENDING ON names an item that was not declared");
+        if (syms[dep].is_alpha || syms[dep].is_group || syms[dep].scale)
+            die("DEPENDING ON needs an integer item");
+        syms[t].odo_dep = dep;
+        for (int g = syms[t].gparent; g >= 0; g = syms[g].gparent) {
+            if (syms[g].odo_tab > 0) die("a group may contain only one OCCURS DEPENDING ON table");
+            syms[g].odo_tab = t;
+        }
+        /* the table must be the last thing in its record */
+        int lvl = syms[t].level;
+        for (int j = t + 1; j < nsym && syms[j].level > lvl; j++) ;
+        int rec = t; while (syms[rec].gparent >= 0) rec = syms[rec].gparent;
+        int endrec = rec + 1;
+        while (endrec < nsym && syms[endrec].level > syms[rec].level && syms[endrec].level != 77) endrec++;
+        for (int j = t + 1; j < endrec; j++)
+            if (syms[j].level <= lvl && !syms[j].is_88)
+                die("an OCCURS DEPENDING ON table must be the last item in its record -- rule 5 on III-2");
     }
 
     /* Index items, appended after everything the program declared. COBOL says
@@ -4939,7 +4995,7 @@ static void gen_rescale16(const char *wk, int from, int to, int round)
  * the work areas, where the permanent base covers them. */
 static struct { char lab[12], op[8], opd[80], cmt[48]; } pend_dc[MAXSOP * 4];
 static int npend_dc;
-static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt;
+static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt, use_mvl;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
     if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
@@ -5143,6 +5199,28 @@ static int gen_expr(Node *n, int d, int tgtscale)
     return 0;
 }
 
+/* An item whose length is only known at run time: a group containing an
+ * OCCURS DEPENDING ON table, or that table itself. */
+static int var_len(const Sym *y) { return y->odo_tab > 0 || (y->occurs > 0 && y->odo_dep >= 0); }
+
+/* Load the current length of such an item into a register: the fixed part
+ * plus the count times the element. */
+static void gen_var_len(const Sym *y, int reg)
+{
+    char b[96];
+    const Sym *t = y->odo_tab > 0 ? &syms[y->odo_tab] : y;
+    const Sym *dep = &syms[t->odo_dep];
+    int fixed = y->bytes - t->bytes;
+    need_sym_base(dep);
+    gen_load(dep, NULL, "PWK2");
+    asm_line("", "ZAP", "DWK(8),PWK2(16)", "");
+    snprintf(b, sizeof b, "%d,DWK", reg);
+    asm_line("", "CVB", b, "DEPENDING ON count");
+    snprintf(b, sizeof b, "%d,%s", reg, intern_half(t->elem));
+    asm_line("", "MH", b, "times the element");
+    if (fixed) { snprintf(b, sizeof b, "%d,%d(%d)", reg, fixed, reg); asm_line("", "LA", b, "plus the fixed part"); }
+}
+
 /* Alphanumeric move: left justified, space filled, truncated on the right.
  * Groups move as bytes, which is why a group MOVE is alphanumeric whatever
  * its subordinates are. */
@@ -5152,8 +5230,29 @@ static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
     int dn = dsub ? d->elem : d->bytes;
     int sn = ssub ? sv->elem : sv->bytes;
     int n = dn < sn ? dn : sn;
-    if (n > 256) die("MVC is limited to 256 bytes; long moves need a loop, "
-                     "which is not implemented yet");
+    if ((var_len(d) && !dsub) || (var_len(sv) && !ssub) || n > 256) {
+        /* A length only known at run time, or one too long for an MVC: the
+         * runtime moves it, however long, and space fills the rest. */
+        if (d->edited || d->just) die("a MOVE to an edited or JUSTIFIED item longer than 256 bytes, or of run-time length, is not implemented");
+        use_mvl = 1;
+        if (var_len(d) && !dsub) gen_var_len(d, 2); else { snprintf(b, sizeof b, "2,%d", dn); asm_line("", "LA", b, "receiver length"); }
+        asm_line("", "STH", "2,MVLLEN", "");
+        if (var_len(sv) && !ssub) gen_var_len(sv, 2); else { snprintf(b, sizeof b, "2,%d", sn); asm_line("", "LA", b, "sender length"); }
+        asm_line("", "STH", "2,MVLLEN+2", "");
+        need_sym_base(d);
+        field_ref_m(d, dsub, FR_RX, dn, 6, fd, sizeof fd);
+        snprintf(b, sizeof b, "1,%s", fd); asm_line("", "LA", b, "");
+        asm_line("", "ST", "1,MVLPARM", "");
+        need_sym_base(sv);
+        field_ref_m(sv, ssub, FR_RX, sn, 7, fs, sizeof fs);
+        snprintf(b, sizeof b, "1,%s", fs); asm_line("", "LA", b, "");
+        asm_line("", "ST", "1,MVLPARM+4", "");
+        asm_line("", "LA", "1,MVLPARM", "");
+        asm_line("", "L", "15,VMVL", "");
+        asm_line("", "BALR", "14,15", "COBMVL: any length, space filled");
+        reset_bases();
+        return;
+    }
     if (d->edited && d->is_alpha) {
         /* Alphanumeric edited: lay down the template, then fill each run of
          * data positions from the sending item. Both are known at compile
@@ -5552,7 +5651,7 @@ static void emit_runtime(void)
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
     asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI", "");
-    asm_line("", "ENTRY", "COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT", "");
+    asm_line("", "ENTRY", "COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT,COBMVL", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -5669,125 +5768,6 @@ static void emit_runtime(void)
     asm_line("ADVPAGE", "DC", "H'999'", "the page-skip request");
     asm_line("ADVTHREE", "DC", "H'3'", "");
     asm_line("RTSAVE7", "DS", "18F", "");
-    emit_string_runtime();
-    asm_comment("");
-    asm_comment(" COBWTO -- DISPLAY UPON CONSOLE. R1 -> A(text), A(halfword length).");
-    asm_comment(" The text goes into a WTO list whose length halfword is set");
-    asm_comment(" from the parameter; MVS caps a line at what it will show.");
-    asm_line("COBWTO", "STM", "14,12,12(13)", "");
-    asm_line("", "BALR", "12,0", "");
-    asm_line("", "USING", "*,12", "");
-    asm_line("", "ST", "13,RTSAVE10+4", "");
-    asm_line("", "LA", "11,RTSAVE10", "");
-    asm_line("", "ST", "11,8(13)", "");
-    asm_line("", "LR", "13,11", "");
-    asm_line("", "L", "2,0(0,1)", "A(text)");
-    asm_line("", "L", "3,4(0,1)", "A(length)");
-    asm_line("", "LH", "4,0(0,3)", "");
-    asm_line("", "CH", "4,WTOMAX", "");
-    asm_line("", "BNH", "WTO010", "");
-    asm_line("", "LH", "4,WTOMAX", "");
-    asm_line("WTO010", "MVI", "WTOTXT,C' '", "");
-    asm_line("", "MVC", "WTOTXT+1(119),WTOTXT", "");
-    asm_line("", "LTR", "4,4", "");
-    asm_line("", "BNP", "WTO020", "");
-    asm_line("", "BCTR", "4,0", "");
-    asm_line("", "EX", "4,WTOMVC", "");
-    asm_line("", "LA", "4,1(4)", "");
-    asm_line("WTO020", "LA", "4,4(4)", "plus the header");
-    asm_line("", "STH", "4,WTOLST", "");
-    asm_line("", "WTO", "MF=(E,WTOLST)", "");
-    asm_line("", "L", "13,4(13)", "");
-    asm_line("", "LM", "14,12,12(13)", "");
-    asm_line("", "SR", "15,15", "");
-    asm_line("", "BR", "14", "");
-    asm_line("WTOMVC", "MVC", "WTOTXT(0),0(2)", "executed");
-    asm_line("WTOMAX", "DC", "H'120'", "");
-    asm_line("WTOLST", "DC", "AL2(124),AL2(0)", "length, MCS flags");
-    asm_line("WTOTXT", "DC", "CL120' '", "");
-    asm_line("RTSAVE10", "DS", "18F", "");
-    asm_comment("");
-    asm_comment(" COBWTOR -- ACCEPT FROM CONSOLE. R1 -> A(item), A(halfword length).");
-    asm_comment(" A WTOR asks the operator, the task waits on its ECB, and the");
-    asm_comment(" reply is moved to the item space padded. One line only.");
-    asm_line("COBWTOR", "STM", "14,12,12(13)", "");
-    asm_line("", "BALR", "12,0", "");
-    asm_line("", "USING", "*,12", "");
-    asm_line("", "ST", "13,RTSAVE11+4", "");
-    asm_line("", "LA", "11,RTSAVE11", "");
-    asm_line("", "ST", "11,8(13)", "");
-    asm_line("", "LR", "13,11", "");
-    asm_line("", "L", "2,0(0,1)", "A(item)");
-    asm_line("", "L", "3,4(0,1)", "A(length)");
-    asm_line("", "LH", "4,0(0,3)", "");
-    asm_line("", "MVI", "WTORRPL,C' '", "");
-    asm_line("", "MVC", "WTORRPL+1(119),WTORRPL", "");
-    asm_line("", "XC", "WTORECB,WTORECB", "");
-    asm_line("", "WTOR", "'COBC370: ACCEPT FROM CONSOLE',WTORRPL,120,WTORECB", "");
-    asm_line("", "WAIT", "ECB=WTORECB", "");
-    asm_line("", "LTR", "4,4", "");
-    asm_line("", "BNP", "WTOR20", "");
-    asm_line("", "CH", "4,WTORMAX", "");
-    asm_line("", "BNH", "WTOR10", "");
-    asm_line("", "LH", "4,WTORMAX", "");
-    asm_line("WTOR10", "BCTR", "4,0", "");
-    asm_line("", "EX", "4,WTORMVC", "");
-    asm_line("WTOR20", "L", "13,4(13)", "");
-    asm_line("", "LM", "14,12,12(13)", "");
-    asm_line("", "SR", "15,15", "");
-    asm_line("", "BR", "14", "");
-    asm_line("WTORMVC", "MVC", "0(0,2),WTORRPL", "executed");
-    asm_line("WTORMAX", "DC", "H'120'", "");
-    asm_line("WTORECB", "DC", "F'0'", "");
-    asm_line("WTORRPL", "DC", "CL120' '", "");
-    asm_line("RTSAVE11", "DS", "18F", "");
-    asm_comment("");
-    asm_comment(" COBADT -- ACCEPT FROM DATE, DAY or TIME. R1 -> A(area), A(halfword");
-    asm_comment(" kind: 1 DATE, 2 DAY, 3 TIME). Writes YYMMDD, YYDDD or HHMMSSth as");
-    asm_comment(" zoned digits into the area. DATE borrows COBDATE's month walk.");
-    asm_line("COBADT", "STM", "14,12,12(13)", "");
-    asm_line("", "BALR", "12,0", "");
-    asm_line("", "USING", "*,12", "");
-    asm_line("", "ST", "13,RTSAVE12+4", "");
-    asm_line("", "LA", "11,RTSAVE12", "");
-    asm_line("", "ST", "11,8(13)", "");
-    asm_line("", "LR", "13,11", "");
-    asm_line("", "L", "2,0(0,1)", "the area");
-    asm_line("", "L", "3,4(0,1)", "");
-    asm_line("", "LH", "3,0(0,3)", "the kind");
-    asm_line("", "CH", "3,ADTH3", "");
-    asm_line("", "BE", "ADT300", "TIME");
-    asm_line("", "TIME", "DEC", "R1 = 00YYDDDF");
-    asm_line("", "ST", "1,ADTPK", "");
-    asm_line("", "UNPK", "ADTZ(7),ADTPK(4)", "'00YYDDD'");
-    asm_line("", "OI", "ADTZ+6,X'F0'", "");
-    asm_line("", "CH", "3,ADTH2", "");
-    asm_line("", "BE", "ADT200", "DAY");
-    asm_line("", "LA", "1,ADTB", "DATE: MM/DD/YY first");
-    asm_line("", "L", "15,ADTVD", "");
-    asm_line("", "BALR", "14,15", "");
-    asm_line("", "MVC", "0(2,2),ADTB+6", "YY");
-    asm_line("", "MVC", "2(2,2),ADTB", "MM");
-    asm_line("", "MVC", "4(2,2),ADTB+3", "DD");
-    asm_line("", "B", "ADTX", "");
-    asm_line("ADT200", "MVC", "0(5,2),ADTZ+2", "YYDDD");
-    asm_line("", "B", "ADTX", "");
-    asm_line("ADT300", "TIME", "DEC", "R0 = HHMMSSth");
-    asm_line("", "ST", "0,ADTPK", "");
-    asm_line("", "MVI", "ADTPK+4,X'0F'", "a sign nibble to unpack against");
-    asm_line("", "UNPK", "ADTZ(9),ADTPK(5)", "'HHMMSSth0'");
-    asm_line("", "MVC", "0(8,2),ADTZ", "");
-    asm_line("ADTX", "L", "13,4(13)", "");
-    asm_line("", "LM", "14,12,12(13)", "");
-    asm_line("", "SR", "15,15", "");
-    asm_line("", "BR", "14", "");
-    asm_line("ADTVD", "DC", "A(COBDATE)", "");
-    asm_line("ADTH2", "DC", "H'2'", "");
-    asm_line("ADTH3", "DC", "H'3'", "");
-    asm_line("ADTPK", "DS", "2F", "");
-    asm_line("ADTZ", "DS", "CL9", "");
-    asm_line("ADTB", "DS", "CL8", "");
-    asm_line("RTSAVE12", "DS", "18F", "");
     asm_comment("");
     asm_comment(" COBUPSI -- set the eight switches from the EXEC PARM.");
     asm_comment("");
@@ -6024,6 +6004,192 @@ static void emit_runtime(void)
              "EODAD=0");
     asm_cont("RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,",
              "LRECL=121,BLKSIZE=121");
+    /* The routines added for level 2 -- STRING and UNSTRING, the console
+     * forms, DATE/DAY/TIME, the any-length move -- come after the shared
+     * data rather than before it. Each has its own base register and its
+     * own data, so nothing they add pushes RTDCB or the buffers out of
+     * reach of the routines that were here first, which is what happened
+     * once the CSECT passed 4K. */
+    emit_string_runtime();
+    asm_comment("");
+    asm_comment(" COBWTO -- DISPLAY UPON CONSOLE. R1 -> A(text), A(halfword length).");
+    asm_comment(" The text goes into a WTO list whose length halfword is set");
+    asm_comment(" from the parameter; MVS caps a line at what it will show.");
+    asm_line("COBWTO", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE10+4", "");
+    asm_line("", "LA", "11,RTSAVE10", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(text)");
+    asm_line("", "L", "3,4(0,1)", "A(length)");
+    asm_line("", "LH", "4,0(0,3)", "");
+    asm_line("", "CH", "4,WTOMAX", "");
+    asm_line("", "BNH", "WTO010", "");
+    asm_line("", "LH", "4,WTOMAX", "");
+    asm_line("WTO010", "MVI", "WTOTXT,C' '", "");
+    asm_line("", "MVC", "WTOTXT+1(119),WTOTXT", "");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BNP", "WTO020", "");
+    asm_line("", "BCTR", "4,0", "");
+    asm_line("", "EX", "4,WTOMVC", "");
+    asm_line("", "LA", "4,1(4)", "");
+    asm_line("WTO020", "LA", "4,4(4)", "plus the header");
+    asm_line("", "STH", "4,WTOLST", "");
+    asm_line("", "WTO", "MF=(E,WTOLST)", "");
+    asm_line("", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("WTOMVC", "MVC", "WTOTXT(0),0(2)", "executed");
+    asm_line("WTOMAX", "DC", "H'120'", "");
+    asm_line("WTOLST", "DC", "AL2(124),AL2(0)", "length, MCS flags");
+    asm_line("WTOTXT", "DC", "CL120' '", "");
+    asm_line("RTSAVE10", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBWTOR -- ACCEPT FROM CONSOLE. R1 -> A(item), A(halfword length).");
+    asm_comment(" A WTOR asks the operator, the task waits on its ECB, and the");
+    asm_comment(" reply is moved to the item space padded. One line only.");
+    asm_line("COBWTOR", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE11+4", "");
+    asm_line("", "LA", "11,RTSAVE11", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "A(item)");
+    asm_line("", "L", "3,4(0,1)", "A(length)");
+    asm_line("", "LH", "4,0(0,3)", "");
+    asm_line("", "MVI", "WTORRPL,C' '", "");
+    asm_line("", "MVC", "WTORRPL+1(119),WTORRPL", "");
+    asm_line("", "XC", "WTORECB,WTORECB", "");
+    asm_line("", "WTOR", "'COBC370: ACCEPT FROM CONSOLE',WTORRPL,120,WTORECB", "");
+    asm_line("", "WAIT", "ECB=WTORECB", "");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BNP", "WTOR20", "");
+    asm_line("", "CH", "4,WTORMAX", "");
+    asm_line("", "BNH", "WTOR10", "");
+    asm_line("", "LH", "4,WTORMAX", "");
+    asm_line("WTOR10", "BCTR", "4,0", "");
+    asm_line("", "EX", "4,WTORMVC", "");
+    asm_line("WTOR20", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("WTORMVC", "MVC", "0(0,2),WTORRPL", "executed");
+    asm_line("WTORMAX", "DC", "H'120'", "");
+    asm_line("WTORECB", "DC", "F'0'", "");
+    asm_line("WTORRPL", "DC", "CL120' '", "");
+    asm_line("RTSAVE11", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBADT -- ACCEPT FROM DATE, DAY or TIME. R1 -> A(area), A(halfword");
+    asm_comment(" kind: 1 DATE, 2 DAY, 3 TIME). Writes YYMMDD, YYDDD or HHMMSSth as");
+    asm_comment(" zoned digits into the area. DATE borrows COBDATE's month walk.");
+    asm_line("COBADT", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE12+4", "");
+    asm_line("", "LA", "11,RTSAVE12", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "the area");
+    asm_line("", "L", "3,4(0,1)", "");
+    asm_line("", "LH", "3,0(0,3)", "the kind");
+    asm_line("", "CH", "3,ADTH3", "");
+    asm_line("", "BE", "ADT300", "TIME");
+    asm_line("", "TIME", "DEC", "R1 = 00YYDDDF");
+    asm_line("", "ST", "1,ADTPK", "");
+    asm_line("", "UNPK", "ADTZ(7),ADTPK(4)", "'00YYDDD'");
+    asm_line("", "OI", "ADTZ+6,X'F0'", "");
+    asm_line("", "CH", "3,ADTH2", "");
+    asm_line("", "BE", "ADT200", "DAY");
+    asm_line("", "LA", "1,ADTB", "DATE: MM/DD/YY first");
+    asm_line("", "L", "15,ADTVD", "");
+    asm_line("", "BALR", "14,15", "");
+    asm_line("", "MVC", "0(2,2),ADTB+6", "YY");
+    asm_line("", "MVC", "2(2,2),ADTB", "MM");
+    asm_line("", "MVC", "4(2,2),ADTB+3", "DD");
+    asm_line("", "B", "ADTX", "");
+    asm_line("ADT200", "MVC", "0(5,2),ADTZ+2", "YYDDD");
+    asm_line("", "B", "ADTX", "");
+    asm_line("ADT300", "TIME", "DEC", "R0 = HHMMSSth");
+    asm_line("", "ST", "0,ADTPK", "");
+    asm_line("", "MVI", "ADTPK+4,X'0F'", "a sign nibble to unpack against");
+    asm_line("", "UNPK", "ADTZ(9),ADTPK(5)", "'HHMMSSth0'");
+    asm_line("", "MVC", "0(8,2),ADTZ", "");
+    asm_line("ADTX", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("ADTVD", "DC", "A(COBDATE)", "");
+    asm_line("ADTH2", "DC", "H'2'", "");
+    asm_line("ADTH3", "DC", "H'3'", "");
+    asm_line("ADTPK", "DS", "2F", "");
+    asm_line("ADTZ", "DS", "CL9", "");
+    asm_line("ADTB", "DS", "CL8", "");
+    asm_line("RTSAVE12", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBMVL -- an alphanumeric move of any length. R1 -> A(receiver),");
+    asm_comment("   A(sender), A(halfword receiver length, halfword sender length).");
+    asm_comment(" The shorter of the two is moved in 256-byte pieces; a receiver");
+    asm_comment(" longer than the sender is space filled after it. Serves a group");
+    asm_comment(" whose length depends on an OCCURS DEPENDING ON count, and any");
+    asm_comment(" move too long for one MVC.");
+    asm_line("COBMVL", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE13+4", "");
+    asm_line("", "LA", "11,RTSAVE13", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "L", "2,0(0,1)", "receiver");
+    asm_line("", "L", "3,4(0,1)", "sender");
+    asm_line("", "L", "4,8(0,1)", "");
+    asm_line("", "LH", "5,0(0,4)", "receiver length");
+    asm_line("", "LH", "6,2(0,4)", "sender length");
+    asm_line("", "LR", "7,5", "");
+    asm_line("", "CR", "7,6", "");
+    asm_line("", "BNH", "MVL010", "");
+    asm_line("", "LR", "7,6", "bytes to move: the shorter");
+    asm_line("MVL010", "SR", "5,7", "bytes to fill afterwards");
+    asm_line("MVL020", "LTR", "7,7", "");
+    asm_line("", "BNP", "MVL040", "moved");
+    asm_line("", "LR", "8,7", "");
+    asm_line("", "CH", "8,MVL256", "");
+    asm_line("", "BNH", "MVL030", "");
+    asm_line("", "LH", "8,MVL256", "a piece");
+    asm_line("MVL030", "BCTR", "8,0", "");
+    asm_line("", "EX", "8,MVLMVC", "");
+    asm_line("", "LA", "8,1(8)", "");
+    asm_line("", "AR", "2,8", "");
+    asm_line("", "AR", "3,8", "");
+    asm_line("", "SR", "7,8", "");
+    asm_line("", "B", "MVL020", "");
+    asm_line("MVL040", "LTR", "5,5", "");
+    asm_line("", "BNP", "MVLX", "nothing to fill");
+    asm_line("", "MVI", "0(2),C' '", "");
+    asm_line("", "BCTR", "5,0", "");
+    asm_line("MVL050", "LTR", "5,5", "");
+    asm_line("", "BNP", "MVLX", "");
+    asm_line("", "LR", "8,5", "");
+    asm_line("", "CH", "8,MVL256", "");
+    asm_line("", "BNH", "MVL060", "");
+    asm_line("", "LH", "8,MVL256", "");
+    asm_line("MVL060", "BCTR", "8,0", "");
+    asm_line("", "EX", "8,MVLPAD", "propagate the space");
+    asm_line("", "LA", "8,1(8)", "");
+    asm_line("", "AR", "2,8", "");
+    asm_line("", "SR", "5,8", "");
+    asm_line("", "B", "MVL050", "");
+    asm_line("MVLX", "L", "13,4(13)", "");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "SR", "15,15", "");
+    asm_line("", "BR", "14", "");
+    asm_line("MVLMVC", "MVC", "0(0,2),0(3)", "executed");
+    asm_line("MVLPAD", "MVC", "1(0,2),0(2)", "executed");
+    asm_line("MVL256", "DC", "H'256'", "");
+    asm_line("RTSAVE13", "DS", "18F", "");
 }
 
 /* Enter a range of procedures and come back, which is what a PERFORM does and
@@ -6224,6 +6390,9 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
                 asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
                 return;
             }
+            if ((L->kind == N_SYM && var_len(&syms[L->sym]) && !L->sub) ||
+                (R->kind == N_SYM && var_len(&syms[R->sym]) && !R->sub))
+                die("comparison of an item whose length depends on an OCCURS DEPENDING ON count is not implemented; MOVE it to a fixed item first");
             if (R->kind == N_SYM && node_alpha(R)
                 && (R->sub ? syms[R->sym].elem : syms[R->sym].bytes) != n) {
                 /* Two items of different lengths: the shorter is space padded
@@ -7141,8 +7310,9 @@ static void generate(void)
             asm_line("", "ZAP", "DWK(8),PWK1(16)", "");
             asm_line("", "CVB", "2,DWK", "the selector");
             asm_line("", "BCTR", "2,0", "1 selects the first entry");
-            snprintf(b, sizeof b, "2,=F'%d'", st->ndop);
-            asm_line("", "CL", b, "past the last, or negative -- unsigned covers both");
+            snprintf(b, sizeof b, "0,%s", intern_half(st->ndop));
+            asm_line("", "LH", b, "the entry count");
+            asm_line("", "CLR", "2,0", "past the last, or negative -- unsigned covers both");
             asm_line("", "BNL", lx, "out of range: fall through");
             asm_line("", "SLL", "2,2", "four bytes per entry");
             snprintf(b, sizeof b, "%s(2)", lt);
@@ -7341,8 +7511,8 @@ static void generate(void)
                         need_sym_base(&syms[o->bf_sym]);
                         field_ref_m(&syms[o->bf_sym], NULL, FR_SS_NOLEN, o->bf_len, 6, g, sizeof g);
                     } else snprintf(g, sizeof g, "%s", o->bf_lab);
-                    snprintf(b, sizeof b, "5,=F'%d'", o->bf_len);
-                    asm_line(lls, "C", b, "room for the bounding string?");
+                    snprintf(b, sizeof b, "5,%s", intern_half(o->bf_len));
+                    asm_line(lls, "CH", b, "room for the bounding string?");
                     asm_line("", "BL", llnf, "");
                     snprintf(b, sizeof b, "0(%d,3),%s", o->bf_len, g);
                     asm_line("", "CLC", b, "INITIAL");
@@ -7358,8 +7528,8 @@ static void generate(void)
                     if (o->bf_after) {
                         snprintf(b, sizeof b, "3,%d(3)", o->bf_len);
                         asm_line("", "LA", b, "AFTER: from just past it");
-                        snprintf(b, sizeof b, "5,=F'%d'", o->bf_len);
-                        asm_line("", "S", b, "");
+                        snprintf(b, sizeof b, "5,%s", intern_half(o->bf_len));
+                        asm_line("", "SH", b, "");
                     } else {
                         asm_line("", "LR", "5,3", "");
                         asm_line("", "SR", "5,7", "BEFORE: up to it");
@@ -7414,8 +7584,8 @@ static void generate(void)
                     need_sym_base(&syms[o->c_sym]);
                     field_ref_m(&syms[o->c_sym], NULL, FR_SS_NOLEN, o->c_len, 7, g, sizeof g);
                 } else snprintf(g, sizeof g, "%s", o->c_lab);
-                snprintf(b, sizeof b, "5,=F'%d'", o->c_len);
-                asm_line(llp, "C", b, "room for the string?");
+                snprintf(b, sizeof b, "5,%s", intern_half(o->c_len));
+                asm_line(llp, "CH", b, "room for the string?");
                 asm_line("", "BL", ldn, "");
                 snprintf(b, sizeof b, "0(%d,3),%s", o->c_len, g);
                 asm_line("", "CLC", b, "");
@@ -7434,8 +7604,8 @@ static void generate(void)
                 }
                 snprintf(b, sizeof b, "3,%d(3)", o->c_len);
                 asm_line("", "LA", b, "past the string");
-                snprintf(b, sizeof b, "5,=F'%d'", o->c_len);
-                asm_line("", "S", b, "");
+                snprintf(b, sizeof b, "5,%s", intern_half(o->c_len));
+                asm_line("", "SH", b, "");
                 asm_line("", "B", llp, "");
                 asm_line(lnx, "DS", "0H", "");
                 asm_line("", "LA", "3,1(3)", "");
@@ -7668,7 +7838,7 @@ static void generate(void)
                 need_sym_base(ix);
                 field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, fx, sizeof fx);
                 snprintf(b, sizeof b, "1,%s", fx); asm_line("", "LH", b, "the index");
-                snprintf(b, sizeof b, "1,=H'%d'", tb->occurs);
+                snprintf(b, sizeof b, "1,%s", intern_half(tb->occurs));
                 asm_line("", "CH", b, "past the last occurrence?");
                 asm_line("", "BH", le, "AT END");
                 for (int k = 0; k < st->nwhen; k++) {
@@ -8212,6 +8382,11 @@ static void generate(void)
             asm_line("WTOLEN", "DS", "H", "");
         }
         if (use_wtor) asm_line("VWTOR", "DC", "V(COBWTOR)", "");
+        if (use_mvl) {
+            asm_line("VMVL", "DC", "V(COBMVL)", "");
+            asm_line("MVLPARM", "DC", "A(0),A(0),X'80',AL3(MVLLEN)", "COBMVL: receiver, sender, lengths");
+            asm_line("MVLLEN", "DS", "2H", "receiver length, sender length");
+        }
         if (use_adt) {
             asm_line("VADT", "DC", "V(COBADT)", "");
             asm_line("ADTP1", "DC", "A(ZWK),X'80',AL3(ADTK1)", "ACCEPT FROM DATE");

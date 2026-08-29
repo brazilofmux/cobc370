@@ -262,7 +262,7 @@ D0007    DC    CL4'WXYZ'           SRC4 PIC X(4)
 *---------------------------------------------------------------
 COBRT    CSECT
          ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
-         ENTRY COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT
+         ENTRY COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT,COBMVL
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -373,6 +373,236 @@ ADVONE   DC    H'1'
 ADVPAGE  DC    H'999'              the page-skip request
 ADVTHREE DC    H'3'
 RTSAVE7  DS    18F
+*
+* COBUPSI -- set the eight switches from the EXEC PARM.
+*
+* PARM='/UPSI(10100000)' is the form IBM's later compilers
+* take, and the one the runtime looks for: the literal UPSI
+* anywhere in the parameter text, then the next eight 0 or 1
+* characters, leftmost being UPSI-0. Anything else leaves all
+* eight off, which is the documented default.
+COBUPSI  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE6+4
+         LA    11,RTSAVE6
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(parameter text)
+         LA    2,0(0,2)            drop the end-of-list bit
+         XC    RTUPSI,RTUPSI       all off unless the PARM says otherwi
+         LH    3,0(0,2)            its length
+         LA    4,2(0,2)            the text itself
+         CH    3,UPSIMIN           room for UPSI and eight digits?
+         BL    UPSX
+         SH    3,UPSIMIN
+         LA    3,1(3)              positions worth trying
+UPS10    CLC   0(4,4),UPSITAG
+         BE    UPS15
+         LA    4,1(4)
+         BCT   3,UPS10
+         B     UPSX                no UPSI in the parameter
+UPS15    LA    4,4(4)              past the tag
+         CLI   0(4),C'0'
+         BE    UPS20
+         CLI   0(4),C'1'
+         BE    UPS20
+         LA    4,1(4)              skip a ( or an =
+UPS20    SR    5,5                 the byte being built
+         LA    6,8                 eight of them
+UPS30    SLL   5,1
+         CLI   0(4),C'1'
+         BNE   UPS40
+         LA    5,1(5)
+UPS40    LA    4,1(4)
+         BCT   6,UPS30
+         ST    5,RTUPSI            the byte, for the caller to store
+UPSX     L     13,4(13)
+         L     15,RTUPSI           the byte, while R12 is still ours
+         ST    15,16(13)           into the save area's R15 slot
+         LM    14,12,12(13)
+         BR    14
+*
+* COBACC -- one transfer from SYSIN into the caller's item.
+*
+* General rule 2 on II-53 leaves the size of a transfer to the
+* implementor: here it is one 80-column record. The buffer is
+* blanked first, so a receiver wider than a card is padded and
+* a read past the last card returns spaces rather than the
+* card before it.
+*
+* Parameter list: A(item), A(halfword length).
+COBACC   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE5+4
+         LA    11,RTSAVE5
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(item)
+         L     3,4(0,1)            A(length)
+         LH    4,0(0,3)            length still to fill
+COBA005  LTR   4,4
+         BNP   COBA040             filled
+         MVI   ACCBUF,C' '
+         MVC   ACCBUF+1(255),ACCBUF  blank the buffer
+         CLI   ACCEOFF,X'01'       already at end of file?
+         BE    COBA020
+         CLI   ACCOPEN,X'01'       already open?
+         BE    COBA010
+         OPEN  (ACCDCB,INPUT)
+         MVI   ACCOPEN,X'01'
+COBA010  LA    1,COBA030
+         STCM  1,7,ACCDCB+33       into DCBEODAD
+         GET   ACCDCB,ACCBUF       one card
+         B     COBA020
+COBA030  MVI   ACCEOFF,X'01'       end of file: the buffer stays blank
+COBA020  LR    5,4
+         CH    5,ACCCARD
+         BNH   COBA035
+         LH    5,ACCCARD           one card's worth
+COBA035  BCTR  5,0                 EX wants length-1
+         EX    5,COBAMVC
+         LA    2,1(5,2)            past what was stored
+         LA    5,1(5)
+         SR    4,5
+         B     COBA005
+COBA040  L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+COBAMVC  MVC   0(0,2),ACCBUF       patched by EX
+ACCCARD  DC    H'80'               a card
+*
+* COBTERM -- close SYSOUT if COBDISP ever opened it.
+*
+COBTERM  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE2+4
+         LA    11,RTSAVE2
+         ST    11,8(13)
+         LR    13,11
+         CLI   ACCOPEN,X'01'
+         BNE   COBT005
+         CLOSE (ACCDCB)
+         MVI   ACCOPEN,X'00'
+COBT005  CLI   RTOPEN,X'01'
+         BNE   COBT010
+         CLOSE (RTDCB)
+         MVI   RTOPEN,X'00'
+COBT010  L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+*
+* COBDATE -- fill an 8-byte field with MM/DD/YY.
+*   R1 -> the field.  TIME DEC hands back the date as packed
+*   00YYDDDF, which is Julian, so the day of year has to be
+*   walked into a month and a day.
+*
+COBDATE  STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE4+4
+         LA    11,RTSAVE4
+         ST    11,8(13)
+         LR    13,11
+         LR    2,1                 the field, before TIME takes R1
+         TIME  DEC                 R0 = HHMMSSth, R1 = 00YYDDDF
+         ST    1,DTPACK
+         UNPK  DTZONE(7),DTPACK(4)  '00YYDDD'
+         OI    DTZONE+6,X'F0'
+         PACK  DTDW(8),DTZONE+4(3)
+         CVB   3,DTDW              day of the year
+         PACK  DTDW(8),DTZONE+2(2)
+         CVB   4,DTDW              the year
+         N     4,DTF3              zero if a leap year -- 1901-2099, so
+*                             mod 4 is the whole rule
+         LA    5,1                 month
+         LA    6,DTMON
+DT010    SR    7,7
+         IC    7,0(0,6)            days in this month
+         CH    5,DTH2              February?
+         BNE   DT020
+         LTR   4,4
+         BNZ   DT020
+         LA    7,1(0,7)            29 this year
+DT020    CR    3,7
+         BNH   DT030               the day falls in this month
+         SR    3,7
+         LA    5,1(0,5)
+         LA    6,1(0,6)
+         B     DT010
+DT030    CVD   5,DTDW
+         UNPK  0(2,2),DTDW+6(2)    MM
+         OI    1(2),X'F0'
+         MVI   2(2),C'/'
+         CVD   3,DTDW
+         UNPK  3(2,2),DTDW+6(2)    DD
+         OI    4(2),X'F0'
+         MVI   5(2),C'/'
+         MVC   6(2,2),DTZONE+2     YY, already zoned
+         L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+DTMON    DC    AL1(31,28,31,30,31,30,31,31,30,31,30,31)
+DTF3     DC    F'3'
+DTH2     DC    H'2'
+DTPACK   DS    F
+DTZONE   DS    CL8
+DTDW     DS    D
+RTSAVE4  DS    18F
+*
+* COBWRL -- advance the paper and write one report line.
+*   R1 -> A(dcb), A(current line), A(target line), A(buffer)
+*
+COBWRL   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE3+4
+         LA    11,RTSAVE3
+         ST    11,8(13)
+         LR    13,11
+         L     2,0(0,1)            A(dcb)
+         L     3,4(0,1)            A(current line)
+         L     4,8(0,1)            A(target line)
+         L     5,12(0,1)           A(buffer)
+         LH    6,0(0,3)
+         LH    7,0(0,4)
+COBW010  LA    8,1(0,6)
+         CR    8,7                 already at the line before the targe
+         BNL   COBW020
+         PUT   (2),RTBLNK          skip a line
+         LA    6,1(0,6)
+         B     COBW010
+COBW020  PUT   (2),(5)
+         STH   7,0(0,3)            current line = target
+         L     13,4(13)
+         LM    14,12,12(13)
+         SR    15,15
+         BR    14
+RTBLNK   DC    CL133' '            a blank line, ASA single space
+RTSAVE3  DS    18F
+RTOPEN   DC    X'00'
+RTMAX    DC    H'120'
+RTLINE   DC    CL121' '            ASA byte + 120 columns
+RTSAVE1  DS    18F
+RTSAVE2  DS    18F
+RTSAVE5  DS    18F
+RTSAVE6  DS    18F
+RTUPSI   DS    F
+UPSITAG  DC    C'UPSI'
+UPSIMIN  DC    H'12'               UPSI, a bracket, eight digits
+ACCOPEN  DC    X'00'
+ACCEOFF  DC    X'00'
+ACCBUF   DC    CL256' '            one card from SYSIN, blank padded
+ACCMAX   DC    H'256'
+ACCDCB   DCB   DDNAME=SYSIN,DSORG=PS,MACRF=(GM),                       X
+               EODAD=0
+RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,            X
+               LRECL=121,BLKSIZE=121
 *
 * COBSTR -- STRING. R1 -> AL4(receiver), AL2(len), AL2(n),
 *   AL4(pointer cell or 0); then per item AL4(addr), AL2(len),
@@ -730,233 +960,64 @@ ADTZ     DS    CL9
 ADTB     DS    CL8
 RTSAVE12 DS    18F
 *
-* COBUPSI -- set the eight switches from the EXEC PARM.
-*
-* PARM='/UPSI(10100000)' is the form IBM's later compilers
-* take, and the one the runtime looks for: the literal UPSI
-* anywhere in the parameter text, then the next eight 0 or 1
-* characters, leftmost being UPSI-0. Anything else leaves all
-* eight off, which is the documented default.
-COBUPSI  STM   14,12,12(13)
+* COBMVL -- an alphanumeric move of any length. R1 -> A(receiver),
+*   A(sender), A(halfword receiver length, halfword sender length).
+* The shorter of the two is moved in 256-byte pieces; a receiver
+* longer than the sender is space filled after it. Serves a group
+* whose length depends on an OCCURS DEPENDING ON count, and any
+* move too long for one MVC.
+COBMVL   STM   14,12,12(13)
          BALR  12,0
          USING *,12
-         ST    13,RTSAVE6+4
-         LA    11,RTSAVE6
+         ST    13,RTSAVE13+4
+         LA    11,RTSAVE13
          ST    11,8(13)
          LR    13,11
-         L     2,0(0,1)            A(parameter text)
-         LA    2,0(0,2)            drop the end-of-list bit
-         XC    RTUPSI,RTUPSI       all off unless the PARM says otherwi
-         LH    3,0(0,2)            its length
-         LA    4,2(0,2)            the text itself
-         CH    3,UPSIMIN           room for UPSI and eight digits?
-         BL    UPSX
-         SH    3,UPSIMIN
-         LA    3,1(3)              positions worth trying
-UPS10    CLC   0(4,4),UPSITAG
-         BE    UPS15
-         LA    4,1(4)
-         BCT   3,UPS10
-         B     UPSX                no UPSI in the parameter
-UPS15    LA    4,4(4)              past the tag
-         CLI   0(4),C'0'
-         BE    UPS20
-         CLI   0(4),C'1'
-         BE    UPS20
-         LA    4,1(4)              skip a ( or an =
-UPS20    SR    5,5                 the byte being built
-         LA    6,8                 eight of them
-UPS30    SLL   5,1
-         CLI   0(4),C'1'
-         BNE   UPS40
-         LA    5,1(5)
-UPS40    LA    4,1(4)
-         BCT   6,UPS30
-         ST    5,RTUPSI            the byte, for the caller to store
-UPSX     L     13,4(13)
-         L     15,RTUPSI           the byte, while R12 is still ours
-         ST    15,16(13)           into the save area's R15 slot
-         LM    14,12,12(13)
-         BR    14
-*
-* COBACC -- one transfer from SYSIN into the caller's item.
-*
-* General rule 2 on II-53 leaves the size of a transfer to the
-* implementor: here it is one 80-column record. The buffer is
-* blanked first, so a receiver wider than a card is padded and
-* a read past the last card returns spaces rather than the
-* card before it.
-*
-* Parameter list: A(item), A(halfword length).
-COBACC   STM   14,12,12(13)
-         BALR  12,0
-         USING *,12
-         ST    13,RTSAVE5+4
-         LA    11,RTSAVE5
-         ST    11,8(13)
-         LR    13,11
-         L     2,0(0,1)            A(item)
-         L     3,4(0,1)            A(length)
-         LH    4,0(0,3)            length still to fill
-COBA005  LTR   4,4
-         BNP   COBA040             filled
-         MVI   ACCBUF,C' '
-         MVC   ACCBUF+1(255),ACCBUF  blank the buffer
-         CLI   ACCEOFF,X'01'       already at end of file?
-         BE    COBA020
-         CLI   ACCOPEN,X'01'       already open?
-         BE    COBA010
-         OPEN  (ACCDCB,INPUT)
-         MVI   ACCOPEN,X'01'
-COBA010  LA    1,COBA030
-         STCM  1,7,ACCDCB+33       into DCBEODAD
-         GET   ACCDCB,ACCBUF       one card
-         B     COBA020
-COBA030  MVI   ACCEOFF,X'01'       end of file: the buffer stays blank
-COBA020  LR    5,4
-         CH    5,ACCCARD
-         BNH   COBA035
-         LH    5,ACCCARD           one card's worth
-COBA035  BCTR  5,0                 EX wants length-1
-         EX    5,COBAMVC
-         LA    2,1(5,2)            past what was stored
-         LA    5,1(5)
-         SR    4,5
-         B     COBA005
-COBA040  L     13,4(13)
+         L     2,0(0,1)            receiver
+         L     3,4(0,1)            sender
+         L     4,8(0,1)
+         LH    5,0(0,4)            receiver length
+         LH    6,2(0,4)            sender length
+         LR    7,5
+         CR    7,6
+         BNH   MVL010
+         LR    7,6                 bytes to move: the shorter
+MVL010   SR    5,7                 bytes to fill afterwards
+MVL020   LTR   7,7
+         BNP   MVL040              moved
+         LR    8,7
+         CH    8,MVL256
+         BNH   MVL030
+         LH    8,MVL256            a piece
+MVL030   BCTR  8,0
+         EX    8,MVLMVC
+         LA    8,1(8)
+         AR    2,8
+         AR    3,8
+         SR    7,8
+         B     MVL020
+MVL040   LTR   5,5
+         BNP   MVLX                nothing to fill
+         MVI   0(2),C' '
+         BCTR  5,0
+MVL050   LTR   5,5
+         BNP   MVLX
+         LR    8,5
+         CH    8,MVL256
+         BNH   MVL060
+         LH    8,MVL256
+MVL060   BCTR  8,0
+         EX    8,MVLPAD            propagate the space
+         LA    8,1(8)
+         AR    2,8
+         SR    5,8
+         B     MVL050
+MVLX     L     13,4(13)
          LM    14,12,12(13)
          SR    15,15
          BR    14
-COBAMVC  MVC   0(0,2),ACCBUF       patched by EX
-ACCCARD  DC    H'80'               a card
-*
-* COBTERM -- close SYSOUT if COBDISP ever opened it.
-*
-COBTERM  STM   14,12,12(13)
-         BALR  12,0
-         USING *,12
-         ST    13,RTSAVE2+4
-         LA    11,RTSAVE2
-         ST    11,8(13)
-         LR    13,11
-         CLI   ACCOPEN,X'01'
-         BNE   COBT005
-         CLOSE (ACCDCB)
-         MVI   ACCOPEN,X'00'
-COBT005  CLI   RTOPEN,X'01'
-         BNE   COBT010
-         CLOSE (RTDCB)
-         MVI   RTOPEN,X'00'
-COBT010  L     13,4(13)
-         LM    14,12,12(13)
-         SR    15,15
-         BR    14
-*
-* COBDATE -- fill an 8-byte field with MM/DD/YY.
-*   R1 -> the field.  TIME DEC hands back the date as packed
-*   00YYDDDF, which is Julian, so the day of year has to be
-*   walked into a month and a day.
-*
-COBDATE  STM   14,12,12(13)
-         BALR  12,0
-         USING *,12
-         ST    13,RTSAVE4+4
-         LA    11,RTSAVE4
-         ST    11,8(13)
-         LR    13,11
-         LR    2,1                 the field, before TIME takes R1
-         TIME  DEC                 R0 = HHMMSSth, R1 = 00YYDDDF
-         ST    1,DTPACK
-         UNPK  DTZONE(7),DTPACK(4)  '00YYDDD'
-         OI    DTZONE+6,X'F0'
-         PACK  DTDW(8),DTZONE+4(3)
-         CVB   3,DTDW              day of the year
-         PACK  DTDW(8),DTZONE+2(2)
-         CVB   4,DTDW              the year
-         N     4,DTF3              zero if a leap year -- 1901-2099, so
-*                             mod 4 is the whole rule
-         LA    5,1                 month
-         LA    6,DTMON
-DT010    SR    7,7
-         IC    7,0(0,6)            days in this month
-         CH    5,DTH2              February?
-         BNE   DT020
-         LTR   4,4
-         BNZ   DT020
-         LA    7,1(0,7)            29 this year
-DT020    CR    3,7
-         BNH   DT030               the day falls in this month
-         SR    3,7
-         LA    5,1(0,5)
-         LA    6,1(0,6)
-         B     DT010
-DT030    CVD   5,DTDW
-         UNPK  0(2,2),DTDW+6(2)    MM
-         OI    1(2),X'F0'
-         MVI   2(2),C'/'
-         CVD   3,DTDW
-         UNPK  3(2,2),DTDW+6(2)    DD
-         OI    4(2),X'F0'
-         MVI   5(2),C'/'
-         MVC   6(2,2),DTZONE+2     YY, already zoned
-         L     13,4(13)
-         LM    14,12,12(13)
-         SR    15,15
-         BR    14
-DTMON    DC    AL1(31,28,31,30,31,30,31,31,30,31,30,31)
-DTF3     DC    F'3'
-DTH2     DC    H'2'
-DTPACK   DS    F
-DTZONE   DS    CL8
-DTDW     DS    D
-RTSAVE4  DS    18F
-*
-* COBWRL -- advance the paper and write one report line.
-*   R1 -> A(dcb), A(current line), A(target line), A(buffer)
-*
-COBWRL   STM   14,12,12(13)
-         BALR  12,0
-         USING *,12
-         ST    13,RTSAVE3+4
-         LA    11,RTSAVE3
-         ST    11,8(13)
-         LR    13,11
-         L     2,0(0,1)            A(dcb)
-         L     3,4(0,1)            A(current line)
-         L     4,8(0,1)            A(target line)
-         L     5,12(0,1)           A(buffer)
-         LH    6,0(0,3)
-         LH    7,0(0,4)
-COBW010  LA    8,1(0,6)
-         CR    8,7                 already at the line before the targe
-         BNL   COBW020
-         PUT   (2),RTBLNK          skip a line
-         LA    6,1(0,6)
-         B     COBW010
-COBW020  PUT   (2),(5)
-         STH   7,0(0,3)            current line = target
-         L     13,4(13)
-         LM    14,12,12(13)
-         SR    15,15
-         BR    14
-RTBLNK   DC    CL133' '            a blank line, ASA single space
-RTSAVE3  DS    18F
-RTOPEN   DC    X'00'
-RTMAX    DC    H'120'
-RTLINE   DC    CL121' '            ASA byte + 120 columns
-RTSAVE1  DS    18F
-RTSAVE2  DS    18F
-RTSAVE5  DS    18F
-RTSAVE6  DS    18F
-RTUPSI   DS    F
-UPSITAG  DC    C'UPSI'
-UPSIMIN  DC    H'12'               UPSI, a bracket, eight digits
-ACCOPEN  DC    X'00'
-ACCEOFF  DC    X'00'
-ACCBUF   DC    CL256' '            one card from SYSIN, blank padded
-ACCMAX   DC    H'256'
-ACCDCB   DCB   DDNAME=SYSIN,DSORG=PS,MACRF=(GM),                       X
-               EODAD=0
-RTDCB    DCB   DDNAME=SYSOUT,DSORG=PS,MACRF=(PM),RECFM=FBA,            X
-               LRECL=121,BLKSIZE=121
+MVLMVC   MVC   0(0,2),0(3)         executed
+MVLPAD   MVC   1(0,2),0(2)         executed
+MVL256   DC    H'256'
+RTSAVE13 DS    18F
          END

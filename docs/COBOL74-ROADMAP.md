@@ -169,13 +169,13 @@ next line, cut wherever the line ends, and an `ACCEPT` wider than a card is
 filled from as many cards as it takes. `DISPLAY` of a subscripted item came
 with it, and `VALUE ALL literal` because the test used one.
 
-### Tier 2 -- Table Handling Level 2 (3 items)
+### Tier 2 -- Table Handling Level 2 (3 items) -- DONE 2026-08-29
 
 | element | size | note |
 |---|---|---|
 | serial `SEARCH`, with `VARYING`, `AT END`, `WHEN` series | DONE 2026-08-29 | `VARYING` an integer item counts the steps, as III-9 says; GnuCOBOL sets it to the index instead, and the oracle was corrected by hand |
 | `OCCURS ... ASCENDING/DESCENDING KEY` series | DONE 2026-08-29 | keys ranked in the order written; `SEARCH ALL` compares them lexicographically, inverting the bound step for a `DESCENDING` one, and its `WHEN` may be a conjunction over the keys in order |
-| `OCCURS integer-1 TO integer-2 DEPENDING ON data-name` | **L** | variable-length groups: the containing group's size becomes a run-time value, which reaches `MOVE`, `WRITE`, comparison and subscript bounds. The one item in this plan that touches the symbol table's assumptions. Do it last in its tier, with the design written down first |
+| `OCCURS integer-1 TO integer-2 DEPENDING ON data-name` | DONE 2026-08-29, in `WORKING-STORAGE` and `LINKAGE` | every group containing the table has a run-time length -- the fixed part plus count times element -- and a `MOVE` of one goes through `COBMVL`, a runtime move of any length that space fills. III-3 rule 4 uses the current count on either side of a `MOVE` (COBOL-85 and GnuCOBOL use the maximum for a receiver; the oracle was corrected from the rule). Refused, each with a message: the table in an `FD` record (variable-length records are a separate feature), and a comparison of such a group. `COBMVL` also lifts the old 256-byte limit on alphanumeric moves |
 
 ### Tier 3 -- Sequential I-O Level 2 (about 10 items)
 
