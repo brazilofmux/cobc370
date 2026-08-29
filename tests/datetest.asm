@@ -25,7 +25,9 @@ COBBEG   EQU   *
          L     15,VDATE
          BALR  14,15
          DROP  8
-         SPIE  COBSPIE,((1,15))    report program checks by line
+         SR    0,0
+         SPM   0                   no overflow interrupts: high-order t
+         SPIE  COBSPIE,((1,7),9,(11,12),15)  report program checks by l
 * 000-MAIN.
 P0000    DS    0H
 T0000    DS    0H

@@ -18,7 +18,9 @@ COBBEG   EQU   *
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
          LR    13,0                our save area is now current
-         SPIE  COBSPIE,((1,15))    report program checks by line
+         SR    0,0
+         SPM   0                   no overflow interrupts: high-order t
+         SPIE  COBSPIE,((1,7),9,(11,12),15)  report program checks by l
 T0000    DS    0H
 * MOVE D18 -> E18
          L     8,BL0000            base locator

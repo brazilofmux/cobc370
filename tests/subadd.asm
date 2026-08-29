@@ -22,7 +22,9 @@ COBBEG   EQU   *
          ST    0,PBL0000           LS-IN
          L     0,4(0,1)
          ST    0,PBL0001           LS-OUT
-         SPIE  COBSPIE,((1,15))    report program checks by line
+         SR    0,0
+         SPM   0                   no overflow interrupts: high-order t
+         SPIE  COBSPIE,((1,7),9,(11,12),15)  report program checks by l
 * MAIN-PARA.
 P0000    DS    0H
 T0000    DS    0H

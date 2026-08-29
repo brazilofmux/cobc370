@@ -544,7 +544,7 @@ static void close_group(int *cursor, const int *stack, int *sp)
  * which are where this will diverge from GnuCOBOL's unbounded intermediates
  * if it diverges anywhere.
  */
-enum { N_SYM, N_LIT, N_STR, N_ADD, N_SUB, N_MUL, N_DIV, N_NEG };
+enum { N_SYM, N_LIT, N_STR, N_ADD, N_SUB, N_MUL, N_DIV, N_NEG, N_POW, N_TRUNC };
 
 typedef struct Node {
     int kind;
@@ -617,6 +617,8 @@ typedef struct {
     int  immscale;
     Node *expr;             /* COMPUTE */
     int  rounded;
+    int  size_err;          /* ON SIZE ERROR governs this statement */
+    int  size_first, size_last; /* first and last of the series it governs */
     char para[31];          /* ST_PARA name, or PERFORM's first paragraph */
     char thru[31];          /* PERFORM ... THRU */
     Cond *cond;             /* ST_IFTEST */
@@ -2050,13 +2052,37 @@ static Node *parse_unary(void)
     return parse_primary();
 }
 
-static Node *parse_term(void)
+/* Exponentiation binds tighter than multiplication and associates to the
+ * right, and a unary sign binds tighter still: -A ** 2 is (-A) ** 2. II-40. */
+static Node *parse_power(void)
 {
     Node *l = parse_unary();
+    if (!is("**")) return l;
+    next();
+    Node *r = parse_power();
+    if (l->kind == N_LIT && r->kind == N_LIT && l->litscale == 0 && r->litscale == 0) {
+        /* Both integer literals: fold it here. 2 ** 3 ** 2 is 2 ** 9, and the
+         * generator would otherwise see an exponent that is an expression. */
+        long long base = atoll(l->lit), e = atoll(r->lit), v = 1;
+        for (long long k = 0; k < e; k++) {
+            v *= base;
+            if (v > 999999999999999999LL) die("a literal ** literal exceeds eighteen digits");
+        }
+        Node *n = node(N_LIT);
+        snprintf(n->lit, sizeof n->lit, "%lld", v);
+        n->litscale = 0;
+        return n;
+    }
+    Node *n = node(N_POW); n->l = l; n->r = r;
+    return n;
+}
+
+static Node *parse_term(void)
+{
+    Node *l = parse_power();
     for (;;) {
-        if (is("**")) die("exponentiation is not implemented yet");
-        if (is("*")) { next(); Node *n = node(N_MUL); n->l = l; n->r = parse_unary(); l = n; }
-        else if (is("/")) { next(); Node *n = node(N_DIV); n->l = l; n->r = parse_unary(); l = n; }
+        if (is("*")) { next(); Node *n = node(N_MUL); n->l = l; n->r = parse_power(); l = n; }
+        else if (is("/")) { next(); Node *n = node(N_DIV); n->l = l; n->r = parse_power(); l = n; }
         else return l;
     }
 }
@@ -2260,6 +2286,53 @@ static void giving_target(Stmt *st)
     st->dst = consume_sym();
     st->dsub = opt_subscript();
     if (is("ROUNDED")) { st->rounded = 1; next(); }
+}
+
+static void eat_period(void);
+/* Every arithmetic statement ends the same way: perhaps more receivers, then
+ * perhaps ON SIZE ERROR. Level 2 allows a series of results on all of them. */
+static int at_arith_end(void)
+{
+    return tok.eof || is(".") || is("ON") || is("SIZE") || is("GIVING")
+        || is("REMAINDER") || is("TO") || is("FROM") || starts_statement();
+}
+
+static Node *mk_add(Node *r, Node *x) { return binop(N_ADD, r, x); }
+static Node *mk_sub(Node *r, Node *x) { return binop(N_SUB, r, x); }
+static Node *mk_mul(Node *r, Node *x) { return binop(N_MUL, r, x); }
+static Node *mk_div(Node *r, Node *x) { return binop(N_DIV, r, x); }
+
+/* st names the first receiver already. Make it a COMPUTE of mk(receiver, x)
+ * -- or of x itself when mk is null, the GIVING case -- and do the same for
+ * each further receiver in the series. The source expression is shared by
+ * every statement, which is sound because generation only reads it. */
+static void arith_series(Stmt *st, Node *(*mk)(Node *, Node *), Node *x)
+{
+    for (Stmt *cur = st; ; ) {
+        Node *recv = node(N_SYM); recv->sym = cur->dst; recv->sub = cur->dsub;
+        cur->op = ST_COMPUTE; cur->src = -1; cur->imm = 0;
+        cur->expr = mk ? mk(recv, x) : x;
+        if (at_arith_end()) break;
+        cur = new_stmt(ST_COMPUTE);
+        giving_target(cur);
+    }
+}
+
+/* ON SIZE ERROR for the statements from stmts[first] to the last one made.
+ * Each receiver whose result will not fit is left unchanged and sets a flag;
+ * the last statement of the series tests the flag and either skips the
+ * imperative statements or falls into them. II-51, general rule 6. */
+static void parse_size_error(int first)
+{
+    if (is("ON")) next();
+    if (!is("SIZE")) { eat_period(); return; }
+    next(); expect("ERROR");
+    int cont = ++nlabel;
+    for (int i = first; i < nstmt; i++) { stmts[i].size_err = 1; stmts[i].lab2 = cont; }
+    stmts[first].size_first = 1;
+    stmts[nstmt - 1].size_last = 1;
+    parse_stmt_list(1);
+    new_stmt(ST_LABEL)->dst = cont;
 }
 
 /* Abbreviated combined relation conditions, II-47. In a sequence of relations
@@ -2566,19 +2639,16 @@ static void parse_one_statement(void)
             Node *e = operand_node(save, squal2, snq2, ssub2);
             while (!tok.eof && !is("GIVING") && !is("TO") && !is("FROM") && !is("."))
                 e = binop(N_ADD, e, parse_expr());
+            int first = (int)(st - stmts);
             if (is("GIVING")) {
                 next();
-                st->op = ST_COMPUTE;
-                st->src = -1;
                 giving_target(st);
-                st->expr = sub ? binop(N_SUB, node_zero(), e) : e;
-                eat_period();
+                arith_series(st, NULL, sub ? binop(N_SUB, node_zero(), e) : e);
+                parse_size_error(first);
                 return;
             }
             expect(sub ? "FROM" : "TO");
             /* The receiver is also an operand: c = c +/- (a + b). */
-            st->op = ST_COMPUTE;
-            st->src = -1; st->imm = 0;
             giving_target(st);
             Node *lhs = node(N_SYM);
             lhs->sym = st->dst; lhs->sub = st->dsub;
@@ -2588,9 +2658,9 @@ static void parse_one_statement(void)
                 Node *rhs = binop(sub ? N_SUB : N_ADD, lhs, e);
                 st->dsub = NULL;
                 giving_target(st);
-                st->expr = rhs;
-            } else st->expr = binop(sub ? N_SUB : N_ADD, lhs, e);
-            eat_period();
+                arith_series(st, NULL, rhs);
+            } else arith_series(st, sub ? mk_sub : mk_add, e);
+            parse_size_error(first);
             return;
         }
         expect(sub ? "FROM" : "TO");
@@ -2605,11 +2675,21 @@ static void parse_one_statement(void)
             Node *lhs = node(N_SYM);
             lhs->sym = st->dst; lhs->sub = st->dsub;
             Node *rhs = operand_node(save, squal2, snq2, ssub2);
-            st->op = ST_COMPUTE;
-            st->src = -1; st->imm = 0; st->dsub = NULL;
+            st->dsub = NULL;
             giving_target(st);
-            st->expr = sub ? binop(N_SUB, lhs, rhs) : binop(N_ADD, lhs, rhs);
-            eat_period();
+            int first = (int)(st - stmts);
+            arith_series(st, NULL, sub ? binop(N_SUB, lhs, rhs) : binop(N_ADD, lhs, rhs));
+            parse_size_error(first);
+            return;
+        }
+        if (is("ROUNDED")) { st->rounded = 1; next(); }
+        if (!at_arith_end() || is("ON") || is("SIZE") || st->rounded) {
+            /* A series of receivers, ROUNDED, or ON SIZE ERROR: all of these
+             * go through COMPUTE, which is where that machinery lives. The
+             * plain single ADD keeps its shorter path below. */
+            int first = (int)(st - stmts);
+            arith_series(st, sub ? mk_sub : mk_add, operand_node(save, squal2, snq2, ssub2));
+            parse_size_error(first);
             return;
         }
         if (is_numeric_literal(save)) {
@@ -2709,29 +2789,62 @@ static void parse_one_statement(void)
             else die("DIVIDE wants INTO or BY");
         } else expect("BY");
         Node *b = parse_expr();
-        if (!is("GIVING"))
-            die(div ? "DIVIDE without GIVING is not implemented yet"
-                    : "MULTIPLY without GIVING is not implemented yet");
-        next();
         Stmt *st = new_stmt(ST_COMPUTE);
-        giving_target(st);
-        if (is("REMAINDER")) die("DIVIDE ... REMAINDER is not implemented yet");
+        int first = (int)(st - stmts);
         /* DIVIDE a INTO b  is  b / a;  DIVIDE a BY b  is  a / b. */
-        st->expr = div ? (into ? binop(N_DIV, b, a) : binop(N_DIV, a, b))
-                       : binop(N_MUL, a, b);
-        eat_period();
+        Node *quot = div ? (into ? binop(N_DIV, b, a) : binop(N_DIV, a, b))
+                         : binop(N_MUL, a, b);
+        if (is("GIVING")) {
+            next();
+            giving_target(st);
+            int qscale = syms[st->dst].scale;
+            arith_series(st, NULL, quot);
+            if (is("REMAINDER")) {
+                if (!div) die("REMAINDER belongs to DIVIDE");
+                next();
+                /* II-62: the remainder is the dividend less the product of the
+                 * divisor and the quotient AS STORED -- truncated to the
+                 * quotient item's scale, not rounded, whatever ROUNDED said.
+                 * That is a second division, which is the honest price of not
+                 * keeping a hidden copy of the quotient. */
+                Stmt *r = new_stmt(ST_COMPUTE);
+                r->src = -1;
+                r->dst = consume_sym(); r->dsub = opt_subscript();
+                Node *tq = node(N_TRUNC); tq->l = quot; tq->litscale = qscale;
+                Node *dividend = into ? b : a, *divisor = into ? a : b;
+                r->expr = binop(N_SUB, dividend, binop(N_MUL, tq, divisor));
+            }
+            parse_size_error(first);
+            return;
+        }
+        if (is("REMAINDER")) die("REMAINDER needs GIVING");
+        /* No GIVING: the second operand is the receiver, and there may be a
+         * series of them. MULTIPLY a BY b is b = b * a; DIVIDE a INTO b is
+         * b = b / a. DIVIDE a BY b has no meaning without GIVING. */
+        if (div && !into) die("DIVIDE a BY b needs GIVING; DIVIDE a INTO b does not");
+        if (b->kind != N_SYM)
+            die(div ? "DIVIDE ... INTO needs an identifier to divide into"
+                    : "MULTIPLY ... BY needs an identifier to multiply");
+        st->dst = b->sym; st->dsub = b->sub;
+        if (is("ROUNDED")) { st->rounded = 1; next(); }
+        arith_series(st, div ? mk_div : mk_mul, a);
+        parse_size_error(first);
         return;
     }
 
     if (is("COMPUTE")) {
         next();
         Stmt *st = new_stmt(ST_COMPUTE);
-        st->dst = consume_sym();
-        st->dsub = opt_subscript();
-        if (is("ROUNDED")) { st->rounded = 1; next(); }
+        int first = (int)(st - stmts);
+        giving_target(st);
+        while (!is("=") && !is("EQUAL")) {
+            if (tok.eof || is(".")) die("COMPUTE has no =");
+            giving_target(new_stmt(ST_COMPUTE));
+        }
         if (is("EQUAL")) { next(); if (is("TO")) next(); } else expect("=");
-        st->expr = parse_expr();
-        eat_period();
+        Node *e = parse_expr();
+        for (int i = first; i < nstmt; i++) stmts[i].expr = e;
+        parse_size_error(first);
         return;
     }
 
@@ -4282,6 +4395,11 @@ static void gen_rescale16(const char *wk, int from, int to, int round)
 #define DIVGUARD 4
 #define DIVSCALEMAX 12
 
+/* While a statement under ON SIZE ERROR is being generated: where a detected
+ * error branches to, past the store. Empty otherwise. */
+static char gen_size_skip[16];
+static int  use_szflg;
+
 static int gen_expr(Node *n, int d, int tgtscale)
 {
     char b[128], wk[8], wk2[8];
@@ -4334,6 +4452,19 @@ static int gen_expr(Node *n, int d, int tgtscale)
     case N_DIV: {
         int sl = gen_expr(n->l, d, tgtscale);
         int sr = gen_expr(n->r, d + 1, tgtscale);
+        if (gen_size_skip[0]) {
+            /* Under ON SIZE ERROR a zero divisor is a size error rather than a
+             * decimal-divide exception: flag it and leave the receiver alone.
+             * Without the phrase the DP takes its S0CB, as the standard
+             * leaves it undefined and IKFCBL00 does the same. */
+            char lg[16]; snprintf(lg, sizeof lg, "L%04d", ++genlabel);
+            snprintf(b, sizeof b, "%s(16),%s(16)", wk2, intern_const("0"));
+            asm_line("", "CP", b, "dividing by zero?");
+            asm_line("", "BNE", lg, "");
+            asm_line("", "MVI", "SZFLG,X'01'", "size error");
+            asm_line("", "B", gen_size_skip, "");
+            asm_line(lg, "DS", "0H", "");
+        }
         int sq = tgtscale + DIVGUARD;
         if (sq > DIVSCALEMAX) sq = DIVSCALEMAX;
         /* Quotient at scale sq needs the dividend pre-shifted by sq+sr-sl. */
@@ -4347,6 +4478,67 @@ static int gen_expr(Node *n, int d, int tgtscale)
         snprintf(b, sizeof b, "%s(16),QTMP(8)", wk);
         asm_line("", "ZAP", b, "drop the remainder");
         return sq;
+    }
+    case N_TRUNC: {
+        int sl = gen_expr(n->l, d, tgtscale);
+        gen_rescale16(wk, sl, n->litscale, 0);
+        return n->litscale;
+    }
+
+    case N_POW: {
+        /* Exponentiation in packed decimal is repeated multiplication, and
+         * the result's scale is the base's times the exponent -- which has to
+         * be known here. So a literal exponent is unrolled, for any base, and
+         * an identifier exponent runs a loop, for an integer base only. A
+         * negative or fractional exponent has no exact packed-decimal answer
+         * and is refused. */
+        Node *r = n->r;
+        if (r->kind == N_LIT) {
+            if (r->litscale != 0) die("a fractional exponent is not implemented -- it has no exact decimal value");
+            int e = atoi(r->lit);
+            int sl = gen_expr(n->l, d, tgtscale);
+            if (sl * e > 30) die("the result of ** would carry more than thirty decimal places");
+            if (e == 0) {
+                snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("1"));
+                asm_line("", "ZAP", b, "anything to the zero is one");
+                return 0;
+            }
+            if (e > 1) {
+                snprintf(b, sizeof b, "MULT8(8),%s(16)", wk);
+                asm_line("", "ZAP", b, "the base");
+                for (int k = 1; k < e; k++) {
+                    snprintf(b, sizeof b, "%s(16),MULT8(8)", wk);
+                    asm_line("", "MP", b, k == 1 ? "** unrolled" : "");
+                }
+            }
+            return sl * e;
+        }
+        if (r->kind == N_NEG) die("a negative exponent is not implemented -- it has no exact decimal value");
+        if (r->kind != N_SYM || syms[r->sym].scale != 0 || syms[r->sym].is_alpha || syms[r->sym].is_group)
+            die("the exponent of ** must be an integer literal or an integer identifier");
+        if (d + 2 >= 5) die("expression nests too deeply for the work-area stack");
+        int sl = gen_expr(n->l, d + 1, tgtscale);
+        if (sl != 0) die("** with an identifier exponent needs an integer base; the result's scale would not be known");
+        char wk3[8]; snprintf(wk3, sizeof wk3, "WK%d", d + 2);
+        gen_expr(r, d + 2, 0);
+        snprintf(b, sizeof b, "DWK(8),%s(16)", wk3);
+        asm_line("", "ZAP", b, "");
+        asm_line("", "CVB", "3,DWK", "the exponent");
+        snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("1"));
+        asm_line("", "ZAP", b, "start from one");
+        char lp[16], le[16];
+        snprintf(lp, sizeof lp, "L%04d", ++genlabel);
+        snprintf(le, sizeof le, "L%04d", ++genlabel);
+        asm_line("", "LTR", "3,3", "");
+        asm_line("", "BNP", le, "exponent of zero: one");
+        snprintf(b, sizeof b, "MULT8(8),%s(16)", wk2);
+        asm_line(lp, "ZAP", b, "the base");
+        snprintf(b, sizeof b, "%s(16),MULT8(8)", wk);
+        asm_line("", "MP", b, "");
+        snprintf(b, sizeof b, "3,%s", lp);
+        asm_line("", "BCT", b, "once per exponent");
+        asm_line(le, "DS", "0H", "");
+        return 0;
     }
     }
     die("internal: bad expression node");
@@ -5438,13 +5630,24 @@ static void generate(void)
         asm_line("", "BALR", "14,15", "read the PARM");
         asm_line("", "STC", "15,UPSIB", "the eight switches");
     }
+    /* The program mask. MVS dispatches a problem program with decimal overflow
+     * enabled, so a ZAP of a value into a packed item too short for it took
+     * an 0CA -- where COBOL, and IKFCBL00, truncate on the left. Clear the
+     * whole mask: fixed-point overflow goes the same way, and the two
+     * floating-point bits mean nothing here. */
+    asm_line("", "SR", "0,0", "");
+    asm_line("", "SPM", "0", "no overflow interrupts: high-order truncation");
     if (gen_lines) {
         /* Armed for every program interruption there is, and armed *here*:
          * the SPIE macro works through R1, which on entry to a subprogram is
          * the caller's parameter list. Arming before picking that up cost the
          * CALL roundtrip an S0C4 -- the linkage section had been filled from
          * whatever SPIE left behind. */
-        asm_line("", "SPIE", "COBSPIE,((1,15))", "report program checks by line");
+        /* Not codes 8, 10, 13 and 14: those are the maskable interruptions,
+         * and naming them in a SPIE turns their program-mask bits ON. That is
+         * how every packed result too wide for its item came to abend 0CA
+         * instead of truncating -- the SPM above was being undone here. */
+        asm_line("", "SPIE", "COBSPIE,((1,7),9,(11,12),15)", "report program checks by line");
     }
 
     int ndlit = 0, cur_para = -1, nret = 0;
@@ -6328,13 +6531,50 @@ static void generate(void)
             break;
         case ST_COMPUTE: {
             const Sym *d = &syms[st->dst];
-            snprintf(b, sizeof b, " COMPUTE %s%s = ...", d->name,
-                     st->rounded ? " ROUNDED" : "");
+            snprintf(b, sizeof b, " COMPUTE %s%s = ...%s", d->name,
+                     st->rounded ? " ROUNDED" : "",
+                     st->size_err ? " (ON SIZE ERROR)" : "");
             asm_comment(b);
+            char lok[16], lskip[16];
+            if (st->size_err) {
+                use_szflg = 1;
+                snprintf(lok, sizeof lok, "L%04d", ++genlabel);
+                snprintf(lskip, sizeof lskip, "L%04d", ++genlabel);
+                snprintf(gen_size_skip, sizeof gen_size_skip, "%s", lskip);
+                if (st->size_first) asm_line("", "MVI", "SZFLG,X'00'", "no size error yet");
+            }
             int rs = gen_expr(st->expr, 0, d->scale);
             gen_rescale16("WK0", rs, d->scale, st->rounded);
             asm_line("", "ZAP", "PWK1(16),WK0(16)", "");
-            gen_store(d, st->dsub, "PWK1");
+            if (st->size_err) {
+                /* A size error is a result whose magnitude has more integer
+                 * digits than the item holds -- after ROUNDED, since rounding
+                 * can carry. The magnitude is compared against 10 to the
+                 * item's digit count at the item's scale; the sign nibble is
+                 * forced positive so one compare covers both signs. */
+                char lim[40];
+                lim[0] = '1';
+                memset(lim + 1, '0', (size_t)d->digits);
+                lim[d->digits + 1] = 0;
+                asm_line("", "ZAP", "WK1(16),PWK1(16)", "");
+                asm_line("", "OI", "WK1+15,X'0F'", "magnitude");
+                snprintf(b, sizeof b, "WK1(16),%s(16)", intern_const(lim));
+                asm_line("", "CP", b, "against 10 ** digits");
+                asm_line("", "BL", lok, "fits");
+                asm_line("", "MVI", "SZFLG,X'01'", "size error: the item is left alone");
+                asm_line("", "B", lskip, "");
+                asm_line(lok, "DS", "0H", "");
+                reset_bases();
+                gen_store(d, st->dsub, "PWK1");
+                asm_line(lskip, "DS", "0H", "");
+                reset_bases();
+                gen_size_skip[0] = 0;
+                if (st->size_last) {
+                    snprintf(b, sizeof b, "L%04d", st->lab2);
+                    asm_line("", "CLI", "SZFLG,X'00'", "any size error in the series?");
+                    asm_line("", "BE", b, "none: past the imperative statements");
+                }
+            } else gen_store(d, st->dsub, "PWK1");
             break;
         }
         case ST_MOVE:
@@ -6661,6 +6901,7 @@ static void generate(void)
         if (use_lvals) asm_line("LVALS", "DC", "256X'00'", "LOW-VALUES, for comparison");
         if (use_qvals) asm_line("QVALS", "DC", "256X'7D'", "QUOTES, for comparison");
         if (use_spcs)  asm_line("SPCS", "DC", "256C' '", "space padding, for comparison");
+        if (use_szflg) asm_line("SZFLG", "DS", "X", "ON SIZE ERROR: set by any receiver of a series");
         asm_line("PWK1", "DS", "PL16", "");
         asm_line("PWK2", "DS", "PL16", "");
         asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");

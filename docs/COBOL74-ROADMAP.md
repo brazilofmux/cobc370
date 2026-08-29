@@ -92,13 +92,24 @@ a subscript; it belongs with the `ACCEPT`/`DISPLAY` item below. S.
   as a chain of hidden condition names expanded to an OR of ranges
 - `NOT` on the sign condition -- already worked
 
-**Arithmetic** -- M for the group:
-- `**` exponentiation (integer exponent by repeated `MP`; a non-integer
-  exponent has no exact packed-decimal answer -- refuse it with a message)
-- `ON SIZE ERROR` on every arithmetic statement (`ROUNDED` is already accepted)
-- identifier series on `COMPUTE` (`COMPUTE A B = ...`), multiple results generally
-- `DIVIDE ... INTO` series without `GIVING`; `DIVIDE ... REMAINDER`
-- `MULTIPLY`/`ADD`/`SUBTRACT` `GIVING` series -- `ADD` and `MULTIPLY` already work
+**Arithmetic** -- DONE 2026-08-29:
+- `**` exponentiation: a literal exponent is unrolled for any base, an
+  identifier exponent runs a loop for an integer base, and literal ** literal
+  is folded at parse time so `2 ** 3 ** 2` works; a negative or fractional
+  exponent is refused, having no exact decimal value
+- `ON SIZE ERROR` on every arithmetic statement: the magnitude is compared
+  against 10^digits after rounding, the item is left alone on overflow, a
+  flag lets a series run its imperative once, and a zero divisor is a size
+  error under the phrase
+- result series on `COMPUTE`, `ADD ... TO`, `SUBTRACT ... FROM`,
+  `MULTIPLY ... BY`, `DIVIDE ... INTO`, and every `GIVING`
+- `DIVIDE ... INTO` without `GIVING`; `DIVIDE ... REMAINDER`, with the
+  quotient truncated as stored whatever `ROUNDED` said
+
+Found and fixed on the way: every packed result too wide for its item had
+been abending 0CA rather than truncating, because naming interruption codes
+8 and 10 in the program-check `SPIE` turns their program-mask bits on. The
+`SPIE` no longer names the maskable codes, and the mask is cleared at entry.
 
 **`CORRESPONDING`** -- S: `ADD`, `SUBTRACT`, `MOVE`. Pure front end: match
 subordinate names between two groups and expand to the elementary statements.
