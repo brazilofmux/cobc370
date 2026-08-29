@@ -30,8 +30,8 @@ T0000    DS    0H
          OPEN  (FD000,OUTPUT)
 T0001    DS    0H
 * PERFORM WRITE-ONE
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   DWK(8),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
          STH   2,PT001
 L0006    DS    0H
@@ -183,9 +183,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

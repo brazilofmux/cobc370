@@ -31,17 +31,17 @@ T0000    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0034
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0034
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0001
 L0034    DS    0H
 T0001    DS    0H
@@ -56,17 +56,17 @@ T0002    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0035
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0035
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0005+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0002
 L0035    DS    0H
 T0003    DS    0H
@@ -90,13 +90,13 @@ T0006    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNH   L0004
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0006(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+14(2),K0006+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BNL   L0004
 T0007    DS    0H
 * DISPLAY
@@ -110,13 +110,13 @@ T0008    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNH   L0005
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0007+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0005
 T0009    DS    0H
 * DISPLAY
@@ -139,9 +139,9 @@ T0012    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0005+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0036
          CLC   D0000(3),D0001      unsigned zoned: a byte compare is ex
          BNE   L0007
@@ -170,9 +170,9 @@ T0016    DS    0H
          MVC   D0000(3),S0009      numeric literal as zoned digits
 T0017    DS    0H
 * IF
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0005+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0037
          CLC   D0000(3),D0001      unsigned zoned: a byte compare is ex
          BNE   L0009
@@ -208,18 +208,18 @@ T0021    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(3)    zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(3)  zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0040
-         PACK  WK0(16),D0001(3)    zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0001(3)  zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0039
 L0040    DS    0H
-         PACK  WK0(16),D0001(3)    zoned -> packed
-         ZAP   WK1(16),K0009(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0001(3)  zoned -> packed
+         ZAP   WK1+15(1),K0009+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0011
 L0039    DS    0H
 T0022    DS    0H
@@ -425,13 +425,13 @@ T0044    DS    0H
          MVC   D0007(2),S0029      numeric literal as zoned digits
 T0045    DS    0H
 * IF
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0022
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0022
 T0046    DS    0H
 * DISPLAY
@@ -457,13 +457,13 @@ T0049    DS    0H
          MVC   D0007(2),S0032      numeric literal as zoned digits
 T0050    DS    0H
 * IF
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0024
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0024
 T0051    DS    0H
 * DISPLAY
@@ -477,25 +477,25 @@ T0052    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0005+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0050
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0051
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0052
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0010(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+14(2),K0010+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BL    L0025
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+14(2),K0011+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0025
 L0052    DS    0H
 L0051    DS    0H
@@ -524,25 +524,25 @@ T0056    DS    0H
          MVC   D0007(2),S0036      numeric literal as zoned digits
 T0057    DS    0H
 * IF
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0005+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0053
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0054
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0055
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0010(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+14(2),K0010+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BL    L0027
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+14(2),K0011+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0027
 L0055    DS    0H
 L0054    DS    0H
@@ -562,25 +562,25 @@ T0059    DS    0H
          MVC   D0007(2),S0038      numeric literal as zoned digits
 T0060    DS    0H
 * IF
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0005+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0056
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0057
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0058
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0010(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+14(2),K0010+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BL    L0028
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+14(2),K0011+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0028
 L0058    DS    0H
 L0057    DS    0H
@@ -597,13 +597,13 @@ T0062    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0059
-         PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0007(2)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNH   L0029
 L0059    DS    0H
 T0063    DS    0H
@@ -811,9 +811,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

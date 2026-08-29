@@ -57,9 +57,9 @@ T0004    DS    0H
 * IF
          LH    2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+14(2),K0002+14(2)  literal
+         CP    WK0+13(3),WK1+14(2)  numeric compare
          BNH   L0001
 T0005    DS    0H
 * GO TO DONE-PARA
@@ -76,13 +76,10 @@ T0007    DS    0H
 * COMPUTE WS-AMT = ...
          LH    2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         SRP   WK0(16),2,0         align scale (left)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   D0002(5),PWK1(16)
+         ZAP   WK0+10(6),DWK(8)
+         MP    WK0+10(6),K0003+13(3)  scale becomes the sum of the scal
+         SRP   WK0+10(6),2,0       align scale (left)
+         ZAP   D0002(5),WK0+10(6)
 T0008    DS    0H
 * GENERATE DETAIL-LINE
          DROP  8
@@ -220,9 +217,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

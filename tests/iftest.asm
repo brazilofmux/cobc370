@@ -33,11 +33,11 @@ T0000    DS    0H
          USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+10(6),DWK(8)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK1+10(6),DWK(8)
+         CP    WK0+10(6),WK1+10(6)  numeric compare
          BNL   L0001
 T0001    DS    0H
 * MOVE LESS   -> OUT-MSG
@@ -65,17 +65,17 @@ T0005    DS    0H
 * IF
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+10(6),DWK(8)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK1+10(6),DWK(8)
+         CP    WK0+10(6),WK1+10(6)  numeric compare
          BH    L0003
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BNH   L0003
 T0006    DS    0H
 * MOVE ANDOK  -> OUT-MSG
@@ -103,15 +103,15 @@ T0010    DS    0H
 * IF
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+14(2),K0002+14(2)  literal
+         CP    WK0+10(6),WK1+14(2)  numeric compare
          BE    L0019
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+14(2),K0003+14(2)  literal
+         CP    WK0+10(6),WK1+14(2)  numeric compare
          BNE   L0005
 L0019    DS    0H
 T0011    DS    0H
@@ -247,19 +247,19 @@ T0036    DS    0H
 * IF
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+10(6),DWK(8)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK1+10(6),DWK(8)
+         CP    WK0+10(6),WK1+10(6)  numeric compare
          BNH   L0015
 T0037    DS    0H
 * IF
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BNH   L0016
 T0038    DS    0H
 * MOVE NEST1  -> OUT-MSG
@@ -334,9 +334,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

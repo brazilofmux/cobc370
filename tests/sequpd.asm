@@ -146,9 +146,9 @@ T0021    DS    0H
          OI    D0006+1,X'F0'       unsigned: force an F zone
 T0022    DS    0H
 * IF
-         PACK  WK0(16),D0006(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0006(2)  zoned -> packed
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0016
 T0023    DS    0H
 * GO TO UPD-CHANGE
@@ -159,9 +159,9 @@ T0024    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0006(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0006(2)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0017
 T0025    DS    0H
 * GO TO UPD-CHANGE
@@ -172,9 +172,9 @@ T0026    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0006(2)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0006(2)  zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0018
 T0027    DS    0H
 * GO TO UPD-FROM
@@ -303,9 +303,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

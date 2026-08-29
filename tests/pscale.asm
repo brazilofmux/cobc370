@@ -100,12 +100,12 @@ T0007    DS    0H
          BALR  14,15
 T0008    DS    0H
 * COMPUTE ACC = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         PACK  WK1(16),D0001(3)    zoned -> packed
-         SRP   WK0(16),1,0         align scale (left)
-         AP    WK0(16),WK1(16)
-         SRP   WK0(16),10,0        align scale (left)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+7(9),D0000(5)   zoned -> packed
+         SRP   WK0+7(9),1,0        align scale (left)
+         PACK  WK1+14(2),D0001(3)  zoned -> packed
+         AP    WK0+7(9),WK1+14(2)
+         SRP   WK0+7(9),10,0       align scale (left)
+         ZAP   PWK1(16),WK0+7(9)
          UNPK  ZWK+2(16),PWK1+7(9)  the low 16 digits, sign and all
          UNPK  DWK(3),PWK1+6(2)    the leading digits
          MVC   ZWK(2),DWK+1        into the front of the item
@@ -136,11 +136,11 @@ T0010    DS    0H
          BALR  14,15
 T0011    DS    0H
 * COMPUTE ACC = ...
-         PACK  WK0(16),D0002(5)    zoned -> packed
-         PACK  WK1(16),D0003(9)    zoned -> packed
-         SRP   WK0(16),4,0         align scale (left)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+10(6),D0002(5)  zoned -> packed
+         SRP   WK0+10(6),4,0       align scale (left)
+         PACK  WK1+11(5),D0003(9)  zoned -> packed
+         AP    WK0+10(6),WK1+11(5)
+         ZAP   PWK1(16),WK0+10(6)
          UNPK  ZWK+2(16),PWK1+7(9)  the low 16 digits, sign and all
          UNPK  DWK(3),PWK1+6(2)    the leading digits
          MVC   ZWK(2),DWK+1        into the front of the item
@@ -234,9 +234,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

@@ -31,19 +31,17 @@ T0000    DS    0H
 * COMPUTE C = ...
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         PACK  WK1(16),D0001(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0002(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0000(5)  zoned -> packed
+         PACK  WK1+13(3),D0001(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         UNPK  D0002(5),WK0+12(4)  packed -> zoned
          OI    D0002+4,X'F0'       unsigned: force an F zone
 T0001    DS    0H
 * COMPUTE D = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         PACK  WK1(16),D0001(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0003(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0000(5)  zoned -> packed
+         PACK  WK1+13(3),D0001(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         UNPK  D0003(5),WK0+12(4)  packed -> zoned
          OI    D0003+4,X'F0'       unsigned: force an F zone
 T0002    DS    0H
 * DISPLAY
@@ -56,19 +54,15 @@ T0002    DS    0H
          BALR  14,15
 T0003    DS    0H
 * COMPUTE A = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0000(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0000(5)  zoned -> packed
+         AP    WK0+12(4),K0001+15(1)
+         UNPK  D0000(5),WK0+12(4)  packed -> zoned
          OI    D0000+4,X'F0'       unsigned: force an F zone
 T0004    DS    0H
 * COMPUTE B = ...
-         PACK  WK0(16),D0001(5)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0001(5)  zoned -> packed
+         AP    WK0+12(4),K0001+15(1)
+         UNPK  D0001(5),WK0+12(4)  packed -> zoned
          OI    D0001+4,X'F0'       unsigned: force an F zone
 T0005    DS    0H
 * DISPLAY
@@ -81,19 +75,15 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * COMPUTE A = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0000(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0000(5)  zoned -> packed
+         SP    WK0+12(4),K0001+15(1)
+         UNPK  D0000(5),WK0+12(4)  packed -> zoned
          OI    D0000+4,X'F0'       unsigned: force an F zone
 T0007    DS    0H
 * COMPUTE B = ...
-         PACK  WK0(16),D0001(5)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0001(5)  zoned -> packed
+         SP    WK0+12(4),K0001+15(1)
+         UNPK  D0001(5),WK0+12(4)  packed -> zoned
          OI    D0001+4,X'F0'       unsigned: force an F zone
 T0008    DS    0H
 * DISPLAY
@@ -106,21 +96,15 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * COMPUTE A = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0000(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0000(5)  zoned -> packed
+         MP    WK0+12(4),K0002+15(1)  scale becomes the sum of the scal
+         UNPK  D0000(5),WK0+12(4)  packed -> zoned
          OI    D0000+4,X'F0'       unsigned: force an F zone
 T0010    DS    0H
 * COMPUTE B = ...
-         PACK  WK0(16),D0001(5)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0001(5)  zoned -> packed
+         MP    WK0+12(4),K0002+15(1)  scale becomes the sum of the scal
+         UNPK  D0001(5),WK0+12(4)  packed -> zoned
          OI    D0001+4,X'F0'       unsigned: force an F zone
 T0011    DS    0H
 * DISPLAY
@@ -133,29 +117,23 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * COMPUTE A = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0000(5),PWK1(16)   packed -> zoned
+         PACK  WK0+10(6),D0000(5)  zoned -> packed
+         SRP   WK0+10(6),4,0       align scale (left)
+         DP    WK0+10(6),K0002+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK0+10(5)   the quotient on its own
+         ZAP   WK0+11(5),QTMP(5)   drop the remainder
+         SRP   WK0+11(5),60,0      align scale (right)
+         UNPK  D0000(5),WK0+11(5)  packed -> zoned
          OI    D0000+4,X'F0'       unsigned: force an F zone
 T0013    DS    0H
 * COMPUTE B = ...
-         PACK  WK0(16),D0001(5)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
+         PACK  WK0+10(6),D0001(5)  zoned -> packed
+         SRP   WK0+10(6),4,0       align scale (left)
+         DP    WK0+10(6),K0002+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK0+10(5)   the quotient on its own
+         ZAP   WK0+11(5),QTMP(5)   drop the remainder
+         SRP   WK0+11(5),60,0      align scale (right)
+         UNPK  D0001(5),WK0+11(5)  packed -> zoned
          OI    D0001+4,X'F0'       unsigned: force an F zone
 T0014    DS    0H
 * DISPLAY
@@ -168,19 +146,17 @@ T0014    DS    0H
          BALR  14,15
 T0015    DS    0H
 * COMPUTE C = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         PACK  WK1(16),D0001(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0002(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0000(5)  zoned -> packed
+         PACK  WK1+13(3),D0001(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         UNPK  D0002(5),WK0+12(4)  packed -> zoned
          OI    D0002+4,X'F0'       unsigned: force an F zone
 T0016    DS    0H
 * COMPUTE D = ...
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         PACK  WK1(16),D0001(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0003(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0000(5)  zoned -> packed
+         PACK  WK1+13(3),D0001(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         UNPK  D0003(5),WK0+12(4)  packed -> zoned
          OI    D0003+4,X'F0'       unsigned: force an F zone
 T0017    DS    0H
 * DISPLAY
@@ -193,34 +169,26 @@ T0017    DS    0H
          BALR  14,15
 T0018    DS    0H
 * COMPUTE C = ...
-         ZAP   WK0(16),K0003(16)   literal
-         ZAP   WK1(16),K0004(16)   literal
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0002(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+11(5),K0004+14(2)  literal
+         SRP   WK0+11(5),4,0       align scale (left)
+         DP    WK0+11(5),K0003+15(1)  quotient, then the remainder
+         ZAP   QTMP(4),WK0+11(4)   the quotient on its own
+         ZAP   WK0+12(4),QTMP(4)   drop the remainder
+         SRP   WK0+12(4),60,0      align scale (right)
+         UNPK  D0002(5),WK0+12(4)  packed -> zoned
          OI    D0002+4,X'F0'       unsigned: force an F zone
 T0019    DS    0H
 * COMPUTE D = ...
-         ZAP   WK0(16),K0003(16)   literal
-         ZAP   WK1(16),K0003(16)   literal
-         ZAP   WK2(16),K0004(16)   literal
-         SRP   WK1(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK2(16)    DP takes at most 8 bytes on the righ
-         DP    WK1(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK1(8)
-         ZAP   WK1(16),QTMP(8)     drop the remainder
-         SRP   WK1(16),60,0        align scale (right)
-         ZAP   WK2(16),K0004(16)   literal
-         ZAP   MULT8(8),WK2(16)    MP takes at most 8 bytes on the righ
-         MP    WK1(16),MULT8(8)    scale becomes the sum of the scales
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0003(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+13(3),K0004+14(2)  literal
+         ZAP   WK1+11(5),K0004+14(2)  literal
+         SRP   WK1+11(5),4,0       align scale (left)
+         DP    WK1+11(5),K0003+15(1)  quotient, then the remainder
+         ZAP   QTMP(4),WK1+11(4)   the quotient on its own
+         ZAP   WK1+12(4),QTMP(4)   drop the remainder
+         SRP   WK1+12(4),60,0      align scale (right)
+         MP    WK1+13(3),K0003+15(1)  scale becomes the sum of the scal
+         SP    WK0+13(3),WK1+13(3)
+         UNPK  D0003(5),WK0+13(3)  packed -> zoned
          OI    D0003+4,X'F0'       unsigned: force an F zone
 T0020    DS    0H
 * DISPLAY
@@ -233,34 +201,26 @@ T0020    DS    0H
          BALR  14,15
 T0021    DS    0H
 * COMPUTE C = ...
-         ZAP   WK0(16),K0003(16)   literal
-         ZAP   WK1(16),K0004(16)   literal
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0002(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+11(5),K0004+14(2)  literal
+         SRP   WK0+11(5),4,0       align scale (left)
+         DP    WK0+11(5),K0003+15(1)  quotient, then the remainder
+         ZAP   QTMP(4),WK0+11(4)   the quotient on its own
+         ZAP   WK0+12(4),QTMP(4)   drop the remainder
+         SRP   WK0+12(4),60,0      align scale (right)
+         UNPK  D0002(5),WK0+12(4)  packed -> zoned
          OI    D0002+4,X'F0'       unsigned: force an F zone
 T0022    DS    0H
 * COMPUTE D = ...
-         ZAP   WK0(16),K0003(16)   literal
-         ZAP   WK1(16),K0003(16)   literal
-         ZAP   WK2(16),K0004(16)   literal
-         SRP   WK1(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK2(16)    DP takes at most 8 bytes on the righ
-         DP    WK1(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK1(8)
-         ZAP   WK1(16),QTMP(8)     drop the remainder
-         SRP   WK1(16),60,0        align scale (right)
-         ZAP   WK2(16),K0004(16)   literal
-         ZAP   MULT8(8),WK2(16)    MP takes at most 8 bytes on the righ
-         MP    WK1(16),MULT8(8)    scale becomes the sum of the scales
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0003(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+13(3),K0004+14(2)  literal
+         ZAP   WK1+11(5),K0004+14(2)  literal
+         SRP   WK1+11(5),4,0       align scale (left)
+         DP    WK1+11(5),K0003+15(1)  quotient, then the remainder
+         ZAP   QTMP(4),WK1+11(4)   the quotient on its own
+         ZAP   WK1+12(4),QTMP(4)   drop the remainder
+         SRP   WK1+12(4),60,0      align scale (right)
+         MP    WK1+13(3),K0003+15(1)  scale becomes the sum of the scal
+         SP    WK0+13(3),WK1+13(3)
+         UNPK  D0003(5),WK0+13(3)  packed -> zoned
          OI    D0003+4,X'F0'       unsigned: force an F zone
 T0023    DS    0H
 * DISPLAY
@@ -273,35 +233,27 @@ T0023    DS    0H
          BALR  14,15
 T0024    DS    0H
 * COMPUTE Q = ...
-         ZAP   WK0(16),K0005(16)   literal
-         ZAP   WK1(16),K0002(16)   literal
-         SRP   WK0(16),6,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0010(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+10(6),K0005+14(2)  literal
+         SRP   WK0+10(6),6,0       align scale (left)
+         DP    WK0+10(6),K0002+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK0+10(5)   the quotient on its own
+         ZAP   WK0+11(5),QTMP(5)   drop the remainder
+         SRP   WK0+11(5),60,0      align scale (right)
+         UNPK  D0010(5),WK0+11(5)  packed -> zoned
          OI    D0010+4,X'F0'       unsigned: force an F zone
 T0025    DS    0H
 * COMPUTE R = ...
-         ZAP   WK0(16),K0005(16)   literal
-         ZAP   WK1(16),K0005(16)   literal
-         ZAP   WK2(16),K0002(16)   literal
-         SRP   WK1(16),6,0         align scale (left)
-         ZAP   DIVR8(8),WK2(16)    DP takes at most 8 bytes on the righ
-         DP    WK1(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK1(8)
-         ZAP   WK1(16),QTMP(8)     drop the remainder
-         SRP   WK1(16),60,0        align scale (right)
-         ZAP   WK2(16),K0002(16)   literal
-         ZAP   MULT8(8),WK2(16)    MP takes at most 8 bytes on the righ
-         MP    WK1(16),MULT8(8)    scale becomes the sum of the scales
-         SRP   WK0(16),2,0         align scale (left)
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0011(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+12(4),K0005+14(2)  literal
+         SRP   WK0+12(4),2,0       align scale (left)
+         ZAP   WK1+10(6),K0005+14(2)  literal
+         SRP   WK1+10(6),6,0       align scale (left)
+         DP    WK1+10(6),K0002+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK1+10(5)   the quotient on its own
+         ZAP   WK1+11(5),QTMP(5)   drop the remainder
+         SRP   WK1+11(5),60,0      align scale (right)
+         MP    WK1+12(4),K0002+15(1)  scale becomes the sum of the scal
+         SP    WK0+12(4),WK1+12(4)
+         UNPK  D0011(5),WK0+12(4)  packed -> zoned
          OI    D0011+4,X'F0'       unsigned: force an F zone
 T0026    DS    0H
 * MOVE Q -> E-Q
@@ -328,35 +280,27 @@ T0028    DS    0H
          BALR  14,15
 T0029    DS    0H
 * COMPUTE Q ROUNDED = ...
-         ZAP   WK0(16),K0005(16)   literal
-         ZAP   WK1(16),K0002(16)   literal
-         SRP   WK0(16),6,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,5        align scale (right, ROUNDED)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0010(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+10(6),K0005+14(2)  literal
+         SRP   WK0+10(6),6,0       align scale (left)
+         DP    WK0+10(6),K0002+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK0+10(5)   the quotient on its own
+         ZAP   WK0+11(5),QTMP(5)   drop the remainder
+         SRP   WK0+11(5),60,5      align scale (right, ROUNDED)
+         UNPK  D0010(5),WK0+11(5)  packed -> zoned
          OI    D0010+4,X'F0'       unsigned: force an F zone
 T0030    DS    0H
 * COMPUTE R = ...
-         ZAP   WK0(16),K0005(16)   literal
-         ZAP   WK1(16),K0005(16)   literal
-         ZAP   WK2(16),K0002(16)   literal
-         SRP   WK1(16),6,0         align scale (left)
-         ZAP   DIVR8(8),WK2(16)    DP takes at most 8 bytes on the righ
-         DP    WK1(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK1(8)
-         ZAP   WK1(16),QTMP(8)     drop the remainder
-         SRP   WK1(16),60,0        align scale (right)
-         ZAP   WK2(16),K0002(16)   literal
-         ZAP   MULT8(8),WK2(16)    MP takes at most 8 bytes on the righ
-         MP    WK1(16),MULT8(8)    scale becomes the sum of the scales
-         SRP   WK0(16),2,0         align scale (left)
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0011(5),PWK1(16)   packed -> zoned
+         ZAP   WK0+12(4),K0005+14(2)  literal
+         SRP   WK0+12(4),2,0       align scale (left)
+         ZAP   WK1+10(6),K0005+14(2)  literal
+         SRP   WK1+10(6),6,0       align scale (left)
+         DP    WK1+10(6),K0002+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK1+10(5)   the quotient on its own
+         ZAP   WK1+11(5),QTMP(5)   drop the remainder
+         SRP   WK1+11(5),60,0      align scale (right)
+         MP    WK1+12(4),K0002+15(1)  scale becomes the sum of the scal
+         SP    WK0+12(4),WK1+12(4)
+         UNPK  D0011(5),WK0+12(4)  packed -> zoned
          OI    D0011+4,X'F0'       unsigned: force an F zone
 T0031    DS    0H
 * MOVE Q -> E-Q
@@ -383,9 +327,8 @@ T0033    DS    0H
          BALR  14,15
 T0034    DS    0H
 * COMPUTE P = ...
-         ZAP   WK0(16),K0006(16)   literal
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0009(9),PWK1(16)   packed -> zoned
+         ZAP   WK0+13(3),K0006+13(3)  literal
+         UNPK  D0009(9),WK0+13(3)  packed -> zoned
          OI    D0009+8,X'F0'       unsigned: force an F zone
 T0035    DS    0H
 * DISPLAY
@@ -396,11 +339,10 @@ T0035    DS    0H
          BALR  14,15
 T0036    DS    0H
 * COMPUTE Q = ...
-         ZAP   WK0(16),K0007(16)   literal
+         ZAP   WK0(16),K0007+14(2)  literal
          ZAP   MULT8(8),WK0(16)    the base
          MP    WK0(16),MULT8(8)    ** unrolled
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0010(5),PWK1(16)   packed -> zoned
+         UNPK  D0010(5),WK0(16)    packed -> zoned
          OI    D0010+4,X'F0'       unsigned: force an F zone
 T0037    DS    0H
 * MOVE Q -> E-Q
@@ -429,8 +371,7 @@ L0008    ZAP   MULT8(8),WK1(16)    the base
          MP    WK0(16),MULT8(8)
          BCT   3,L0008             once per exponent
 L0009    DS    0H
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0009(9),PWK1(16)   packed -> zoned
+         UNPK  D0009(9),WK0(16)    packed -> zoned
          OI    D0009+8,X'F0'       unsigned: force an F zone
 T0040    DS    0H
 * DISPLAY
@@ -441,9 +382,8 @@ T0040    DS    0H
          BALR  14,15
 T0041    DS    0H
 * COMPUTE P = ...
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0009(9),PWK1(16)   packed -> zoned
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         UNPK  D0009(9),WK0+15(1)  packed -> zoned
          OI    D0009+8,X'F0'       unsigned: force an F zone
 T0042    DS    0H
 * DISPLAY
@@ -454,9 +394,8 @@ T0042    DS    0H
          BALR  14,15
 T0043    DS    0H
 * COMPUTE P = ...
-         ZAP   WK0(16),K0008(16)   literal
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0009(9),PWK1(16)   packed -> zoned
+         ZAP   WK0+14(2),K0008+14(2)  literal
+         UNPK  D0009(9),WK0+14(2)  packed -> zoned
          OI    D0009+8,X'F0'       unsigned: force an F zone
 T0044    DS    0H
 * DISPLAY
@@ -468,10 +407,9 @@ T0044    DS    0H
 T0045    DS    0H
 * COMPUTE S2 = ... (ON SIZE ERROR)
          MVI   SZFLG,X'00'         no size error yet
-         PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0009(16)   literal
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+13(3),D0004(2)  zoned -> packed
+         AP    WK0+13(3),K0009+14(2)
+         ZAP   PWK1(16),WK0+13(3)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0010(16)   against 10 ** digits
@@ -504,10 +442,9 @@ T0047    DS    0H
          MVI   SZFLG,X'00'         no size error yet
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+14(2),D0004(2)  zoned -> packed
+         AP    WK0+14(2),K0001+15(1)
+         ZAP   PWK1(16),WK0+14(2)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0010(16)   against 10 ** digits
@@ -543,11 +480,9 @@ T0049    DS    0H
 T0050    DS    0H
 * COMPUTE S2 = ... (ON SIZE ERROR)
          MVI   SZFLG,X'00'         no size error yet
-         PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+12(4),D0004(2)  zoned -> packed
+         MP    WK0+12(4),K0011+14(2)  scale becomes the sum of the scal
+         ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0010(16)   against 10 ** digits
@@ -566,11 +501,9 @@ T0051    DS    0H
 * COMPUTE T2 = ... (ON SIZE ERROR)
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0005(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+12(4),D0005(2)  zoned -> packed
+         MP    WK0+12(4),K0011+14(2)  scale becomes the sum of the scal
+         ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0010(16)   against 10 ** digits
@@ -605,20 +538,19 @@ T0053    DS    0H
          MVI   SZFLG,X'00'         no size error yet
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(5)    zoned -> packed
-         PACK  WK1(16),D0014(1)    zoned -> packed
-         CP    WK1(16),K0012(16)   dividing by zero?
+         PACK  WK0+10(6),D0000(5)  zoned -> packed
+         PACK  WK1+15(1),D0014(1)  zoned -> packed
+         CP    WK1+15(1),K0012+15(1)  dividing by zero?
          BNE   L0020
          MVI   SZFLG,X'01'         size error
          B     L0019
 L0020    DS    0H
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
+         SRP   WK0+10(6),4,0       align scale (left)
+         DP    WK0+10(6),WK1+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK0+10(5)   the quotient on its own
+         ZAP   WK0+11(5),QTMP(5)   drop the remainder
+         SRP   WK0+11(5),60,0      align scale (right)
+         ZAP   PWK1(16),WK0+11(5)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0013(16)   against 10 ** digits
@@ -651,20 +583,19 @@ T0055    DS    0H
          MVI   SZFLG,X'00'         no size error yet
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0002(5)    zoned -> packed
-         PACK  WK1(16),D0014(1)    zoned -> packed
-         CP    WK1(16),K0012(16)   dividing by zero?
+         PACK  WK0+10(6),D0002(5)  zoned -> packed
+         PACK  WK1+15(1),D0014(1)  zoned -> packed
+         CP    WK1+15(1),K0012+15(1)  dividing by zero?
          BNE   L0023
          MVI   SZFLG,X'01'         size error
          B     L0022
 L0023    DS    0H
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
+         SRP   WK0+10(6),4,0       align scale (left)
+         DP    WK0+10(6),WK1+15(1)  quotient, then the remainder
+         ZAP   QTMP(5),WK0+10(5)   the quotient on its own
+         ZAP   WK0+11(5),QTMP(5)   drop the remainder
+         SRP   WK0+11(5),60,0      align scale (right)
+         ZAP   PWK1(16),WK0+11(5)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0013(16)   against 10 ** digits
@@ -695,9 +626,9 @@ L0005    DS    0H
 T0057    DS    0H
 * COMPUTE S2 ROUNDED = ... (ON SIZE ERROR)
          MVI   SZFLG,X'00'         no size error yet
-         ZAP   WK0(16),K0014(16)   literal
-         SRP   WK0(16),63,5        align scale (right, ROUNDED)
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+14(2),K0014+14(2)  literal
+         SRP   WK0+14(2),63,5      align scale (right, ROUNDED)
+         ZAP   PWK1(16),WK0+14(2)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0010(16)   against 10 ** digits
@@ -729,10 +660,9 @@ T0059    DS    0H
          MVI   SZFLG,X'00'         no size error yet
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0010(16)   literal
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+13(3),D0004(2)  zoned -> packed
+         SP    WK0+13(3),K0010+14(2)
+         ZAP   PWK1(16),WK0+13(3)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0010(16)   against 10 ** digits
@@ -868,9 +798,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -879,8 +808,8 @@ WK4      DS    PL16
 WK5      DS    PL16
 K0001    DC    PL16'1'             numeric constants
 K0002    DC    PL16'3'
-K0003    DC    PL16'17'
-K0004    DC    PL16'5'
+K0003    DC    PL16'5'
+K0004    DC    PL16'17'
 K0005    DC    PL16'10'
 K0006    DC    PL16'1024'
 K0007    DC    PL16'15'

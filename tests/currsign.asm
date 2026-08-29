@@ -148,13 +148,10 @@ T0012    DS    0H
          BALR  14,15
 T0013    DS    0H
 * COMPUTE R = ...
-         PACK  WK0(16),D0006(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         SRP   WK0(16),1,0         align scale (left)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0007(6),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0006(2)  zoned -> packed
+         MP    WK0+12(4),K0002+14(2)  scale becomes the sum of the scal
+         SRP   WK0+12(4),1,0       align scale (left)
+         UNPK  D0007(6),WK0+12(4)  packed -> zoned
          OI    D0007+5,X'F0'       unsigned: force an F zone
 T0014    DS    0H
 * MOVE R -> E-R
@@ -231,9 +228,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

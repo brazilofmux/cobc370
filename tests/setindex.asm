@@ -178,11 +178,11 @@ T0021    DS    0H
          USING WSC0000,8
          LH    2,D0010
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+13(3),DWK(8)
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK1+10(6),DWK(8)
+         CP    WK0+13(3),WK1+10(6)  numeric compare
          BNE   L0001
 T0022    DS    0H
 * DISPLAY
@@ -212,11 +212,11 @@ T0026    DS    0H
 * IF
          LH    2,D0010
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+13(3),DWK(8)
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK1+10(6),DWK(8)
+         CP    WK0+13(3),WK1+10(6)  numeric compare
          BNL   L0003
 T0027    DS    0H
 * DISPLAY
@@ -361,9 +361,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

@@ -81,29 +81,23 @@ T0006    DS    0H
          MVC   0(2,1),D0005        alphanumeric into a numeric item
 T0007    DS    0H
 * COMPUTE YY2 = ...
-         PACK  WK0(16),D0001(5)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0008(2),PWK1(16)   packed -> zoned
+         PACK  WK0+8(8),D0001(5)   zoned -> packed
+         SRP   WK0+8(8),4,0        align scale (left)
+         DP    WK0+8(8),K0001+13(3)  quotient, then the remainder
+         ZAP   QTMP(5),WK0+8(5)    the quotient on its own
+         ZAP   WK0+11(5),QTMP(5)   drop the remainder
+         SRP   WK0+11(5),60,0      align scale (right)
+         UNPK  D0008(2),WK0+11(5)  packed -> zoned
          OI    D0008+1,X'F0'       unsigned: force an F zone
 T0008    DS    0H
 * COMPUTE HH = ...
-         PACK  WK0(16),D0002(8)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0009(2),PWK1(16)   packed -> zoned
+         PACK  WK0+5(11),D0002(8)  zoned -> packed
+         SRP   WK0+5(11),4,0       align scale (left)
+         DP    WK0+5(11),K0002+12(4)  quotient, then the remainder
+         ZAP   QTMP(7),WK0+5(7)    the quotient on its own
+         ZAP   WK0+9(7),QTMP(7)    drop the remainder
+         SRP   WK0+9(7),60,0       align scale (right)
+         UNPK  D0009(2),WK0+9(7)   packed -> zoned
          OI    D0009+1,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * IF
@@ -148,9 +142,9 @@ T0013    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0009(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0009(2)  zoned -> packed
+         ZAP   WK1+14(2),K0003+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BNL   L0003
 T0014    DS    0H
 * DISPLAY
@@ -164,13 +158,13 @@ T0015    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(6)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+12(4),D0000(6)  zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+12(4),WK1+15(1)  numeric compare
          BNH   L0004
-         PACK  WK0(16),D0001(5)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+13(3),D0001(5)  zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BNH   L0004
 T0016    DS    0H
 * DISPLAY
@@ -392,9 +386,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

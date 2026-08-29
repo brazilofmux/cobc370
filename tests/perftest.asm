@@ -29,8 +29,8 @@ SPIEARMD DS    0H
 P0000    DS    0H
 T0000    DS    0H
 * PERFORM FILL-PARA THRU FILL-EXIT
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
@@ -42,9 +42,9 @@ L0002    DS    0H
          USING WSC0000,8
          LH    2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0003
          LA    15,R0001            return here
          ST    15,X0002            into the range's exit cell
@@ -53,8 +53,8 @@ R0001    DS    0H
          DROP  8
          LA    15,F0002            restore fall-through
          ST    15,X0002
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    2,D0003
@@ -102,9 +102,9 @@ L0004    DS    0H
          USING WSC0000,8
          LH    2,D0003
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0005
          LH    7,D0003             subscript
          BCTR  7,0                 subscript-1
@@ -112,9 +112,9 @@ L0004    DS    0H
          LA    7,D0002(7)          element address
          LH    2,0(,7)
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0004(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0005
          LA    15,R0002            return here
          ST    15,X0004            into the range's exit cell
@@ -186,8 +186,8 @@ T0012    DS    0H
          STH   2,D0005
 T0013    DS    0H
 * PERFORM BUMP-PARA THRU BUMP-EXIT
-         ZAP   WK0(16),K0005(16)   literal
-         ZAP   DWK(8),WK0(16)
+         ZAP   WK0+15(1),K0005+15(1)  literal
+         ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
          STH   2,PT014
 L0008    DS    0H
@@ -235,9 +235,9 @@ L0010    DS    0H
          USING WSC0000,8
          LH    2,D0005
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BE    L0011
          LA    15,R0005            return here
          ST    15,X0008            into the range's exit cell
@@ -333,9 +333,9 @@ T0027    DS    0H
 * IF
          LH    2,D0005
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0006(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0006+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BNH   L0001
 T0028    DS    0H
 * MOVE Y -> EOF-FLAG
@@ -397,9 +397,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

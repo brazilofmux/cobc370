@@ -29,15 +29,14 @@ SPIEARMD DS    0H
 P0000    DS    0H
 T0000    DS    0H
 * COMPUTE C = ...
-         ZAP   WK0(16),K0001(16)   literal
+         ZAP   WK0+10(6),K0001+15(1)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         AP    WK0+10(6),WK1+10(6)
+         ZAP   DWK(8),WK0+10(6)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0001    DS    0H
@@ -58,13 +57,12 @@ T0003    DS    0H
 * COMPUTE C = ...
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+10(6),DWK(8)
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         AP    WK0+10(6),WK1+10(6)
+         ZAP   DWK(8),WK0+10(6)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0004    DS    0H
@@ -85,11 +83,9 @@ T0006    DS    0H
 * COMPUTE C = ...
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK0+10(6),DWK(8)
+         SP    WK0+10(6),K0001+15(1)
+         ZAP   DWK(8),WK0+10(6)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0007    DS    0H
@@ -110,13 +106,12 @@ T0009    DS    0H
 * COMPUTE C = ...
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+10(6),DWK(8)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         SP    WK0+10(6),WK1+10(6)
+         ZAP   DWK(8),WK0+10(6)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0010    DS    0H
@@ -137,14 +132,12 @@ T0012    DS    0H
 * COMPUTE C = ...
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+4(12),DWK(8)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         MP    WK0+4(12),WK1+10(6)  scale becomes the sum of the scales
+         ZAP   DWK(8),WK0+4(12)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0013    DS    0H
@@ -165,18 +158,16 @@ T0015    DS    0H
 * COMPUTE C = ...
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+2(14),DWK(8)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         SRP   WK0+2(14),4,0       align scale (left)
+         DP    WK0+2(14),WK1+10(6)  quotient, then the remainder
+         ZAP   QTMP(8),WK0+2(8)    the quotient on its own
+         ZAP   WK0+8(8),QTMP(8)    drop the remainder
+         SRP   WK0+8(8),60,0       align scale (right)
+         ZAP   DWK(8),WK0+8(8)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0016    DS    0H
@@ -197,18 +188,16 @@ T0018    DS    0H
 * COMPUTE C = ...
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
+         ZAP   WK0+2(14),DWK(8)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         SRP   WK0(16),4,0         align scale (left)
-         ZAP   DIVR8(8),WK1(16)    DP takes at most 8 bytes on the righ
-         DP    WK0(16),DIVR8(8)    quotient in the leading 8 bytes
-         ZAP   QTMP(8),WK0(8)
-         ZAP   WK0(16),QTMP(8)     drop the remainder
-         SRP   WK0(16),60,0        align scale (right)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         SRP   WK0+2(14),4,0       align scale (left)
+         DP    WK0+2(14),WK1+10(6)  quotient, then the remainder
+         ZAP   QTMP(8),WK0+2(8)    the quotient on its own
+         ZAP   WK0+8(8),QTMP(8)    drop the remainder
+         SRP   WK0+8(8),60,0       align scale (right)
+         ZAP   DWK(8),WK0+8(8)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0019    DS    0H
@@ -227,17 +216,16 @@ T0020    DS    0H
          BALR  14,15
 T0021    DS    0H
 * COMPUTE C = ...
-         ZAP   WK0(16),K0001(16)   literal
+         ZAP   WK0+9(7),K0001+15(1)  literal
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         AP    WK0(16),WK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         AP    WK0+9(7),WK1+10(6)
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK1(16),DWK(8)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   DWK(8),PWK1(16)
+         ZAP   WK1+10(6),DWK(8)
+         AP    WK0+9(7),WK1+10(6)
+         ZAP   DWK(8),WK0+9(7)
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0022    DS    0H
@@ -295,9 +283,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

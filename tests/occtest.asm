@@ -44,9 +44,9 @@ T0001    DS    0H
          USING WSC0000,8
          LH    2,D0006
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BNH   L0001
 T0002    DS    0H
 * GO TO FILL-DONE
@@ -59,32 +59,26 @@ T0003    DS    0H
          USING WSC0000,8
          LH    2,D0006
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0003(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         SRP   WK0(16),2,0         align scale (left)
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+10(6),DWK(8)
+         MP    WK0+10(6),K0003+14(2)  scale becomes the sum of the scal
+         SRP   WK0+10(6),2,0       align scale (left)
          LH    6,D0006             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         ZAP   0(5,6),PWK1(16)
+         ZAP   0(5,6),WK0+10(6)
 T0004    DS    0H
 * COMPUTE YT-CREDITS = ...
          LH    2,D0006
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0004(16)   literal
-         ZAP   MULT8(8),WK1(16)    MP takes at most 8 bytes on the righ
-         MP    WK0(16),MULT8(8)    scale becomes the sum of the scales
-         SRP   WK0(16),2,0         align scale (left)
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+11(5),DWK(8)
+         MP    WK0+11(5),K0004+14(2)  scale becomes the sum of the scal
+         SRP   WK0+11(5),2,0       align scale (left)
          LH    6,D0006             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         ZAP   0(5,6),PWK1(16)
+         ZAP   0(5,6),WK0+11(5)
 T0005    DS    0H
 * ADD 1 -> WS-IDX
          LH    2,D0006             binary, same scale: in the register
@@ -153,14 +147,12 @@ T0014    DS    0H
          LA    7,1                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
-         ZAP   WK0(16),0(5,7)
+         ZAP   WK0+10(6),0(5,7)
          LA    7,3                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0003(7)          element address
-         ZAP   WK1(16),0(5,7)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0007(9),PWK1(16)   packed -> zoned
+         AP    WK0+10(6),0(5,7)
+         UNPK  D0007(9),WK0+10(6)  packed -> zoned
          OI    D0007+8,X'F0'       unsigned: force an F zone
 T0015    DS    0H
 * DISPLAY
@@ -234,9 +226,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

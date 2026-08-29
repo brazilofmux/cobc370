@@ -29,31 +29,31 @@ SPIEARMD DS    0H
 P0000    DS    0H
 T0000    DS    0H
 * PERFORM SHOW-IJ
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          UNPK  D0000(2),PWK1(16)   packed -> zoned
          OI    D0000+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
 L0002    DS    0H                  outer test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(2)  zoned -> packed
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0007
 L0003    DS    0H                  AFTER test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0001(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0001(2)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0005
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
@@ -62,8 +62,8 @@ R0001    DS    0H
          DROP  8
          LA    15,F0001            restore fall-through
          ST    15,X0001
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0001(2)   zoned -> packed
@@ -73,14 +73,14 @@ R0001    DS    0H
          B     L0003
 L0005    DS    0H                  AFTER level done: reset it, step the
          DROP  8
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0000(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(2),PWK1(16)   packed -> zoned
@@ -106,41 +106,41 @@ T0002    DS    0H
          MVC   D0003(2),S0006      numeric literal as zoned digits
 T0003    DS    0H
 * PERFORM COUNT-IT
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          UNPK  D0000(2),PWK1(16)   packed -> zoned
          OI    D0000+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0004(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0004+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          UNPK  D0002(2),PWK1(16)   packed -> zoned
          OI    D0002+1,X'F0'       unsigned: force an F zone
 L0008    DS    0H                  outer test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(2)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0013
 L0009    DS    0H                  AFTER test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0001(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0001(2)  zoned -> packed
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0011
 L0010    DS    0H                  second AFTER test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0002(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0002(2)  zoned -> packed
+         ZAP   WK1+15(1),K0003+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0012
          LA    15,R0002            return here
          ST    15,X0002            into the range's exit cell
@@ -149,8 +149,8 @@ R0002    DS    0H
          DROP  8
          LA    15,F0002            restore fall-through
          ST    15,X0002
-         ZAP   WK0(16),K0005(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0005+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0002(2)   zoned -> packed
@@ -160,14 +160,14 @@ R0002    DS    0H
          B     L0010
 L0012    DS    0H                  innermost done: reset it, step the m
          DROP  8
-         ZAP   WK0(16),K0004(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0004+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          UNPK  D0002(2),PWK1(16)   packed -> zoned
          OI    D0002+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0001(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          UNPK  D0001(2),PWK1(16)   packed -> zoned
@@ -175,14 +175,14 @@ L0012    DS    0H                  innermost done: reset it, step the m
          B     L0009
 L0011    DS    0H                  AFTER level done: reset it, step the
          DROP  8
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0000(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(2),PWK1(16)   packed -> zoned
@@ -206,29 +206,29 @@ T0005    DS    0H
          MVC   D0003(2),S0006      numeric literal as zoned digits
 T0006    DS    0H
 * PERFORM COUNT-IT
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          UNPK  D0000(2),PWK1(16)   packed -> zoned
          OI    D0000+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
 L0014    DS    0H                  outer test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   WK1(16),K0006(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(2)  zoned -> packed
+         ZAP   WK1+15(1),K0006+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0019
 L0015    DS    0H                  AFTER test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0001(2)    zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0001(2)  zoned -> packed
+         ZAP   WK1+15(1),K0007+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0017
          LA    15,R0003            return here
          ST    15,X0002            into the range's exit cell
@@ -237,8 +237,8 @@ R0003    DS    0H
          DROP  8
          LA    15,F0002            restore fall-through
          ST    15,X0002
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0001(2)   zoned -> packed
@@ -248,14 +248,14 @@ R0003    DS    0H
          B     L0015
 L0017    DS    0H                  AFTER level done: reset it, step the
          DROP  8
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0000(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(2),PWK1(16)   packed -> zoned
@@ -277,29 +277,29 @@ T0008    DS    0H
          MVC   D0003(2),S0006      numeric literal as zoned digits
 T0009    DS    0H
 * PERFORM COUNT-IT THRU COUNT-X
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK1(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK1(16),WK0+15(1)
          UNPK  D0000(2),PWK1(16)   packed -> zoned
          OI    D0000+1,X'F0'       unsigned: force an F zone
-         PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+14(2),D0000(2)  zoned -> packed
+         ZAP   PWK1(16),WK0+14(2)
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
 L0020    DS    0H                  outer test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0000(2)  zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0025
 L0021    DS    0H                  AFTER test
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0001(2)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0001(2)  zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0023
          LA    15,R0004            return here
          ST    15,X0003            into the range's exit cell
@@ -308,8 +308,8 @@ R0004    DS    0H
          DROP  8
          LA    15,F0003            restore fall-through
          ST    15,X0003
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0001(2)   zoned -> packed
@@ -321,12 +321,12 @@ L0023    DS    0H                  AFTER level done: reset it, step the
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+14(2),D0000(2)  zoned -> packed
+         ZAP   PWK1(16),WK0+14(2)
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0003(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0003+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0000(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(2),PWK1(16)   packed -> zoned
@@ -399,9 +399,9 @@ T0016    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0003(2)    zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0003(2)  zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0001
 T0017    DS    0H
 * DISPLAY
@@ -484,9 +484,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

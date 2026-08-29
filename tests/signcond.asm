@@ -33,9 +33,9 @@ T0000    DS    0H
          USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BNH   L0001
 T0001    DS    0H
 * DISPLAY
@@ -51,9 +51,9 @@ T0002    DS    0H
          USING WSC0000,8
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BNL   L0002
 T0003    DS    0H
 * DISPLAY
@@ -69,9 +69,9 @@ T0004    DS    0H
          USING WSC0000,8
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BNE   L0003
 T0005    DS    0H
 * DISPLAY
@@ -87,9 +87,9 @@ T0006    DS    0H
          USING WSC0000,8
          L     2,D0000
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BL    L0004
 T0007    DS    0H
 * DISPLAY
@@ -105,9 +105,9 @@ T0008    DS    0H
          USING WSC0000,8
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BH    L0005
 T0009    DS    0H
 * DISPLAY
@@ -123,9 +123,9 @@ T0010    DS    0H
          USING WSC0000,8
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BE    L0006
 T0011    DS    0H
 * DISPLAY
@@ -141,9 +141,9 @@ T0012    DS    0H
          USING WSC0000,8
          L     2,D0001
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BNH   L0007
 T0013    DS    0H
 * DISPLAY
@@ -159,9 +159,9 @@ T0014    DS    0H
          USING WSC0000,8
          L     2,D0002
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
          BNL   L0008
 T0015    DS    0H
 * DISPLAY
@@ -290,9 +290,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

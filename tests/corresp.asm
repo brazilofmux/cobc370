@@ -108,27 +108,24 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * COMPUTE AGE = ...
-         PACK  WK0(16),D0016(3)    zoned -> packed
-         PACK  WK1(16),D0003(2)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0016(3),PWK1(16)   packed -> zoned
+         PACK  WK0+13(3),D0016(3)  zoned -> packed
+         PACK  WK1+14(2),D0003(2)  zoned -> packed
+         AP    WK0+13(3),WK1+14(2)
+         UNPK  D0016(3),WK0+13(3)  packed -> zoned
          OI    D0016+2,X'F0'       unsigned: force an F zone
 T0013    DS    0H
 * COMPUTE ZIP = ...
-         PACK  WK0(16),D0018(5)    zoned -> packed
-         PACK  WK1(16),D0006(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0018(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0018(5)  zoned -> packed
+         PACK  WK1+13(3),D0006(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         UNPK  D0018(5),WK0+12(4)  packed -> zoned
          OI    D0018+4,X'F0'       unsigned: force an F zone
 T0014    DS    0H
 * COMPUTE AMT = ...
-         PACK  WK0(16),D0021(5)    zoned -> packed
-         PACK  WK1(16),D0008(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0021(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0021(5)  zoned -> packed
+         PACK  WK1+13(3),D0008(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         UNPK  D0021(5),WK0+12(4)  packed -> zoned
          OI    D0021+4,X'F0'       unsigned: force an F zone
 T0015    DS    0H
 * MOVE AMT -> E-AMT
@@ -158,27 +155,24 @@ T0017    DS    0H
          BALR  14,15
 T0018    DS    0H
 * COMPUTE AGE = ...
-         PACK  WK0(16),D0016(3)    zoned -> packed
-         PACK  WK1(16),D0003(2)    zoned -> packed
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0016(3),PWK1(16)   packed -> zoned
+         PACK  WK0+13(3),D0016(3)  zoned -> packed
+         PACK  WK1+14(2),D0003(2)  zoned -> packed
+         SP    WK0+13(3),WK1+14(2)
+         UNPK  D0016(3),WK0+13(3)  packed -> zoned
          OI    D0016+2,X'F0'       unsigned: force an F zone
 T0019    DS    0H
 * COMPUTE ZIP = ...
-         PACK  WK0(16),D0018(5)    zoned -> packed
-         PACK  WK1(16),D0006(5)    zoned -> packed
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0018(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0018(5)  zoned -> packed
+         PACK  WK1+13(3),D0006(5)  zoned -> packed
+         SP    WK0+12(4),WK1+13(3)
+         UNPK  D0018(5),WK0+12(4)  packed -> zoned
          OI    D0018+4,X'F0'       unsigned: force an F zone
 T0020    DS    0H
 * COMPUTE AMT = ...
-         PACK  WK0(16),D0021(5)    zoned -> packed
-         PACK  WK1(16),D0008(5)    zoned -> packed
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0021(5),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0021(5)  zoned -> packed
+         PACK  WK1+13(3),D0008(5)  zoned -> packed
+         SP    WK0+12(4),WK1+13(3)
+         UNPK  D0021(5),WK0+12(4)  packed -> zoned
          OI    D0021+4,X'F0'       unsigned: force an F zone
 T0021    DS    0H
 * MOVE AMT -> E-AMT
@@ -212,10 +206,10 @@ T0024    DS    0H
 T0025    DS    0H
 * COMPUTE AGE ROUNDED = ... (ON SIZE ERROR)
          MVI   SZFLG,X'00'         no size error yet
-         PACK  WK0(16),D0016(3)    zoned -> packed
-         PACK  WK1(16),D0003(2)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+13(3),D0016(3)  zoned -> packed
+         PACK  WK1+14(2),D0003(2)  zoned -> packed
+         AP    WK0+13(3),WK1+14(2)
+         ZAP   PWK1(16),WK0+13(3)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0001(16)   against 10 ** digits
@@ -234,10 +228,10 @@ T0026    DS    0H
 * COMPUTE ZIP ROUNDED = ... (ON SIZE ERROR)
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0018(5)    zoned -> packed
-         PACK  WK1(16),D0006(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+12(4),D0018(5)  zoned -> packed
+         PACK  WK1+13(3),D0006(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0002(16)   against 10 ** digits
@@ -256,10 +250,10 @@ T0027    DS    0H
 * COMPUTE AMT ROUNDED = ... (ON SIZE ERROR)
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0021(5)    zoned -> packed
-         PACK  WK1(16),D0008(5)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
+         PACK  WK0+12(4),D0021(5)  zoned -> packed
+         PACK  WK1+13(3),D0008(5)  zoned -> packed
+         AP    WK0+12(4),WK1+13(3)
+         ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
          CP    WK1(16),K0002(16)   against 10 ** digits
@@ -342,9 +336,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

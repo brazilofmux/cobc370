@@ -43,9 +43,9 @@ L0001    DS    0H
          USING WSC0000,8
          LH    2,D0012
          CVD   2,DWK               binary -> packed
-         ZAP   WK0(16),DWK(8)
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0002+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0002
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
@@ -150,9 +150,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

@@ -73,11 +73,9 @@ T0006    DS    0H
          BALR  14,15
 T0007    DS    0H
 * COMPUTE Q18 = ...
-         ZAP   WK0(16),D0002(10)
-         ZAP   WK1(16),D0003(10)
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   D0005(10),PWK1(16)
+         ZAP   WK0+6(10),D0002(10)
+         SP    WK0+6(10),D0003(10)
+         ZAP   D0005(10),WK0+6(10)
 T0008    DS    0H
 * MOVE Q18 -> E18
          ZAP   PWK1(16),D0005(10)
@@ -131,11 +129,9 @@ T0014    DS    0H
          BALR  14,15
 T0015    DS    0H
 * COMPUTE Q18 = ...
-         ZAP   WK0(16),D0002(10)
-         ZAP   WK1(16),D0004(10)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         ZAP   D0005(10),PWK1(16)
+         ZAP   WK0+6(10),D0002(10)
+         AP    WK0+6(10),D0004(10)
+         ZAP   D0005(10),WK0+6(10)
 T0016    DS    0H
 * MOVE Q18 -> E18
          ZAP   PWK1(16),D0005(10)
@@ -293,9 +289,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

@@ -29,15 +29,14 @@ T0000    DS    0H
 * COMPUTE D = ...
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0003(6)    zoned -> packed
-         PACK  WK1(16),D0000(4)    zoned -> packed
-         PACK  WK2(16),D0001(4)    zoned -> packed
-         AP    WK1(16),WK2(16)
-         PACK  WK2(16),D0002(4)    zoned -> packed
-         AP    WK1(16),WK2(16)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0003(6),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0003(6)  zoned -> packed
+         PACK  WK1+12(4),D0000(4)  zoned -> packed
+         PACK  WK2+13(3),D0001(4)  zoned -> packed
+         AP    WK1+12(4),WK2+13(3)
+         PACK  WK2+13(3),D0002(4)  zoned -> packed
+         AP    WK1+12(4),WK2+13(3)
+         AP    WK0+12(4),WK1+12(4)
+         UNPK  D0003(6),WK0+12(4)  packed -> zoned
 T0001    DS    0H
 * MOVE D -> S
          PACK  PWK1(16),D0003(6)   zoned -> packed
@@ -57,11 +56,10 @@ T0002    DS    0H
          BALR  14,15
 T0003    DS    0H
 * COMPUTE E = ...
-         PACK  WK0(16),D0000(4)    zoned -> packed
-         PACK  WK1(16),D0001(4)    zoned -> packed
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0004(6),PWK1(16)   packed -> zoned
+         PACK  WK0+13(3),D0000(4)  zoned -> packed
+         PACK  WK1+13(3),D0001(4)  zoned -> packed
+         AP    WK0+13(3),WK1+13(3)
+         UNPK  D0004(6),WK0+13(3)  packed -> zoned
 T0004    DS    0H
 * MOVE E -> S
          PACK  PWK1(16),D0004(6)   zoned -> packed
@@ -81,17 +79,13 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * COMPUTE E = ...
-         PACK  WK0(16),D0004(6)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         ZAP   WK2(16),K0002(16)   literal
-         AP    WK1(16),WK2(16)
-         ZAP   WK2(16),K0003(16)   literal
-         AP    WK1(16),WK2(16)
-         ZAP   WK2(16),K0004(16)   literal
-         AP    WK1(16),WK2(16)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0004(6),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0004(6)  zoned -> packed
+         ZAP   WK1+13(3),K0001+15(1)  literal
+         AP    WK1+13(3),K0002+15(1)
+         AP    WK1+13(3),K0003+15(1)
+         AP    WK1+13(3),K0004+15(1)
+         AP    WK0+12(4),WK1+13(3)
+         UNPK  D0004(6),WK0+12(4)  packed -> zoned
 T0007    DS    0H
 * MOVE E -> S
          PACK  PWK1(16),D0004(6)   zoned -> packed
@@ -111,13 +105,12 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * COMPUTE D = ...
-         PACK  WK0(16),D0003(6)    zoned -> packed
-         PACK  WK1(16),D0000(4)    zoned -> packed
-         PACK  WK2(16),D0001(4)    zoned -> packed
-         AP    WK1(16),WK2(16)
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0003(6),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0003(6)  zoned -> packed
+         PACK  WK1+13(3),D0000(4)  zoned -> packed
+         PACK  WK2+13(3),D0001(4)  zoned -> packed
+         AP    WK1+13(3),WK2+13(3)
+         SP    WK0+12(4),WK1+13(3)
+         UNPK  D0003(6),WK0+12(4)  packed -> zoned
 T0010    DS    0H
 * MOVE D -> S
          PACK  PWK1(16),D0003(6)   zoned -> packed
@@ -137,13 +130,12 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * COMPUTE E = ...
-         PACK  WK0(16),D0002(4)    zoned -> packed
-         PACK  WK1(16),D0000(4)    zoned -> packed
-         PACK  WK2(16),D0001(4)    zoned -> packed
-         AP    WK1(16),WK2(16)
-         SP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0004(6),PWK1(16)   packed -> zoned
+         PACK  WK0+12(4),D0002(4)  zoned -> packed
+         PACK  WK1+13(3),D0000(4)  zoned -> packed
+         PACK  WK2+13(3),D0001(4)  zoned -> packed
+         AP    WK1+13(3),WK2+13(3)
+         SP    WK0+12(4),WK1+13(3)
+         UNPK  D0004(6),WK0+12(4)  packed -> zoned
 T0013    DS    0H
 * MOVE E -> S
          PACK  PWK1(16),D0004(6)   zoned -> packed
@@ -163,14 +155,13 @@ T0014    DS    0H
          BALR  14,15
 T0015    DS    0H
 * COMPUTE F ROUNDED = ...
-         PACK  WK0(16),D0005(6)    zoned -> packed
-         PACK  WK1(16),D0000(4)    zoned -> packed
-         PACK  WK2(16),D0001(4)    zoned -> packed
-         AP    WK1(16),WK2(16)
-         SRP   WK1(16),2,0         align scale (left)
-         AP    WK0(16),WK1(16)
-         ZAP   PWK1(16),WK0(16)
-         UNPK  D0005(6),PWK1(16)   packed -> zoned
+         PACK  WK0+11(5),D0005(6)  zoned -> packed
+         PACK  WK1+12(4),D0000(4)  zoned -> packed
+         PACK  WK2+13(3),D0001(4)  zoned -> packed
+         AP    WK1+12(4),WK2+13(3)
+         SRP   WK1+12(4),2,0       align scale (left)
+         AP    WK0+11(5),WK1+12(4)
+         UNPK  D0005(6),WK0+11(5)  packed -> zoned
 T0016    DS    0H
 * MOVE F -> T
          PACK  PWK1(16),D0005(6)   zoned -> packed
@@ -250,9 +241,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

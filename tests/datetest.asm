@@ -63,9 +63,9 @@ T0005    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0002(2)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0002(2)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNL   L0003
 T0006    DS    0H
 * MOVE Y -> BAD-SWITCH
@@ -76,9 +76,9 @@ T0007    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0002(2)    zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0002(2)  zoned -> packed
+         ZAP   WK1+14(2),K0002+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BNH   L0004
 T0008    DS    0H
 * MOVE Y -> BAD-SWITCH
@@ -89,9 +89,9 @@ T0009    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0001(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0004(2)  zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNL   L0005
 T0010    DS    0H
 * MOVE Y -> BAD-SWITCH
@@ -102,9 +102,9 @@ T0011    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0(16),D0004(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),D0004(2)  zoned -> packed
+         ZAP   WK1+14(2),K0003+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BNH   L0006
 T0012    DS    0H
 * MOVE Y -> BAD-SWITCH
@@ -164,9 +164,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16

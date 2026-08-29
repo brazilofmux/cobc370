@@ -4764,6 +4764,7 @@ static int class_used[CLS_N];
 static void need_class_table(int which) { class_used[which] = 1; }
 static void gen_load(const Sym *sy, Node *sub, const char *wk);
 static void gen_store(const Sym *sy, Node *sub, const char *wk);
+static void gen_store_op(const Sym *sy, Node *sub, const char *op);
 
 /* VSAM addresses an RRDS by a fullword record number. A RELATIVE KEY that is
  * already one is used in place; any other elementary integer -- which is all
@@ -5244,14 +5245,31 @@ static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
 
 static void gen_store(const Sym *sy, Node *sub, const char *wk)
 {
+    char op[32];
+    snprintf(op, sizeof op, "%s(16)", wk);
+    gen_store_op(sy, sub, op);
+}
+
+/* Store from any packed operand -- the tail of a work area, sized to the
+ * value, as the expression code leaves it. The editing, wide and SIGN-clause
+ * stores read a whole 16-byte area, so they get one. */
+static void gen_store_op(const Sym *sy, Node *sub, const char *op)
+{
     char b[128], f[64];
-    if (sy->edited) { gen_store_edited(sy, sub, wk); return; }
+    if (sy->edited || (sy->usage == U_DISPLAY && (sy->digits > 16 || sy->sgn_lead || sy->sgn_sep))) {
+        if (strcmp(op, "PWK1(16)")) {
+            snprintf(b, sizeof b, "PWK1(16),%s", op);
+            asm_line("", "ZAP", b, "");
+        }
+        if (sy->edited) gen_store_edited(sy, sub, "PWK1");
+        else if (sy->digits > 16) gen_wide_store(sy, sub, "PWK1");
+        else gen_sign_store(sy, sub, "PWK1");
+        return;
+    }
     switch (sy->usage) {
     case U_DISPLAY:
-        if (sy->digits > 16) { gen_wide_store(sy, sub, wk); break; }
-        if (sy->sgn_lead || sy->sgn_sep) { gen_sign_store(sy, sub, wk); break; }
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
-        snprintf(b, sizeof b, "%s,%s(16)", f, wk);
+        snprintf(b, sizeof b, "%s,%s", f, op);
         asm_line("", "UNPK", b, "packed -> zoned");
         if (!sy->is_signed) {
             if (sub) snprintf(b, sizeof b, "%d(6),X'F0'", sy->elem - 1);
@@ -5261,7 +5279,7 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
         break;
     case U_COMP3:
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
-        snprintf(b, sizeof b, "%s,%s(16)", f, wk);
+        snprintf(b, sizeof b, "%s,%s", f, op);
         asm_line("", "ZAP", b, "");
         if (!sy->is_signed) {
             /* ZAP leaves a C sign; an unsigned packed item carries F, which
@@ -5273,7 +5291,7 @@ static void gen_store(const Sym *sy, Node *sub, const char *wk)
         }
         break;
     case U_COMP:
-        snprintf(b, sizeof b, "DWK(8),%s(16)", wk);
+        snprintf(b, sizeof b, "DWK(8),%s", op);
         asm_line("", "ZAP", b, "");
         asm_line("", "CVB", "2,DWK", "packed -> binary");
         field_ref(sy, sub, 0, 6, f, sizeof f);
@@ -5329,38 +5347,22 @@ static const char *intern_str(const char *text, int len, int pad)
     return sconsts[nsconst++].label;
 }
 
-/* Load a field into a 16-byte work area. */
-static void gen_load16(const Sym *sy, Node *sub, const char *wk)
+/* The tail of a 16-byte work area: its last len bytes, as an SS operand. A
+ * packed value is right-aligned, so the tail that holds its digits is the
+ * whole value, and every instruction that touches it costs by that length. */
+static void tail_op(const char *area, int len, char *out, size_t on)
 {
-    char b[128], f[64];
-    switch (sy->usage) {
-    case U_DISPLAY:
-        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
-        snprintf(b, sizeof b, "%s(16),%s", wk, f);
-        asm_line("", "PACK", b, "zoned -> packed");
-        break;
-    case U_COMP3:
-        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
-        snprintf(b, sizeof b, "%s(16),%s", wk, f);
-        asm_line("", "ZAP", b, "");
-        break;
-    case U_COMP:
-        field_ref(sy, sub, 0, 7, f, sizeof f);
-        snprintf(b, sizeof b, "2,%s", f);
-        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
-        asm_line("", "CVD", "2,DWK", "binary -> packed");
-        snprintf(b, sizeof b, "%s(16),DWK(8)", wk);
-        asm_line("", "ZAP", b, "");
-        break;
-    }
+    if (len >= 16) snprintf(out, on, "%s(16)", area);
+    else snprintf(out, on, "%s+%d(%d)", area, 16 - len, len);
 }
 
-static void gen_rescale16(const char *wk, int from, int to, int round)
+static void gen_rescale_t(const char *wk, int len, int from, int to, int round)
 {
     if (from == to) return;
-    char b[96];
+    char b[96], t[32];
     int d = to - from;
-    snprintf(b, sizeof b, "%s(16),%d,%d", wk, d > 0 ? d : 64 + d,
+    tail_op(wk, len, t, sizeof t);
+    snprintf(b, sizeof b, "%s,%d,%d", t, d > 0 ? d : 64 + d,
              (d < 0 && round) ? 5 : 0);
     asm_line("", "SRP", b,
              d > 0 ? "align scale (left)"
@@ -5442,89 +5444,307 @@ static void cell_out(int sy, Node *sb, const char *cell)
 static char gen_size_skip[16];
 static int  use_szflg;
 
-static int gen_expr(Node *n, int d, int tgtscale)
+/* ---- expressions ----
+ *
+ * Every value in an expression lives in the tail of one of the work areas
+ * WK0..WK5, sized to the digits it can have. The sizes come from expr_shape,
+ * which walks the tree with the rules the generator uses: an item has its
+ * picture's digits (a binary item, what its word can hold); a sum or
+ * difference one digit more than its wider operand, at the wider scale; a
+ * product the digits of both; a quotient the digits of the dividend once it
+ * is shifted for the quotient's scale. Those are bounds, not values, and
+ * they are all the correctness needs: an operation on a tail long enough
+ * for its result is exact whatever sits above the tail.
+ *
+ * A caller that will shift the result left asks for a longer tail, `want`,
+ * so the growth never needs a copy. A COMP-3 item, or a literal, on the
+ * right of an operator is taken straight from the data when the instruction
+ * can address it there: AP, SP, MP and DP all take a second operand in
+ * storage, so the load, and the work area it went into, are gone.
+ *
+ * This replaced fixed 16-byte areas everywhere -- a seven-digit product
+ * spent an MP of 16 by 8, and every ZAP, AP and SRP ran the full width. */
+
+static int pk_bytes(int digits)
 {
-    char b[128], wk[8], wk2[8];
+    int b = digits / 2 + 1;
+    return b > 16 ? 16 : b;
+}
+
+static int lit_digits(const char *lit)
+{
+    const char *p = lit;
+    if (*p == '-' || *p == '+') p++;
+    while (p[1] && *p == '0') p++;
+    return (int)strlen(p);
+}
+
+/* A numeric literal as a packed operand at the given scale: the tail of its
+ * interned constant, exactly the bytes its digits need. 0 if the literal has
+ * more decimal places than the scale, or needs more than maxlen bytes. */
+static int lit_operand(const char *digits, int litscale, int scale, int maxlen,
+                       char *out, size_t on, int *len)
+{
+    if (litscale > scale) return 0;
+    char d[48]; int n = 0, neg = 0;
+    const char *p = digits;
+    if (*p == '-') { neg = 1; p++; } else if (*p == '+') p++;
+    while (p[1] && *p == '0') p++;
+    if (neg) d[n++] = '-';
+    while (*p) { if (n >= (int)sizeof d - 2) return 0; d[n++] = *p++; }
+    for (int k = 0; k < scale - litscale; k++) { if (n >= (int)sizeof d - 2) return 0; d[n++] = '0'; }
+    d[n] = 0;
+    int l = pk_bytes(lit_digits(d));
+    if (l > maxlen) return 0;
+    snprintf(out, on, "%s+%d(%d)", intern_const(d), 16 - l, l);
+    if (len) *len = l;
+    return 1;
+}
+
+/* Items the loaders and stores handle as a whole 16-byte area. */
+static int leaf_full16(const Sym *y)
+{
+    return y->usage == U_DISPLAY && (y->digits > 16 || y->sgn_lead || y->sgn_sep);
+}
+
+static void expr_shape(Node *n, int tgtscale, int *scale, int *prec)
+{
+    int sl, pl, sr, pr;
+    switch (n->kind) {
+    case N_SYM: {
+        const Sym *y = &syms[n->sym];
+        *scale = y->scale;
+        *prec = y->usage == U_COMP ? (y->bytes == 2 ? 5 : 10) : y->digits;
+        break;
+    }
+    case N_LIT:
+        *scale = n->litscale; *prec = lit_digits(n->lit);
+        break;
+    case N_NEG:
+        expr_shape(n->l, tgtscale, scale, prec);
+        break;
+    case N_ADD: case N_SUB:
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        expr_shape(n->r, tgtscale, &sr, &pr);
+        *scale = sl > sr ? sl : sr;
+        pl += *scale - sl; pr += *scale - sr;
+        *prec = (pl > pr ? pl : pr) + 1;
+        break;
+    case N_MUL:
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        expr_shape(n->r, tgtscale, &sr, &pr);
+        *scale = sl + sr; *prec = pl + pr;
+        break;
+    case N_DIV: {
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        expr_shape(n->r, tgtscale, &sr, &pr);
+        int sq = tgtscale + DIVGUARD;
+        if (sq > DIVSCALEMAX) sq = DIVSCALEMAX;
+        int sh = sq + sr - sl;
+        *scale = sq; *prec = pl + (sh > 0 ? sh : 0);
+        break;
+    }
+    case N_TRUNC: {
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        int sh = n->litscale - sl;
+        *scale = n->litscale; *prec = pl + sh;
+        if (*prec < 1) *prec = 1;
+        break;
+    }
+    case N_POW:
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        *scale = n->r->kind == N_LIT ? sl * atoi(n->r->lit) : 0;
+        *prec = 31;
+        break;
+    default:
+        *scale = 0; *prec = 31;
+        break;
+    }
+    if (*prec > 31) *prec = 31;
+}
+
+/* An item into the tail of a work area, len bytes of it. */
+static void gen_load_t(const Sym *sy, Node *sub, const char *wk, int len)
+{
+    char b[128], f[64], t[32];
+    if (leaf_full16(sy)) { gen_load(sy, sub, wk); return; }
+    tail_op(wk, len, t, sizeof t);
+    switch (sy->usage) {
+    case U_DISPLAY:
+        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
+        snprintf(b, sizeof b, "%s,%s", t, f);
+        asm_line("", "PACK", b, "zoned -> packed");
+        break;
+    case U_COMP3:
+        field_ref(sy, sub, sy->elem, 7, f, sizeof f);
+        snprintf(b, sizeof b, "%s,%s", t, f);
+        asm_line("", "ZAP", b, "");
+        break;
+    case U_COMP:
+        field_ref(sy, sub, 0, 7, f, sizeof f);
+        snprintf(b, sizeof b, "2,%s", f);
+        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
+        asm_line("", "CVD", "2,DWK", "binary -> packed");
+        snprintf(b, sizeof b, "%s,DWK(8)", t);
+        asm_line("", "ZAP", b, "");
+        break;
+    }
+}
+
+/* An operand the instruction can take straight from the program's data: a
+ * COMP-3 item, or a literal, at the scale asked for (any scale when anyscale
+ * is set -- a multiplier or divisor brings its own). */
+static int direct_operand(Node *r, int scale, int anyscale, int maxlen,
+                          char *out, size_t on, int *len)
+{
+    if (r->kind == N_SYM) {
+        const Sym *y = &syms[r->sym];
+        if (y->usage != U_COMP3 || y->is_group || y->elem > maxlen) return 0;
+        if (!anyscale && y->scale != scale) return 0;
+        need_sym_base(y);
+        field_ref(y, r->sub, y->elem, 7, out, on);
+        *len = y->elem;
+        return 1;
+    }
+    if (r->kind == N_LIT)
+        return lit_operand(r->lit, r->litscale, anyscale ? r->litscale : scale,
+                           maxlen, out, on, len);
+    return 0;
+}
+
+/* Generate the expression into the tail of WKd, at least want bytes long.
+ * Returns the tail's length. */
+static int gen_expr(Node *n, int d, int tgtscale, int want)
+{
+    char b[128], wk[8], wk2[8], t[32], t2[32], op[64];
     if (d >= 5) die("expression nests too deeply for the work-area stack");
     snprintf(wk,  sizeof wk,  "WK%d", d);
     snprintf(wk2, sizeof wk2, "WK%d", d + 1);
+    int scale, prec, oplen = 0;
+    expr_shape(n, tgtscale, &scale, &prec);
+    int L = pk_bytes(prec);
+    if (L < want) L = want;
 
     switch (n->kind) {
     case N_SYM:
-        gen_load16(&syms[n->sym], n->sub, wk);
-        return syms[n->sym].scale;
+        if (leaf_full16(&syms[n->sym])) L = 16;
+        gen_load_t(&syms[n->sym], n->sub, wk, L);
+        return L;
 
-    case N_LIT: {
-        const char *lab = intern_const(n->lit);
-        snprintf(b, sizeof b, "%s(16),%s(16)", wk, lab);
+    case N_LIT:
+        lit_operand(n->lit, n->litscale, n->litscale, 16, op, sizeof op, &oplen);
+        tail_op(wk, L, t, sizeof t);
+        snprintf(b, sizeof b, "%s,%s", t, op);
         asm_line("", "ZAP", b, "literal");
-        return n->litscale;
-    }
+        return L;
 
     case N_NEG: {
-        int s = gen_expr(n->l, d + 1, tgtscale);
-        snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("0"));
+        int Lc = gen_expr(n->l, d + 1, tgtscale, 1);
+        tail_op(wk, L, t, sizeof t);
+        tail_op(wk2, Lc, t2, sizeof t2);
+        snprintf(b, sizeof b, "%s,%s+15(1)", t, intern_const("0"));
         asm_line("", "ZAP", b, "unary minus");
-        snprintf(b, sizeof b, "%s(16),%s(16)", wk, wk2);
+        snprintf(b, sizeof b, "%s,%s", t, t2);
         asm_line("", "SP", b, "");
-        return s;
+        return L;
     }
 
     case N_ADD: case N_SUB: {
-        int sl = gen_expr(n->l, d, tgtscale);
-        int sr = gen_expr(n->r, d + 1, tgtscale);
+        int sl, pl, sr, pr;
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        expr_shape(n->r, tgtscale, &sr, &pr);
         int ws = sl > sr ? sl : sr;
-        gen_rescale16(wk,  sl, ws, 0);
-        gen_rescale16(wk2, sr, ws, 0);
-        snprintf(b, sizeof b, "%s(16),%s(16)", wk, wk2);
+        gen_expr(n->l, d, tgtscale, L);
+        gen_rescale_t(wk, L, sl, ws, 0);
+        if (!direct_operand(n->r, ws, 0, 16, op, sizeof op, &oplen)) {
+            int Lr = gen_expr(n->r, d + 1, tgtscale, pk_bytes(pr + ws - sr));
+            gen_rescale_t(wk2, Lr, sr, ws, 0);
+            tail_op(wk2, Lr, op, sizeof op);
+        }
+        tail_op(wk, L, t, sizeof t);
+        snprintf(b, sizeof b, "%s,%s", t, op);
         asm_line("", n->kind == N_ADD ? "AP" : "SP", b, "");
-        return ws;
+        return L;
     }
 
     case N_MUL: {
-        int sl = gen_expr(n->l, d, tgtscale);
-        int sr = gen_expr(n->r, d + 1, tgtscale);
-        snprintf(b, sizeof b, "MULT8(8),%s(16)", wk2);
-        asm_line("", "ZAP", b, "MP takes at most 8 bytes on the right");
-        snprintf(b, sizeof b, "%s(16),MULT8(8)", wk);
+        int sl, pl, sr, pr;
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        expr_shape(n->r, tgtscale, &sr, &pr);
+        /* MP: the multiplier at most 8 bytes, the multiplicand with at least
+         * that many high-order zero bytes -- so the area is the multiplicand's
+         * bytes plus the multiplier's. */
+        int direct = direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        int L2 = direct ? oplen : pk_bytes(pr);
+        if (L2 > 8) L2 = 8;
+        int L1 = pk_bytes(pl) + L2;
+        if (L1 > 16) L1 = 16;
+        if (L < L1) L = L1;
+        gen_expr(n->l, d, tgtscale, L);
+        if (!direct) {
+            gen_expr(n->r, d + 1, tgtscale, 1);
+            tail_op(wk2, L2, op, sizeof op);
+        }
+        tail_op(wk, L, t, sizeof t);
+        snprintf(b, sizeof b, "%s,%s", t, op);
         asm_line("", "MP", b, "scale becomes the sum of the scales");
-        return sl + sr;
+        return L;
     }
 
     case N_DIV: {
-        int sl = gen_expr(n->l, d, tgtscale);
-        int sr = gen_expr(n->r, d + 1, tgtscale);
+        int sl, pl, sr, pr;
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        expr_shape(n->r, tgtscale, &sr, &pr);
+        int sq = tgtscale + DIVGUARD;
+        if (sq > DIVSCALEMAX) sq = DIVSCALEMAX;
+        /* DP: the divisor at most 8 bytes; the quotient takes the bytes the
+         * divisor leaves, so the area is the shifted dividend's bytes plus
+         * the divisor's. */
+        int direct = direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        int L2 = direct ? oplen : pk_bytes(pr);
+        if (L2 > 8) L2 = 8;
+        int L1 = pk_bytes(prec) + L2;
+        if (L1 > 16) L1 = 16;
+        gen_expr(n->l, d, tgtscale, L1);
+        if (!direct) {
+            gen_expr(n->r, d + 1, tgtscale, 1);
+            tail_op(wk2, L2, op, sizeof op);
+        }
         if (gen_size_skip[0]) {
             /* Under ON SIZE ERROR a zero divisor is a size error rather than a
              * decimal-divide exception: flag it and leave the receiver alone.
              * Without the phrase the DP takes its S0CB, as the standard
              * leaves it undefined and IKFCBL00 does the same. */
             char lg[16]; snprintf(lg, sizeof lg, "L%04d", ++genlabel);
-            snprintf(b, sizeof b, "%s(16),%s(16)", wk2, intern_const("0"));
+            snprintf(b, sizeof b, "%s,%s+15(1)", op, intern_const("0"));
             asm_line("", "CP", b, "dividing by zero?");
             asm_line("", "BNE", lg, "");
             asm_line("", "MVI", "SZFLG,X'01'", "size error");
             asm_line("", "B", gen_size_skip, "");
             asm_line(lg, "DS", "0H", "");
         }
-        int sq = tgtscale + DIVGUARD;
-        if (sq > DIVSCALEMAX) sq = DIVSCALEMAX;
         /* Quotient at scale sq needs the dividend pre-shifted by sq+sr-sl. */
-        gen_rescale16(wk, sl, sq + sr, 0);
-        snprintf(b, sizeof b, "DIVR8(8),%s(16)", wk2);
-        asm_line("", "ZAP", b, "DP takes at most 8 bytes on the right");
-        snprintf(b, sizeof b, "%s(16),DIVR8(8)", wk);
-        asm_line("", "DP", b, "quotient in the leading 8 bytes");
-        snprintf(b, sizeof b, "QTMP(8),%s(8)", wk);
-        asm_line("", "ZAP", b, "");
-        snprintf(b, sizeof b, "%s(16),QTMP(8)", wk);
+        gen_rescale_t(wk, L1, sl, sq + sr, 0);
+        tail_op(wk, L1, t, sizeof t);
+        snprintf(b, sizeof b, "%s,%s", t, op);
+        asm_line("", "DP", b, "quotient, then the remainder");
+        int Lq = L1 - L2;
+        snprintf(b, sizeof b, "QTMP(%d),%s+%d(%d)", Lq, wk, 16 - L1, Lq);
+        asm_line("", "ZAP", b, "the quotient on its own");
+        if (L < Lq) L = Lq;
+        tail_op(wk, L, t, sizeof t);
+        snprintf(b, sizeof b, "%s,QTMP(%d)", t, Lq);
         asm_line("", "ZAP", b, "drop the remainder");
-        return sq;
+        return L;
     }
+
     case N_TRUNC: {
-        int sl = gen_expr(n->l, d, tgtscale);
-        gen_rescale16(wk, sl, n->litscale, 0);
-        return n->litscale;
+        int sl, pl;
+        expr_shape(n->l, tgtscale, &sl, &pl);
+        if (n->litscale > sl) gen_expr(n->l, d, tgtscale, L);
+        else L = gen_expr(n->l, d, tgtscale, want);
+        gen_rescale_t(wk, L, sl, n->litscale, 0);
+        return L;
     }
 
     case N_POW: {
@@ -5533,17 +5753,19 @@ static int gen_expr(Node *n, int d, int tgtscale)
          * be known here. So a literal exponent is unrolled, for any base, and
          * an identifier exponent runs a loop, for an integer base only. A
          * negative or fractional exponent has no exact packed-decimal answer
-         * and is refused. */
+         * and is refused. Whole 16-byte areas throughout. */
         Node *r = n->r;
         if (r->kind == N_LIT) {
             if (r->litscale != 0) die("a fractional exponent is not implemented -- it has no exact decimal value");
             int e = atoi(r->lit);
-            int sl = gen_expr(n->l, d, tgtscale);
+            int sl, pl;
+            expr_shape(n->l, tgtscale, &sl, &pl);
+            gen_expr(n->l, d, tgtscale, 16);
             if (sl * e > 30) die("the result of ** would carry more than thirty decimal places");
             if (e == 0) {
                 snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("1"));
                 asm_line("", "ZAP", b, "anything to the zero is one");
-                return 0;
+                return 16;
             }
             if (e > 1) {
                 snprintf(b, sizeof b, "MULT8(8),%s(16)", wk);
@@ -5553,16 +5775,18 @@ static int gen_expr(Node *n, int d, int tgtscale)
                     asm_line("", "MP", b, k == 1 ? "** unrolled" : "");
                 }
             }
-            return sl * e;
+            return 16;
         }
         if (r->kind == N_NEG) die("a negative exponent is not implemented -- it has no exact decimal value");
         if (r->kind != N_SYM || syms[r->sym].scale != 0 || syms[r->sym].is_alpha || syms[r->sym].is_group)
             die("the exponent of ** must be an integer literal or an integer identifier");
         if (d + 2 >= 5) die("expression nests too deeply for the work-area stack");
-        int sl = gen_expr(n->l, d + 1, tgtscale);
+        int sl, pl;
+        expr_shape(n->l, tgtscale, &sl, &pl);
         if (sl != 0) die("** with an identifier exponent needs an integer base; the result's scale would not be known");
+        gen_expr(n->l, d + 1, tgtscale, 16);
         char wk3[8]; snprintf(wk3, sizeof wk3, "WK%d", d + 2);
-        gen_expr(r, d + 2, 0);
+        gen_expr(r, d + 2, 0, 16);
         snprintf(b, sizeof b, "DWK(8),%s(16)", wk3);
         asm_line("", "ZAP", b, "");
         asm_line("", "CVB", "3,DWK", "the exponent");
@@ -5580,7 +5804,7 @@ static int gen_expr(Node *n, int d, int tgtscale)
         snprintf(b, sizeof b, "3,%s", lp);
         asm_line("", "BCT", b, "once per exponent");
         asm_line(le, "DS", "0H", "");
-        return 0;
+        return 16;
     }
     }
     die("internal: bad expression node");
@@ -7026,12 +7250,19 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             snprintf(b, sizeof b, "%s,%s", fl, fr);
             asm_line("", "CLC", b, "unsigned zoned: a byte compare is exact");
         } else {
-            int sl = gen_expr(c->l, 0, 0);
-            int sr = gen_expr(c->r, 1, 0);
+            int sl, pl, sr, pr;
+            expr_shape(c->l, 0, &sl, &pl);
+            expr_shape(c->r, 0, &sr, &pr);
             int ws = sl > sr ? sl : sr;
-            gen_rescale16("WK0", sl, ws, 0);
-            gen_rescale16("WK1", sr, ws, 0);
-            asm_line("", "CP", "WK0(16),WK1(16)", "numeric compare");
+            int L0 = gen_expr(c->l, 0, 0, pk_bytes(pl + ws - sl));
+            int L1 = gen_expr(c->r, 1, 0, pk_bytes(pr + ws - sr));
+            gen_rescale_t("WK0", L0, sl, ws, 0);
+            gen_rescale_t("WK1", L1, sr, ws, 0);
+            char t0[32], t1[32];
+            tail_op("WK0", L0, t0, sizeof t0);
+            tail_op("WK1", L1, t1, sizeof t1);
+            snprintf(b, sizeof b, "%s,%s", t0, t1);
+            asm_line("", "CP", b, "numeric compare");
         }
         snprintf(l, sizeof l, "L%04d", label);
         asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
@@ -7233,14 +7464,20 @@ static void emit_report_group(int gi)
 /* Set or step a PERFORM VARYING identifier from an expression. */
 static void emit_set_from_expr(const Sym *d, Node *e, int add)
 {
-    int rs = gen_expr(e, 0, d->scale);
-    gen_rescale16("WK0", rs, d->scale, 0);
+    char b[64], top[32];
+    int rs, rp;
+    expr_shape(e, d->scale, &rs, &rp);
+    int L = gen_expr(e, 0, d->scale, d->scale > rs ? pk_bytes(rp + d->scale - rs) : 1);
+    gen_rescale_t("WK0", L, rs, d->scale, 0);
+    tail_op("WK0", L, top, sizeof top);
     if (add) {
-        asm_line("", "ZAP", "PWK2(16),WK0(16)", "");
+        snprintf(b, sizeof b, "PWK2(16),%s", top);
+        asm_line("", "ZAP", b, "");
         gen_load(d, NULL, "PWK1");
         asm_line("", "AP", "PWK1(16),PWK2(16)", "");
     } else {
-        asm_line("", "ZAP", "PWK1(16),WK0(16)", "");
+        snprintf(b, sizeof b, "PWK1(16),%s", top);
+        asm_line("", "ZAP", b, "");
     }
     gen_store(d, NULL, "PWK1");
 }
@@ -8444,8 +8681,10 @@ static void generate(void)
                 break;
             }
             if (st->times_expr) {
-                gen_expr(st->times_expr, 0, 0);
-                asm_line("", "ZAP", "DWK(8),WK0(16)", "");
+                int L = gen_expr(st->times_expr, 0, 0, 1);
+                char top[32]; tail_op("WK0", L, top, sizeof top);
+                snprintf(b, sizeof b, "DWK(8),%s", top);
+                asm_line("", "ZAP", b, "");
                 asm_line("", "CVB", "2,DWK", "repeat count");
                 snprintf(b, sizeof b, "2,%s", pt); asm_line("", "STH", b, "");
             }
@@ -8727,10 +8966,14 @@ static void generate(void)
                 snprintf(gen_size_skip, sizeof gen_size_skip, "%s", lskip);
                 if (st->size_first) asm_line("", "MVI", "SZFLG,X'00'", "no size error yet");
             }
-            int rs = gen_expr(st->expr, 0, d->scale);
-            gen_rescale16("WK0", rs, d->scale, st->rounded);
-            asm_line("", "ZAP", "PWK1(16),WK0(16)", "");
+            int rs, rp;
+            expr_shape(st->expr, d->scale, &rs, &rp);
+            int L = gen_expr(st->expr, 0, d->scale, d->scale > rs ? pk_bytes(rp + d->scale - rs) : 1);
+            gen_rescale_t("WK0", L, rs, d->scale, st->rounded);
+            char top[32]; tail_op("WK0", L, top, sizeof top);
             if (st->size_err) {
+                snprintf(b, sizeof b, "PWK1(16),%s", top);
+                asm_line("", "ZAP", b, "");
                 /* A size error is a result whose magnitude has more integer
                  * digits than the item holds -- after ROUNDED, since rounding
                  * can carry. The magnitude is compared against 10 to the
@@ -8758,7 +9001,7 @@ static void generate(void)
                     asm_line("", "CLI", "SZFLG,X'00'", "any size error in the series?");
                     asm_line("", "BE", b, "none: past the imperative statements");
                 }
-            } else gen_store(d, st->dsub, "PWK1");
+            } else gen_store_op(d, st->dsub, top);
             break;
         }
         case ST_MOVE:
@@ -9205,9 +9448,8 @@ static void generate(void)
         asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");
         asm_line("EDWK", "DS", "CL64", "ED pattern and result");
         asm_line("ZWK", "DS", "CL24", "zoned work area");
-        asm_line("MULT8", "DS", "PL8", "MP right operand");
-        asm_line("DIVR8", "DS", "PL8", "DP divisor");
-        asm_line("QTMP", "DS", "PL8", "DP quotient");
+        asm_line("MULT8", "DS", "PL8", "** multiplier");
+        asm_line("QTMP", "DS", "PL16", "DP quotient");
         for (int i = 0; i < 6; i++) {
             char w[8]; snprintf(w, sizeof w, "WK%d", i);
             asm_line(w, "DS", "PL16", i == 0 ? "expression stack" : "");

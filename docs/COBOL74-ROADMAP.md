@@ -308,7 +308,7 @@ times behind.
 | `MOVE` same picture, DISPLAY | 0.05 | 0.01 | **0.01** (3) |
 | `MOVE` to a wider picture | 0.06 | 0.02 | **0.02** (3) |
 | `IF` same picture, unsigned DISPLAY | 0.02 | 0.10 | already ahead |
-| `COMPUTE` with `*` and `+` | 0.49 | 0.53 | level |
+| `COMPUTE` with `*` and `+` | 0.49 | 0.53 | **0.39** (5) |
 
 1. Same-scale packed `ADD`/`SUBTRACT`/compare in place: `AP`, `SP`, `CP` on
    the fields themselves, literals from the tail of their constants.
@@ -334,5 +334,21 @@ times behind.
    First cut skipped the source-scale check and added a `V9` item to a `V99`
    one as hundredths; `tests/compadd` caught it before the sweep did.
 
-Next: right-sizing the work areas `gen_expr` uses, which is the general form
-of (1).
+5. Expression work areas sized to the value. A shape pass bounds the digits
+   at every node with the rules the generator uses (a sum one more than its
+   wider operand, a product the digits of both, a quotient the shifted
+   dividend's), and each operation runs on just that tail of its 16-byte
+   area. A caller that will shift the result left asks for the longer tail
+   up front, so growth never copies. A `COMP-3` item or a literal on the
+   right of an operator is addressed in place -- `AP`, `SP`, `MP` and `DP`
+   all take a second operand in storage -- and `COMPUTE` stores from the
+   tail instead of copying through `PWK1`. The benchmark's seven-digit
+   `P1 * P2 + P1` went from twelve 16-byte instructions (an `MP` of 16 by
+   8 among them) to seven on 5- and 8-byte tails. Found on the way: an
+   item over 16 digits, or with a `SIGN` clause, in an expression was
+   loaded by a helper without the wide and sign paths, and assembled a
+   `PACK` with an 18-byte operand; `tests/exprsize` covers both now.
+
+The primitives on the list are all at or ahead of IKFCBL00. What is left
+is the shape of whole programs -- base-register traffic, the SPIE and
+DCB work at entry -- and nothing there has been measured yet.

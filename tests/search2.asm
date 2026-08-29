@@ -123,9 +123,9 @@ L0035    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0002+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0003
          DROP  8
          L     8,BL0000            base locator
@@ -134,9 +134,9 @@ L0035    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0003+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0004
          DROP  8
          L     8,BL0000            base locator
@@ -241,8 +241,8 @@ L0036    DS    0H
          LH    1,D0016
          LA    1,1(1)              next occurrence
          STH   1,D0016
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0013(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          UNPK  D0013(2),PWK1(16)   packed -> zoned
@@ -299,9 +299,9 @@ L0037    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0005+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0010
          DROP  8
          L     8,BL0000            base locator
@@ -309,8 +309,8 @@ L0037    DS    0H
          LH    1,D0016
          LA    1,1(1)              next occurrence
          STH   1,D0016
-         ZAP   WK0(16),K0001(16)   literal
-         ZAP   PWK2(16),WK0(16)
+         ZAP   WK0+15(1),K0001+15(1)  literal
+         ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0013(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          UNPK  D0013(2),PWK1(16)   packed -> zoned
@@ -423,17 +423,17 @@ SP057    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0003+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0012
          LH    7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0003+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0014
          LH    1,D0017
          BCTR  1,0
@@ -494,17 +494,17 @@ SP064    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0006(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0006+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0016
          LH    7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0006(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0006+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0018
          LH    1,D0017
          BCTR  1,0
@@ -565,17 +565,17 @@ SP071    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0002+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0020
          LH    7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
-         PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0002(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(3,7)    zoned -> packed
+         ZAP   WK1+14(2),K0002+14(2)  literal
+         CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0022
          LH    1,D0017
          BCTR  1,0
@@ -738,42 +738,42 @@ SP096    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0038
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0007+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0024
 L0038    DS    0H
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0026
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0039
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0007+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0026
 L0039    DS    0H
          LH    1,D0018
@@ -835,42 +835,42 @@ SP103    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0009(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0040
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0010(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0028
 L0040    DS    0H
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0009(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0030
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0009(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0041
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0010(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0030
 L0041    DS    0H
          LH    1,D0018
@@ -932,42 +932,42 @@ SP110    DS    0H
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0042
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0009(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0032
 L0042    DS    0H
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0034
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0004+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0043
          LH    7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
-         PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0009(16)   literal
-         CP    WK0(16),WK1(16)     numeric compare
+         PACK  WK0+14(2),0(2,7)    zoned -> packed
+         ZAP   WK1+15(1),K0008+15(1)  literal
+         CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0034
 L0043    DS    0H
          LH    1,D0018
@@ -1095,9 +1095,8 @@ PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
 EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
-MULT8    DS    PL8                 MP right operand
-DIVR8    DS    PL8                 DP divisor
-QTMP     DS    PL8                 DP quotient
+MULT8    DS    PL8                 ** multiplier
+QTMP     DS    PL16                DP quotient
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -1105,15 +1104,13 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'040'
-K0003    DC    PL16'030'
+K0002    DC    PL16'40'
+K0003    DC    PL16'30'
 K0004    DC    PL16'2'
-K0005    DC    PL16'050'
-K0006    DC    PL16'090'
-K0007    DC    PL16'02'
-K0008    DC    PL16'09'
-K0009    DC    PL16'03'
-K0010    DC    PL16'01'
+K0005    DC    PL16'50'
+K0006    DC    PL16'90'
+K0007    DC    PL16'9'
+K0008    DC    PL16'3'
 H0001    DC    H'6'                element sizes
 H0002    DC    H'7'
 S0001    DC    CL3'010'            nonnumeric constants
