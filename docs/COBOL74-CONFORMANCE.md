@@ -47,11 +47,18 @@ Writer Level 2" to aspire to. The whole module is `1 RPW 0,1` or nothing.
 
 ## Where cobc370 is
 
-The short version: **the compiler does not sit at a level.** It cuts a
-diagonal across the map, because it was built by demand. It implements several
-Level 2 elements while missing Level 1 elements of the same module. That is
-not a defect — it is what "pulled, not pushed" produces — but it does mean no
-conformance claim is currently available, not even the minimum standard.
+The short version, as of 2026-08-29: **Level 2 of the Nucleus, Table
+Handling, Sequential I-O, Relative I-O, Inter-Program Communication and
+Library; Indexed I-O at Level 2 but for `ALTERNATE RECORD KEY`; Segmentation
+at Level 1; the Report Writer's page-manager subset without the module claim;
+and the null level of Sort-Merge, Debug and Communication.** Each module's
+section below says what is there and what is not, and the dates.
+
+When this map was first drawn the compiler did not sit at a level at all. It
+cut a diagonal, because it was built by demand -- several Level 2 elements
+present while Level 1 elements of the same module were missing. The roadmap
+(`COBOL74-ROADMAP.md`) is how that was closed, one element at a time against
+the standard's own lists.
 
 ### Nucleus — Level 2, complete
 
@@ -74,9 +81,9 @@ Already at **Level 2**, above a floor not yet reached: `COMPUTE` (Level 2, not
 `PERFORM VARYING`, nested `IF`, complex conditions, the full `01`-`49`
 level-number range.
 
-Missing from Level 2, beyond the Level 1 gaps: `STRING`, `UNSTRING`,
-`CORRESPONDING` on ADD/SUBTRACT/MOVE, level-66 `RENAMES` (which dies with a
-message), `PERFORM VARYING ... AFTER`.
+The rest of Level 2 -- `STRING`, `UNSTRING`, `CORRESPONDING` on
+ADD/SUBTRACT/MOVE, level-66 `RENAMES`, `PERFORM VARYING ... AFTER`, the
+figurative constants and abbreviated conditions -- was added on 2026-08-29.
 
 ### Table Handling — Level 2, complete
 
@@ -127,18 +134,23 @@ indexes and paths before it is a compiler change.
 
 ### Report Writer — a fraction of its only level
 
-Present: `REPORT IS` on the FD, `RD` with `PAGE LIMIT`, `HEADING`, `FIRST
-DETAIL`, `LAST DETAIL`, `CONTROL`; report groups of `TYPE DETAIL` and `TYPE
-PAGE HEADING`; `LINE NUMBER` absolute and `PLUS`; `COLUMN NUMBER`; `SOURCE`;
-`VALUE`; `GENERATE`, `INITIATE`, `TERMINATE`.
+Present -- the page-manager subset: `REPORT IS` on the FD, `RD` with `PAGE
+LIMIT`, `HEADING`, `FIRST DETAIL`, `LAST DETAIL`; report groups of `TYPE
+DETAIL` and `TYPE PAGE HEADING`; `LINE NUMBER` absolute and `PLUS`; `COLUMN
+NUMBER`; `SOURCE`; `VALUE`; `GENERATE`, `INITIATE`, `TERMINATE`.
 
-Missing: `TYPE` for `REPORT HEADING`, `CONTROL HEADING`, `CONTROL FOOTING`,
-`PAGE FOOTING`, `REPORT FOOTING`; the `SUM` clause and sum counters, with
-subtotalling, crossfooting and rolling forward; `NEXT GROUP`; `GROUP
-INDICATE`; `CODE`; `SUPPRESS`; `USE BEFORE REPORTING`; `LINE-COUNTER` and
-`PAGE-COUNTER` as referenceable special registers.
+Missing, each refused with a message: `CONTROL` clauses; `TYPE` for `REPORT
+HEADING`, `CONTROL HEADING`, `CONTROL FOOTING`, `PAGE FOOTING`, `REPORT
+FOOTING`; the `SUM` clause and sum counters, with subtotalling, crossfooting
+and rolling forward; `NEXT GROUP`; `GROUP INDICATE`; `CODE`; `SUPPRESS`; `USE
+BEFORE REPORTING`; `LINE-COUNTER` and `PAGE-COUNTER` as referenceable special
+registers.
 
-The absent half is the half that computes. What exists is a page manager.
+What exists is a page manager; what is absent is the part that computes, and
+it is the larger part. `1 RPW 0,1` is a single level, so the module is not
+claimed. Completing it was left as an open decision when the feature work
+closed on 2026-08-29, and has not been taken up. The README, the roadmap and
+the source comment at `---- Report Writer` all describe the same subset.
 
 ### Inter-Program Communication — Level 2, complete
 
@@ -185,12 +197,15 @@ element list rather than trusted: switch-status conditions are Nucleus level 1,
 and `BEFORE ADVANCING` and `OPEN I-O`/`REWRITE` are Sequential I-O level 1.
 Both times the correction was found by testing each element one at a time.
 
-That is a claim the project can make: **cobc370 implements the COBOL-74 minimum
-standard**, with substantial parts of Relative, Indexed, Report Writer,
-Segmentation and Inter-Program Communication besides. It is not a validated
-claim — nobody has run the 1974 audit routines against it, and CCVS-85 tests a
-later standard — but it is a checkable one, and the map above is where to check
-it.
+That was the first claim the project could make, on 2026-08-29: **cobc370
+implements the COBOL-74 minimum standard.** By the end of the same day the
+roadmap's definition of done was reached as well -- Level 2 of those three
+modules and of Relative I-O, Inter-Program Communication and Library, Indexed
+I-O at Level 2 less `ALTERNATE RECORD KEY`, Segmentation at Level 1 -- with
+the Report Writer's page-manager subset besides. None of it is a validated
+claim — nobody has run the 1974 audit routines against it, and CCVS-85 tests
+a later standard — but all of it is checkable, and the map above is where to
+check it.
 
 ## Testing it
 

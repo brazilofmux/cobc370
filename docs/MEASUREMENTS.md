@@ -2,6 +2,14 @@
 
 All figures from the real monthly BATCH job on real data, 2026-08-26.
 
+**Superseded on CPU, 2026-08-29.** The +37% below was measured before the
+optimization pass recorded under Optimization in `COBOL74-ROADMAP.md`. After
+it, the same batch's COBOL steps take 0.6s under either compiler, at the noise
+floor of the step accounting, and every primitive in `bench/run.sh` is at or
+ahead of IKFCBL00. The size figures stand; a later build of the full corpus
+came to about a third smaller in aggregate rather than half, the runtime
+having grown with the language.
+
 ## Wall clock
 
 Unchanged: **0.04 minutes** either way, as the job accounting reports it. That

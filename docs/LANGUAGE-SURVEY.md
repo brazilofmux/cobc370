@@ -66,7 +66,8 @@ not just "programs that print". What they use:
 `USE BEFORE REPORTING`. Control breaks and totals are done by hand in the
 Procedure Division.
 
-That is roughly the cheap 30% of Report Writer: a page manager that tracks the
+That is the cheap part of Report Writer, and it is exactly the subset the
+compiler implements: a page manager that tracks the
 line counter against `PAGE LIMIT`/`FIRST DETAIL`/`LAST DETAIL`, emits the page
 heading group on overflow, and renders groups by positioning `COLUMN` fields on
 `LINE`/`LINE PLUS` lines with `SOURCE`/`VALUE` content. No control hierarchy, no

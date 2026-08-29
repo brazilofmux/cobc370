@@ -44,8 +44,8 @@ and every module in it is one the compiler already has most of.
   digits; this would add a multi-precision path used by nothing but the
   representation tests. Stays refused, with the message it has.
 - **Report Writer completion** is *not* out of scope, but it is a separate
-  decision (below), because it is the one module where the remaining half is
-  larger than the half that exists.
+  decision (below), because it is the one module where what remains is larger
+  than what exists.
 
 ## The work, in order
 
@@ -248,9 +248,10 @@ guest but the copied text.
 ### Report Writer -- a separate decision
 
 `1 RPW 0,1` is a single level, so the module is either complete or not
-claimed. What exists is a page manager: `RD`, `PAGE LIMIT`, `PAGE HEADING`,
-`DETAIL`, `LINE`, `COLUMN`, `SOURCE`, `VALUE`, `GENERATE`/`INITIATE`/
-`TERMINATE`. What is missing is the half that computes: the five other `TYPE`s
+claimed. What exists is the page-manager subset: `RD` with `PAGE LIMIT`,
+`HEADING`, `FIRST DETAIL`, `LAST DETAIL`; `PAGE HEADING` and `DETAIL` groups;
+`LINE`, `COLUMN`, `SOURCE`, `VALUE`; `GENERATE`/`INITIATE`/`TERMINATE`. What
+is missing is the part that computes: `CONTROL` clauses, the five other `TYPE`s
 (`REPORT HEADING`, `CONTROL HEADING`, `CONTROL FOOTING`, `PAGE FOOTING`,
 `REPORT FOOTING`), `SUM` with sum counters, `UPON` and `RESET`, control breaks
 with subtotalling and rolling forward, `NEXT GROUP`, `GROUP INDICATE`,
@@ -260,7 +261,9 @@ is a small language of its own.
 
 Not required for the definition of done above. Worth doing if reports are the
 point of the compiler, which for this project they are; worth skipping if the
-goal is to close the language and move on. Decide after Tier 6.
+goal is to close the language and move on. Left open when the feature work
+closed on 2026-08-29, and not taken up since: the programs this compiler was
+built for do their control breaks by hand, and nothing has asked for the rest.
 
 ### `ALTERNATE RECORD KEY` -- also separate
 
