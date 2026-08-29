@@ -812,9 +812,10 @@ enum { RG_REPORT_HEADING, RG_PAGE_HEADING, RG_CONTROL_HEADING, RG_DETAIL,
        RG_CONTROL_FOOTING, RG_PAGE_FOOTING, RG_REPORT_FOOTING };
 enum { NG_NONE, NG_ABS, NG_REL, NG_PAGE };         /* the NEXT GROUP clause */
 
-typedef struct { int column, sym, src; Node *sub; char lit[MAXTOK]; int litlen; } RField;
+typedef struct { int column, sym, src; Node *sub; char lit[MAXTOK]; int litlen;
+                 char pend_name[31], pend_qual[31]; } RField;   /* src -2: resolved at the section's end */
 typedef struct { int absolute, n, next_page, first_fld, nfld; } RLine;
-typedef struct { char name[31]; int report, type, first_line, nline, ng_kind, ng_n, ctl_level; } RGroup;
+typedef struct { char name[31]; int report, type, first_line, nline, ng_kind, ng_n, ctl_level, name_sym; } RGroup;
 #define MAXCTL 9                                    /* FINAL and eight data-names */
 typedef struct {
     char name[31];
@@ -837,6 +838,31 @@ typedef struct {
     char lbl_adv[9], lbl_advs[9];       /* page-advance routine, its return */
     char lbl_ejc[9], lbl_ejcs[9];       /* the eject alone, its return */
 } Report;
+
+/* A sum counter, VIII 2.20: a signed packed item sized by the PICTURE of
+ * the entry that carries the SUM clause. Its operands are subtotalled on
+ * GENERATE (all of them, or only for the DETAIL groups named by UPON),
+ * crossfooted or rolled forward when a CONTROL FOOTING is processed, and it
+ * is reset when its own footing's level, or the RESET level, is processed.
+ * Operands and UPON names may refer to entries later in the section, so
+ * they are kept as text until the section ends. */
+#define MAXSUM 64
+#define MAXSUMOP 8
+typedef struct {
+    int  sym;                       /* the counter itself */
+    int  group;                     /* the CONTROL FOOTING group it is defined in */
+    int  nops;
+    int  op_sym[MAXSUMOP];          /* an operand, once resolved */
+    char op_name[MAXSUMOP][31];     /* its name until then */
+    char op_qual[MAXSUMOP][31];     /* OF/IN qualifier, one level, or empty */
+    Node *op_sub[MAXSUMOP];
+    int  nupon;
+    char upon_name[4][31];
+    int  upon_group[4];
+    int  reset_level;               /* 0: at its own footing's level */
+    int  line;
+} RSum;
+static RSum rsums[MAXSUM]; static int nrsum;
 
 static int rg_is_body(int type)
 {
@@ -1002,6 +1028,27 @@ static int has_ancestor(int i, const char *q)
     for (int p = syms[i].gparent; p >= 0; p = syms[p].gparent)
         if (!strcmp(syms[p].name, q)) return 1;
     return 0;
+}
+
+/* As resolve_sym, but -1 for a name not yet declared: the Report Section
+ * may name a sum counter before its entry. Ambiguity still dies. */
+static int resolve_sym_quiet(const char *name, char q[][31], int nq)
+{
+    int found = -1, count = 0;
+    for (int i = 0; i < nsym; i++) {
+        if (strcmp(syms[i].name, name)) continue;
+        int ok = 1;
+        for (int k = 0; k < nq; k++) if (!has_ancestor(i, q[k])) { ok = 0; break; }
+        if (!ok) continue;
+        if (count++ == 0) found = i;
+    }
+    if (count > 1) {
+        char m[160];
+        snprintf(m, sizeof m, "'%s' is ambiguous -- %d items share that name; "
+                 "qualify it with OF or IN", name, count);
+        die(m);
+    }
+    return found;
 }
 
 /* Qualifiers may skip levels: B OF D is valid for A > B under C > D. */
@@ -1316,6 +1363,7 @@ static int is_numeric_literal(const char *t)
 
 static Node *opt_subscript(void);
 static int var_len(const Sym *y);
+static int consume_quals(char q[][31]);
 
 /* LINE-COUNTER and PAGE-COUNTER for a report: unsigned binary items able to
  * hold 999999 (VIII 1.2), under a hidden group named for the report so that
@@ -1471,6 +1519,8 @@ static void parse_report_section(void)
         int ng_kind = NG_NONE, ng_n = 0;
         int has_col = 0, column = 0, src = -1; Node *sub = NULL;
         char pic[64] = "", lit[MAXTOK]; int litlen = -1;
+        char src_pend[31] = "", src_pendq[31] = "";
+        int has_sum = 0; RSum sm; memset(&sm, 0, sizeof sm);
         if (!is("TYPE") && !is("LINE") && !is("NEXT") && !is("COLUMN") && !is("PIC")
             && !is("PICTURE") && !is("SOURCE") && !is("VALUE") && !is("SUM")
             && !is("GROUP") && !is("USAGE") && !is("DISPLAY") && !is("JUSTIFIED")
@@ -1535,17 +1585,61 @@ static void parse_report_section(void)
                 next_pic();
                 snprintf(pic, sizeof pic, "%s", tok.text); next();
             } else if (is("SOURCE")) {
+                /* The identifier may be a sum counter whose entry is still
+                 * to come (VIII 2.19.3(1)c): then it is resolved when the
+                 * section ends. */
                 next(); if (is("IS")) next();
-                src = consume_sym();
-                sub = opt_subscript();
+                char sn[31], q[MAXQUAL][31];
+                if (strlen(tok.text) > 30) die("data name too long");
+                strcpy(sn, tok.text); next();
+                int nq = consume_quals(q);
+                src = resolve_sym_quiet(sn, q, nq);
+                if (src >= 0) sub = opt_subscript();
+                else {
+                    if (nq > 1) die("one level of qualification on a forward SOURCE reference");
+                    src = -2; strcpy(src_pend, sn); strcpy(src_pendq, nq ? q[0] : "");
+                }
             } else if (is("VALUE")) {
                 next(); if (is("IS")) next();
                 if (!tok.literal) die("a report VALUE must be a nonnumeric literal");
                 memcpy(lit, tok.text, (size_t)tok.len + 1);
                 litlen = tok.len; next();
-            } else if (is("SUM"))
-                die("the SUM clause is not implemented yet");
-            else if (is("GROUP"))
+            } else if (is("SUM")) {
+                /* SUM identifier ... [UPON detail ...] [RESET ON control]. An
+                 * operand may be a counter defined further down, so names
+                 * are kept and resolved when the section ends. */
+                next();
+                has_sum = 1;
+                while (!tok.eof && !is(".") && !is("UPON") && !is("RESET") && !is("COLUMN")
+                       && !is("PIC") && !is("PICTURE") && !is("LINE") && !is("USAGE") && !is("GROUP")) {
+                    if (sm.nops >= MAXSUMOP) die("too many SUM operands");
+                    if (strlen(tok.text) > 30) die("data name too long");
+                    strcpy(sm.op_name[sm.nops], tok.text); next();
+                    if (is("OF") || is("IN")) { next(); strcpy(sm.op_qual[sm.nops], tok.text); next(); }
+                    if (is("(")) {
+                        char q[MAXQUAL][31]; int nq = 0;
+                        if (sm.op_qual[sm.nops][0]) { strcpy(q[0], sm.op_qual[sm.nops]); nq = 1; }
+                        sm.op_sym[sm.nops] = resolve_sym(sm.op_name[sm.nops], q, nq);
+                        sm.op_sub[sm.nops] = opt_subscript();
+                    }
+                    sm.nops++;
+                }
+                if (is("UPON")) {
+                    next();
+                    while (!tok.eof && !is(".") && !is("RESET") && !is("COLUMN") && !is("PIC")
+                           && !is("PICTURE") && !is("LINE") && !is("USAGE")) {
+                        if (sm.nupon >= 4) die("too many UPON names");
+                        if (strlen(tok.text) > 30) die("data name too long");
+                        strcpy(sm.upon_name[sm.nupon++], tok.text); next();
+                    }
+                }
+                if (is("RESET")) {
+                    next(); if (is("ON")) next();
+                    if (is("FINAL")) { next(); sm.reset_level = control_level(rp, -1, 1); }
+                    else sm.reset_level = control_level(rp, consume_sym(), 0);
+                    if (!sm.reset_level) die("RESET ON must name a control of this report -- VIII 2.20.3(4)");
+                }
+            } else if (is("GROUP"))
                 die("GROUP INDICATE is not implemented yet");
             else if (is("JUSTIFIED") || is("JUST") || is("BLANK"))
                 die("JUSTIFIED and BLANK WHEN ZERO on report items are not implemented yet");
@@ -1584,6 +1678,18 @@ static void parse_report_section(void)
             memset(g, 0, sizeof *g);
             snprintf(g->name, sizeof g->name, "%s", nm);
             g->report = cur_report; g->type = ty;
+            if (nm[0]) {
+                /* A named group is a qualifier for its sum counters:
+                 * TOTAL OF DEPT-FOOT. A hidden group of no size does that. */
+                if (nsym >= MAXSYM) die("too many data items");
+                Sym *gs = &syms[nsym];
+                memset(gs, 0, sizeof *gs);
+                snprintf(gs->name, sizeof gs->name, "%s", nm);
+                snprintf(gs->label, sizeof gs->label, "D%04d", nsym);
+                gs->level = 2; gs->is_group = 1; gs->gparent = rp->lc_sym >= 0 ? syms[rp->lc_sym].gparent : -1;
+                gs->occ_parent = -1; gs->offset = wslen;
+                g->name_sym = nsym++;
+            } else g->name_sym = -1;
             g->first_line = nrline;
             g->ng_kind = ng_kind; g->ng_n = ng_n; g->ctl_level = ctl_level;
             cur_group = nrgroup++; cur_line = -1;
@@ -1618,16 +1724,47 @@ static void parse_report_section(void)
             g->nline++;
         }
 
-        if (has_col || pic[0] || src >= 0 || litlen >= 0) {
-            if (!has_col) die("a PICTURE without COLUMN would be a sum counter, which is not implemented yet");
+        if (has_sum) {
+            /* The sum counter: sized by the PICTURE, signed, packed; named
+             * by the entry's data-name under the group or the report, so it
+             * qualifies as TOTAL OF DEPT-FOOT or TOTAL OF report-name. */
+            if (cur_group < 0 || rgroups[cur_group].type != RG_CONTROL_FOOTING)
+                die("a SUM clause may appear only in a CONTROL FOOTING group -- VIII 2.20.3(3)");
+            if (!pic[0]) die("a SUM entry needs a PICTURE");
+            if (src != -1 || litlen >= 0) die("a SUM entry takes neither SOURCE nor VALUE");
+            if (nrsum >= MAXSUM) die("too many sum counters");
+            if (nsym >= MAXSYM) die("too many data items");
+            PicInfo pi;
+            if (analyse_picture(pic, &pi) < 0) die(pi.err);
+            if (pi.is_alpha || pi.digits == 0) die("a SUM entry's PICTURE must be numeric");
+            Sym *cs = &syms[nsym];
+            memset(cs, 0, sizeof *cs);
+            snprintf(cs->name, sizeof cs->name, "%s", nm[0] ? nm : "*SUM");
+            snprintf(cs->label, sizeof cs->label, "D%04d", nsym);
+            cs->level = 3; cs->occ_parent = -1;
+            cs->gparent = rgroups[cur_group].name_sym >= 0 ? rgroups[cur_group].name_sym
+                        : (rp->lc_sym >= 0 ? syms[rp->lc_sym].gparent : -1);
+            cs->usage = U_COMP3; cs->digits = pi.digits; cs->scale = pi.scale; cs->is_signed = 1;
+            cs->bytes = cs->elem = pi.digits / 2 + 1;
+            cs->offset = wslen; wslen += cs->bytes;
+            sm.sym = nsym++;
+            sm.group = cur_group; sm.line = tok.line;
+            rsums[nrsum++] = sm;
+            if (!has_col) continue;                  /* a counter that does not print */
+            src = sm.sym;                            /* the counter is the printable item's source */
+            nm[0] = 0;
+        }
+        if (has_col || pic[0] || src != -1 || litlen >= 0) {
+            if (!has_col) die("a PICTURE without COLUMN or SUM has nothing to do -- VIII 2.5.3(10)");
             if (cur_line < 0) die("a COLUMN outside any LINE -- VIII 2.5.3(10c)");
             if (nrfield >= MAXRFIELD) die("too many report fields");
             if (!pic[0]) die("a COLUMN entry needs a PICTURE");
-            if (src < 0 && litlen < 0) die("a COLUMN entry needs a SOURCE or a VALUE");
-            if (src >= 0 && litlen >= 0) die("a COLUMN entry takes SOURCE or VALUE, not both");
+            if (src == -1 && litlen < 0) die("a COLUMN entry needs a SOURCE or a VALUE");
+            if (src != -1 && litlen >= 0) die("a COLUMN entry takes SOURCE or VALUE, not both");
             RField *fl = &rfields[nrfield];
             memset(fl, 0, sizeof *fl);
             fl->column = column; fl->src = src; fl->sub = sub;
+            strcpy(fl->pend_name, src_pend); strcpy(fl->pend_qual, src_pendq);
             if (litlen >= 0) { memcpy(fl->lit, lit, (size_t)litlen + 1); fl->litlen = litlen; }
             /* The field becomes an ordinary hidden item, so SOURCE placement
                reuses the existing MOVE path, editing and all. */
@@ -1660,10 +1797,44 @@ static void parse_report_section(void)
         if (rgroups[k].ng_kind != NG_NONE && rgroups[k].nline == 0)
             die("a NEXT GROUP clause needs a LINE clause in its group -- VIII 2.15.3(1)");
     lex_parens = saved_parens;
+    for (int i = 0; i < nrfield; i++) {
+        if (rfields[i].src != -2) continue;
+        char q[MAXQUAL][31]; int nq = 0;
+        if (rfields[i].pend_qual[0]) { strcpy(q[0], rfields[i].pend_qual); nq = 1; }
+        rfields[i].src = resolve_sym(rfields[i].pend_name, q, nq);
+    }
+    for (int i = 0; i < nrsum; i++) {
+        RSum *sm = &rsums[i];
+        const Report *rp = &reports[rgroups[sm->group].report];
+        for (int k = 0; k < sm->nops; k++) {
+            if (sm->op_sub[k]) continue;             /* resolved with its subscript */
+            char q[MAXQUAL][31]; int nq = 0;
+            if (sm->op_qual[k][0]) { strcpy(q[0], sm->op_qual[k]); nq = 1; }
+            sm->op_sym[k] = resolve_sym(sm->op_name[k], q, nq);
+            const Sym *o = &syms[sm->op_sym[k]];
+            if (o->is_alpha || o->is_group) die("a SUM operand must be numeric -- VIII 2.20.3(1)");
+            int j; for (j = 0; j < nrsum; j++) if (rsums[j].sym == sm->op_sym[k]) break;
+            if (j < nrsum) {
+                if (sm->nupon) die("with UPON, a SUM operand may not be a sum counter -- VIII 2.20.3(1)");
+                if (rgroups[rsums[j].group].report != rgroups[sm->group].report
+                    || rgroups[rsums[j].group].ctl_level < rgroups[sm->group].ctl_level)
+                    die("a sum counter operand must be in the same or a lower-level CONTROL FOOTING -- VIII 2.20.3(1)");
+            }
+        }
+        for (int k = 0; k < sm->nupon; k++) {
+            int gi = rgroup_index(sm->upon_name[k]);
+            if (gi < 0 || rgroups[gi].type != RG_DETAIL || rgroups[gi].report != rgroups[sm->group].report)
+                die("UPON must name a DETAIL group of the same report -- VIII 2.20.3(2)");
+            sm->upon_group[k] = gi;
+        }
+        if (sm->reset_level && sm->reset_level > rgroups[sm->group].ctl_level)
+            die("RESET ON may not name a lower-level control than the footing's own -- VIII 2.20.3(4)");
+        (void)rp;
+    }
     for (int r = 0; r < nreport; r++) {
         int body = 0;
         for (int k = 0; k < nrgroup; k++)
-            if (rgroups[k].report == r && rgroups[k].type == RG_DETAIL) body = 1;
+            if (rgroups[k].report == r && rg_is_body(rgroups[k].type)) body = 1;
         if (reports[r].lc_sym >= 0 && !body)
             die("a report needs at least one body group -- VIII 2.21.3(7)");
     }
@@ -4163,10 +4334,29 @@ static void parse_one_statement(void)
 
     if (is("GENERATE")) {
         next();
+        int r = report_index(tok.text);
+        if (r >= 0) {
+            /* GENERATE report-name: summary processing, VIII 3.1.3(2). */
+            const Report *rp = &reports[r];
+            int ndet = 0, nbody = 0;
+            for (int k = 0; k < nrgroup; k++) {
+                if (rgroups[k].report != r) continue;
+                if (rgroups[k].type == RG_DETAIL) ndet++;
+                if (rg_is_body(rgroups[k].type)) nbody++;
+            }
+            if (!rp->nctl) die("GENERATE report-name needs a CONTROL clause in the RD -- VIII 3.1.3(2)");
+            if (ndet > 1) die("GENERATE report-name allows at most one DETAIL group -- VIII 3.1.3(2)");
+            if (!nbody) die("GENERATE report-name needs at least one body group -- VIII 3.1.3(2)");
+            Stmt *st = new_stmt(ST_GENERATE);
+            st->dst = r; st->rec = 1;
+            next();
+            eat_period();
+            return;
+        }
         int g = rgroup_index(tok.text);
-        if (g < 0) die("GENERATE names something that is not a report group");
+        if (g < 0) die("GENERATE names something that is not a report group or a report");
         if (rgroups[g].type != RG_DETAIL)
-            die("GENERATE of a non-detail group is not implemented");
+            die("GENERATE must name a DETAIL group -- VIII 3.1.3(1)");
         new_stmt(ST_GENERATE)->dst = g;
         next();
         eat_period();
@@ -7992,6 +8182,112 @@ static void emit_report_eject(int ri)
     asm_line("", "BR", "14", "");
 }
 
+/* ADD one operand into a sum counter, under the rules of the ADD statement
+ * (VIII 2.20.4(1)): at the wider scale, then truncated to the counter's. */
+static void emit_sum_add(int dst, int src, Node *sub)
+{
+    const Sym *d = &syms[dst], *o = &syms[src];
+    int ws = d->scale > o->scale ? d->scale : o->scale;
+    need_sym_base(d); gen_load(d, NULL, "PWK1");
+    gen_rescale("PWK1", d->scale, ws);
+    need_sym_base(o); gen_load(o, sub, "PWK2");
+    gen_rescale("PWK2", o->scale, ws);
+    asm_line("", "AP", "PWK1(16),PWK2(16)", o->name);
+    gen_rescale("PWK1", ws, d->scale);
+    need_sym_base(d); gen_store(d, NULL, "PWK1");
+    reset_bases();
+}
+
+static int sum_index_of(int sym)
+{
+    for (int j = 0; j < nrsum; j++) if (rsums[j].sym == sym) return j;
+    return -1;
+}
+
+/* Subtotalling, VIII 2.20.4(8)c: on a GENERATE for report ri, every operand
+ * that is not a sum counter is added into its counter -- for a clause with
+ * UPON, only when the GENERATE names one of its DETAIL groups (gi); for a
+ * clause without, on any GENERATE data-name (gi >= 0) and, as though for the
+ * one DETAIL group, on GENERATE report-name (gi < 0, VIII 2.21.4(11)). */
+static void emit_subtotal(int ri, int gi)
+{
+    int any = 0;
+    for (int i = 0; i < nrsum; i++) {
+        const RSum *sm = &rsums[i];
+        if (rgroups[sm->group].report != ri) continue;
+        int upon_ok = !sm->nupon;
+        for (int k = 0; k < sm->nupon; k++) if (sm->upon_group[k] == gi) upon_ok = 1;
+        if (!upon_ok && gi < 0 && sm->nupon) {
+            /* GENERATE report-name with one DETAIL: as though it were named. */
+            int ndet = 0, det = -1;
+            for (int k = 0; k < nrgroup; k++) if (rgroups[k].report == ri && rgroups[k].type == RG_DETAIL) { ndet++; det = k; }
+            if (ndet == 1) for (int k = 0; k < sm->nupon; k++) if (sm->upon_group[k] == det) upon_ok = 1;
+        }
+        if (!upon_ok) continue;
+        for (int k = 0; k < sm->nops; k++) {
+            if (sum_index_of(sm->op_sym[k]) >= 0) continue;
+            if (!any) { asm_comment(" subtotalling"); any = 1; }
+            emit_sum_add(sm->sym, sm->op_sym[k], sm->op_sub[k]);
+        }
+    }
+}
+
+/* Crossfooting and rolling forward when CONTROL FOOTING gi is processed,
+ * VIII 2.21.4(10)a and b: first each counter of the group takes the
+ * counters of the same group it names, in definition order; then each
+ * counter of the group is added into every higher-level counter that names
+ * it. */
+static void emit_crossfoot(int gi)
+{
+    int any = 0;
+    for (int i = 0; i < nrsum; i++) {
+        const RSum *sm = &rsums[i];
+        if (sm->group != gi) continue;
+        for (int k = 0; k < sm->nops; k++) {
+            int j = sum_index_of(sm->op_sym[k]);
+            if (j < 0 || rsums[j].group != gi) continue;
+            if (!any) { asm_comment(" crossfooting"); any = 1; }
+            emit_sum_add(sm->sym, sm->op_sym[k], NULL);
+        }
+    }
+    any = 0;
+    for (int i = 0; i < nrsum; i++) {
+        if (rsums[i].group != gi) continue;
+        for (int j = 0; j < nrsum; j++) {
+            const RSum *hi = &rsums[j];
+            if (rgroups[hi->group].report != rgroups[gi].report || hi->group == gi) continue;
+            if (rgroups[hi->group].ctl_level >= rgroups[gi].ctl_level) continue;
+            for (int k = 0; k < hi->nops; k++) {
+                if (hi->op_sym[k] != rsums[i].sym) continue;
+                if (!any) { asm_comment(" rolling forward"); any = 1; }
+                emit_sum_add(hi->sym, rsums[i].sym, NULL);
+            }
+        }
+    }
+}
+
+/* Reset the counters that go to zero when level k of report ri is processed,
+ * VIII 2.20.4(11): those defined in the footing at that level without a
+ * RESET phrase, and those anywhere whose RESET names that level. */
+static void emit_sum_reset(int ri, int k)
+{
+    char b[160], f[64];
+    int any = 0;
+    for (int i = 0; i < nrsum; i++) {
+        const RSum *sm = &rsums[i];
+        if (rgroups[sm->group].report != ri) continue;
+        int level = sm->reset_level ? sm->reset_level : rgroups[sm->group].ctl_level;
+        if (level != k) continue;
+        const Sym *c = &syms[sm->sym];
+        if (!any) { asm_comment(" sum counters reset at this level"); any = 1; }
+        need_sym_base(c);
+        field_ref(c, NULL, c->bytes, 6, f, sizeof f);
+        snprintf(b, sizeof b, "%s,%s+15(1)", f, intern_const("0"));
+        asm_line("", "ZAP", b, c->name);
+    }
+    if (any) reset_bases();
+}
+
 /* Save the control data items: the values the next GENERATE senses against,
  * and the prior values a CONTROL FOOTING reads. */
 static void emit_save_controls(const Report *rp)
@@ -8047,16 +8343,28 @@ static void emit_sense_break(const Report *rp, const char *lbrk)
 static void emit_control_groups(const Report *rp, int footings)
 {
     char b[160], ls[16];
+    int ri = (int)(rp - reports);
     for (int i = 0; i < rp->nctl; i++) {
         int k = footings ? rp->nctl - i : i + 1;
         int gi = footings ? rp->cf_group[k] : rp->ch_group[k];
-        if (gi < 0) continue;
+        int resets = 0;
+        if (footings)
+            for (int j = 0; j < nrsum; j++)
+                if (rgroups[rsums[j].group].report == ri
+                    && (rsums[j].reset_level ? rsums[j].reset_level : rgroups[rsums[j].group].ctl_level) == k)
+                    resets = 1;
+        if (gi < 0 && !resets) continue;
         snprintf(ls, sizeof ls, "L%04d", ++genlabel);
         snprintf(b, sizeof b, "%s,%d", rp->lbl_brk, k);
         asm_line("", "CLI", b, "the break is at least this major?");
         asm_line("", "BH", ls, "no: this level did not break");
-        snprintf(b, sizeof b, "14,RG%03d", gi);
-        asm_line("", "BAL", b, footings ? "CONTROL FOOTING" : "CONTROL HEADING");
+        if (gi >= 0) {
+            if (footings) emit_crossfoot(gi);
+            snprintf(b, sizeof b, "14,RG%03d", gi);
+            asm_line("", "BAL", b, footings ? "CONTROL FOOTING" : "CONTROL HEADING");
+            reset_bases();
+        }
+        if (footings) emit_sum_reset(ri, k);
         asm_line(ls, "DS", "0H", "");
         reset_bases();
     }
@@ -8591,6 +8899,19 @@ static void generate(void)
             snprintf(b, sizeof b, "%s,X'00'", rp->lbl_pf);   asm_line("", "MVI", b, "");
             snprintf(b, sizeof b, "%s,X'00'", rp->lbl_gen);  asm_line("", "MVI", b, "no GENERATE yet");
             snprintf(b, sizeof b, "%s,C'1'", rp->lbl_ctl);   asm_line("", "MVI", b, "eject before the first page");
+            {
+                int any = 0; char f[64];
+                for (int i = 0; i < nrsum; i++) {
+                    if (rgroups[rsums[i].group].report != st->dst) continue;
+                    const Sym *c = &syms[rsums[i].sym];
+                    if (!any) { asm_comment(" sum counters to zero, 3.2.4(1)a"); any = 1; }
+                    need_sym_base(c);
+                    field_ref(c, NULL, c->bytes, 6, f, sizeof f);
+                    snprintf(b, sizeof b, "%s,%s+15(1)", f, intern_const("0"));
+                    asm_line("", "ZAP", b, c->name);
+                }
+                reset_bases();
+            }
             break;
         }
         case ST_TERMINATE: {
@@ -8635,11 +8956,13 @@ static void generate(void)
             /* VIII 3.1.4(5): the first GENERATE presents the REPORT HEADING
              * -- on a page by itself under NEXT GROUP NEXT PAGE, which is an
              * eject with no PAGE FOOTING before it (2.21.4(7)a) -- then the
-             * PAGE HEADING, then (not yet) the CONTROL HEADINGs, then the
-             * detail; the renderer does the rest. */
-            RGroup *g = &rgroups[st->dst];
-            Report *rp = &reports[g->report];
-            snprintf(b, sizeof b, " GENERATE %s", g->name);
+             * PAGE HEADING, then the CONTROL HEADINGs, then the detail; the
+             * renderer does the rest. GENERATE report-name (st->rec) does
+             * everything but present the detail (2.21.4(11)). */
+            int summary = st->rec > 0;      /* new_stmt leaves rec at -1 */
+            int gi = summary ? -1 : st->dst;
+            Report *rp = summary ? &reports[st->dst] : &reports[rgroups[st->dst].report];
+            snprintf(b, sizeof b, " GENERATE %s", summary ? rp->name : rgroups[gi].name);
             asm_comment(b);
             reset_bases();
             char lnf[16]; snprintf(lnf, sizeof lnf, "L%04d", ++genlabel);
@@ -8685,9 +9008,12 @@ static void generate(void)
             } else asm_line(lnf, "DS", "0H", "");
             asm_line(ldet, "DS", "0H", "");
             reset_bases();
-            snprintf(b, sizeof b, "14,RG%03d", st->dst);
-            asm_line("", "BAL", b, "");
-            reset_bases();
+            emit_subtotal((int)(rp - reports), gi);
+            if (!summary) {
+                snprintf(b, sizeof b, "14,RG%03d", gi);
+                asm_line("", "BAL", b, "");
+                reset_bases();
+            }
             break;
         }
         case ST_GOTO: {
@@ -10651,7 +10977,8 @@ static void generate(void)
                 at = sy->offset;
             }
             if (sy->is_group) {
-                if (sy->elem <= 256) snprintf(b, sizeof b, "0CL%d", sy->elem);
+                if (sy->elem == 0) snprintf(b, sizeof b, "0C");   /* a hidden report group: a name, no storage */
+                else if (sy->elem <= 256) snprintf(b, sizeof b, "0CL%d", sy->elem);
                 else                 snprintf(b, sizeof b, "0C");
                 if (sy->occurs) snprintf(cmt, sizeof cmt, "%s (%02d group, OCCURS %d)",
                                          sy->name, sy->level, sy->occurs);
@@ -10809,7 +11136,8 @@ static void generate(void)
                 at = sy->offset;
             }
             if (sy->is_group) {
-                if (sy->elem <= 256) snprintf(b, sizeof b, "0CL%d", sy->elem);
+                if (sy->elem == 0) snprintf(b, sizeof b, "0C");   /* a hidden report group: a name, no storage */
+                else if (sy->elem <= 256) snprintf(b, sizeof b, "0CL%d", sy->elem);
                 else                 snprintf(b, sizeof b, "0C");
                 snprintf(cmt, sizeof cmt, "%s (%02d group)", sy->name, sy->level);
                 asm_line(sy->label, "DS", b, cmt);

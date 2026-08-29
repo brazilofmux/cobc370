@@ -154,13 +154,19 @@ level); prior values of the controls for `CONTROL FOOTING` and `REPORT
 FOOTING` `SOURCE`s (2.21.4(13)); `LINE NUMBER` absolute, `PLUS` and `NEXT
 PAGE`; `NEXT GROUP` absolute, `PLUS` and `NEXT PAGE`, ignored on a footing
 below the break level (2.15.4(3)); report entries with their clauses in any
-order (2.5.3(2)); `COLUMN NUMBER`; `SOURCE` with subscripts; `VALUE`;
-`USAGE DISPLAY`; `GENERATE data-name`, `INITIATE`, `TERMINATE`.
+order (2.5.3(2)); `COLUMN NUMBER`; `SOURCE` with subscripts, including a
+sum counter defined later in the section; `VALUE`; `USAGE DISPLAY`; the
+`SUM` clause with `UPON` and `RESET ON` (2.20) -- subtotalling on
+`GENERATE`, crossfooting and rolling forward when a footing is processed,
+counters zeroed by `INITIATE`, usable as `SOURCE` and in the Procedure
+Division, qualified by the footing's name or the report's; `GENERATE
+data-name` and `GENERATE report-name` (summary reports, 2.21.4(11)),
+`INITIATE`, `TERMINATE`.
 
-Missing, each refused with a message: the `SUM` clause and sum counters,
-with subtotalling, crossfooting and rolling forward; `GROUP INDICATE`;
-`JUSTIFIED` and `BLANK WHEN ZERO` on report items; `CODE`; `REPORTS ARE`;
-`GENERATE report-name`; `SUPPRESS`; `USE BEFORE REPORTING`.
+Missing, each refused with a message: `GROUP INDICATE`; `JUSTIFIED` and
+`BLANK WHEN ZERO` on report items; `CODE`; `REPORTS ARE`; `SUPPRESS`; `USE
+BEFORE REPORTING`; `INITIATE`/`TERMINATE` of several reports in one
+statement.
 
 `1 RPW 0,1` is a single level, so the module is not claimed until the list
 above is empty.

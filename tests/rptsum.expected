@@ -1,0 +1,20 @@
+ACCT-TOT BEFORE TERMINATE     8.88
+DEPT-TOT BEFORE TERMINATE     0.00
+SUM REPORT
+A: AA 01     10.50                   10.50
+B: AA 01      3.25-
+ACCT TOT      7.25        3.25-       7.25      2
+A: AA 02      7.00                   14.25
+ACCT TOT      7.00        0.00       14.25      1
+DEPT TOT     14.25                              3
+B: BB 01    100.00
+ACCT TOT    100.00      100.00      100.00      1
+A: BB 03     20.10                  120.10
+B: BB 03     20.10
+A: BB 03     20.10                  160.30
+ACCT TOT     60.30       20.10      160.30      3
+DEPT TOT    160.30                              4
+B: CC 01      8.88
+ACCT TOT      8.88        8.88        8.88      1
+DEPT TOT      8.88                              1
+GRAND       183.43       183.43

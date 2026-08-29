@@ -95,12 +95,15 @@ T0009    DS    0H
          MVI   RPF000,X'00'
          MVI   RFGEN000,X'00'      no GENERATE yet
          MVI   RCTL000,C'1'        eject before the first page
+         DROP  8
 T0010    DS    0H
 * PERFORM ONE-REC
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK1(16),WK0+15(1)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0000
 L0001    DS    0H
          DROP  8
@@ -308,11 +311,11 @@ RG000    ST    14,RGS000           save the return
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0001       load the ED pattern
          ED    EDWK(4),EDSRC
-         MVC   D0014(3),EDWK+1     the edited result
+         MVC   D0015(3),EDWK+1     the edited result
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+20(3),D0014    COLUMN placement
+         MVC   RBUF+20(3),D0015    COLUMN placement
          LA    1,RGP000
          L     15,VWRL
          BALR  14,15
@@ -364,11 +367,11 @@ L0022    DS    0H
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
          MVC   RBUF+1(11),S0009    COLUMN literal
-         MVC   D0016(2),D0005      alphanumeric move
+         MVC   D0018(2),D0005      alphanumeric move
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+12(2),D0016    COLUMN placement
+         MVC   RBUF+12(2),D0018    COLUMN placement
          LA    1,RGP001
          L     15,VWRL
          BALR  14,15
@@ -421,11 +424,11 @@ L0026    DS    0H
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
          MVC   RBUF+3(5),S0010     COLUMN literal
-         MVC   D0018(2),D0006      zoned to zoned, same picture
+         MVC   D0021(2),D0006      zoned to zoned, same picture
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+8(2),D0018     COLUMN placement
+         MVC   RBUF+8(2),D0021     COLUMN placement
          LA    1,RGP002
          L     15,VWRL
          BALR  14,15
@@ -477,25 +480,25 @@ L0030    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
-         MVC   D0019(2),D0005      alphanumeric move
+         MVC   D0023(2),D0005      alphanumeric move
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+5(2),D0019     COLUMN placement
-         MVC   D0020(2),D0006      zoned to zoned, same picture
+         MVC   RBUF+5(2),D0023     COLUMN placement
+         MVC   D0024(2),D0006      zoned to zoned, same picture
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+8(2),D0020     COLUMN placement
+         MVC   RBUF+8(2),D0024     COLUMN placement
          PACK  PWK1(16),D0007(3)   zoned -> packed
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0001       load the ED pattern
          ED    EDWK(4),EDSRC
-         MVC   D0021(3),EDWK+1     the edited result
+         MVC   D0025(3),EDWK+1     the edited result
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+12(3),D0021    COLUMN placement
+         MVC   RBUF+12(3),D0025    COLUMN placement
          LA    1,RGP003
          L     15,VWRL
          BALR  14,15
@@ -548,17 +551,17 @@ L0034    DS    0H
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
          MVC   RBUF+3(9),S0011     COLUMN literal
-         MVC   D0023(2),D0012      zoned to zoned, same picture
+         MVC   D0028(2),D0012      zoned to zoned, same picture
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+12(2),D0023    COLUMN placement
+         MVC   RBUF+12(2),D0028    COLUMN placement
          MVC   RBUF+15(3),S0012    COLUMN literal
-         MVC   D0025(2),D0011      alphanumeric move
+         MVC   D0030(2),D0011      alphanumeric move
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+18(2),D0025    COLUMN placement
+         MVC   RBUF+18(2),D0030    COLUMN placement
          LA    1,RGP004
          L     15,VWRL
          BALR  14,15
@@ -624,11 +627,11 @@ L0040    DS    0H
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
          MVC   RBUF+1(9),S0013     COLUMN literal
-         MVC   D0027(2),D0011      alphanumeric move
+         MVC   D0033(2),D0011      alphanumeric move
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+10(2),D0027    COLUMN placement
+         MVC   RBUF+10(2),D0033    COLUMN placement
          LA    1,RGP005
          L     15,VWRL
          BALR  14,15
@@ -942,22 +945,29 @@ D0009    DC    FL4'0'              LINE-COUNTER PIC 9(6)v0 COMP
 D0010    DC    FL4'0'              PAGE-COUNTER PIC 9(6)v0 COMP
 D0011    DC    CL2' '              *PRIOR PIC X(2)
 D0012    DC    CL2'00'             *PRIOR PIC 9(2)v0 DISP
-D0013    DC    CL11' '             RPT0 PIC X(11)
-D0014    DC    CL3' '              RPT1 edited, 3 chars
-D0015    DC    CL11' '             RPT2 PIC X(11)
-D0016    DC    CL2' '              RPT3 PIC X(2)
-D0017    DC    CL5' '              RPT4 PIC X(5)
-D0018    DC    CL2'00'             RPT5 PIC 9(2)v0 DISP
-D0019    DC    CL2' '              RPT6 PIC X(2)
-D0020    DC    CL2'00'             RPT7 PIC 9(2)v0 DISP
-D0021    DC    CL3' '              RPT8 edited, 3 chars
-D0022    DC    CL9' '              RPT9 PIC X(9)
-D0023    DC    CL2'00'             RPT10 PIC 9(2)v0 DISP
-D0024    DC    CL3' '              RPT11 PIC X(3)
-D0025    DC    CL2' '              RPT12 PIC X(2)
-D0026    DC    CL9' '              RPT13 PIC X(9)
-D0027    DC    CL2' '              RPT14 PIC X(2)
-D0028    DC    CL13' '             RPT15 PIC X(13)
+D0013    DS    0C                  PAGE-HEAD (02 group)
+D0014    DC    CL11' '             RPT0 PIC X(11)
+D0015    DC    CL3' '              RPT1 edited, 3 chars
+D0016    DS    0C                  DEPT-HEAD (02 group)
+D0017    DC    CL11' '             RPT2 PIC X(11)
+D0018    DC    CL2' '              RPT3 PIC X(2)
+D0019    DS    0C                  ACCT-HEAD (02 group)
+D0020    DC    CL5' '              RPT4 PIC X(5)
+D0021    DC    CL2'00'             RPT5 PIC 9(2)v0 DISP
+D0022    DS    0C                  DETAIL-LINE (02 group)
+D0023    DC    CL2' '              RPT6 PIC X(2)
+D0024    DC    CL2'00'             RPT7 PIC 9(2)v0 DISP
+D0025    DC    CL3' '              RPT8 edited, 3 chars
+D0026    DS    0C                  ACCT-FOOT (02 group)
+D0027    DC    CL9' '              RPT9 PIC X(9)
+D0028    DC    CL2'00'             RPT10 PIC 9(2)v0 DISP
+D0029    DC    CL3' '              RPT11 PIC X(3)
+D0030    DC    CL2' '              RPT12 PIC X(2)
+D0031    DS    0C                  DEPT-FOOT (02 group)
+D0032    DC    CL9' '              RPT13 PIC X(9)
+D0033    DC    CL2' '              RPT14 PIC X(2)
+D0034    DS    0C                  FINAL-FOOT (02 group)
+D0035    DC    CL13' '             RPT15 PIC X(13)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

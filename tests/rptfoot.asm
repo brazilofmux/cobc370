@@ -44,12 +44,15 @@ T0001    DS    0H
          MVI   RPF000,X'00'
          MVI   RFGEN000,X'00'      no GENERATE yet
          MVI   RCTL000,C'1'        eject before the first page
+         DROP  8
 T0002    DS    0H
 * PERFORM SPACED-PARA
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK1(16),WK0+15(1)
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0000
 L0001    DS    0H
          DROP  8
@@ -300,11 +303,11 @@ L0019    DS    0H
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0001       load the ED pattern
          ED    EDWK(4),EDSRC
-         MVC   D0009(3),EDWK+1     the edited result
+         MVC   D0011(3),EDWK+1     the edited result
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+25(3),D0009    COLUMN placement
+         MVC   RBUF+25(3),D0011    COLUMN placement
          LA    1,RGP001
          L     15,VWRL
          BALR  14,15
@@ -355,11 +358,11 @@ L0023    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
-         MVC   D0010(3),D0001      zoned to zoned, same picture
+         MVC   D0013(3),D0001      zoned to zoned, same picture
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+1(3),D0010     COLUMN placement
+         MVC   RBUF+1(3),D0013     COLUMN placement
          MVC   RBUF+8(6),S0005     COLUMN literal
          LA    1,RGP002
          L     15,VWRL
@@ -422,11 +425,11 @@ L0028    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(131),RBUF+1  blank the line
-         MVC   D0012(3),D0001      zoned to zoned, same picture
+         MVC   D0016(3),D0001      zoned to zoned, same picture
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+1(3),D0012     COLUMN placement
+         MVC   RBUF+1(3),D0016     COLUMN placement
          MVC   RBUF+8(6),S0006     COLUMN literal
          LA    1,RGP003
          L     15,VWRL
@@ -464,11 +467,11 @@ RG004    ST    14,RGS004           save the return
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0001       load the ED pattern
          ED    EDWK(4),EDSRC
-         MVC   D0015(3),EDWK+1     the edited result
+         MVC   D0020(3),EDWK+1     the edited result
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   RBUF+12(3),D0015    COLUMN placement
+         MVC   RBUF+12(3),D0020    COLUMN placement
          LA    1,RGP004
          L     15,VWRL
          BALR  14,15
@@ -717,17 +720,23 @@ D0002    DC    CL3' '              WS-LC edited, 3 chars
 D0003    DS    0CL8                FOOTED-RPT (01 group)
 D0004    DC    FL4'0'              LINE-COUNTER PIC 9(6)v0 COMP
 D0005    DC    FL4'0'              PAGE-COUNTER PIC 9(6)v0 COMP
-D0006    DC    CL15' '             RPT0 PIC X(15)
-D0007    DC    CL13' '             RPT1 PIC X(13)
-D0008    DC    CL4' '              RPT2 PIC X(4)
-D0009    DC    CL3' '              RPT3 edited, 3 chars
-D0010    DC    CL3'000'            RPT4 PIC 9(3)v0 DISP
-D0011    DC    CL6' '              RPT5 PIC X(6)
-D0012    DC    CL3'000'            RPT6 PIC 9(3)v0 DISP
-D0013    DC    CL6' '              RPT7 PIC X(6)
-D0014    DC    CL11' '             RPT8 PIC X(11)
-D0015    DC    CL3' '              RPT9 edited, 3 chars
-D0016    DC    CL16' '             RPT10 PIC X(16)
+D0006    DS    0C                  RPT-HEAD (02 group)
+D0007    DC    CL15' '             RPT0 PIC X(15)
+D0008    DS    0C                  PAGE-HEAD (02 group)
+D0009    DC    CL13' '             RPT1 PIC X(13)
+D0010    DC    CL4' '              RPT2 PIC X(4)
+D0011    DC    CL3' '              RPT3 edited, 3 chars
+D0012    DS    0C                  SPACED (02 group)
+D0013    DC    CL3'000'            RPT4 PIC 9(3)v0 DISP
+D0014    DC    CL6' '              RPT5 PIC X(6)
+D0015    DS    0C                  JUMPER (02 group)
+D0016    DC    CL3'000'            RPT6 PIC 9(3)v0 DISP
+D0017    DC    CL6' '              RPT7 PIC X(6)
+D0018    DS    0C                  PAGE-FOOT (02 group)
+D0019    DC    CL11' '             RPT8 PIC X(11)
+D0020    DC    CL3' '              RPT9 edited, 3 chars
+D0021    DS    0C                  RPT-FOOT (02 group)
+D0022    DC    CL16' '             RPT10 PIC X(16)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

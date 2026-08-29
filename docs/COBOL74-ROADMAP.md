@@ -476,7 +476,26 @@ generated per report from the `CONTROL` hierarchy.
    rolling forward at `CF` processing in the order of 2.21.4(10) and
    2.20.4(8); `RESET ON`; the counter as `SOURCE` and as an ordinary item in
    the Procedure Division; `GENERATE report-name` and summary reports
-   (2.21.4(11)). **M.**
+   (2.21.4(11)). **M.** -- DONE 2026-08-30. A counter is a signed packed
+   item sized by its entry's `PICTURE`, under the footing's name when the
+   entry has one (so `TOTAL OF DEPT-FOOT` qualifies) or the report's.
+   Operands and `UPON` names may refer to entries later in the section, so
+   they are held as text and resolved when the section ends; a `SOURCE` may
+   do the same, since a detail line may show a running total. Subtotalling
+   is emitted into each `GENERATE` after the break sequence and before the
+   detail; crossfooting and rolling forward go before each footing's
+   renderer in the footing sequence, resets after it, and a level with no
+   footing group still gets its resets (2.21.4(10) note). `tests/rptsum`
+   and `tests/rptsumm` are the checks. GnuCOBOL was not consulted --
+   slice 3 showed its Report Writer unusable here. IKFCBL00 agreed on every
+   subtotal, running total, `UPON` selection, `RESET ON`, roll into the
+   next level and `DISPLAY` of a counter mid-report, and differed from the
+   1974 text in three places, all 1968-shaped: a counter summing a counter
+   of its own group (crossfooting) stayed zero; a counter summing one two
+   levels down (rolling forward past a level) stayed zero; and `GENERATE
+   report-name` with no `DETAIL` group subtotalled nothing, where
+   2.21.4(11) says to proceed as though one `DETAIL` existed. The oracles
+   follow the text in those three places.
 5. **The rest of the list.** `USE BEFORE REPORTING` as a declarative with
    `SUPPRESS`; `GROUP INDICATE` (first after `INITIATE`, page advance or
    break); `JUSTIFIED` and `BLANK WHEN ZERO` on printable items; `CODE`;
