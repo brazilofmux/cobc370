@@ -48,6 +48,9 @@ T0002    DS    0H
 T0003    DS    0H
 * OPEN INPUT KSDS-FILE
          OPEN  (FD000)             VSAM ACB
+         CH    15,VSFOUR           a warning?
+         BNE   *+6
+         SR    15,15               then it opened
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
          L     8,BL0000            base locator
@@ -159,6 +162,7 @@ T0014    DS    0H
 G0007    DS    0H
          DROP  8
          GET   RPL=FD000R          VSAM retrieval by key
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0001
          LTR   15,15               VSAM request succeeded?
@@ -184,6 +188,11 @@ G0009    DS    0H
          B     G0010
 G0012    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0014
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0014    DS    0H
 G0010    DS    0H
          B     L0002
 L0001    DS    0H                  INVALID KEY
@@ -210,6 +219,11 @@ G0013    DS    0H
          B     G0014
 G0016    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0015
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0015    DS    0H
 G0014    DS    0H
 G0008    DS    0H
 T0015    DS    0H
@@ -284,16 +298,16 @@ T0024    DS    0H
          MVC   D0004(1),S0008      literal move, space padded
 T0025    DS    0H
 * PERFORM 104-NEXT THRU 105-EXIT
-L0016    DS    0H
+L0018    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0004(1),S0009      alphanumeric compare
-         BE    L0017
+         BE    L0019
          PACK  WK0+11(5),D0008(8)  zoned -> packed
          ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+11(5),WK1+15(1)  numeric compare
-         BH    L0017
+         BH    L0019
          LA    15,R0005            return here
          ST    15,X0008            into the range's exit cell
          B     P0007
@@ -301,8 +315,8 @@ R0005    DS    0H
          DROP  8
          LA    15,F0008            restore fall-through
          ST    15,X0008
-         B     L0016
-L0017    DS    0H
+         B     L0018
+L0019    DS    0H
 T0026    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0003
@@ -331,6 +345,7 @@ T0028    DS    0H
 G0017    DS    0H
          DROP  8
          GET   RPL=FD000R          VSAM sequential retrieval
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0005
          LTR   15,15               VSAM request succeeded?
@@ -356,6 +371,11 @@ G0019    DS    0H
          B     G0020
 G0022    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0020
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0020    DS    0H
 G0020    DS    0H
          B     L0006
 L0005    DS    0H                  AT END
@@ -382,6 +402,11 @@ G0023    DS    0H
          B     G0024
 G0026    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0021
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0021    DS    0H
 G0024    DS    0H
 G0018    DS    0H
 T0029    DS    0H
@@ -472,6 +497,7 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=KSDSF01,MACRF=(KEY,SEQ,DIR,IN)  VSAM access metho
+FD000RA  DC    F'0'                has carried a request
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,ARG=D0001,KEYLEN=10,OPTCD=(KEY,SEQ,X
                KEQ,NUP,MVE)
@@ -494,6 +520,7 @@ S0012    DC    CL10'    NEXT: '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
+VSFOUR   DC    H'4'                an OPEN warning
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H

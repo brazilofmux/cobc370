@@ -48,6 +48,9 @@ T0002    DS    0H
 T0003    DS    0H
 * OPEN I-O ESDS-FILE
          OPEN  (FD000)             VSAM ACB
+         CH    15,VSFOUR           a warning?
+         BNE   *+6
+         SR    15,15               then it opened
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
          L     8,BL0000            base locator
@@ -132,6 +135,7 @@ P0003    DS    0H
 T0010    DS    0H
 * READ ESDS-FILE
          GET   RPL=FD000R          VSAM sequential retrieval
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0002
          LTR   15,15               VSAM request succeeded?
@@ -157,6 +161,11 @@ G0007    DS    0H
          B     G0008
 G0010    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0012
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0012    DS    0H
 G0008    DS    0H
          B     L0003
 L0002    DS    0H                  AT END
@@ -183,6 +192,11 @@ G0011    DS    0H
          B     G0012
 G0014    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0013
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0013    DS    0H
 G0012    DS    0H
 T0011    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
@@ -230,16 +244,16 @@ T0016    DS    0H
          PACK  WK0+14(2),D0004(2)  zoned -> packed
          ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
-         BE    L0014
+         BE    L0016
          PACK  WK0+14(2),D0004(2)  zoned -> packed
          ZAP   WK1+15(1),K0003+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
-         BE    L0014
+         BE    L0016
          PACK  WK0+14(2),D0004(2)  zoned -> packed
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0005
-L0014    DS    0H
+L0016    DS    0H
 T0017    DS    0H
 * PERFORM 122-DO-UPDATE THRU 123-EXIT
          LA    15,R0003            return here
@@ -286,6 +300,7 @@ T0022    DS    0H
 T0023    DS    0H
 * REWRITE ESDS-RECORD
          PUT   RPL=FD000R          put the held record back
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
          BNZ   L0006
          LTR   15,15               VSAM request succeeded?
@@ -325,6 +340,11 @@ G0015    DS    0H
          B     G0016
 G0020    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0019
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0019    DS    0H
 G0016    DS    0H
          B     L0007
 L0006    DS    0H                  INVALID KEY
@@ -367,6 +387,11 @@ G0021    DS    0H
          B     G0022
 G0026    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0020
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0020    DS    0H
 G0022    DS    0H
 T0024    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -456,6 +481,7 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=ESDSF01,MACRF=(ADR,SEQ,OUT)  VSAM access method c
+FD000RA  DC    F'0'                has carried a request
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(ADR,SEQ,UPD,MVE)
 K0001    DC    PL16'1'             numeric constants
@@ -478,6 +504,7 @@ S0011    DC    CL30'VSAM ERROR ON REWRITE, STATUS '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
+VSFOUR   DC    H'4'                an OPEN warning
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H

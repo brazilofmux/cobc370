@@ -276,6 +276,9 @@ the module" at the end of this file.
 so it is infrastructure first and a compiler change second. Indexed I-O Level
 2 is not in the definition of done, so this is optional. **L.**
 
+*Taken up 2026-08-30, after the Report Writer; see "ALTERNATE RECORD KEY:
+what this VSAM allows" at the end of this file.*
+
 ## Counting it
 
 Tiers 0 through 6 come to roughly **40 elements**, of which about 30 are S, 8
@@ -534,3 +537,66 @@ every slice. IKFCBL00 has one too, of the 1968 standard's shape, and where the
 two disagree the 1974 text decides -- the same rule as everywhere else in this
 project. The corpus's six report programs stay the regression floor: nothing
 here may change a line they print.
+
+## ALTERNATE RECORD KEY: what this VSAM allows
+
+Done 2026-08-30. The clause, `WITH DUPLICATES`, `READ ... KEY IS` an
+alternate, `START ... KEY IS` an alternate, the key of reference for `READ
+NEXT` (VI-24, VI-30), status `02` on a read whose next record shares the key
+of reference's value and on a write or rewrite that made a duplicate (VI-3),
+`22` on a duplicate where none is allowed, `23` on a missing value. Each
+alternate key is a VSAM alternate index reached through a path: the compiler
+emits an ACB and RPL per path, with IBM's ddname convention (the first five
+characters of the base ddname and `01`, `02`, ...), and a cell naming the key
+of reference's RPL, through which sequential requests go. The infrastructure
+is the user's IDCAMS: `DEFINE ALTERNATEINDEX` (`NONUNIQUEKEY` for `WITH
+DUPLICATES`, `UPGRADE`), `DEFINE PATH`, and `BLDINDEX` after a load, because
+VSAM does not maintain an alternate index while the base is being created.
+The test harness carries that JCL for `tests/aixnatl`, `aixnat`, `aixnatu`
+and `aixnatr`; the oracles are GnuCOBOL's indexed files where the two agree
+and the 1974 text where they do not (GnuCOBOL returns `00` on a keyed read
+that duplicates follow; VI-3 says `02`, and VSAM signals it).
+
+What the machine allowed was found by probing, and each limit is a fact
+about MVS 3.8's VSAM, not a choice:
+
+- A base cluster defined `REUSE` cannot carry an alternate index
+  (`IDC3022I INVALID RELATED OBJECT`). So an alternate-key file is not
+  reset by `OPEN OUTPUT`; the load relies on the cluster being empty, and
+  the harness deletes and redefines it before each load.
+- Nothing else in the sphere can be open in the same region while the base
+  is open for output: a path opened for output gets ACB error 168; a path
+  opened for input after the base opens for output takes an operation
+  exception inside VSAM on its first `GET`; the base opened after the paths
+  gets 168; the alternate index opened as a cluster gets 168. Local Shared
+  Resources, which would have given every ACB one buffer pool, refuse a base
+  with an upgrade set (error 212) while accepting a plain KSDS.
+- Therefore: **`OPEN INPUT` opens the base and every path, and reads by any
+  key; `OPEN I-O` opens the base alone, updates by the prime key, and VSAM
+  maintains the alternate indexes through the upgrade set -- with status
+  `02` and `22` reported as the standard says -- and a program that opens a
+  file `I-O` may not read it by an alternate key** (refused at compile time
+  with the reason). `OPEN OUTPUT` loads the base; `BLDINDEX` follows in JCL.
+  A program that needs both updates and alternate-key reads does them in
+  two opens.
+- `ENDREQ` against an RPL that has never carried a request goes through a
+  placeholder VSAM has not built and ends in an operation exception; each
+  RPL now carries a flag in the fullword before it, and a failed request is
+  `ENDREQ`ed (it may hold its interval in exclusive control, which the next
+  request on another string would meet as feedback 20).
+- The insert RPL of a `DYNAMIC` file must be `DIR`: a sequential `PUT`
+  keeps its string positioned and its interval held, and the retrieval
+  string's next keyed `GET` met the hold (feedback 20). That was the last
+  fault, and lifting it also lifted the old refusal of `ACCESS IS DYNAMIC`
+  with `OPEN I-O` -- `UPD` keeps a direct request's position just as `NSP`
+  does, so one RPL serves both kinds of `READ` on an I-O file.
+- VSAM keeps an alternate index's pointers in the order the records were
+  written, which is the standard's order for duplicates (a record rewritten
+  under a new value comes last), and GnuCOBOL's.
+
+`COBC370_VSDEBUG=1` at compile time makes an unmapped VSAM failure leave the
+raw feedback or ACB error code in the `FILE STATUS`, as two hex digits, in
+place of `30`; it is how every code above was read.
+
+With this the Indexed I-O module is at Level 2 -- the one caveat being the
+I-O split above -- and the map's last exception is gone.

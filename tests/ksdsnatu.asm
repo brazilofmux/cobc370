@@ -48,6 +48,9 @@ T0002    DS    0H
 T0003    DS    0H
 * OPEN I-O KSDS-FILE
          OPEN  (FD000)             VSAM ACB
+         CH    15,VSFOUR           a warning?
+         BNE   *+6
+         SR    15,15               then it opened
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
          L     8,BL0000            base locator
@@ -147,6 +150,7 @@ P0003    DS    0H
 T0012    DS    0H
 * READ KSDS-FILE
          GET   RPL=FD000R          VSAM sequential retrieval
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0003
          LTR   15,15               VSAM request succeeded?
@@ -172,6 +176,11 @@ G0007    DS    0H
          B     G0008
 G0010    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0018
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0018    DS    0H
 G0008    DS    0H
          B     L0004
 L0003    DS    0H                  AT END
@@ -198,6 +207,11 @@ G0011    DS    0H
          B     G0012
 G0014    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0019
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0019    DS    0H
 G0012    DS    0H
 T0013    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
@@ -297,6 +311,7 @@ T0025    DS    0H
 T0026    DS    0H
 * REWRITE KSDS-RECORD
          PUT   RPL=FD000R          put the held record back
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
          BNZ   L0008
          LTR   15,15               VSAM request succeeded?
@@ -336,6 +351,11 @@ G0015    DS    0H
          B     G0016
 G0020    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0026
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0026    DS    0H
 G0016    DS    0H
          B     L0009
 L0008    DS    0H                  INVALID KEY
@@ -378,6 +398,11 @@ G0021    DS    0H
          B     G0022
 G0026    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0027
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0027    DS    0H
 G0022    DS    0H
 T0027    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -451,6 +476,7 @@ T0036    DS    0H
 T0037    DS    0H
 * DELETE KSDS-FILE
          ERASE RPL=FD000R          erase the held record
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
          BNZ   L0012
          LTR   15,15               VSAM request succeeded?
@@ -490,6 +516,11 @@ G0027    DS    0H
          B     G0028
 G0032    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0028
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0028    DS    0H
 G0028    DS    0H
          B     L0013
 L0012    DS    0H                  INVALID KEY
@@ -532,6 +563,11 @@ G0033    DS    0H
          B     G0034
 G0038    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0029
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0029    DS    0H
 G0034    DS    0H
 T0038    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -642,6 +678,7 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=KSDSF01,MACRF=(KEY,SEQ,OUT)  VSAM access method c
+FD000RA  DC    F'0'                has carried a request
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(KEY,SEQ,UPD,MVE)
 S0001    DC    CL40'KSDSUPDT: READ/REWRITE KSDS SEQUENTIALLY'  nonnumer
@@ -665,6 +702,7 @@ S0017    DC    CL29'VSAM ERROR ON DELETE, STATUS '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
+VSFOUR   DC    H'4'                an OPEN warning
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H

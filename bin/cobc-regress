@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="rptuse rptcode rptsum rptsumm rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -30,6 +30,8 @@ prereq_for() {
         esdsnatr|esdsnatu|esdsnata)         echo esdsnatl ;;
         rrdsnatr|rrdsnatd|rrdsnats|rrdsdisp)         echo rrdsnatl ;;
         usevsam)                                     echo "ksdsnatl rrdsnatl" ;;
+        aixnat|aixnatu)                              echo aixnatl ;;
+        aixnatr)                                     echo "aixnatl aixnatu" ;;
     esac
 }
 if [ $# -gt 0 ]; then
@@ -67,6 +69,32 @@ for t in $TESTS; do
         printf '//%-8s JOB (5161A020,1A11),%s,\n' "$jn" "'REGRESSION'"
         printf '//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),\n'
         printf '//             USER=HERC01,PASSWORD=@HERC01PW@\n'
+        if [ "$t" = aixnatl ]; then
+            # The alternate-key trio runs on a base cluster that cannot be
+            # REUSE (an alternate index forbids it), so the loader's job
+            # deletes and defines the base, its two alternate indexes and
+            # their paths first -- in the VSTEST catalog, where that is safe
+            # -- and builds the indexes after the load, because VSAM does
+            # not maintain them while the base is being created.
+            printf '//DEF      EXEC PGM=IDCAMS\n//SYSPRINT DD  SYSOUT=Z\n//SYSIN    DD  *\n'
+            printf '  DELETE VSTEST.AIX.PATH1\n  DELETE VSTEST.AIX.PATH2\n'
+            printf '  DELETE VSTEST.AIX.AIX1\n  DELETE VSTEST.AIX.AIX2\n  DELETE VSTEST.AIX.BASE\n'
+            printf '  SET MAXCC = 0\n'
+            printf '  DEFINE CLUSTER (NAME(VSTEST.AIX.BASE) INDEXED KEYS(5 0) -\n'
+            printf '    RECORDSIZE(80 80) VOLUMES(WORK01) TRACKS(2 1) SHAREOPTIONS(3 3)) -\n'
+            printf '    DATA (NAME(VSTEST.AIX.BASE.DATA)) INDEX (NAME(VSTEST.AIX.BASE.INDEX))\n'
+            printf '  DEFINE ALTERNATEINDEX (NAME(VSTEST.AIX.AIX1) RELATE(VSTEST.AIX.BASE) -\n'
+            printf '    KEYS(3 10) NONUNIQUEKEY UPGRADE RECORDSIZE(40 200) -\n'
+            printf '    VOLUMES(WORK01) TRACKS(2 1) SHAREOPTIONS(3 3)) -\n'
+            printf '    DATA (NAME(VSTEST.AIX.AIX1.DATA)) INDEX (NAME(VSTEST.AIX.AIX1.INDEX))\n'
+            printf '  DEFINE PATH (NAME(VSTEST.AIX.PATH1) PATHENTRY(VSTEST.AIX.AIX1))\n'
+            printf '  DEFINE ALTERNATEINDEX (NAME(VSTEST.AIX.AIX2) RELATE(VSTEST.AIX.BASE) -\n'
+            printf '    KEYS(4 13) UNIQUEKEY UPGRADE RECORDSIZE(40 200) -\n'
+            printf '    VOLUMES(WORK01) TRACKS(2 1) SHAREOPTIONS(3 3)) -\n'
+            printf '    DATA (NAME(VSTEST.AIX.AIX2.DATA)) INDEX (NAME(VSTEST.AIX.AIX2.INDEX))\n'
+            printf '  DEFINE PATH (NAME(VSTEST.AIX.PATH2) PATHENTRY(VSTEST.AIX.AIX2))\n'
+            printf '/*\n'
+        fi
         if [ "$t" = upsisw ]; then
             # The switches arrive on the GO step's PARM, which is what the
             # runtime reads at entry.
@@ -124,6 +152,24 @@ for t in $TESTS; do
             printf '/*\n'
         fi
         case "$t" in rpt*) printf '//GO.PROUT   DD  SYSOUT=Z\n' ;; esac
+        case "$t" in aixnatl|aixnat|aixnatu|aixnatr)
+            # The base and the two paths: the path ddnames are the base's
+            # first five characters and 01, 02 -- IBM's convention.
+            printf '//GO.AIXBAS  DD  DSN=VSTEST.AIX.BASE,DISP=OLD\n'
+            printf '//GO.AIXBA01 DD  DSN=VSTEST.AIX.PATH1,DISP=OLD\n'
+            printf '//GO.AIXBA02 DD  DSN=VSTEST.AIX.PATH2,DISP=OLD\n' ;;
+        esac
+        if [ "$t" = aixnatl ]; then
+            printf '//BLD      EXEC PGM=IDCAMS,COND=(4,LT)\n//SYSPRINT DD  SYSOUT=Z\n'
+            printf '//BASE     DD  DSN=VSTEST.AIX.BASE,DISP=OLD\n'
+            printf '//AIX1     DD  DSN=VSTEST.AIX.AIX1,DISP=OLD\n'
+            printf '//AIX2     DD  DSN=VSTEST.AIX.AIX2,DISP=OLD\n'
+            printf "//IDCUT1   DD  DSN=VSTEST.AIX.CUT1,DISP=OLD,UNIT=SYSDA,\n"
+            printf "//             VOL=SER=WORK01,AMP='AMORG'\n"
+            printf "//IDCUT2   DD  DSN=VSTEST.AIX.CUT2,DISP=OLD,UNIT=SYSDA,\n"
+            printf "//             VOL=SER=WORK01,AMP='AMORG'\n"
+            printf '//SYSIN    DD  *\n  BLDINDEX INFILE(BASE) OUTFILE(AIX1)\n  BLDINDEX INFILE(BASE) OUTFILE(AIX2)\n/*\n'
+        fi
         if [ "$t" = intofrom ]; then
             printf '//GO.OUTFILE DD  SYSOUT=Z\n//GO.INFILE  DD  *\n'
             for r in "AAA111 first record" "BBB222 second record" \

@@ -30,6 +30,9 @@ P0000    DS    0H
 T0000    DS    0H
 * OPEN INPUT RRDS-FILE
          OPEN  (FD000)             VSAM ACB
+         CH    15,VSFOUR           a warning?
+         BNE   *+6
+         SR    15,15               then it opened
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
          L     8,BL0000            base locator
@@ -65,6 +68,7 @@ T0003    DS    0H
          CVB   2,DWK               packed -> binary
          ST    2,FD000K
          GET   RPL=FD000R          VSAM retrieval by key
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0001
          LTR   15,15               VSAM request succeeded?
@@ -88,6 +92,11 @@ G0004    DS    0H
          B     G0005
 G0007    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0007
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0007    DS    0H
 G0005    DS    0H
 *  and the number VSAM used back into the RELATIVE KEY
          L     8,BL0000            base locator
@@ -123,6 +132,11 @@ G0008    DS    0H
          B     G0009
 G0011    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0008
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0008    DS    0H
 G0009    DS    0H
 L0002    DS    0H
 T0004    DS    0H
@@ -151,6 +165,7 @@ T0007    DS    0H
          CVB   2,DWK               packed -> binary
          ST    2,FD000K
          GET   RPL=FD000R          VSAM retrieval by key
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0003
          LTR   15,15               VSAM request succeeded?
@@ -174,6 +189,11 @@ G0012    DS    0H
          B     G0013
 G0015    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0009
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0009    DS    0H
 G0013    DS    0H
 *  and the number VSAM used back into the RELATIVE KEY
          L     8,BL0000            base locator
@@ -209,6 +229,11 @@ G0016    DS    0H
          B     G0017
 G0019    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0010
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0010    DS    0H
 G0017    DS    0H
 L0004    DS    0H
 T0008    DS    0H
@@ -237,6 +262,7 @@ T0011    DS    0H
          CVB   2,DWK               packed -> binary
          ST    2,FD000K
          GET   RPL=FD000R          VSAM retrieval by key
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0005
          LTR   15,15               VSAM request succeeded?
@@ -260,6 +286,11 @@ G0020    DS    0H
          B     G0021
 G0023    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0011
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0011    DS    0H
 G0021    DS    0H
 *  and the number VSAM used back into the RELATIVE KEY
          L     8,BL0000            base locator
@@ -295,6 +326,11 @@ G0024    DS    0H
          B     G0025
 G0027    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0012
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0012    DS    0H
 G0025    DS    0H
 L0006    DS    0H
 T0012    DS    0H
@@ -373,6 +409,7 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=RRDSF01,MACRF=(KEY,DIR,IN)  VSAM access method co
+FD000RA  DC    F'0'                has carried a request
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,ARG=FD000K,OPTCD=(KEY,DIR,KEQ,NUP, X
                MVE)
@@ -391,6 +428,7 @@ S0010    DC    CL7'CLOSE  '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
+VSFOUR   DC    H'4'                an OPEN warning
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H

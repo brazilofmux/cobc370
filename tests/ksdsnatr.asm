@@ -51,6 +51,9 @@ T0003    DS    0H
 T0004    DS    0H
 * OPEN I-O KSDS-FILE
          OPEN  (FD001)             VSAM ACB
+         CH    15,VSFOUR           a warning?
+         BNE   *+6
+         SR    15,15               then it opened
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
          L     8,BL0000            base locator
@@ -256,6 +259,7 @@ T0026    DS    0H
 T0027    DS    0H
 * WRITE KSDS-RECORD
          PUT   RPL=FD001N          VSAM insert by key
+         MVI   FD001NA,X'01'       the RPL has carried a request
          LTR   15,15               stored?
          BNZ   L0008
          LTR   15,15               VSAM request succeeded?
@@ -295,6 +299,11 @@ G0007    DS    0H
          B     G0008
 G0012    DS    0H
          DROP  8
+         CLI   FD001NA,X'00'       ever used?
+         BE    L0038
+         ENDREQ RPL=FD001N         the failed request is over
+         MVI   FD001NA,X'00'
+L0038    DS    0H
 G0008    DS    0H
          B     L0009
 L0008    DS    0H                  INVALID KEY
@@ -337,6 +346,11 @@ G0013    DS    0H
          B     G0014
 G0018    DS    0H
          DROP  8
+         CLI   FD001NA,X'00'       ever used?
+         BE    L0039
+         ENDREQ RPL=FD001N         the failed request is over
+         MVI   FD001NA,X'00'
+L0039    DS    0H
 G0014    DS    0H
 T0028    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -487,6 +501,7 @@ T0047    DS    0H
 T0048    DS    0H
 * REWRITE KSDS-RECORD
          PUT   RPL=FD001R          put the held record back
+         MVI   FD001RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
          BNZ   L0015
          LTR   15,15               VSAM request succeeded?
@@ -526,6 +541,11 @@ G0019    DS    0H
          B     G0020
 G0024    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0044
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0044    DS    0H
 G0020    DS    0H
          B     L0016
 L0015    DS    0H                  INVALID KEY
@@ -568,6 +588,11 @@ G0025    DS    0H
          B     G0026
 G0030    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0045
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0045    DS    0H
 G0026    DS    0H
 T0049    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -701,6 +726,7 @@ T0066    DS    0H
 T0067    DS    0H
 * DELETE KSDS-FILE
          ERASE RPL=FD001R          erase the held record
+         MVI   FD001RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
          BNZ   L0021
          LTR   15,15               VSAM request succeeded?
@@ -740,6 +766,11 @@ G0031    DS    0H
          B     G0032
 G0036    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0050
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0050    DS    0H
 G0032    DS    0H
          B     L0022
 L0021    DS    0H                  INVALID KEY
@@ -782,6 +813,11 @@ G0037    DS    0H
          B     G0038
 G0042    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0051
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0051    DS    0H
 G0038    DS    0H
 T0068    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -855,6 +891,7 @@ T0077    DS    0H
 T0078    DS    0H
 * READ KSDS-FILE
          GET   RPL=FD001R          VSAM retrieval by key
+         MVI   FD001RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0025
          LTR   15,15               VSAM request succeeded?
@@ -878,6 +915,11 @@ G0043    DS    0H
          B     G0044
 G0046    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0052
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0052    DS    0H
 G0044    DS    0H
          B     L0026
 L0025    DS    0H                  INVALID KEY
@@ -904,6 +946,11 @@ G0047    DS    0H
          B     G0048
 G0050    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0053
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0053    DS    0H
 G0048    DS    0H
 T0079    DS    0H
 * MOVE N -> FOUND-SWITCH
@@ -1043,9 +1090,11 @@ WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=CARDIN,DSORG=PS,MACRF=(GM)
 FD001    ACB   DDNAME=KSDSF01,MACRF=(KEY,DIR,OUT)  VSAM access method c
+FD001RA  DC    F'0'                has carried a request
 FD001R   RPL   ACB=FD001,AREA=D0004,                                   X
                AREALEN=80,RECLEN=80,ARG=D0005,KEYLEN=10,OPTCD=(KEY,DIR,X
                KEQ,UPD,MVE)
+FD001NA  DC    F'0'                has carried a request
 FD001N   RPL   ACB=FD001,AREA=D0004,                                   X
                AREALEN=80,RECLEN=80,ARG=D0005,KEYLEN=10,OPTCD=(KEY,DIR,X
                KEQ,NUP,MVE)
@@ -1078,6 +1127,7 @@ S0025    DC    CL27'VSAM ERROR ON READ, STATUS '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
+VSFOUR   DC    H'4'                an OPEN warning
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H

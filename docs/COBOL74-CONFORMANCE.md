@@ -49,8 +49,8 @@ Writer Level 2" to aspire to. The whole module is `1 RPW 0,1` or nothing.
 
 The short version, as of 2026-08-29: **Level 2 of the Nucleus, Table
 Handling, Sequential I-O, Relative I-O, Inter-Program Communication and
-Library; Indexed I-O at Level 2 but for `ALTERNATE RECORD KEY`; Segmentation
-at Level 1; the Report Writer at its one level, complete since 2026-08-30;
+Library and Indexed I-O; Segmentation at Level 1; the Report Writer at its
+one level, complete since 2026-08-30;
 and the null level of Sort-Merge, Debug and Communication.** Each module's
 section below says what is there and what is not, and the dates.
 
@@ -122,7 +122,7 @@ RRDS through VSAM. `ORGANIZATION RELATIVE`, `ACCESS SEQUENTIAL/RANDOM`,
 `ACCESS DYNAMIC`, `READ NEXT` and `START` are Level 2 and were there first;
 `USE` declaratives, the last Level 1 element, were added on 2026-08-29.
 
-### Indexed I-O — Level 2 but for ALTERNATE RECORD KEY
+### Indexed I-O — Level 2, complete (with one VSAM-imposed split)
 
 ISAM and VSAM KSDS. `ORGANIZATION INDEXED`, `RECORD KEY`, `ACCESS
 SEQUENTIAL/RANDOM`, `READ WRITE REWRITE DELETE START`, `INVALID KEY`.
@@ -130,9 +130,15 @@ SEQUENTIAL/RANDOM`, `READ WRITE REWRITE DELETE START`, `INVALID KEY`.
 Above the floor: `ACCESS DYNAMIC`, `READ NEXT`, `READ ... KEY IS`, `START` —
 Level 2.
 
-`USE` declaratives were added on 2026-08-29. Missing from Level 2:
-`ALTERNATE RECORD KEY` with `DUPLICATES`, which on MVS is VSAM alternate
-indexes and paths before it is a compiler change.
+`USE` declaratives were added on 2026-08-29; `ALTERNATE RECORD KEY` with
+`DUPLICATES`, `READ ... KEY IS`, `START ... KEY IS` an alternate, the key of
+reference, and the `02`/`22`/`23` statuses on 2026-08-30, on VSAM alternate
+indexes and paths. This VSAM will not have a base and its paths open together
+while the base is open for output, so a file opened `I-O` updates by the
+prime key (VSAM maintaining the alternate indexes) and reads by alternate
+keys only when opened `INPUT`; a program that opens a file `I-O` and reads it
+by an alternate key is refused with that reason. The roadmap's closing
+section records the probes.
 
 ### Report Writer — Level 1, complete
 

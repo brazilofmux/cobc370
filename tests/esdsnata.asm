@@ -51,6 +51,9 @@ T0003    DS    0H
 T0004    DS    0H
 * OPEN EXTEND ESDS-FILE
          OPEN  (FD001)             VSAM ACB
+         CH    15,VSFOUR           a warning?
+         BNE   *+6
+         SR    15,15               then it opened
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
          L     8,BL0000            base locator
@@ -206,6 +209,7 @@ T0020    DS    0H
 T0021    DS    0H
 * WRITE ESDS-RECORD
          PUT   RPL=FD001R          VSAM sequential store
+         MVI   FD001RA,X'01'       the RPL has carried a request
          LTR   15,15               stored?
          BNZ   L0005
          LTR   15,15               VSAM request succeeded?
@@ -245,6 +249,11 @@ G0007    DS    0H
          B     G0008
 G0012    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0014
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0014    DS    0H
 G0008    DS    0H
          B     L0006
 L0005    DS    0H                  INVALID KEY
@@ -287,6 +296,11 @@ G0013    DS    0H
          B     G0014
 G0018    DS    0H
          DROP  8
+         CLI   FD001RA,X'00'       ever used?
+         BE    L0015
+         ENDREQ RPL=FD001R         the failed request is over
+         MVI   FD001RA,X'00'
+L0015    DS    0H
 G0014    DS    0H
 T0022    DS    0H
 * MOVE Y -> WRITE-FAILED-SWITCH
@@ -399,6 +413,7 @@ WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=CARDIN,DSORG=PS,MACRF=(GM)
 FD001    ACB   DDNAME=ESDSF01,MACRF=(ADR,SEQ,OUT)  VSAM access method c
+FD001RA  DC    F'0'                has carried a request
 FD001R   RPL   ACB=FD001,AREA=D0001,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(ADR,SEQ,NUP,MVE)
 K0001    DC    PL16'1'             numeric constants
@@ -418,6 +433,7 @@ S0011    DC    CL28'VSAM ERROR ON WRITE, STATUS '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
+VSFOUR   DC    H'4'                an OPEN warning
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H

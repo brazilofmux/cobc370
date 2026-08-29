@@ -713,6 +713,7 @@ typedef struct {
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
     int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
+    int  altkey;            /* READ/START KEY IS: 0 the prime key, k the k-th alternate */
     int  rec;               /* WRITE/REWRITE: the record named, of an FD's several */
     int  adv;               /* WRITE ADVANCING: -2 none, -1 PAGE, else lines */
     int  adv_before;        /* the phrase was BEFORE, so the advance is held */
@@ -774,6 +775,13 @@ typedef struct {
     int  org;          /* 0 sequential/ESDS, 1 indexed/KSDS, 2 relative/RRDS */
     int  access;       /* 0 sequential, 1 random, 2 dynamic */
     int  status_sym;   /* FILE STATUS field, -1 if none */
+    /* ALTERNATE RECORD KEY, VI-5: each is a VSAM alternate index reached
+     * through a path, with its own ACB and RPL. The ddname of the path is
+     * IBM's convention -- the first five characters of the base ddname and
+     * a two-digit number. */
+    int  nalt;
+    int  alt_sym[4], alt_dup[4];
+    char alt_dd[4][9];
 } File;
 
 #define MAXFILE 16
@@ -782,6 +790,7 @@ static int nfile;
 /* RECORD KEY and NOMINAL KEY name items declared later, so hold the names and
  * resolve once the data division has been read. */
 static char keyname[MAXFILE][31], nomname[MAXFILE][31], statname[MAXFILE][31];
+static char altname[MAXFILE][4][31]; static int altdup[MAXFILE][4];
 
 static int file_index(const char *n)
 {
@@ -2699,6 +2708,10 @@ static void parse_data_division(void)
             if (syms[k].fd_file == i && syms[k].bytes > files[i].reclen)
                 files[i].reclen = syms[k].bytes;
         if (keyname[i][0]) files[i].key_sym = need_sym(keyname[i]);
+        for (int k = 0; k < files[i].nalt; k++) {
+            files[i].alt_sym[k] = need_sym(altname[i][k]);
+            files[i].alt_dup[k] = altdup[i][k];
+        }
         if (nomname[i][0]) files[i].nominal_sym = need_sym(nomname[i]);
         if (statname[i][0]) {
             files[i].status_sym = need_sym(statname[i]);
@@ -2708,6 +2721,8 @@ static void parse_data_division(void)
         }
         if (files[i].isam == 2 && files[i].nominal_sym < 0)
             die("ACCESS IS RANDOM needs a NOMINAL KEY");
+        if (files[i].nalt && !files[i].vsam)
+            die("ALTERNATE RECORD KEY is for VSAM files: ISAM has no alternate index");
         if (files[i].vsam) {
             /* What is not implemented is refused by name, so the gap is
              * obvious rather than mysterious. */
@@ -2735,6 +2750,21 @@ static void parse_data_division(void)
             }
             if (files[i].org == 1 && files[i].key_sym < 0)
                 die("a VSAM KSDS needs a RECORD KEY");
+            if (files[i].nalt) {
+                if (files[i].org != 1) die("ALTERNATE RECORD KEY needs ORGANIZATION INDEXED -- VI-5");
+                const Sym *rec = &syms[files[i].rec_sym];
+                for (int k = 0; k < files[i].nalt; k++) {
+                    const Sym *a = &syms[files[i].alt_sym[k]];
+                    if (a->offset < rec->offset || a->offset + a->bytes > rec->offset + rec->bytes)
+                        die("an ALTERNATE RECORD KEY must be a data item within the record -- VI-6");
+                    if (files[i].alt_sym[k] == files[i].key_sym)
+                        die("an ALTERNATE RECORD KEY may not be the RECORD KEY");
+                    snprintf(files[i].alt_dd[k], sizeof files[i].alt_dd[k], "%.5s%02d", files[i].ddname, k + 1);
+                    if (!strcmp(files[i].alt_dd[k], files[i].ddname))
+                        die("the path ddname (first five characters of the base ddname plus 01, 02, ...) "
+                            "would equal the base ddname; give the base a different ASSIGN name");
+                }
+            }
             if (files[i].org == 0) {
                 /* An entry-sequenced dataset has no key: records are found by
                  * where they are, not by what is in them. So the clauses that
@@ -2851,6 +2881,17 @@ static void parse_environment(void)
                         if (f->org != 2) die("RELATIVE KEY needs ORGANIZATION RELATIVE");
                         snprintf(keyname[nfile], sizeof keyname[0], "%s", tok.text);
                         next(); continue;
+                    }
+                    if (is("ALTERNATE")) {
+                        /* ALTERNATE RECORD KEY IS x [WITH DUPLICATES] --
+                         * resolved later, like RECORD KEY. */
+                        next(); if (is("RECORD")) next(); if (is("KEY")) next(); if (is("IS")) next();
+                        if (f->nalt >= 4) die("at most four ALTERNATE RECORD KEYs are supported");
+                        snprintf(altname[nfile][f->nalt], 31, "%s", tok.text); next();
+                        if (is("WITH")) { next(); expect("DUPLICATES"); altdup[nfile][f->nalt] = 1; }
+                        else if (is("DUPLICATES")) { next(); altdup[nfile][f->nalt] = 1; }
+                        f->nalt++;
+                        continue;
                     }
                     if (is("RECORD")) {      /* RECORD KEY IS x -- resolved later */
                         next();
@@ -4181,6 +4222,21 @@ static void parse_one_statement(void)
             next();
             st->src = consume_sym();
         }
+        if (is("KEY")) {
+            /* KEY IS: which key the record is fetched by, and the key of
+             * reference from then on (VI-24). */
+            next(); if (is("IS")) next();
+            int k = consume_sym();
+            File *rf = &files[fi];
+            if (rnext) die("READ NEXT takes no KEY phrase");
+            if (rf->access == 0) die("READ ... KEY IS needs ACCESS RANDOM or DYNAMIC");
+            if (k == rf->key_sym) st->altkey = 0;
+            else {
+                int a; for (a = 0; a < rf->nalt; a++) if (rf->alt_sym[a] == k) break;
+                if (a == rf->nalt) die("READ ... KEY IS must name the RECORD KEY or an ALTERNATE RECORD KEY");
+                st->altkey = a + 1;
+            }
+        }
         st->lab1 = ++nlabel;                 /* AT END */
         st->lab2 = ++nlabel;                 /* continue */
         if (is("INVALID")) {
@@ -4358,9 +4414,16 @@ static void parse_one_statement(void)
                 st->src = 1;
             } else die("START KEY IS what?");
             int k = consume_sym();
-            if (k != files[fi].key_sym)
-                die("START must name the RECORD KEY; generic keys are not "
-                    "implemented yet");
+            if (k == files[fi].key_sym) st->altkey = 0;
+            else {
+                /* An ALTERNATE RECORD KEY positions through its path and
+                 * becomes the key of reference (VI-30). */
+                int a; for (a = 0; a < files[fi].nalt; a++) if (files[fi].alt_sym[a] == k) break;
+                if (a == files[fi].nalt)
+                    die("START must name the RECORD KEY or an ALTERNATE RECORD KEY; "
+                        "generic keys are not implemented yet");
+                st->altkey = a + 1;
+            }
         }
         st->lab1 = ++nlabel;                 /* INVALID KEY */
         st->lab2 = ++nlabel;                 /* continue */
@@ -5611,6 +5674,77 @@ static const char *rpl_name(const File *f, int inserting, char *buf, size_t n)
     return buf;
 }
 
+/* With alternate keys the RPL a sequential request or an update goes through
+ * is the key of reference's, chosen at run time: the cell <label>X holds its
+ * address, and the request names RPL=(1) after loading it. */
+static const char *rpl_ref(const File *f, char *buf, size_t n)
+{
+    if (f->nalt) { snprintf(buf, n, "(1)"); return buf; }
+    return rpl_name(f, 0, buf, n);
+}
+static void rpl_load(const File *f, const char *rn)
+{
+    char b[64];
+    if (strcmp(rn, "(1)")) return;
+    snprintf(b, sizeof b, "1,%sX", f->label);
+    asm_line("", "L", b, "the key of reference's RPL");
+}
+/* ENDREQ against an RPL that has never carried a request goes through a
+ * placeholder VSAM has not set up yet, and ends in an operation exception
+ * inside VSAM. So each RPL has a flag in the fullword before it: set after
+ * every request, cleared by ENDREQ, tested before one. */
+static void rpl_mark(const File *f, const char *rn)
+{
+    char b[64];
+    if (!f->vsam) return;
+    if (!strcmp(rn, "(1)")) {
+        snprintf(b, sizeof b, "1,%sX", f->label); asm_line("", "L", b, "");
+        asm_line("", "SH", "1,VSFOUR", "");
+        asm_line("", "MVI", "0(1),X'01'", "the RPL has carried a request");
+    } else {
+        snprintf(b, sizeof b, "%sA,X'01'", rn);
+        asm_line("", "MVI", b, "the RPL has carried a request");
+    }
+}
+/* ENDREQ a statically named RPL, if it has carried a request. */
+static void rpl_endreq(const char *rn, const char *why)
+{
+    char b[64], ls[16];
+    snprintf(ls, sizeof ls, "L%04d", ++genlabel);
+    snprintf(b, sizeof b, "%sA,X'00'", rn);
+    asm_line("", "CLI", b, "ever used?");
+    asm_line("", "BE", ls, "");
+    snprintf(b, sizeof b, "RPL=%s", rn);
+    asm_line("", "ENDREQ", b, why);
+    snprintf(b, sizeof b, "%sA,X'00'", rn);
+    asm_line("", "MVI", b, "");
+    asm_line(ls, "DS", "0H", "");
+}
+/* ENDREQ the RPL whose address is in R2, if it has carried a request. */
+static void rpl_endreq_reg(const char *why)
+{
+    char ls[16];
+    snprintf(ls, sizeof ls, "L%04d", ++genlabel);
+    asm_line("", "LR", "3,2", "");
+    asm_line("", "SH", "3,VSFOUR", "its flag");
+    asm_line("", "CLI", "0(3),X'00'", "ever used?");
+    asm_line("", "BE", ls, "");
+    asm_line("", "ENDREQ", "RPL=(2)", why);
+    asm_line("", "MVI", "0(3),X'00'", "");
+    asm_line(ls, "DS", "0H", "");
+}
+
+static void rpl_set_ref(const File *f, const char *rn)
+{
+    char b[64], ls[16];
+    if (!f->nalt) return;
+    /* The paths are open only for INPUT, where nothing is held, so the old
+     * reference simply lapses. */
+    (void)ls;
+    snprintf(b, sizeof b, "1,%s", rn);  asm_line("", "LA", b, "");
+    snprintf(b, sizeof b, "1,%sX", f->label); asm_line("", "ST", b, "the key of reference");
+}
+
 static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab);
 
 /* The USE procedure that applies to the statement being generated, or -1:
@@ -5627,6 +5761,12 @@ static void gen_use_call(void)
     asm_comment("  no phrase for this: the USE procedure");
     gen_call_range(decls[gen_use_decl].sect, section_end(decls[gen_use_decl].sect), gen_use_nret);
 }
+
+/* Set around a request that may succeed with a duplicate alternate key --
+ * VI-3, status key 2, rule 2: a READ whose next record in the key of
+ * reference has the same key value, or a WRITE or REWRITE that made a
+ * duplicate. VSAM reports it as feedback 8 on a successful request. */
+static int vs_dupcheck;
 
 static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
 {
@@ -5657,6 +5797,7 @@ static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
     if (ncase > 8) die("too many VSAM feedback cases");
     if (ncase) {
         /* R15 alone does not say why, so ask the RPL. */
+        rpl_load(f, rpl);
         snprintf(b, sizeof b, "RPL=%s,FIELDS=FDBK,AREA=VSFB,LENGTH=4", rpl);
         asm_line("", "SHOWCB", b, "why did it fail?");
     }
@@ -5668,6 +5809,16 @@ static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
         asm_line("", "BE", acase[i], "");
     }
     char afail[16]; snprintf(afail, sizeof afail, "G%04d", ++gen_edited_labels);
+    if (getenv("COBC370_VSDEBUG")) {
+        if (!ncase) {
+            if (rpl) { rpl_load(f, rpl); snprintf(b, sizeof b, "RPL=%s,FIELDS=FDBK,AREA=VSFB,LENGTH=4", rpl); asm_line("", "SHOWCB", b, "DEBUG feedback"); }
+            else { snprintf(b, sizeof b, "ACB=%s,FIELDS=ERROR,AREA=VSFB,LENGTH=4", f->label); asm_line("", "SHOWCB", b, "DEBUG ACB error"); }
+        }
+        asm_line("", "UNPK", "DWK(3),VSFB+3(2)", "DEBUG: feedback as hex");
+        asm_line("", "TR", "DWK(2),SPIEHEX-240", "");
+        need_sym_base(st); field_ref(st, NULL, 2, 6, fd, sizeof fd);
+        snprintf(b, sizeof b, "%s,DWK", fd); asm_line("", "MVC", b, "DEBUG");
+    } else
     VS_SET("30", "permanent error");
     asm_line("", "B", afail, "");
     for (int i = 0; i < ncase; i++) {
@@ -5679,11 +5830,31 @@ static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
     asm_line(aok, "DS", "0H", "");
     reset_bases();
     VS_SET("00", "");
+    if (vs_dupcheck && rpl) {
+        char ldup[16]; snprintf(ldup, sizeof ldup, "G%04d", ++gen_edited_labels);
+        rpl_load(f, rpl);
+        snprintf(b, sizeof b, "RPL=%s,FIELDS=FDBK,AREA=VSFB,LENGTH=4", rpl);
+        asm_line("", "SHOWCB", b, "a duplicate alternate key?");
+        asm_line("", "CLI", "VSFB+3,X'08'", "");
+        asm_line("", "BNE", ldup, "");
+        VS_SET("02", "successful, duplicate alternate key");
+        asm_line(ldup, "DS", "0H", "");
+        reset_bases();
+    }
     asm_line("", "B", adone, "");
-    /* Failed, status set: the USE procedure, when one applies and the
-     * statement had no phrase of its own to take this. */
+    /* Failed, status set. The string that failed still holds whatever
+     * position and exclusive control it had, and a failed insert into the
+     * upgrade set leaves the sphere waiting for it to be released: ENDREQ
+     * first, then the USE procedure, when one applies and the statement had
+     * no phrase of its own to take this. */
     asm_line(afail, "DS", "0H", "");
     reset_bases();
+    if (rpl && f->vsam) {
+        if (!strcmp(rpl, "(1)")) {
+            snprintf(b, sizeof b, "2,%sX", f->label); asm_line("", "L", b, "");
+            rpl_endreq_reg("the failed request is over");
+        } else rpl_endreq(rpl, "the failed request is over");
+    }
     gen_use_call();
     asm_line(adone, "DS", "0H", "");
     reset_bases();
@@ -8588,10 +8759,13 @@ static void resolve_file_use(void)
     for (int i = 0; i < nfile; i++) {
         File *f = &files[i];
         if (f->vsam) {
-            if (f->access == 2 && f->opened_io)
-                die("ACCESS IS DYNAMIC with OPEN I-O is not implemented yet -- "
-                    "browsing wants OPTCD=NSP and updating wants UPD, and one "
-                    "RPL cannot hold both");
+            if (f->nalt && f->opened_io)
+                for (int k = 0; k < nstmt; k++)
+                    if ((stmts[k].op == ST_READ || stmts[k].op == ST_START) && stmts[k].dst == i && stmts[k].altkey)
+                        die("a file opened I-O cannot be read by an ALTERNATE RECORD KEY in this program: this "
+                            "VSAM keeps a base and its paths from being open together while the base is open "
+                            "for output. Update by the RECORD KEY here -- VSAM maintains the alternate indexes "
+                            "-- and read by alternate keys in a program that opens the file INPUT");
             continue;
         }
         if (!f->opened_io || f->isam) continue;
@@ -8809,9 +8983,38 @@ static void generate(void)
             asm_comment(b);
             if (f->vsam) {
                 /* VSAM takes its mode from the ACB's MACRF, so OPEN names only
-                 * the control block. */
-                snprintf(b, sizeof b, "(%s)", f->label);
-                asm_line("", "OPEN", b, "VSAM ACB");
+                 * the control block. The paths of the alternate keys open with
+                 * it for INPUT and I-O; a load (OUTPUT) leaves them shut, since
+                 * VSAM does not maintain an alternate index while the base is
+                 * being created -- BLDINDEX does that afterwards. */
+                if (f->nalt && st->src == 1) {
+                    /* INPUT: the base and its paths together. For I-O the
+                     * base opens alone -- this VSAM will not have a path, or
+                     * the alternate index itself, open in the same region
+                     * while the base is open for output (ACB error 168, or
+                     * an operation exception inside VSAM on the first GET
+                     * when the base opened first) -- and VSAM maintains the
+                     * alternate indexes through the base's upgrade set. */
+                    int n = snprintf(b, sizeof b, "(%s", f->label);
+                    for (int k = 0; k < f->nalt; k++) n += snprintf(b + n, sizeof b - n, ",,%sP%d", f->label, k + 1);
+                    snprintf(b + n, sizeof b - n, ")");
+                    asm_line("", "OPEN", b, "VSAM ACB and its paths");
+                    snprintf(b, sizeof b, "%sV,X'01'", f->label); asm_line("", "MVI", b, "paths open");
+                } else {
+                    snprintf(b, sizeof b, "(%s)", f->label);
+                    asm_line("", "OPEN", b, "VSAM ACB");
+                    if (f->nalt) { snprintf(b, sizeof b, "%sV,X'00'", f->label); asm_line("", "MVI", b, "paths shut"); }
+                }
+                if (f->nalt) {
+                    char rn[10]; rpl_name(f, 0, rn, sizeof rn);
+                    rpl_set_ref(f, rn);              /* the prime key, VI-10 */
+                }
+                /* R15 = 4 is an open that succeeded with a warning in the
+                 * ACB's error flag -- an empty cluster, a data set not closed
+                 * properly last time -- and is not a failure. */
+                asm_line("", "CH", "15,VSFOUR", "a warning?");
+                asm_line("", "BNE", "*+6", "");
+                asm_line("", "SR", "15,15", "then it opened");
                 gen_vsam_status(f, NULL, vs_simple);
                 reset_bases();
                 break;
@@ -8865,6 +9068,23 @@ static void generate(void)
             if (st->close_opt == 2) {
                 snprintf(b, sizeof b, "%s", f->label);
                 asm_line("", "FEOV", b, "CLOSE REEL/UNIT: force end of volume");
+            } else if (f->nalt) {
+                char lb[16], lj[16];
+                snprintf(lb, sizeof lb, "L%04d", ++genlabel);
+                snprintf(lj, sizeof lj, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "%sV,X'01'", f->label);
+                asm_line("", "CLI", b, "paths open?");
+                asm_line("", "BNE", lb, "");
+                int n = snprintf(b, sizeof b, "(%s", f->label);
+                for (int k = 0; k < f->nalt; k++) n += snprintf(b + n, sizeof b - n, ",,%sP%d", f->label, k + 1);
+                snprintf(b + n, sizeof b - n, ")");
+                asm_line("", "CLOSE", b, "the base and its paths");
+                asm_line("", "B", lj, "");
+                asm_line(lb, "DS", "0H", "");
+                snprintf(b, sizeof b, "(%s)", f->label);
+                asm_line("", "CLOSE", b, "");
+                asm_line(lj, "DS", "0H", "");
+                reset_bases();
             } else {
                 snprintf(b, sizeof b, st->close_opt == 1 ? "(%s,LEAVE)" : "(%s)", f->label);
                 asm_line("", "CLOSE", b, st->close_opt == 1 ? "WITH NO REWIND" : "");
@@ -8947,6 +9167,15 @@ static void generate(void)
                  * other access modes: their RPL was assembled saying it. */
                 int bykey = (f->access == 1) ||
                             (f->access == 2 && !st->read_next);
+                if (f->nalt) {
+                    /* A keyed READ goes through the RPL of the key it names
+                     * and makes that key the key of reference; a sequential
+                     * READ goes through whichever RPL that is (VI-24). */
+                    if (bykey) {
+                        if (st->altkey) snprintf(rn, sizeof rn, "%sQ%d", f->label, st->altkey);
+                        rpl_set_ref(f, rn);
+                    } else rpl_ref(f, rn, sizeof rn);
+                }
                 char luser[16] = "";
                 if (f->access == 2) {
                     /* NSP, not NUP. A direct request only leaves the RPL
@@ -8954,9 +9183,32 @@ static void generate(void)
                      * asked to note where it got to -- without it READ NEXT
                      * returns end of data immediately, which is a quiet way
                      * to lose half of what DYNAMIC is for. */
-                    snprintf(b, sizeof b, "RPL=%s,OPTCD=(%s)", rn,
-                             bykey ? "DIR,NSP" : "SEQ");
-                    asm_line("", "MODCB", b, bykey ? "by key" : "next");
+                    /* NSP keeps the position a direct request lands on; so
+                     * does UPD, which an I-O file needs for the PUT or ERASE
+                     * that may follow -- and MODCB replaces the whole
+                     * NSP/NUP/UPD choice, so the I-O file names UPD here. */
+                    rpl_load(f, rn);
+                    if (!strcmp(rn, "(1)") && f->opened_io) {
+                        /* Sequential through the key of reference: UPD only
+                         * when that is the base string; a path is for input. */
+                        char lp[16], lj[16];
+                        snprintf(lp, sizeof lp, "L%04d", ++genlabel);
+                        snprintf(lj, sizeof lj, "L%04d", ++genlabel);
+                        snprintf(b, sizeof b, "2,%sR", f->label); asm_line("", "LA", b, "");
+                        asm_line("", "CR", "1,2", "the base string?");
+                        asm_line("", "BNE", lp, "");
+                        asm_line("", "MODCB", "RPL=(1),OPTCD=(SEQ,UPD)", "next, for update");
+                        asm_line("", "B", lj, "");
+                        asm_line(lp, "DS", "0H", "");
+                        asm_line("", "MODCB", "RPL=(1),OPTCD=(SEQ)", "next, through a path");
+                        asm_line(lj, "DS", "0H", "");
+                    } else {
+                        int path = bykey && st->altkey > 0;
+                        snprintf(b, sizeof b, "RPL=%s,OPTCD=(%s)", rn,
+                                 bykey ? (f->opened_io && !path ? "DIR,UPD" : "DIR,NSP")
+                                       : (f->opened_io ? "SEQ,UPD" : "SEQ"));
+                        asm_line("", "MODCB", b, bykey ? "by key" : "next");
+                    }
                     /* A MODCB that fails must not look like end of data. It
                      * takes the same branch the program wrote, but with a
                      * status of its own and without decoding a feedback code
@@ -8979,10 +9231,13 @@ static void generate(void)
                     reset_bases();
                 }
                 const VsFbk *rtab = bykey ? vs_read_dir : vs_read;
+                for (int k = 0; k < f->nalt; k++) if (f->alt_dup[k]) vs_dupcheck = 1;
                 if (bykey && f->org == 2) gen_rrn_to_cell(f);
+                rpl_load(f, rn);
                 snprintf(b, sizeof b, "RPL=%s", rn);
                 asm_line("", "GET", b, bykey
                          ? "VSAM retrieval by key" : "VSAM sequential retrieval");
+                rpl_mark(f, rn);
                 asm_line("", "LTR", "15,15", "got a record?");
                 asm_line("", "BNZ", le, "");
                 gen_vsam_status(f, rn, rtab);
@@ -8999,6 +9254,7 @@ static void generate(void)
                 gen_vsam_status(f, rn, rtab);
                 if (luser[0]) { asm_line(luser, "DS", "0H", ""); reset_bases(); }
                 reset_bases();
+                vs_dupcheck = 0;
                 break;
             }
             /* COBOL's AT END is per-READ but DCBEODAD is per-file, so patch it
@@ -9469,11 +9725,14 @@ static void generate(void)
                 char wn[10]; rpl_name(f, 1, wn, sizeof wn);
                 if (f->org == 2 && f->access != 0) gen_rrn_to_cell(f);
                 snprintf(b, sizeof b, "RPL=%s", wn);
-                asm_line("", "PUT", b, f->access == 1
+                asm_line("", "PUT", b, f->access != 0
                          ? "VSAM insert by key" : "VSAM sequential store");
+                rpl_mark(f, wn);
                 asm_line("", "LTR", "15,15", "stored?");
                 asm_line("", "BNZ", wle, "");
+                for (int k = 0; k < f->nalt; k++) if (f->alt_dup[k]) vs_dupcheck = 1;
                 gen_vsam_status(f, wn, vs_write);
+                vs_dupcheck = 0;
                 if (f->org == 2) gen_rrn_from_cell(f);
                 asm_line("", "B", wlc, "");
                 asm_line(wle, "DS", "0H", "INVALID KEY");
@@ -9699,6 +9958,7 @@ static void generate(void)
             snprintf(b, sizeof b, " START %s", f->name);
             asm_comment(b);
             char sn[10]; rpl_name(f, 0, sn, sizeof sn);
+            if (f->nalt && st->altkey) snprintf(sn, sizeof sn, "%sQ%d", f->label, st->altkey);
             if (f->org == 2) gen_rrn_to_cell(f);
             /* KEQ and KGE are the same field of the same RPL, and the RPL that
              * is positioned has to be the one the following READ uses -- VSAM
@@ -9718,8 +9978,10 @@ static void generate(void)
             asm_line("", "BNZ", sle, "");
             snprintf(b, sizeof b, "RPL=%s", sn);
             asm_line("", "POINT", b, "position by key");
+            rpl_mark(f, sn);
             asm_line("", "LTR", "15,15", "positioned?");
             asm_line("", "BNZ", sle, "");
+            rpl_set_ref(f, sn);                        /* the key of reference, VI-30 */
             gen_vsam_status(f, sn, vs_start);
             asm_line("", "B", slc, "");
             asm_line(sle, "DS", "0H", "INVALID KEY");
@@ -9778,9 +10040,12 @@ static void generate(void)
             snprintf(b, sizeof b, "RPL=%s", un);
             asm_line("", erase ? "ERASE" : "PUT", b,
                      erase ? "erase the held record" : "put the held record back");
+            rpl_mark(f, un);
             asm_line("", "LTR", "15,15", "done?");
             asm_line("", "BNZ", wle, "");
+            if (!erase) for (int k = 0; k < f->nalt; k++) if (f->alt_dup[k]) vs_dupcheck = 1;
             gen_vsam_status(f, un, vs_upd);
+            vs_dupcheck = 0;
             asm_line("", "B", wlc, "");
             asm_line(wle, "DS", "0H", "INVALID KEY");
             reset_bases();
@@ -10691,7 +10956,9 @@ static void generate(void)
              * OPEN; OPEN EXTEND and OPEN I-O mean it is already there. For an
              * ESDS that distinction is the whole of ESDSLOAD versus ESDSADDT,
              * which are otherwise the same program. */
-            const char *macrf = f->opened_output ? "OUT,RST"
+            /* RST needs a REUSE cluster, and a cluster with an alternate index
+             * cannot be one: a load then relies on the cluster being empty. */
+            const char *macrf = f->opened_output ? (f->nalt ? "OUT" : "OUT,RST")
                               : (f->opened_io || f->opened_extend) ? "OUT"
                               : "IN";
             const char *optcd = f->opened_io ? "UPD" : "NUP";
@@ -10746,21 +11013,57 @@ static void generate(void)
                 if (pass == 1 && !(f->opened_io && f->has_write)) continue;
                 char rlab[10];
                 snprintf(rlab, sizeof rlab, "%s%c", f->label, pass ? 'N' : 'R');
+                snprintf(b, sizeof b, "%sA", rlab);
+                asm_line(b, "DC", "F'0'", "has carried a request");
                 snprintf(first, sizeof first, "%-8s RPL   ACB=%s,AREA=%s,",
                          rlab, f->label, syms[f->rec_sym].label);
                 char second[100];
                 /* KEQ is an OPTCD sub-option, not an RPL keyword of its own:
                  * find the record whose key equals the argument, rather than
                  * the first one greater than or equal to it. */
+                /* The insert RPL of a DYNAMIC file is DIR: a sequential PUT
+                 * keeps its string positioned and its interval held, and the
+                 * retrieval string's next keyed GET then meets the hold
+                 * (feedback 20). A RANDOM file's is DIR already. */
                 snprintf(second, sizeof second,
                          "AREALEN=%d,RECLEN=%d,%sOPTCD=(%s,%s,%s%s,MVE)",
-                         f->reclen, f->reclen, keyarg, keyadr, seqdir,
+                         f->reclen, f->reclen, keyarg, keyadr,
+                         (pass && f->access == 2) ? "DIR" : seqdir,
                          f->access != 0 ? "KEQ," : "",
                          pass ? "NUP" : optcd);
                 asm_cont(first, second);
             }
             if (rrncell[0])
                 asm_line(rrncell, "DS", "F", "relative record number");
+            if (f->nalt) {
+                /* Each alternate key: an ACB on its path, and a retrieval RPL
+                 * whose search argument is that key inside the record. The
+                 * paths are for input and open only with OPEN INPUT: on this
+                 * VSAM nothing else in the sphere can be open while the base
+                 * is open for output, and shared resources (LSR) are refused
+                 * for a base with an upgrade set (error 212). Updates go
+                 * through the base alone, VSAM upgrading the indexes. */
+                for (int k = 0; k < f->nalt; k++) {
+                    const Sym *a = &syms[f->alt_sym[k]];
+                    snprintf(b, sizeof b, "DDNAME=%s,MACRF=(KEY,SEQ,DIR,IN)", f->alt_dd[k]);
+                    char lab[10]; snprintf(lab, sizeof lab, "%sP%d", f->label, k + 1);
+                    asm_line(lab, "ACB", b, a->name);
+                    snprintf(b, sizeof b, "%sQ%dA", f->label, k + 1);
+                    asm_line(b, "DC", "F'0'", "has carried a request");
+                    snprintf(first, sizeof first, "%sQ%d   RPL   ACB=%s,AREA=%s,", f->label, k + 1, lab, syms[f->rec_sym].label);
+                    char second[100];
+                    snprintf(second, sizeof second,
+                             "AREALEN=%d,RECLEN=%d,ARG=%s,KEYLEN=%d,OPTCD=(KEY,%s,%sNUP,MVE)",
+                             f->reclen, f->reclen, a->label, a->bytes, seqdir,
+                             f->access != 0 ? "KEQ," : "");
+                    asm_cont(first, second);
+                }
+                snprintf(b, sizeof b, "A(%sR)", f->label);
+                snprintf(first, sizeof first, "%sX", f->label);
+                asm_line(first, "DC", b, "the key of reference's RPL");
+                snprintf(first, sizeof first, "%sV", f->label);
+                asm_line(first, "DC", "X'00'", "the paths are open");
+            }
             continue;
         }
         if (f->isam && f->opened_output) {
@@ -11011,6 +11314,8 @@ static void generate(void)
         int anyvsam = 0;
         for (int i = 0; i < nfile; i++) if (files[i].vsam) anyvsam = 1;
         if (anyvsam) asm_line("VSFB", "DS", "F", "VSAM SHOWCB feedback word");
+        if (anyvsam) asm_line("VSFOUR", "DC", "H'4'", "an OPEN warning");
+
     }
     asm_line("SAVEAREA", "DS", "18F", "");
     if (gen_lines && nlinetab) {

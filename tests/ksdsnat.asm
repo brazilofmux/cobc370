@@ -48,6 +48,9 @@ T0002    DS    0H
 T0003    DS    0H
 * OPEN INPUT KSDS-FILE
          OPEN  (FD000)             VSAM ACB
+         CH    15,VSFOUR           a warning?
+         BNE   *+6
+         SR    15,15               then it opened
          LTR   15,15               VSAM request succeeded?
          BZ    G0001
          L     8,BL0000            base locator
@@ -114,6 +117,7 @@ P0003    DS    0H
 T0007    DS    0H
 * READ KSDS-FILE
          GET   RPL=FD000R          VSAM sequential retrieval
+         MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               got a record?
          BNZ   L0001
          LTR   15,15               VSAM request succeeded?
@@ -139,6 +143,11 @@ G0007    DS    0H
          B     G0008
 G0010    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0006
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0006    DS    0H
 G0008    DS    0H
          B     L0002
 L0001    DS    0H                  AT END
@@ -165,6 +174,11 @@ G0011    DS    0H
          B     G0012
 G0014    DS    0H
          DROP  8
+         CLI   FD000RA,X'00'       ever used?
+         BE    L0007
+         ENDREQ RPL=FD000R         the failed request is over
+         MVI   FD000RA,X'00'
+L0007    DS    0H
 G0012    DS    0H
 T0008    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
@@ -230,6 +244,7 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    ACB   DDNAME=KSDSF01,MACRF=(KEY,SEQ,IN)  VSAM access method co
+FD000RA  DC    F'0'                has carried a request
 FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,OPTCD=(KEY,SEQ,NUP,MVE)
 S0001    DC    CL32'KSDSREAD: READ KSDS SEQUENTIALLY'  nonnumeric const
@@ -242,6 +257,7 @@ S0006    DC    CL10'  RECORD: '
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
 VSFB     DS    F                   VSAM SHOWCB feedback word
+VSFOUR   DC    H'4'                an OPEN warning
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H

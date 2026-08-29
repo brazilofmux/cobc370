@@ -26,7 +26,7 @@ element against the standard's own lists:
 |---|---|
 | Nucleus, Table Handling, Sequential I-O | **Level 2, complete** |
 | Relative I-O, Inter-Program Communication, Library | **Level 2, complete** |
-| Indexed I-O | Level 2 but for `ALTERNATE RECORD KEY` |
+| Indexed I-O | **Level 2, complete** (alternate keys read under `OPEN INPUT`; see below) |
 | Segmentation | Level 1 |
 | Report Writer | **Level 1, complete** (its only level) |
 | Sort-Merge, Debug, Communication | not implemented -- each has a null level, which conforms |
@@ -43,7 +43,7 @@ aggregate on the measurement in `docs/MEASUREMENTS.md`, a third on the later
 full build -- and, after the optimization pass, the CPU time of the COBOL steps
 is at IBM's (0.6s either way, at the noise floor of the step accounting).
 
-96 regression tests, all green, every one diffed against an oracle -- and
+100 regression tests, all green, every one diffed against an oracle -- and
 for the Report Writer the oracle is the 1974 text itself, hand-derived from
 its presentation-rule tables, with IBM's own compiler run on the same
 source wherever its 1968-vintage Report Writer reaches.
@@ -54,16 +54,18 @@ source wherever its 1968-vintage Report Writer reaches.
 | verbs | `MOVE` (with `CORRESPONDING`), `ADD SUBTRACT MULTIPLY DIVIDE COMPUTE` with `GIVING`, `ROUNDED`, `REMAINDER`, `ON SIZE ERROR`, `**`; `IF` with class, sign, condition-name and abbreviated conditions; `PERFORM` (`TIMES`, `UNTIL`, `VARYING ... AFTER ... AFTER`, `THRU`); `GO TO` (`DEPENDING ON`, `ALTER`); `SEARCH` and `SEARCH ALL`; `SET`; `STRING`, `UNSTRING`, `INSPECT`; `DISPLAY`/`ACCEPT` with `UPON`/`FROM` and `DATE`/`DAY`/`TIME`; `CALL literal` and `CALL identifier` with `USING`, `CANCEL`, `EXIT PROGRAM`, `GOBACK`; `COPY ... REPLACING` (host side, `-I`) |
 | QSAM | sequential read, write, rewrite; blocked and unblocked; `OPTIONAL`, `EXTEND`, `WRITE ... ADVANCING` with ASA carriage control, `LINAGE` with `END-OF-PAGE`, `USE` declaratives |
 | ISAM | QISAM load and sequential read, BISAM random read |
-| **VSAM KSDS** | read, load, update in place, read/write/delete by key, `START`, `ACCESS IS DYNAMIC` |
+| **VSAM KSDS** | read, load, update in place, read/write/delete by key, `START`, `ACCESS IS DYNAMIC` (with `OPEN I-O` too); `ALTERNATE RECORD KEY ... WITH DUPLICATES` on VSAM alternate indexes and paths -- `READ`/`START ... KEY IS` an alternate, the key of reference for `READ NEXT`, statuses `02`/`22`/`23` |
 | **VSAM ESDS** | read, load, update in place, extend |
 | **VSAM RRDS** | read, load, read/write/delete by record number, `START` |
 | reports | Report Writer entire: `RD` with `CONTROL`, `PAGE` and `CODE`; all seven group `TYPE`s; `LINE` (absolute, `PLUS`, `NEXT PAGE`), `NEXT GROUP`, `COLUMN`, `SOURCE`, `VALUE`, `SUM ... UPON ... RESET`, `GROUP INDICATE`, `JUSTIFIED`, `BLANK WHEN ZERO`; `LINE-COUNTER`/`PAGE-COUNTER`; `INITIATE`, `GENERATE` (detail or summary), `TERMINATE`, `USE BEFORE REPORTING`, `SUPPRESS`; presented by the standard's tables, not an approximation of them |
 
 What is deliberately not there, each refused with a message that says so:
 
-- `ALTERNATE RECORD KEY` -- on MVS that is VSAM alternate indexes and paths
-  before it is a compiler change.
-- `ACCESS IS DYNAMIC` combined with `OPEN I-O`.
+- Reading by an `ALTERNATE RECORD KEY` in a program that opens the file
+  `I-O`. This VSAM will not have a base cluster and its paths open together
+  while the base is open for output, so updates go by the prime key (VSAM
+  maintains the alternate indexes) and alternate-key reads need `OPEN
+  INPUT` -- two opens, or two programs. The roadmap records the probes.
 - `COMP` past nine digits -- doubleword binary on a machine with no 64-bit
   arithmetic. Everything else computes in packed decimal to 18 digits.
 - Sort-Merge, Debug, Communication; and every COBOL-85 spelling.
@@ -159,7 +161,7 @@ what each change was, are under Optimization in `docs/COBOL74-ROADMAP.md`.
 ## Layout
 
     src/     the compiler: one C file, plus a Ragel scanner for PICTURE
-    tests/   104 COBOL programs and their oracles
+    tests/   108 COBOL programs and their oracles
     bin/     the regression harness, the three round-trip checks, and
              cobc-ccvs to run the NIST CCVS-85 corpus through the front end
     bench/   the micro-benchmarks
