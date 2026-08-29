@@ -305,8 +305,8 @@ times behind.
 | packed compare | 0.17 | 0.07 | **0.09** (1) |
 | `CALL` a subprogram | 4.76 | 0.16 | **0.27** (2) |
 | `COMP` `ADD 1` | 0.20 | 0.03 | |
-| `MOVE` same picture, DISPLAY | 0.05 | 0.01 | |
-| `MOVE` to a wider picture | 0.06 | 0.02 | |
+| `MOVE` same picture, DISPLAY | 0.05 | 0.01 | **0.01** (3) |
+| `MOVE` to a wider picture | 0.06 | 0.02 | **0.02** (3) |
 | `IF` same picture, unsigned DISPLAY | 0.02 | 0.10 | already ahead |
 | `COMPUTE` with `*` and `+` | 0.49 | 0.53 | level |
 
@@ -317,7 +317,12 @@ times behind.
    the benchmark said 4.59 and the label fix said 0.27. Cost: after a callee
    has run, a program check in the caller is reported against the callee's
    line table; the offset stays true.
+3. Unsigned zoned to unsigned zoned at one scale is bytes: one `MVC` for the
+   same picture, zeros then digits into a wider receiver, the low-order
+   digits into a narrower one. A numeric literal into such an item is one
+   `MVC` from a zoned constant. Signed items and `SIGN` clauses keep the
+   `PACK`/`UNPK` path, where the sign nibble has to be made.
 
-Next: numeric `DISPLAY` moves as `MVC`; `COMP` add and subtract in binary
+Next: `COMP` add and subtract in binary
 with a range guard for picture truncation; then right-sizing the work areas
 `gen_expr` uses, which is the general form of (1).

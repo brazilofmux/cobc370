@@ -58,9 +58,7 @@ T0002    DS    0H
          OI    D0009+2,X'F0'       unsigned: force an F zone
 T0003    DS    0H
 * MOVE BB -> N
-         PACK  PWK1(16),D0009(3)   zoned -> packed
-         UNPK  D0012(3),PWK1(16)   packed -> zoned
-         OI    D0012+2,X'F0'       unsigned: force an F zone
+         MVC   D0012(3),D0009      zoned to zoned, same picture
 T0004    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0001

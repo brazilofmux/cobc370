@@ -90,9 +90,7 @@ T0006    DS    0H
          MVC   1(19,1),0(1)        propagate across the item
 T0007    DS    0H
 * MOVE 3 -> P
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0005(2),PWK1(16)   packed -> zoned
-         OI    D0005+1,X'F0'       unsigned: force an F zone
+         MVC   D0005(2),S0013      numeric literal as zoned digits
 T0008    DS    0H
 * STRING ... INTO R
          LA    1,D0003             the receiver
@@ -117,11 +115,11 @@ T0008    DS    0H
          DROP  8
 T0009    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0013
+         MVC   DSPBUF+0(4),S0014
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(20),D0003+0
-         MVC   DSPBUF+24(4),S0014
+         MVC   DSPBUF+24(4),S0015
          MVC   DSPBUF+28(2),D0005+0
          LA    1,PARM0003
          L     15,VDISP
@@ -150,11 +148,11 @@ T0010    DS    0H
          DROP  8
 T0011    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0015
+         MVC   DSPBUF+0(4),S0016
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(20),D0003+0
-         MVC   DSPBUF+24(4),S0014
+         MVC   DSPBUF+24(4),S0015
          MVC   DSPBUF+28(2),D0005+0
          LA    1,PARM0004
          L     15,VDISP
@@ -166,9 +164,7 @@ T0012    DS    0H
          MVC   1(5,1),0(1)         propagate across the item
 T0013    DS    0H
 * MOVE 1 -> P
-         ZAP   PWK1(16),K0002(16)  literal
-         UNPK  D0005(2),PWK1(16)   packed -> zoned
-         OI    D0005+1,X'F0'       unsigned: force an F zone
+         MVC   D0005(2),S0017      numeric literal as zoned digits
 T0014    DS    0H
 * STRING ... INTO R6
          LA    1,D0004             the receiver
@@ -194,18 +190,18 @@ T0014    DS    0H
          DROP  8
 T0015    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0016
+         MVC   DSPBUF+0(11),S0018
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
 L0001    DS    0H
 T0016    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0017
+         MVC   DSPBUF+0(4),S0019
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(6),D0004+0
-         MVC   DSPBUF+10(4),S0014
+         MVC   DSPBUF+10(4),S0015
          MVC   DSPBUF+14(2),D0005+0
          LA    1,PARM0006
          L     15,VDISP
@@ -217,9 +213,7 @@ T0017    DS    0H
          MVC   1(5,1),0(1)         propagate across the item
 T0018    DS    0H
 * MOVE 0 -> P
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0005(2),PWK1(16)   packed -> zoned
-         OI    D0005+1,X'F0'       unsigned: force an F zone
+         MVC   D0005(2),S0020      numeric literal as zoned digits
 T0019    DS    0H
 * STRING ... INTO R6
          LA    1,D0004             the receiver
@@ -245,18 +239,18 @@ T0019    DS    0H
          DROP  8
 T0020    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0018
+         MVC   DSPBUF+0(11),S0021
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 L0002    DS    0H
 T0021    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0019
+         MVC   DSPBUF+0(4),S0022
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(6),D0004+0
-         MVC   DSPBUF+10(4),S0014
+         MVC   DSPBUF+10(4),S0015
          MVC   DSPBUF+14(2),D0005+0
          LA    1,PARM0008
          L     15,VDISP
@@ -277,7 +271,7 @@ T0023    DS    0H
          LTR   15,15               overflow?
 T0024    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0020
+         MVC   DSPBUF+0(4),S0023
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(6),D0004+0
@@ -290,19 +284,19 @@ T0025    DS    0H
          LA    6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(4,6),S0021        literal move, space padded
+         MVC   0(4,6),S0024        literal move, space padded
 T0026    DS    0H
 * MOVE BB   -> E
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(4,6),S0022        literal move, space padded
+         MVC   0(4,6),S0025        literal move, space padded
 T0027    DS    0H
 * MOVE CCCC -> E
          LA    6,2                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(4,6),S0023        literal move, space padded
+         MVC   0(4,6),S0026        literal move, space padded
 T0028    DS    0H
 * MOVE ALL literal -> R
          LA    1,D0003             ALL literal
@@ -329,7 +323,7 @@ T0029    DS    0H
          LTR   15,15               overflow?
 T0030    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0024
+         MVC   DSPBUF+0(4),S0027
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(20),D0003+0
@@ -340,22 +334,22 @@ T0030    DS    0H
 T0031    DS    0H
 * MOVE ALL literal -> A1
          LA    1,D0010             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0032    DS    0H
 * MOVE ALL literal -> A2
          LA    1,D0011             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0033    DS    0H
 * MOVE ALL literal -> A3
          LA    1,D0012             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0034    DS    0H
 * MOVE ALL literal -> A4
          LA    1,D0013             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(2,1),0(1)         propagate across the item
 T0035    DS    0H
 * UNSTRING S ...
@@ -377,15 +371,15 @@ T0035    DS    0H
          LTR   3,3                 overflow?
 T0036    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0026
+         MVC   DSPBUF+0(3),S0029
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+3(6),D0010+0
-         MVC   DSPBUF+9(1),S0027
+         MVC   DSPBUF+9(1),S0030
          MVC   DSPBUF+10(6),D0011+0
-         MVC   DSPBUF+16(1),S0027
+         MVC   DSPBUF+16(1),S0030
          MVC   DSPBUF+17(6),D0012+0
-         MVC   DSPBUF+23(1),S0027
+         MVC   DSPBUF+23(1),S0030
          MVC   DSPBUF+24(3),D0013+0
          LA    1,PARM0011
          L     15,VDISP
@@ -393,48 +387,42 @@ T0036    DS    0H
 T0037    DS    0H
 * MOVE ALL literal -> A1
          LA    1,D0010             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0038    DS    0H
 * MOVE ALL literal -> A2
          LA    1,D0011             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0039    DS    0H
 * MOVE ALL literal -> A3
          LA    1,D0012             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0040    DS    0H
 * MOVE ALL literal -> A4
          LA    1,D0013             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(2,1),0(1)         propagate across the item
 T0041    DS    0H
 * MOVE ALL literal -> D1
          LA    1,D0014             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(1,1),0(1)         propagate across the item
 T0042    DS    0H
 * MOVE ALL literal -> D2
          LA    1,D0015             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(1,1),0(1)         propagate across the item
 T0043    DS    0H
 * MOVE 0 -> C1
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0016(2),PWK1(16)   packed -> zoned
-         OI    D0016+1,X'F0'       unsigned: force an F zone
+         MVC   D0016(2),S0020      numeric literal as zoned digits
 T0044    DS    0H
 * MOVE 0 -> C2
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0017(2),PWK1(16)   packed -> zoned
-         OI    D0017+1,X'F0'       unsigned: force an F zone
+         MVC   D0017(2),S0020      numeric literal as zoned digits
 T0045    DS    0H
 * MOVE 0 -> TL
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0018(2),PWK1(16)   packed -> zoned
-         OI    D0018+1,X'F0'       unsigned: force an F zone
+         MVC   D0018(2),S0020      numeric literal as zoned digits
 T0046    DS    0H
 * UNSTRING S2 ...
          LA    1,D0009             the sending item
@@ -479,35 +467,35 @@ T0046    DS    0H
          DROP  8
 T0047    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0028
+         MVC   DSPBUF+0(3),S0031
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+3(6),D0010+0
-         MVC   DSPBUF+9(1),S0027
+         MVC   DSPBUF+9(1),S0030
          MVC   DSPBUF+10(6),D0011+0
-         MVC   DSPBUF+16(1),S0027
+         MVC   DSPBUF+16(1),S0030
          MVC   DSPBUF+17(6),D0012+0
-         MVC   DSPBUF+23(1),S0027
+         MVC   DSPBUF+23(1),S0030
          LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
 T0048    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(5),S0029
+         MVC   DSPBUF+0(5),S0032
          MVC   DSPBUF+5(2),D0014+0
-         MVC   DSPBUF+7(1),S0027
+         MVC   DSPBUF+7(1),S0030
          MVC   DSPBUF+8(2),D0015+0
-         MVC   DSPBUF+10(1),S0027
+         MVC   DSPBUF+10(1),S0030
          LA    1,PARM0013
          L     15,VDISP
          BALR  14,15
 T0049    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(5),S0030
+         MVC   DSPBUF+0(5),S0033
          MVC   DSPBUF+5(2),D0016+0
          MVC   DSPBUF+7(1),S0001
          MVC   DSPBUF+8(2),D0017+0
-         MVC   DSPBUF+10(3),S0031
+         MVC   DSPBUF+10(3),S0034
          MVC   DSPBUF+13(2),D0018+0
          LA    1,PARM0014
          L     15,VDISP
@@ -515,17 +503,17 @@ T0049    DS    0H
 T0050    DS    0H
 * MOVE ALL literal -> A1
          LA    1,D0010             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0051    DS    0H
 * MOVE ALL literal -> A2
          LA    1,D0011             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0052    DS    0H
 * MOVE ALL literal -> A3
          LA    1,D0012             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0053    DS    0H
 * UNSTRING S ...
@@ -545,13 +533,13 @@ T0053    DS    0H
          LTR   3,3                 overflow?
 T0054    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0032
+         MVC   DSPBUF+0(4),S0035
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(6),D0010+0
-         MVC   DSPBUF+10(2),S0033
+         MVC   DSPBUF+10(2),S0036
          MVC   DSPBUF+12(6),D0011+0
-         MVC   DSPBUF+18(2),S0033
+         MVC   DSPBUF+18(2),S0036
          MVC   DSPBUF+20(6),D0012+0
          MVC   DSPBUF+26(1),S0011
          LA    1,PARM0015
@@ -560,23 +548,19 @@ T0054    DS    0H
 T0055    DS    0H
 * MOVE ALL literal -> A1
          LA    1,D0010             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0056    DS    0H
 * MOVE ALL literal -> A2
          LA    1,D0011             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0057    DS    0H
 * MOVE 7 -> UPT
-         ZAP   PWK1(16),K0004(16)  literal
-         UNPK  D0019(2),PWK1(16)   packed -> zoned
-         OI    D0019+1,X'F0'       unsigned: force an F zone
+         MVC   D0019(2),S0037      numeric literal as zoned digits
 T0058    DS    0H
 * MOVE 0 -> TL
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0018(2),PWK1(16)   packed -> zoned
-         OI    D0018+1,X'F0'       unsigned: force an F zone
+         MVC   D0018(2),S0020      numeric literal as zoned digits
 T0059    DS    0H
 * UNSTRING S ...
          LA    1,D0008             the sending item
@@ -615,22 +599,22 @@ T0059    DS    0H
          DROP  8
 T0060    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0034
+         MVC   DSPBUF+0(11),S0038
          LA    1,PARM0016
          L     15,VDISP
          BALR  14,15
 L0003    DS    0H
 T0061    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0035
+         MVC   DSPBUF+0(4),S0039
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(6),D0010+0
-         MVC   DSPBUF+10(2),S0033
+         MVC   DSPBUF+10(2),S0036
          MVC   DSPBUF+12(6),D0011+0
-         MVC   DSPBUF+18(4),S0014
+         MVC   DSPBUF+18(4),S0015
          MVC   DSPBUF+22(2),D0019+0
-         MVC   DSPBUF+24(3),S0031
+         MVC   DSPBUF+24(3),S0034
          MVC   DSPBUF+27(2),D0018+0
          LA    1,PARM0017
          L     15,VDISP
@@ -638,17 +622,17 @@ T0061    DS    0H
 T0062    DS    0H
 * MOVE ALL literal -> A1
          LA    1,D0010             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0063    DS    0H
 * MOVE ALL literal -> A2
          LA    1,D0011             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0064    DS    0H
 * MOVE ALL literal -> A3
          LA    1,D0012             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0065    DS    0H
 * UNSTRING S2 ...
@@ -669,20 +653,20 @@ T0065    DS    0H
          BZ    L0004               no: past the ON OVERFLOW statements
 T0066    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0036
+         MVC   DSPBUF+0(11),S0040
          LA    1,PARM0018
          L     15,VDISP
          BALR  14,15
 L0004    DS    0H
 T0067    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0037
+         MVC   DSPBUF+0(4),S0041
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(6),D0010+0
-         MVC   DSPBUF+10(2),S0033
+         MVC   DSPBUF+10(2),S0036
          MVC   DSPBUF+12(6),D0011+0
-         MVC   DSPBUF+18(2),S0033
+         MVC   DSPBUF+18(2),S0036
          MVC   DSPBUF+20(6),D0012+0
          MVC   DSPBUF+26(1),S0011
          LA    1,PARM0019
@@ -691,22 +675,22 @@ T0067    DS    0H
 T0068    DS    0H
 * MOVE ALL literal -> A1
          LA    1,D0010             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0069    DS    0H
 * MOVE ALL literal -> A2
          LA    1,D0011             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0070    DS    0H
 * MOVE ALL literal -> A3
          LA    1,D0012             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(5,1),0(1)         propagate across the item
 T0071    DS    0H
 * MOVE ALL literal -> A4
          LA    1,D0013             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(2,1),0(1)         propagate across the item
 T0072    DS    0H
 * UNSTRING XY ...
@@ -729,22 +713,22 @@ T0072    DS    0H
          BZ    L0005               no: past the ON OVERFLOW statements
 T0073    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0038
+         MVC   DSPBUF+0(11),S0042
          LA    1,PARM0020
          L     15,VDISP
          BALR  14,15
 L0005    DS    0H
 T0074    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0039
+         MVC   DSPBUF+0(3),S0043
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+3(6),D0010+0
-         MVC   DSPBUF+9(1),S0027
+         MVC   DSPBUF+9(1),S0030
          MVC   DSPBUF+10(6),D0011+0
-         MVC   DSPBUF+16(1),S0027
+         MVC   DSPBUF+16(1),S0030
          MVC   DSPBUF+17(6),D0012+0
-         MVC   DSPBUF+23(1),S0027
+         MVC   DSPBUF+23(1),S0030
          MVC   DSPBUF+24(3),D0013+0
          LA    1,PARM0021
          L     15,VDISP
@@ -752,18 +736,16 @@ T0074    DS    0H
 T0075    DS    0H
 * MOVE ALL literal -> A4
          LA    1,D0013             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(2,1),0(1)         propagate across the item
 T0076    DS    0H
 * MOVE ALL literal -> D1
          LA    1,D0014             ALL literal
-         MVC   0(1,1),S0025        the unit
+         MVC   0(1,1),S0028        the unit
          MVC   1(1,1),0(1)         propagate across the item
 T0077    DS    0H
 * MOVE 0 -> C1
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0016(2),PWK1(16)   packed -> zoned
-         OI    D0016+1,X'F0'       unsigned: force an F zone
+         MVC   D0016(2),S0020      numeric literal as zoned digits
 T0078    DS    0H
 * UNSTRING S ...
          LA    1,D0008             the sending item
@@ -788,13 +770,13 @@ T0078    DS    0H
          DROP  8
 T0079    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0040
+         MVC   DSPBUF+0(4),S0044
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(3),D0013+0
-         MVC   DSPBUF+7(5),S0041
+         MVC   DSPBUF+7(5),S0045
          MVC   DSPBUF+12(2),D0014+0
-         MVC   DSPBUF+14(4),S0042
+         MVC   DSPBUF+14(4),S0046
          MVC   DSPBUF+18(2),D0016+0
          LA    1,PARM0022
          L     15,VDISP
@@ -1117,10 +1099,6 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'3'             numeric constants
-K0002    DC    PL16'1'
-K0003    DC    PL16'0'
-K0004    DC    PL16'7'
 H0001    DC    H'4'                element sizes
 S0001    DC    CL1' '              nonnumeric constants
 S0002    DC    CL1','
@@ -1134,36 +1112,40 @@ S0009    DC    CL1'-'
 S0010    DC    CL4'S1 ['
 S0011    DC    CL1']'
 S0012    DC    CL4'S2 ['
-S0013    DC    CL4'S3 ['
-S0014    DC    CL4'] P='
-S0015    DC    CL4'S4 ['
-S0016    DC    CL11'S5 OVERFLOW'
-S0017    DC    CL4'S5 ['
-S0018    DC    CL11'S6 OVERFLOW'
-S0019    DC    CL4'S6 ['
-S0020    DC    CL4'S7 ['
-S0021    DC    CL4'AAAA'
-S0022    DC    CL4'BB  '
-S0023    DC    CL4'CCCC'
-S0024    DC    CL4'S8 ['
-S0025    DC    CL1'*'
-S0026    DC    CL3'U1 '
-S0027    DC    CL1'|'
-S0028    DC    CL3'U2 '
-S0029    DC    CL5'U2 D='
-S0030    DC    CL5'U2 C='
-S0031    DC    CL3' T='
-S0032    DC    CL4'U3 ['
-S0033    DC    CL2']['
-S0034    DC    CL11'U4 OVERFLOW'
-S0035    DC    CL4'U4 ['
-S0036    DC    CL11'U5 OVERFLOW'
-S0037    DC    CL4'U5 ['
-S0038    DC    CL11'U6 OVERFLOW'
-S0039    DC    CL3'U6 '
-S0040    DC    CL4'U7 ['
-S0041    DC    CL5'] D=['
-S0042    DC    CL4'] C='
+S0013    DC    CL2'03'
+S0014    DC    CL4'S3 ['
+S0015    DC    CL4'] P='
+S0016    DC    CL4'S4 ['
+S0017    DC    CL2'01'
+S0018    DC    CL11'S5 OVERFLOW'
+S0019    DC    CL4'S5 ['
+S0020    DC    CL2'00'
+S0021    DC    CL11'S6 OVERFLOW'
+S0022    DC    CL4'S6 ['
+S0023    DC    CL4'S7 ['
+S0024    DC    CL4'AAAA'
+S0025    DC    CL4'BB  '
+S0026    DC    CL4'CCCC'
+S0027    DC    CL4'S8 ['
+S0028    DC    CL1'*'
+S0029    DC    CL3'U1 '
+S0030    DC    CL1'|'
+S0031    DC    CL3'U2 '
+S0032    DC    CL5'U2 D='
+S0033    DC    CL5'U2 C='
+S0034    DC    CL3' T='
+S0035    DC    CL4'U3 ['
+S0036    DC    CL2']['
+S0037    DC    CL2'07'
+S0038    DC    CL11'U4 OVERFLOW'
+S0039    DC    CL4'U4 ['
+S0040    DC    CL11'U5 OVERFLOW'
+S0041    DC    CL4'U5 ['
+S0042    DC    CL11'U6 OVERFLOW'
+S0043    DC    CL3'U6 '
+S0044    DC    CL4'U7 ['
+S0045    DC    CL5'] D=['
+S0046    DC    CL4'] C='
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

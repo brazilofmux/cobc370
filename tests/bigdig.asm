@@ -35,9 +35,7 @@ T0000    DS    0H
          BALR  14,15
 T0001    DS    0H
 * MOVE Z16 -> ZR
-         PACK  PWK1(16),D0000(16)  zoned -> packed
-         UNPK  D0001(16),PWK1(16)  packed -> zoned
-         OI    D0001+15,X'F0'      unsigned: force an F zone
+         MVC   D0001(16),D0000     zoned to zoned, same picture
 T0002    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(16),D0001+0

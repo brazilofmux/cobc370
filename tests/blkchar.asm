@@ -105,9 +105,7 @@ T0008    DS    0H
          OI    D0001+0,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * MOVE I -> L-NUM
-         PACK  PWK1(16),D0001(1)   zoned -> packed
-         UNPK  D0006(1),PWK1(16)   packed -> zoned
-         OI    D0006+0,X'F0'       unsigned: force an F zone
+         MVC   D0006(1),D0001      zoned to zoned, same picture
 T0010    DS    0H
 * WRITE BLK-REC
 *  FROM: fill the record area first

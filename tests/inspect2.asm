@@ -120,19 +120,13 @@ T0003    DS    0H
          BALR  14,15
 T0004    DS    0H
 * MOVE 0 -> C1
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0002(2),PWK1(16)   packed -> zoned
-         OI    D0002+1,X'F0'       unsigned: force an F zone
+         MVC   D0002(2),S0018      numeric literal as zoned digits
 T0005    DS    0H
 * MOVE 0 -> C2
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(2),PWK1(16)   packed -> zoned
-         OI    D0003+1,X'F0'       unsigned: force an F zone
+         MVC   D0003(2),S0018      numeric literal as zoned digits
 T0006    DS    0H
 * MOVE 0 -> C3
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0004(2),PWK1(16)   packed -> zoned
-         OI    D0004+1,X'F0'       unsigned: force an F zone
+         MVC   D0004(2),S0018      numeric literal as zoned digits
 T0007    DS    0H
 * INSPECT S
          LA    3,D0000             the field
@@ -245,7 +239,7 @@ L0027    DS    0H
          DROP  8
 T0010    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0018
+         MVC   DSPBUF+0(3),S0019
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+3(2),D0002+0
@@ -258,14 +252,10 @@ T0010    DS    0H
          BALR  14,15
 T0011    DS    0H
 * MOVE 0 -> C1
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0002(2),PWK1(16)   packed -> zoned
-         OI    D0002+1,X'F0'       unsigned: force an F zone
+         MVC   D0002(2),S0018      numeric literal as zoned digits
 T0012    DS    0H
 * MOVE 0 -> C2
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(2),PWK1(16)   packed -> zoned
-         OI    D0003+1,X'F0'       unsigned: force an F zone
+         MVC   D0003(2),S0018      numeric literal as zoned digits
 T0013    DS    0H
 * INSPECT S
          LA    3,D0000             the field
@@ -334,7 +324,7 @@ L0038    DS    0H
          DROP  8
 T0015    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0019
+         MVC   DSPBUF+0(3),S0020
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+3(2),D0002+0
@@ -365,11 +355,11 @@ L0041    DS    0H
          DROP  8
 T0018    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0020
+         MVC   DSPBUF+0(4),S0021
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(24),D0001+0
-         MVC   DSPBUF+28(1),S0021
+         MVC   DSPBUF+28(1),S0022
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -395,11 +385,11 @@ L0044    DS    0H
          DROP  8
 T0021    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0022
+         MVC   DSPBUF+0(4),S0023
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(24),D0001+0
-         MVC   DSPBUF+28(1),S0021
+         MVC   DSPBUF+28(1),S0022
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
@@ -426,11 +416,11 @@ L0047    DS    0H
          DROP  8
 T0024    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0023
+         MVC   DSPBUF+0(4),S0024
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(24),D0001+0
-         MVC   DSPBUF+28(1),S0021
+         MVC   DSPBUF+28(1),S0022
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
@@ -470,11 +460,11 @@ L0054    DS    0H
          DROP  8
 T0027    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0024
+         MVC   DSPBUF+0(4),S0025
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(24),D0001+0
-         MVC   DSPBUF+28(1),S0021
+         MVC   DSPBUF+28(1),S0022
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
@@ -514,11 +504,11 @@ L0059    DS    0H
          DROP  8
 T0030    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0025
+         MVC   DSPBUF+0(4),S0026
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(24),D0001+0
-         MVC   DSPBUF+28(1),S0021
+         MVC   DSPBUF+28(1),S0022
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
@@ -556,11 +546,11 @@ L0064    DS    0H
          DROP  8
 T0033    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0026
+         MVC   DSPBUF+0(4),S0027
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(24),D0001+0
-         MVC   DSPBUF+28(1),S0021
+         MVC   DSPBUF+28(1),S0022
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
@@ -619,19 +609,17 @@ L0074    DS    0H
          DROP  8
 T0036    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0027
+         MVC   DSPBUF+0(4),S0028
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+4(24),D0001+0
-         MVC   DSPBUF+28(1),S0021
+         MVC   DSPBUF+28(1),S0022
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
 T0037    DS    0H
 * MOVE 0 -> C1
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0002(2),PWK1(16)   packed -> zoned
-         OI    D0002+1,X'F0'       unsigned: force an F zone
+         MVC   D0002(2),S0018      numeric literal as zoned digits
 T0038    DS    0H
 * INSPECT S
          LA    3,D0000             the field
@@ -676,7 +664,7 @@ L0081    DS    0H
          OI    D0002+1,X'F0'       unsigned: force an F zone
 T0039    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0028
+         MVC   DSPBUF+0(3),S0029
          MVC   DSPBUF+3(2),D0002+0
          LA    1,PARM0011
          L     15,VDISP
@@ -741,7 +729,6 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'0'             numeric constants
 H0001    DC    H'2'                element sizes
 H0002    DC    H'3'
 H0003    DC    H'1'
@@ -762,17 +749,18 @@ S0014    DC    CL2'ba'
 S0015    DC    CL1'B'
 S0016    DC    CL3'ZZZ'
 S0017    DC    CL3'T1 '
-S0018    DC    CL3'T2 '
-S0019    DC    CL3'T3 '
-S0020    DC    CL4'R1 ['
-S0021    DC    CL1']'
-S0022    DC    CL4'R2 ['
-S0023    DC    CL4'R3 ['
-S0024    DC    CL4'R4 ['
-S0025    DC    CL4'R5 ['
-S0026    DC    CL4'R6 ['
-S0027    DC    CL4'R7 ['
-S0028    DC    CL3'T4 '
+S0018    DC    CL2'00'
+S0019    DC    CL3'T2 '
+S0020    DC    CL3'T3 '
+S0021    DC    CL4'R1 ['
+S0022    DC    CL1']'
+S0023    DC    CL4'R2 ['
+S0024    DC    CL4'R3 ['
+S0025    DC    CL4'R4 ['
+S0026    DC    CL4'R5 ['
+S0027    DC    CL4'R6 ['
+S0028    DC    CL4'R7 ['
+S0029    DC    CL3'T4 '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

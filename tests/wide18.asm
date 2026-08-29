@@ -94,19 +94,7 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * MOVE D18 -> R18
-         MVC   ZWK(18),D0001       the whole zoned item
-         XC    PWK1(6),PWK1        the high half of the work area is ze
-         PACK  PWK1+6(10),ZWK+2(16)  the low 16 digits, with the sign
-         PACK  DWK(2),ZWK(2)       and the leading digits on their own
-         MVC   PWK1+6(1),DWK       digit 1 into the free byte
-         MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
-         UNPK  ZWK+2(16),PWK1+7(9)  the low 16 digits, sign and all
-         UNPK  DWK(3),PWK1+6(2)    the leading digits
-         MVC   ZWK(2),DWK+1        into the front of the item
-         OI    ZWK,X'F0'           as plain digits
-         OI    ZWK+1,X'F0'
-         MVC   D0003(18),ZWK       the whole zoned item
-         OI    D0003+17,X'F0'      unsigned: force an F zone
+         MVC   D0003(18),D0001     zoned to zoned, same picture
 T0007    DS    0H
 * MOVE R18 -> E18
          MVC   ZWK(18),D0003       the whole zoned item
@@ -131,17 +119,7 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * MOVE D17 -> R17
-         MVC   ZWK(17),D0000       the whole zoned item
-         XC    PWK1(6),PWK1        the high half of the work area is ze
-         PACK  PWK1+6(10),ZWK+1(16)  the low 16 digits, with the sign
-         PACK  DWK(2),ZWK(1)       and the leading digits on their own
-         MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
-         UNPK  ZWK+1(16),PWK1+7(9)  the low 16 digits, sign and all
-         UNPK  DWK(3),PWK1+6(2)    the leading digits
-         MVC   ZWK(1),DWK+2        into the front of the item
-         OI    ZWK,X'F0'           as plain digits
-         MVC   D0004(17),ZWK       the whole zoned item
-         OI    D0004+16,X'F0'      unsigned: force an F zone
+         MVC   D0004(17),D0000     zoned to zoned, same picture
 T0010    DS    0H
 * MOVE R17 -> E18
          MVC   ZWK(17),D0004       the whole zoned item
@@ -191,14 +169,7 @@ T0014    DS    0H
          BALR  14,15
 T0015    DS    0H
 * MOVE 999999999999999999 -> R18
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  ZWK+2(16),PWK1+7(9)  the low 16 digits, sign and all
-         UNPK  DWK(3),PWK1+6(2)    the leading digits
-         MVC   ZWK(2),DWK+1        into the front of the item
-         OI    ZWK,X'F0'           as plain digits
-         OI    ZWK+1,X'F0'
-         MVC   D0003(18),ZWK       the whole zoned item
-         OI    D0003+17,X'F0'      unsigned: force an F zone
+         MVC   D0003(18),S0007     numeric literal as zoned digits
 T0016    DS    0H
 * MOVE R18 -> E18
          MVC   ZWK(18),D0003       the whole zoned item
@@ -216,7 +187,7 @@ G0013    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0017    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0007
+         MVC   DSPBUF+0(6),S0008
          MVC   DSPBUF+6(19),D0006+0
          LA    1,PARM0007
          L     15,VDISP
@@ -229,7 +200,7 @@ T0018    DS    0H
          PACK  DWK(2),ZWK(2)       and the leading digits on their own
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
-         ZAP   PWK2(16),K0002(16)  literal
+         ZAP   PWK2(16),K0001(16)  literal
          SP    PWK1(16),PWK2(16)
          UNPK  ZWK+2(16),PWK1+7(9)  the low 16 digits, sign and all
          UNPK  DWK(3),PWK1+6(2)    the leading digits
@@ -255,21 +226,14 @@ G0015    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0020    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0008
+         MVC   DSPBUF+0(6),S0009
          MVC   DSPBUF+6(19),D0006+0
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
 T0021    DS    0H
 * MOVE 100000000000000007 -> R18
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  ZWK+2(16),PWK1+7(9)  the low 16 digits, sign and all
-         UNPK  DWK(3),PWK1+6(2)    the leading digits
-         MVC   ZWK(2),DWK+1        into the front of the item
-         OI    ZWK,X'F0'           as plain digits
-         OI    ZWK+1,X'F0'
-         MVC   D0003(18),ZWK       the whole zoned item
-         OI    D0003+17,X'F0'      unsigned: force an F zone
+         MVC   D0003(18),S0010     numeric literal as zoned digits
 T0022    DS    0H
 * MOVE R18 -> E18
          MVC   ZWK(18),D0003       the whole zoned item
@@ -287,7 +251,7 @@ G0017    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0023    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0009
+         MVC   DSPBUF+0(6),S0011
          MVC   DSPBUF+6(19),D0006+0
          LA    1,PARM0009
          L     15,VDISP
@@ -345,9 +309,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'999999999999999999'  numeric constants
-K0002    DC    PL16'1'
-K0003    DC    PL16'100000000000000007'
+K0001    DC    PL16'1'             numeric constants
 M0001    DC    XL21'402140202020202020202020202020202020202020'  ED pat
 S0001    DC    CL6'D18   '         nonnumeric constants
 S0002    DC    CL6'D17   '
@@ -355,9 +317,11 @@ S0003    DC    CL6'S18   '
 S0004    DC    CL6'RT18  '
 S0005    DC    CL6'RT17  '
 S0006    DC    CL6'VIA3  '
-S0007    DC    CL6'NINES '
-S0008    DC    CL6'LESS1 '
-S0009    DC    CL6'SPARSE'
+S0007    DC    CL18'999999999999999999'
+S0008    DC    CL6'NINES '
+S0009    DC    CL6'LESS1 '
+S0010    DC    CL18'100000000000000007'
+S0011    DC    CL6'SPARSE'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

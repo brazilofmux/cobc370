@@ -96,14 +96,12 @@ T0014    DS    0H
          OPEN  (FD001,UPDAT)       QSAM update mode
 T0015    DS    0H
 * MOVE 0 -> CTR
-         ZAP   PWK1(16),K0001(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0006(2),PWK1(16)   packed -> zoned
-         OI    D0006+1,X'F0'       unsigned: force an F zone
+         MVC   D0006(2),S0007      numeric literal as zoned digits
 T0016    DS    0H
 * MOVE N -> EOF-FLAG
-         MVC   D0005(1),S0007      literal move, space padded
+         MVC   D0005(1),S0008      literal move, space padded
          DROP  8
 * UPD-LOOP.
 P0000    DS    0H
@@ -123,14 +121,14 @@ T0018    DS    0H
 * MOVE Y -> EOF-FLAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0005(1),S0008      literal move, space padded
+         MVC   D0005(1),S0009      literal move, space padded
          DROP  8
 L0014    DS    0H
 T0019    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0005(1),S0008      alphanumeric compare
+         CLC   D0005(1),S0009      alphanumeric compare
          BNE   L0015
 T0020    DS    0H
 * GO TO UPD-DONE
@@ -142,14 +140,14 @@ T0021    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0006(2)   zoned -> packed
-         ZAP   PWK2(16),K0002(16)  literal
+         ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0006(2),PWK1(16)   packed -> zoned
          OI    D0006+1,X'F0'       unsigned: force an F zone
 T0022    DS    0H
 * IF
          PACK  WK0(16),D0006(2)    zoned -> packed
-         ZAP   WK1(16),K0003(16)   literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0016
 T0023    DS    0H
@@ -162,7 +160,7 @@ T0024    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0006(2)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0017
 T0025    DS    0H
@@ -175,7 +173,7 @@ T0026    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0006(2)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
+         ZAP   WK1(16),K0004(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0018
 T0027    DS    0H
@@ -192,7 +190,7 @@ T0029    DS    0H
 * MOVE CHANGED    -> U-TAIL
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0003(10),S0009     literal move, space padded
+         MVC   D0003(10),S0010     literal move, space padded
 T0030    DS    0H
 * REWRITE UPD-REC
          L     1,U001              where the last READ left the record
@@ -231,7 +229,7 @@ T0036    DS    0H
 * MOVE N -> EOF-FLAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0005(1),S0007      literal move, space padded
+         MVC   D0005(1),S0008      literal move, space padded
          DROP  8
 * IN-LOOP.
 P0004    DS    0H
@@ -249,14 +247,14 @@ T0038    DS    0H
 * MOVE Y -> EOF-FLAG
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0005(1),S0008      literal move, space padded
+         MVC   D0005(1),S0009      literal move, space padded
          DROP  8
 L0024    DS    0H
 T0039    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0005(1),S0008      alphanumeric compare
+         CLC   D0005(1),S0009      alphanumeric compare
          BNE   L0025
 T0040    DS    0H
 * GO TO IN-DONE
@@ -270,9 +268,9 @@ T0041    DS    0H
          MVC   D0007(20),D0004     alphanumeric move
 T0042    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0010
+         MVC   DSPBUF+0(1),S0011
          MVC   DSPBUF+1(20),D0007+0
-         MVC   DSPBUF+21(1),S0011
+         MVC   DSPBUF+21(1),S0012
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -320,22 +318,22 @@ FD000    DCB   DDNAME=UPDFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
 FD001    DCB   DDNAME=UPDFILE,DSORG=PS,MACRF=(GL,PL)
 FD002    DCB   DDNAME=UPDFILE,DSORG=PS,MACRF=(GM)
 U001     DS    F                   the record the last GET located
-K0001    DC    PL16'0'             numeric constants
-K0002    DC    PL16'1'
-K0003    DC    PL16'2'
-K0004    DC    PL16'4'
-K0005    DC    PL16'5'
+K0001    DC    PL16'1'             numeric constants
+K0002    DC    PL16'2'
+K0003    DC    PL16'4'
+K0004    DC    PL16'5'
 S0001    DC    CL20'RECORD 01 ORIGINAL  '  nonnumeric constants
 S0002    DC    CL20'RECORD 02 ORIGINAL  '
 S0003    DC    CL20'RECORD 03 ORIGINAL  '
 S0004    DC    CL20'RECORD 04 ORIGINAL  '
 S0005    DC    CL20'RECORD 05 ORIGINAL  '
 S0006    DC    CL20'RECORD 06 ORIGINAL  '
-S0007    DC    CL1'N'
-S0008    DC    CL1'Y'
-S0009    DC    CL10'CHANGED   '
-S0010    DC    CL1'['
-S0011    DC    CL1']'
+S0007    DC    CL2'00'
+S0008    DC    CL1'N'
+S0009    DC    CL1'Y'
+S0010    DC    CL10'CHANGED   '
+S0011    DC    CL1'['
+S0012    DC    CL1']'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

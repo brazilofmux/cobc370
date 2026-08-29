@@ -29,93 +29,81 @@ SPIEARMD DS    0H
 P0000    DS    0H
 T0000    DS    0H
 * MOVE 010 -> K1
-         ZAP   PWK1(16),K0001(16)  literal
-         LA    6,0                 subscript-1
-         MH    6,H0001             times element size
          L     8,BL0000            base locator
          USING WSC0000,8
+         LA    6,0                 subscript-1
+         MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0001        numeric literal as zoned digits
 T0001    DS    0H
 * MOVE AAA -> V1
          LA    6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         MVC   0(3,6),S0001        literal move, space padded
+         MVC   0(3,6),S0002        literal move, space padded
 T0002    DS    0H
 * MOVE 020 -> K1
-         ZAP   PWK1(16),K0002(16)  literal
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0003        numeric literal as zoned digits
 T0003    DS    0H
 * MOVE BBB -> V1
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         MVC   0(3,6),S0002        literal move, space padded
+         MVC   0(3,6),S0004        literal move, space padded
 T0004    DS    0H
 * MOVE 035 -> K1
-         ZAP   PWK1(16),K0003(16)  literal
          LA    6,2                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0005        numeric literal as zoned digits
 T0005    DS    0H
 * MOVE CCC -> V1
          LA    6,2                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         MVC   0(3,6),S0003        literal move, space padded
+         MVC   0(3,6),S0006        literal move, space padded
 T0006    DS    0H
 * MOVE 040 -> K1
-         ZAP   PWK1(16),K0004(16)  literal
          LA    6,3                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0007        numeric literal as zoned digits
 T0007    DS    0H
 * MOVE DDD -> V1
          LA    6,3                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         MVC   0(3,6),S0004        literal move, space padded
+         MVC   0(3,6),S0008        literal move, space padded
 T0008    DS    0H
 * MOVE 050 -> K1
-         ZAP   PWK1(16),K0005(16)  literal
          LA    6,4                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0009        numeric literal as zoned digits
 T0009    DS    0H
 * MOVE EEE -> V1
          LA    6,4                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         MVC   0(3,6),S0005        literal move, space padded
+         MVC   0(3,6),S0010        literal move, space padded
 T0010    DS    0H
 * MOVE 060 -> K1
-         ZAP   PWK1(16),K0006(16)  literal
          LA    6,5                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0002(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0011        numeric literal as zoned digits
 T0011    DS    0H
 * MOVE FFF -> V1
          LA    6,5                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         MVC   0(3,6),S0006        literal move, space padded
+         MVC   0(3,6),S0012        literal move, space padded
 T0012    DS    0H
 * MOVE 1 -> X1
-         ZAP   PWK1(16),K0007(16)  literal
+         ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0016
@@ -136,7 +124,7 @@ L0035    DS    0H
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0003
          DROP  8
@@ -147,7 +135,7 @@ L0035    DS    0H
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0004
          DROP  8
@@ -161,7 +149,7 @@ L0035    DS    0H
 L0001    DS    0H
 T0014    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0007
+         MVC   DSPBUF+0(12),S0013
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -170,7 +158,7 @@ T0015    DS    0H
 L0003    DS    0H
 T0016    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0008
+         MVC   DSPBUF+0(6),S0014
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    6,D0016             subscript
@@ -188,7 +176,7 @@ T0017    DS    0H
 L0004    DS    0H
 T0018    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0009
+         MVC   DSPBUF+0(7),S0015
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    6,D0016             subscript
@@ -215,22 +203,20 @@ T0020    DS    0H
          OI    D0015+0,X'F0'       unsigned: force an F zone
 T0021    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0010
+         MVC   DSPBUF+0(6),S0016
          MVC   DSPBUF+6(1),D0015+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 T0022    DS    0H
 * MOVE 1 -> X1
-         ZAP   PWK1(16),K0007(16)  literal
+         ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0016
 T0023    DS    0H
 * MOVE 0 -> N
-         ZAP   PWK1(16),K0009(16)  literal
-         UNPK  D0013(2),PWK1(16)   packed -> zoned
-         OI    D0013+1,X'F0'       unsigned: force an F zone
+         MVC   D0013(2),S0017      numeric literal as zoned digits
 T0024    DS    0H
 * SEARCH E1
 L0036    DS    0H
@@ -247,7 +233,7 @@ L0036    DS    0H
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
-         CLC   0(3,6),S0011        alphanumeric compare
+         CLC   0(3,6),S0018        alphanumeric compare
          BE    L0007
          DROP  8
          L     8,BL0000            base locator
@@ -255,7 +241,7 @@ L0036    DS    0H
          LH    1,D0016
          LA    1,1(1)              next occurrence
          STH   1,D0016
-         ZAP   WK0(16),K0007(16)   literal
+         ZAP   WK0(16),K0001(16)   literal
          ZAP   PWK2(16),WK0(16)
          PACK  PWK1(16),D0013(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
@@ -266,7 +252,7 @@ L0036    DS    0H
 L0005    DS    0H
 T0025    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(15),S0012
+         MVC   DSPBUF+0(15),S0019
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+15(2),D0013+0
@@ -279,7 +265,7 @@ T0026    DS    0H
 L0007    DS    0H
 T0027    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(8),S0013
+         MVC   DSPBUF+0(8),S0020
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
@@ -288,7 +274,7 @@ T0028    DS    0H
 L0006    DS    0H
 T0029    DS    0H
 * MOVE 2 -> X1
-         ZAP   PWK1(16),K0010(16)  literal
+         ZAP   PWK1(16),K0004(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
@@ -296,9 +282,7 @@ T0029    DS    0H
          STH   2,D0016
 T0030    DS    0H
 * MOVE 0 -> N
-         ZAP   PWK1(16),K0009(16)  literal
-         UNPK  D0013(2),PWK1(16)   packed -> zoned
-         OI    D0013+1,X'F0'       unsigned: force an F zone
+         MVC   D0013(2),S0017      numeric literal as zoned digits
 T0031    DS    0H
 * SEARCH E1
 L0037    DS    0H
@@ -325,7 +309,7 @@ L0037    DS    0H
          LH    1,D0016
          LA    1,1(1)              next occurrence
          STH   1,D0016
-         ZAP   WK0(16),K0007(16)   literal
+         ZAP   WK0(16),K0001(16)   literal
          ZAP   PWK2(16),WK0(16)
          PACK  PWK1(16),D0013(2)   zoned -> packed
          AP    PWK1(16),PWK2(16)
@@ -336,7 +320,7 @@ L0037    DS    0H
 L0008    DS    0H
 T0032    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0014
+         MVC   DSPBUF+0(12),S0021
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
@@ -345,7 +329,7 @@ T0033    DS    0H
 L0010    DS    0H
 T0034    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0015
+         MVC   DSPBUF+0(11),S0022
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+11(2),D0013+0
@@ -358,76 +342,66 @@ T0035    DS    0H
 L0009    DS    0H
 T0036    DS    0H
 * MOVE 090 -> K2
-         ZAP   PWK1(16),K0011(16)  literal
-         LA    6,0                 subscript-1
-         MH    6,H0001             times element size
          L     8,BL0000            base locator
          USING WSC0000,8
+         LA    6,0                 subscript-1
+         MH    6,H0001             times element size
          LA    6,D0006(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0023        numeric literal as zoned digits
 T0037    DS    0H
 * MOVE AAA -> V2
          LA    6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(3,6),S0001        literal move, space padded
+         MVC   0(3,6),S0002        literal move, space padded
 T0038    DS    0H
 * MOVE 070 -> K2
-         ZAP   PWK1(16),K0012(16)  literal
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0006(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0024        numeric literal as zoned digits
 T0039    DS    0H
 * MOVE BBB -> V2
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(3,6),S0002        literal move, space padded
+         MVC   0(3,6),S0004        literal move, space padded
 T0040    DS    0H
 * MOVE 050 -> K2
-         ZAP   PWK1(16),K0005(16)  literal
          LA    6,2                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0006(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0009        numeric literal as zoned digits
 T0041    DS    0H
 * MOVE CCC -> V2
          LA    6,2                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(3,6),S0003        literal move, space padded
+         MVC   0(3,6),S0006        literal move, space padded
 T0042    DS    0H
 * MOVE 030 -> K2
-         ZAP   PWK1(16),K0008(16)  literal
          LA    6,3                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0006(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0025        numeric literal as zoned digits
 T0043    DS    0H
 * MOVE DDD -> V2
          LA    6,3                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(3,6),S0004        literal move, space padded
+         MVC   0(3,6),S0008        literal move, space padded
 T0044    DS    0H
 * MOVE 010 -> K2
-         ZAP   PWK1(16),K0001(16)  literal
          LA    6,4                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0006(6)          element address
-         UNPK  0(3,6),PWK1(16)     packed -> zoned
-         OI    2(6),X'F0'          unsigned: force an F zone
+         MVC   0(3,6),S0001        numeric literal as zoned digits
 T0045    DS    0H
 * MOVE EEE -> V2
          LA    6,4                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
-         MVC   0(3,6),S0005        literal move, space padded
+         MVC   0(3,6),S0010        literal move, space padded
 T0046    DS    0H
 * SEARCH ALL E2
          LA    1,1
@@ -450,7 +424,7 @@ SP057    DS    0H
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0012
          LH    7,D0017             subscript
@@ -458,7 +432,7 @@ SP057    DS    0H
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0008(16)   literal
+         ZAP   WK1(16),K0003(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0014
          LH    1,D0017
@@ -477,7 +451,7 @@ L0014    DS    0H
 L0011    DS    0H
 T0047    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0016
+         MVC   DSPBUF+0(12),S0026
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
@@ -486,7 +460,7 @@ T0048    DS    0H
 L0012    DS    0H
 T0049    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0017
+         MVC   DSPBUF+0(3),S0027
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    6,D0017             subscript
@@ -521,7 +495,7 @@ SP064    DS    0H
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
+         ZAP   WK1(16),K0006(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0016
          LH    7,D0017             subscript
@@ -529,7 +503,7 @@ SP064    DS    0H
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
+         ZAP   WK1(16),K0006(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0018
          LH    1,D0017
@@ -548,7 +522,7 @@ L0018    DS    0H
 L0015    DS    0H
 T0051    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0018
+         MVC   DSPBUF+0(12),S0028
          LA    1,PARM0011
          L     15,VDISP
          BALR  14,15
@@ -557,7 +531,7 @@ T0052    DS    0H
 L0016    DS    0H
 T0053    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0019
+         MVC   DSPBUF+0(3),S0029
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    6,D0017             subscript
@@ -592,7 +566,7 @@ SP071    DS    0H
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0020
          LH    7,D0017             subscript
@@ -600,7 +574,7 @@ SP071    DS    0H
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
          PACK  WK0(16),0(3,7)      zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
+         ZAP   WK1(16),K0002(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0022
          LH    1,D0017
@@ -619,7 +593,7 @@ L0022    DS    0H
 L0019    DS    0H
 T0055    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0020
+         MVC   DSPBUF+0(12),S0030
          LA    1,PARM0013
          L     15,VDISP
          BALR  14,15
@@ -628,145 +602,121 @@ T0056    DS    0H
 L0020    DS    0H
 T0057    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(8),S0021
+         MVC   DSPBUF+0(8),S0031
          LA    1,PARM0014
          L     15,VDISP
          BALR  14,15
 L0021    DS    0H
 T0058    DS    0H
 * MOVE 01 -> K3A
-         ZAP   PWK1(16),K0013(16)  literal
-         LA    6,0                 subscript-1
-         MH    6,H0002             times element size
          L     8,BL0000            base locator
          USING WSC0000,8
+         LA    6,0                 subscript-1
+         MH    6,H0002             times element size
          LA    6,D0010(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0032        numeric literal as zoned digits
 T0059    DS    0H
 * MOVE 01 -> K3B
-         ZAP   PWK1(16),K0013(16)  literal
          LA    6,0                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0011(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0032        numeric literal as zoned digits
 T0060    DS    0H
 * MOVE AAA -> V3
          LA    6,0                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
-         MVC   0(3,6),S0001        literal move, space padded
+         MVC   0(3,6),S0002        literal move, space padded
 T0061    DS    0H
 * MOVE 01 -> K3A
-         ZAP   PWK1(16),K0013(16)  literal
          LA    6,1                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0010(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0032        numeric literal as zoned digits
 T0062    DS    0H
 * MOVE 05 -> K3B
-         ZAP   PWK1(16),K0014(16)  literal
          LA    6,1                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0011(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0033        numeric literal as zoned digits
 T0063    DS    0H
 * MOVE BBB -> V3
          LA    6,1                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
-         MVC   0(3,6),S0002        literal move, space padded
+         MVC   0(3,6),S0004        literal move, space padded
 T0064    DS    0H
 * MOVE 02 -> K3A
-         ZAP   PWK1(16),K0015(16)  literal
          LA    6,2                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0010(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0034        numeric literal as zoned digits
 T0065    DS    0H
 * MOVE 02 -> K3B
-         ZAP   PWK1(16),K0015(16)  literal
          LA    6,2                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0011(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0034        numeric literal as zoned digits
 T0066    DS    0H
 * MOVE CCC -> V3
          LA    6,2                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
-         MVC   0(3,6),S0003        literal move, space padded
+         MVC   0(3,6),S0006        literal move, space padded
 T0067    DS    0H
 * MOVE 02 -> K3A
-         ZAP   PWK1(16),K0015(16)  literal
          LA    6,3                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0010(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0034        numeric literal as zoned digits
 T0068    DS    0H
 * MOVE 09 -> K3B
-         ZAP   PWK1(16),K0016(16)  literal
          LA    6,3                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0011(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0035        numeric literal as zoned digits
 T0069    DS    0H
 * MOVE DDD -> V3
          LA    6,3                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
-         MVC   0(3,6),S0004        literal move, space padded
+         MVC   0(3,6),S0008        literal move, space padded
 T0070    DS    0H
 * MOVE 03 -> K3A
-         ZAP   PWK1(16),K0017(16)  literal
          LA    6,4                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0010(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0036        numeric literal as zoned digits
 T0071    DS    0H
 * MOVE 01 -> K3B
-         ZAP   PWK1(16),K0013(16)  literal
          LA    6,4                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0011(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0032        numeric literal as zoned digits
 T0072    DS    0H
 * MOVE EEE -> V3
          LA    6,4                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
-         MVC   0(3,6),S0005        literal move, space padded
+         MVC   0(3,6),S0010        literal move, space padded
 T0073    DS    0H
 * MOVE 03 -> K3A
-         ZAP   PWK1(16),K0017(16)  literal
          LA    6,5                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0010(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0036        numeric literal as zoned digits
 T0074    DS    0H
 * MOVE 04 -> K3B
-         ZAP   PWK1(16),K0018(16)  literal
          LA    6,5                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0011(6)          element address
-         UNPK  0(2,6),PWK1(16)     packed -> zoned
-         OI    1(6),X'F0'          unsigned: force an F zone
+         MVC   0(2,6),S0037        numeric literal as zoned digits
 T0075    DS    0H
 * MOVE FFF -> V3
          LA    6,5                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
-         MVC   0(3,6),S0006        literal move, space padded
+         MVC   0(3,6),S0012        literal move, space padded
 T0076    DS    0H
 * SEARCH ALL E3
          LA    1,1
@@ -789,7 +739,7 @@ SP096    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0015(16)   literal
+         ZAP   WK1(16),K0007(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0038
          LH    7,D0018             subscript
@@ -797,7 +747,7 @@ SP096    DS    0H
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0016(16)   literal
+         ZAP   WK1(16),K0008(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0024
 L0038    DS    0H
@@ -806,7 +756,7 @@ L0038    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0015(16)   literal
+         ZAP   WK1(16),K0007(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0026
          LH    7,D0018             subscript
@@ -814,7 +764,7 @@ L0038    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0015(16)   literal
+         ZAP   WK1(16),K0007(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0039
          LH    7,D0018             subscript
@@ -822,7 +772,7 @@ L0038    DS    0H
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0016(16)   literal
+         ZAP   WK1(16),K0008(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0026
 L0039    DS    0H
@@ -842,7 +792,7 @@ L0026    DS    0H
 L0023    DS    0H
 T0077    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0022
+         MVC   DSPBUF+0(12),S0038
          LA    1,PARM0015
          L     15,VDISP
          BALR  14,15
@@ -851,7 +801,7 @@ T0078    DS    0H
 L0024    DS    0H
 T0079    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0023
+         MVC   DSPBUF+0(3),S0039
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    6,D0018             subscript
@@ -886,7 +836,7 @@ SP103    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0017(16)   literal
+         ZAP   WK1(16),K0009(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0040
          LH    7,D0018             subscript
@@ -894,7 +844,7 @@ SP103    DS    0H
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0013(16)   literal
+         ZAP   WK1(16),K0010(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0028
 L0040    DS    0H
@@ -903,7 +853,7 @@ L0040    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0017(16)   literal
+         ZAP   WK1(16),K0009(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0030
          LH    7,D0018             subscript
@@ -911,7 +861,7 @@ L0040    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0017(16)   literal
+         ZAP   WK1(16),K0009(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0041
          LH    7,D0018             subscript
@@ -919,7 +869,7 @@ L0040    DS    0H
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0013(16)   literal
+         ZAP   WK1(16),K0010(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0030
 L0041    DS    0H
@@ -939,7 +889,7 @@ L0030    DS    0H
 L0027    DS    0H
 T0081    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0024
+         MVC   DSPBUF+0(12),S0040
          LA    1,PARM0017
          L     15,VDISP
          BALR  14,15
@@ -948,7 +898,7 @@ T0082    DS    0H
 L0028    DS    0H
 T0083    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0025
+         MVC   DSPBUF+0(3),S0041
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    6,D0018             subscript
@@ -983,7 +933,7 @@ SP110    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0015(16)   literal
+         ZAP   WK1(16),K0007(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0042
          LH    7,D0018             subscript
@@ -991,7 +941,7 @@ SP110    DS    0H
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0017(16)   literal
+         ZAP   WK1(16),K0009(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0032
 L0042    DS    0H
@@ -1000,7 +950,7 @@ L0042    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0015(16)   literal
+         ZAP   WK1(16),K0007(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0034
          LH    7,D0018             subscript
@@ -1008,7 +958,7 @@ L0042    DS    0H
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0015(16)   literal
+         ZAP   WK1(16),K0007(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BNE   L0043
          LH    7,D0018             subscript
@@ -1016,7 +966,7 @@ L0042    DS    0H
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
          PACK  WK0(16),0(2,7)      zoned -> packed
-         ZAP   WK1(16),K0017(16)   literal
+         ZAP   WK1(16),K0009(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0034
 L0043    DS    0H
@@ -1036,7 +986,7 @@ L0034    DS    0H
 L0031    DS    0H
 T0085    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0026
+         MVC   DSPBUF+0(12),S0042
          LA    1,PARM0019
          L     15,VDISP
          BALR  14,15
@@ -1045,7 +995,7 @@ T0086    DS    0H
 L0032    DS    0H
 T0087    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(8),S0027
+         MVC   DSPBUF+0(8),S0043
          LA    1,PARM0020
          L     15,VDISP
          BALR  14,15
@@ -1154,53 +1104,61 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'010'           numeric constants
-K0002    DC    PL16'020'
-K0003    DC    PL16'035'
-K0004    DC    PL16'040'
+K0001    DC    PL16'1'             numeric constants
+K0002    DC    PL16'040'
+K0003    DC    PL16'030'
+K0004    DC    PL16'2'
 K0005    DC    PL16'050'
-K0006    DC    PL16'060'
-K0007    DC    PL16'1'
-K0008    DC    PL16'030'
-K0009    DC    PL16'0'
-K0010    DC    PL16'2'
-K0011    DC    PL16'090'
-K0012    DC    PL16'070'
-K0013    DC    PL16'01'
-K0014    DC    PL16'05'
-K0015    DC    PL16'02'
-K0016    DC    PL16'09'
-K0017    DC    PL16'03'
-K0018    DC    PL16'04'
+K0006    DC    PL16'090'
+K0007    DC    PL16'02'
+K0008    DC    PL16'09'
+K0009    DC    PL16'03'
+K0010    DC    PL16'01'
 H0001    DC    H'6'                element sizes
 H0002    DC    H'7'
-S0001    DC    CL3'AAA'            nonnumeric constants
-S0002    DC    CL3'BBB'
-S0003    DC    CL3'CCC'
-S0004    DC    CL3'DDD'
-S0005    DC    CL3'EEE'
-S0006    DC    CL3'FFF'
-S0007    DC    CL12'S1 NOT FOUND'
-S0008    DC    CL6'S1 40 '
-S0009    DC    CL7'S1 >30 '
-S0010    DC    CL6'S1 X1='
-S0011    DC    CL3'ZZZ'
-S0012    DC    CL15'S2 NOT FOUND N='
-S0013    DC    CL8'S2 WRONG'
-S0014    DC    CL12'S3 NOT FOUND'
-S0015    DC    CL11'S3 FOUND N='
-S0016    DC    CL12'S4 NOT FOUND'
-S0017    DC    CL3'S4 '
-S0018    DC    CL12'S5 NOT FOUND'
-S0019    DC    CL3'S5 '
-S0020    DC    CL12'S6 NOT FOUND'
-S0021    DC    CL8'S6 WRONG'
-S0022    DC    CL12'S7 NOT FOUND'
-S0023    DC    CL3'S7 '
-S0024    DC    CL12'S8 NOT FOUND'
-S0025    DC    CL3'S8 '
-S0026    DC    CL12'S9 NOT FOUND'
-S0027    DC    CL8'S9 WRONG'
+S0001    DC    CL3'010'            nonnumeric constants
+S0002    DC    CL3'AAA'
+S0003    DC    CL3'020'
+S0004    DC    CL3'BBB'
+S0005    DC    CL3'035'
+S0006    DC    CL3'CCC'
+S0007    DC    CL3'040'
+S0008    DC    CL3'DDD'
+S0009    DC    CL3'050'
+S0010    DC    CL3'EEE'
+S0011    DC    CL3'060'
+S0012    DC    CL3'FFF'
+S0013    DC    CL12'S1 NOT FOUND'
+S0014    DC    CL6'S1 40 '
+S0015    DC    CL7'S1 >30 '
+S0016    DC    CL6'S1 X1='
+S0017    DC    CL2'00'
+S0018    DC    CL3'ZZZ'
+S0019    DC    CL15'S2 NOT FOUND N='
+S0020    DC    CL8'S2 WRONG'
+S0021    DC    CL12'S3 NOT FOUND'
+S0022    DC    CL11'S3 FOUND N='
+S0023    DC    CL3'090'
+S0024    DC    CL3'070'
+S0025    DC    CL3'030'
+S0026    DC    CL12'S4 NOT FOUND'
+S0027    DC    CL3'S4 '
+S0028    DC    CL12'S5 NOT FOUND'
+S0029    DC    CL3'S5 '
+S0030    DC    CL12'S6 NOT FOUND'
+S0031    DC    CL8'S6 WRONG'
+S0032    DC    CL2'01'
+S0033    DC    CL2'05'
+S0034    DC    CL2'02'
+S0035    DC    CL2'09'
+S0036    DC    CL2'03'
+S0037    DC    CL2'04'
+S0038    DC    CL12'S7 NOT FOUND'
+S0039    DC    CL3'S7 '
+S0040    DC    CL12'S8 NOT FOUND'
+S0041    DC    CL3'S8 '
+S0042    DC    CL12'S9 NOT FOUND'
+S0043    DC    CL8'S9 WRONG'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

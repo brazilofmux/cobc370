@@ -95,9 +95,7 @@ T0003    DS    0H
          BALR  14,15
 T0004    DS    0H
 * MOVE 0 -> T
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(4),PWK1(16)   packed -> zoned
-         OI    D0003+3,X'F0'       unsigned: force an F zone
+         MVC   D0003(4),S0009      numeric literal as zoned digits
 T0005    DS    0H
 * INSPECT W
          LA    3,D0000             the field
@@ -126,16 +124,14 @@ L0009    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0006    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0009
+         MVC   DSPBUF+0(10),S0010
          MVC   DSPBUF+10(4),D0003+0
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 T0007    DS    0H
 * MOVE 0 -> T
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(4),PWK1(16)   packed -> zoned
-         OI    D0003+3,X'F0'       unsigned: force an F zone
+         MVC   D0003(4),S0009      numeric literal as zoned digits
 T0008    DS    0H
 * INSPECT W
          LA    3,D0000             the field
@@ -150,7 +146,7 @@ T0008    DS    0H
          DROP  8
 T0009    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0010
+         MVC   DSPBUF+0(10),S0011
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+10(4),D0003+0
@@ -159,9 +155,7 @@ T0009    DS    0H
          BALR  14,15
 T0010    DS    0H
 * MOVE 0 -> T
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(4),PWK1(16)   packed -> zoned
-         OI    D0003+3,X'F0'       unsigned: force an F zone
+         MVC   D0003(4),S0009      numeric literal as zoned digits
 T0011    DS    0H
 * INSPECT W
          LA    3,D0000             the field
@@ -190,7 +184,7 @@ L0012    DS    0H
          OI    D0003+3,X'F0'       unsigned: force an F zone
 T0012    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0011
+         MVC   DSPBUF+0(10),S0012
          MVC   DSPBUF+10(4),D0003+0
          LA    1,PARM0005
          L     15,VDISP
@@ -214,17 +208,17 @@ L0015    DS    0H
          DROP  8
 T0014    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0012
+         MVC   DSPBUF+0(11),S0013
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+11(10),D0001+0
-         MVC   DSPBUF+21(1),S0013
+         MVC   DSPBUF+21(1),S0014
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
 T0015    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0014     literal move, space padded
+         MVC   D0001(10),S0015     literal move, space padded
 T0016    DS    0H
 * INSPECT V
          LA    3,D0001             the field
@@ -244,17 +238,17 @@ L0018    DS    0H
          DROP  8
 T0017    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0015
+         MVC   DSPBUF+0(11),S0016
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+11(10),D0001+0
-         MVC   DSPBUF+21(1),S0013
+         MVC   DSPBUF+21(1),S0014
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 T0018    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0014     literal move, space padded
+         MVC   D0001(10),S0015     literal move, space padded
 T0019    DS    0H
 * INSPECT V
          LA    3,D0001             the field
@@ -275,17 +269,17 @@ L0021    DS    0H
          DROP  8
 T0020    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0016
+         MVC   DSPBUF+0(11),S0017
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+11(10),D0001+0
-         MVC   DSPBUF+21(1),S0013
+         MVC   DSPBUF+21(1),S0014
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
 T0021    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0014     literal move, space padded
+         MVC   D0001(10),S0015     literal move, space padded
 T0022    DS    0H
 * INSPECT V
          LA    3,D0001             the field
@@ -305,11 +299,11 @@ L0024    DS    0H
          DROP  8
 T0023    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0017
+         MVC   DSPBUF+0(11),S0018
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+11(10),D0001+0
-         MVC   DSPBUF+21(1),S0013
+         MVC   DSPBUF+21(1),S0014
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
@@ -330,22 +324,20 @@ L0025    DS    0H
          DROP  8
 T0025    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(11),S0018
+         MVC   DSPBUF+0(11),S0019
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+11(6),D0002+0
-         MVC   DSPBUF+17(1),S0013
+         MVC   DSPBUF+17(1),S0014
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
 T0026    DS    0H
 * MOVE 0 -> T
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(4),PWK1(16)   packed -> zoned
-         OI    D0003+3,X'F0'       unsigned: force an F zone
+         MVC   D0003(4),S0009      numeric literal as zoned digits
 T0027    DS    0H
 * MOVE AABBAACCAA -> V
-         MVC   D0001(10),S0014     literal move, space padded
+         MVC   D0001(10),S0015     literal move, space padded
 T0028    DS    0H
 * INSPECT V
          LA    3,D0001             the field
@@ -389,13 +381,13 @@ L0031    DS    0H
          DROP  8
 T0029    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0019
+         MVC   DSPBUF+0(10),S0020
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+10(4),D0003+0
-         MVC   DSPBUF+14(2),S0020
+         MVC   DSPBUF+14(2),S0021
          MVC   DSPBUF+16(10),D0001+0
-         MVC   DSPBUF+26(1),S0013
+         MVC   DSPBUF+26(1),S0014
          LA    1,PARM0011
          L     15,VDISP
          BALR  14,15
@@ -459,7 +451,6 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'0'             numeric constants
 H0001    DC    H'1'                element sizes
 S0001    DC    CL1'A'              nonnumeric constants
 S0002    DC    CL1'B'
@@ -469,18 +460,19 @@ S0005    DC    CL1'.'
 S0006    DC    CL1'K'
 S0007    DC    CL10'ALL A     '
 S0008    DC    CL10'PLUS ALL B'
-S0009    DC    CL10'LEADING A '
-S0010    DC    CL10'CHARACTERS'
-S0011    DC    CL10'ALL BY ID '
-S0012    DC    CL11'REPL ALL  ['
-S0013    DC    CL1']'
-S0014    DC    CL10'AABBAACCAA'
-S0015    DC    CL11'REPL LEAD ['
-S0016    DC    CL11'REPL FIRST['
-S0017    DC    CL11'REPL BY ID['
-S0018    DC    CL11'REPL CHARS['
-S0019    DC    CL10'BOTH      '
-S0020    DC    CL2' ['
+S0009    DC    CL4'0000'
+S0010    DC    CL10'LEADING A '
+S0011    DC    CL10'CHARACTERS'
+S0012    DC    CL10'ALL BY ID '
+S0013    DC    CL11'REPL ALL  ['
+S0014    DC    CL1']'
+S0015    DC    CL10'AABBAACCAA'
+S0016    DC    CL11'REPL LEAD ['
+S0017    DC    CL11'REPL FIRST['
+S0018    DC    CL11'REPL BY ID['
+S0019    DC    CL11'REPL CHARS['
+S0020    DC    CL10'BOTH      '
+S0021    DC    CL2' ['
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

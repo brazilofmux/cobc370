@@ -165,11 +165,9 @@ T0015    DS    0H
 L0008    DS    0H
 T0016    DS    0H
 * MOVE 7 -> A
-         ZAP   PWK1(16),K0008(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0000(3),PWK1(16)   packed -> zoned
-         OI    D0000+2,X'F0'       unsigned: force an F zone
+         MVC   D0000(3),S0009      numeric literal as zoned digits
 T0017    DS    0H
 * IF
          PACK  WK0(16),D0000(3)    zoned -> packed
@@ -181,7 +179,7 @@ T0017    DS    0H
 L0037    DS    0H
 T0018    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0009
+         MVC   DSPBUF+0(9),S0010
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
@@ -191,16 +189,16 @@ T0019    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0002(3),S0010      alphanumeric compare
-         BE    L0038
          CLC   D0002(3),S0011      alphanumeric compare
          BE    L0038
          CLC   D0002(3),S0012      alphanumeric compare
+         BE    L0038
+         CLC   D0002(3),S0013      alphanumeric compare
          BNE   L0010
 L0038    DS    0H
 T0020    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0013
+         MVC   DSPBUF+0(9),S0014
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
@@ -226,7 +224,7 @@ L0040    DS    0H
 L0039    DS    0H
 T0022    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0014
+         MVC   DSPBUF+0(9),S0015
          LA    1,PARM0011
          L     15,VDISP
          BALR  14,15
@@ -245,7 +243,7 @@ L0041    DS    0H
          BNE   L0012
 T0024    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0015
+         MVC   DSPBUF+0(9),S0016
          LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
@@ -264,7 +262,7 @@ L0042    DS    0H
          BNE   L0013
 T0026    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0016
+         MVC   DSPBUF+0(9),S0017
          LA    1,PARM0013
          L     15,VDISP
          BALR  14,15
@@ -283,7 +281,7 @@ L0043    DS    0H
          BE    L0014
 T0028    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0017
+         MVC   DSPBUF+0(9),S0018
          LA    1,PARM0014
          L     15,VDISP
          BALR  14,15
@@ -302,7 +300,7 @@ L0044    DS    0H
          BNL   L0015
 T0030    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0018
+         MVC   DSPBUF+0(9),S0019
          LA    1,PARM0015
          L     15,VDISP
          BALR  14,15
@@ -321,7 +319,7 @@ L0045    DS    0H
          BNH   L0016
 T0032    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0019
+         MVC   DSPBUF+0(9),S0020
          LA    1,PARM0016
          L     15,VDISP
          BALR  14,15
@@ -331,14 +329,14 @@ T0033    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0002(3),S0020      the item's width
+         CLC   D0002(3),S0021      the item's width
          BNE   L0046
-         CLC   SPCS(4),S0020+3     spaces against the literal's tail
+         CLC   SPCS(4),S0021+3     spaces against the literal's tail
 L0046    DS    0H
          BNE   L0017
 T0034    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0021
+         MVC   DSPBUF+0(9),S0022
          LA    1,PARM0017
          L     15,VDISP
          BALR  14,15
@@ -348,14 +346,14 @@ T0035    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0002(3),S0022      the item's width
+         CLC   D0002(3),S0023      the item's width
          BNE   L0047
-         CLC   SPCS(4),S0022+3     spaces against the literal's tail
+         CLC   SPCS(4),S0023+3     spaces against the literal's tail
 L0047    DS    0H
          BNE   L0018
 T0036    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0023
+         MVC   DSPBUF+0(12),S0024
          LA    1,PARM0018
          L     15,VDISP
          BALR  14,15
@@ -365,7 +363,7 @@ T0037    DS    0H
 L0018    DS    0H
 T0038    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0024
+         MVC   DSPBUF+0(9),S0025
          LA    1,PARM0019
          L     15,VDISP
          BALR  14,15
@@ -377,7 +375,7 @@ T0039    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          LA    6,D0006(6)          element address
-         MVC   0(5,6),S0025        literal move, space padded
+         MVC   0(5,6),S0026        literal move, space padded
 T0040    DS    0H
 * IF
          LA    6,1                 subscript-1
@@ -392,7 +390,7 @@ L0048    DS    0H
          BNE   L0020
 T0041    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0026
+         MVC   DSPBUF+0(9),S0027
          LA    1,PARM0020
          L     15,VDISP
          BALR  14,15
@@ -414,7 +412,7 @@ L0049    DS    0H
          BNE   L0021
 T0043    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0027
+         MVC   DSPBUF+0(9),S0028
          LA    1,PARM0021
          L     15,VDISP
          BALR  14,15
@@ -422,11 +420,9 @@ T0043    DS    0H
 L0021    DS    0H
 T0044    DS    0H
 * MOVE 0 -> G
-         ZAP   PWK1(16),K0010(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0007(2),PWK1(16)   packed -> zoned
-         OI    D0007+1,X'F0'       unsigned: force an F zone
+         MVC   D0007(2),S0029      numeric literal as zoned digits
 T0045    DS    0H
 * IF
          PACK  WK0(16),D0007(2)    zoned -> packed
@@ -439,7 +435,7 @@ T0045    DS    0H
          BH    L0022
 T0046    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0028
+         MVC   DSPBUF+0(10),S0030
          LA    1,PARM0022
          L     15,VDISP
          BALR  14,15
@@ -449,18 +445,16 @@ T0047    DS    0H
 L0022    DS    0H
 T0048    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0029
+         MVC   DSPBUF+0(7),S0031
          LA    1,PARM0023
          L     15,VDISP
          BALR  14,15
 L0023    DS    0H
 T0049    DS    0H
 * MOVE 9 -> G
-         ZAP   PWK1(16),K0003(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0007(2),PWK1(16)   packed -> zoned
-         OI    D0007+1,X'F0'       unsigned: force an F zone
+         MVC   D0007(2),S0032      numeric literal as zoned digits
 T0050    DS    0H
 * IF
          PACK  WK0(16),D0007(2)    zoned -> packed
@@ -473,7 +467,7 @@ T0050    DS    0H
          BH    L0024
 T0051    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0030
+         MVC   DSPBUF+0(7),S0033
          LA    1,PARM0024
          L     15,VDISP
          BALR  14,15
@@ -496,11 +490,11 @@ T0052    DS    0H
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0052
          PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
+         ZAP   WK1(16),K0010(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0025
          PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0012(16)   literal
+         ZAP   WK1(16),K0011(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0025
 L0052    DS    0H
@@ -508,7 +502,7 @@ L0051    DS    0H
 L0050    DS    0H
 T0053    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0031
+         MVC   DSPBUF+0(10),S0034
          LA    1,PARM0025
          L     15,VDISP
          BALR  14,15
@@ -518,18 +512,16 @@ T0054    DS    0H
 L0025    DS    0H
 T0055    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0032
+         MVC   DSPBUF+0(7),S0035
          LA    1,PARM0026
          L     15,VDISP
          BALR  14,15
 L0026    DS    0H
 T0056    DS    0H
 * MOVE 7 -> G
-         ZAP   PWK1(16),K0008(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0007(2),PWK1(16)   packed -> zoned
-         OI    D0007+1,X'F0'       unsigned: force an F zone
+         MVC   D0007(2),S0036      numeric literal as zoned digits
 T0057    DS    0H
 * IF
          PACK  WK0(16),D0007(2)    zoned -> packed
@@ -545,11 +537,11 @@ T0057    DS    0H
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0055
          PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
+         ZAP   WK1(16),K0010(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0027
          PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0012(16)   literal
+         ZAP   WK1(16),K0011(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0027
 L0055    DS    0H
@@ -557,7 +549,7 @@ L0054    DS    0H
 L0053    DS    0H
 T0058    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0033
+         MVC   DSPBUF+0(7),S0037
          LA    1,PARM0027
          L     15,VDISP
          BALR  14,15
@@ -565,11 +557,9 @@ T0058    DS    0H
 L0027    DS    0H
 T0059    DS    0H
 * MOVE 25 -> G
-         ZAP   PWK1(16),K0013(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0007(2),PWK1(16)   packed -> zoned
-         OI    D0007+1,X'F0'       unsigned: force an F zone
+         MVC   D0007(2),S0038      numeric literal as zoned digits
 T0060    DS    0H
 * IF
          PACK  WK0(16),D0007(2)    zoned -> packed
@@ -585,11 +575,11 @@ T0060    DS    0H
          CP    WK0(16),WK1(16)     numeric compare
          BE    L0058
          PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0011(16)   literal
+         ZAP   WK1(16),K0010(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BL    L0028
          PACK  WK0(16),D0007(2)    zoned -> packed
-         ZAP   WK1(16),K0012(16)   literal
+         ZAP   WK1(16),K0011(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0028
 L0058    DS    0H
@@ -597,7 +587,7 @@ L0057    DS    0H
 L0056    DS    0H
 T0061    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0034
+         MVC   DSPBUF+0(7),S0039
          LA    1,PARM0028
          L     15,VDISP
          BALR  14,15
@@ -618,7 +608,7 @@ T0062    DS    0H
 L0059    DS    0H
 T0063    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0035
+         MVC   DSPBUF+0(7),S0040
          LA    1,PARM0029
          L     15,VDISP
          BALR  14,15
@@ -628,13 +618,13 @@ T0064    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0013(1),S0036      alphanumeric compare
+         CLC   D0013(1),S0041      alphanumeric compare
          BL    L0030
-         CLC   D0013(1),S0037      alphanumeric compare
+         CLC   D0013(1),S0042      alphanumeric compare
          BH    L0030
 T0065    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0038
+         MVC   DSPBUF+0(7),S0043
          LA    1,PARM0030
          L     15,VDISP
          BALR  14,15
@@ -644,15 +634,15 @@ T0066    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0013(1),S0036      alphanumeric compare
-         BE    L0060
-         CLC   D0013(1),S0039      alphanumeric compare
-         BE    L0061
-         CLC   D0013(1),S0040      alphanumeric compare
-         BE    L0062
          CLC   D0013(1),S0041      alphanumeric compare
+         BE    L0060
+         CLC   D0013(1),S0044      alphanumeric compare
+         BE    L0061
+         CLC   D0013(1),S0045      alphanumeric compare
+         BE    L0062
+         CLC   D0013(1),S0046      alphanumeric compare
          BE    L0063
-         CLC   D0013(1),S0042      alphanumeric compare
+         CLC   D0013(1),S0047      alphanumeric compare
          BNE   L0031
 L0063    DS    0H
 L0062    DS    0H
@@ -660,7 +650,7 @@ L0061    DS    0H
 L0060    DS    0H
 T0067    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0043
+         MVC   DSPBUF+0(10),S0048
          LA    1,PARM0031
          L     15,VDISP
          BALR  14,15
@@ -670,7 +660,7 @@ T0068    DS    0H
 L0031    DS    0H
 T0069    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0044
+         MVC   DSPBUF+0(7),S0049
          LA    1,PARM0032
          L     15,VDISP
          BALR  14,15
@@ -679,18 +669,18 @@ T0070    DS    0H
 * MOVE O -> C
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0013(1),S0041      literal move, space padded
+         MVC   D0013(1),S0046      literal move, space padded
 T0071    DS    0H
 * IF
-         CLC   D0013(1),S0036      alphanumeric compare
-         BE    L0064
-         CLC   D0013(1),S0039      alphanumeric compare
-         BE    L0065
-         CLC   D0013(1),S0040      alphanumeric compare
-         BE    L0066
          CLC   D0013(1),S0041      alphanumeric compare
+         BE    L0064
+         CLC   D0013(1),S0044      alphanumeric compare
+         BE    L0065
+         CLC   D0013(1),S0045      alphanumeric compare
+         BE    L0066
+         CLC   D0013(1),S0046      alphanumeric compare
          BE    L0067
-         CLC   D0013(1),S0042      alphanumeric compare
+         CLC   D0013(1),S0047      alphanumeric compare
          BNE   L0033
 L0067    DS    0H
 L0066    DS    0H
@@ -698,7 +688,7 @@ L0065    DS    0H
 L0064    DS    0H
 T0072    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0045
+         MVC   DSPBUF+0(7),S0050
          LA    1,PARM0033
          L     15,VDISP
          BALR  14,15
@@ -839,10 +829,8 @@ K0006    DC    PL16'100'
 K0007    DC    PL16'4'
 K0008    DC    PL16'7'
 K0009    DC    PL16'8'
-K0010    DC    PL16'0'
-K0011    DC    PL16'20'
-K0012    DC    PL16'29'
-K0013    DC    PL16'25'
+K0010    DC    PL16'20'
+K0011    DC    PL16'29'
 H0001    DC    H'5'                element sizes
 S0001    DC    CL9'ABBR 1 OK'      nonnumeric constants
 S0002    DC    CL12'ABBR 2 WRONG'
@@ -852,43 +840,48 @@ S0005    DC    CL12'ABBR 4 WRONG'
 S0006    DC    CL9'ABBR 4 OK'
 S0007    DC    CL12'ABBR 5 WRONG'
 S0008    DC    CL9'ABBR 5 OK'
-S0009    DC    CL9'ABBR 6 OK'
-S0010    DC    CL3'A  '
-S0011    DC    CL3'AB '
-S0012    DC    CL3'ABC'
-S0013    DC    CL9'ABBR 7 OK'
-S0014    DC    CL9'ABBR 8 OK'
-S0015    DC    CL9'UNEQ 1 OK'
-S0016    DC    CL9'UNEQ 2 OK'
-S0017    DC    CL9'UNEQ 3 OK'
-S0018    DC    CL9'UNEQ 4 OK'
-S0019    DC    CL9'UNEQ 5 OK'
-S0020    DC    CL7'AB     '
-S0021    DC    CL9'UNEQ 6 OK'
-S0022    DC    CL7'AB    X'
-S0023    DC    CL12'UNEQ 7 WRONG'
-S0024    DC    CL9'UNEQ 7 OK'
-S0025    DC    CL5'AB   '
-S0026    DC    CL9'UNEQ 8 OK'
-S0027    DC    CL9'UNEQ 9 OK'
-S0028    DC    CL10'88 1 WRONG'
-S0029    DC    CL7'88 1 OK'
-S0030    DC    CL7'88 2 OK'
-S0031    DC    CL10'88 3 WRONG'
-S0032    DC    CL7'88 3 OK'
-S0033    DC    CL7'88 4 OK'
-S0034    DC    CL7'88 5 OK'
-S0035    DC    CL7'88 6 OK'
-S0036    DC    CL1'A'
-S0037    DC    CL1'Z'
-S0038    DC    CL7'88 7 OK'
-S0039    DC    CL1'E'
-S0040    DC    CL1'I'
-S0041    DC    CL1'O'
-S0042    DC    CL1'U'
-S0043    DC    CL10'88 8 WRONG'
-S0044    DC    CL7'88 8 OK'
-S0045    DC    CL7'88 9 OK'
+S0009    DC    CL3'007'
+S0010    DC    CL9'ABBR 6 OK'
+S0011    DC    CL3'A  '
+S0012    DC    CL3'AB '
+S0013    DC    CL3'ABC'
+S0014    DC    CL9'ABBR 7 OK'
+S0015    DC    CL9'ABBR 8 OK'
+S0016    DC    CL9'UNEQ 1 OK'
+S0017    DC    CL9'UNEQ 2 OK'
+S0018    DC    CL9'UNEQ 3 OK'
+S0019    DC    CL9'UNEQ 4 OK'
+S0020    DC    CL9'UNEQ 5 OK'
+S0021    DC    CL7'AB     '
+S0022    DC    CL9'UNEQ 6 OK'
+S0023    DC    CL7'AB    X'
+S0024    DC    CL12'UNEQ 7 WRONG'
+S0025    DC    CL9'UNEQ 7 OK'
+S0026    DC    CL5'AB   '
+S0027    DC    CL9'UNEQ 8 OK'
+S0028    DC    CL9'UNEQ 9 OK'
+S0029    DC    CL2'00'
+S0030    DC    CL10'88 1 WRONG'
+S0031    DC    CL7'88 1 OK'
+S0032    DC    CL2'09'
+S0033    DC    CL7'88 2 OK'
+S0034    DC    CL10'88 3 WRONG'
+S0035    DC    CL7'88 3 OK'
+S0036    DC    CL2'07'
+S0037    DC    CL7'88 4 OK'
+S0038    DC    CL2'25'
+S0039    DC    CL7'88 5 OK'
+S0040    DC    CL7'88 6 OK'
+S0041    DC    CL1'A'
+S0042    DC    CL1'Z'
+S0043    DC    CL7'88 7 OK'
+S0044    DC    CL1'E'
+S0045    DC    CL1'I'
+S0046    DC    CL1'O'
+S0047    DC    CL1'U'
+S0048    DC    CL10'88 8 WRONG'
+S0049    DC    CL7'88 8 OK'
+S0050    DC    CL7'88 9 OK'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

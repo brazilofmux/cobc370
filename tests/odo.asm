@@ -61,9 +61,7 @@ T0004    DS    0H
          MVC   0(3,6),S0005        literal move, space padded
 T0005    DS    0H
 * MOVE 2 -> N
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0000(2),PWK1(16)   packed -> zoned
-         OI    D0000+1,X'F0'       unsigned: force an F zone
+         MVC   D0000(2),S0006      numeric literal as zoned digits
 T0006    DS    0H
 * MOVE REC -> OUT-AREA
          LA    2,19                receiver length
@@ -84,23 +82,21 @@ T0006    DS    0H
          DROP  8
 T0007    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0006
+         MVC   DSPBUF+0(1),S0007
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+1(19),D0004+0
-         MVC   DSPBUF+20(1),S0007
+         MVC   DSPBUF+20(1),S0008
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 T0008    DS    0H
 * MOVE 5 -> N
-         ZAP   PWK1(16),K0002(16)  literal
-         UNPK  D0000(2),PWK1(16)   packed -> zoned
-         OI    D0000+1,X'F0'       unsigned: force an F zone
+         MVC   D0000(2),S0009      numeric literal as zoned digits
 T0009    DS    0H
 * MOVE ALL literal -> OUT-AREA
          LA    1,D0004             ALL literal
-         MVC   0(1,1),S0008        the unit
+         MVC   0(1,1),S0010        the unit
          MVC   1(18,1),0(1)        propagate across the item
 T0010    DS    0H
 * MOVE REC -> OUT-AREA
@@ -122,23 +118,21 @@ T0010    DS    0H
          DROP  8
 T0011    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0006
+         MVC   DSPBUF+0(1),S0007
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+1(19),D0004+0
-         MVC   DSPBUF+20(1),S0007
+         MVC   DSPBUF+20(1),S0008
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
 T0012    DS    0H
 * MOVE 3 -> N
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0000(2),PWK1(16)   packed -> zoned
-         OI    D0000+1,X'F0'       unsigned: force an F zone
+         MVC   D0000(2),S0011      numeric literal as zoned digits
 T0013    DS    0H
 * MOVE ALL literal -> BACK
          LA    1,D0005             ALL literal
-         MVC   0(1,1),S0009        the unit
+         MVC   0(1,1),S0012        the unit
          MVC   1(18,1),0(1)        propagate across the item
 T0014    DS    0H
 * MOVE LONG-SRC -> BACK
@@ -160,11 +154,9 @@ T0014    DS    0H
          DROP  8
 T0015    DS    0H
 * MOVE 5 -> N
-         ZAP   PWK1(16),K0002(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0000(2),PWK1(16)   packed -> zoned
-         OI    D0000+1,X'F0'       unsigned: force an F zone
+         MVC   D0000(2),S0009      numeric literal as zoned digits
 T0016    DS    0H
 * MOVE BACK -> OUT-AREA
          LA    2,19                receiver length
@@ -185,23 +177,21 @@ T0016    DS    0H
          DROP  8
 T0017    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0006
+         MVC   DSPBUF+0(1),S0007
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+1(19),D0004+0
-         MVC   DSPBUF+20(1),S0007
+         MVC   DSPBUF+20(1),S0008
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 T0018    DS    0H
 * MOVE 1 -> N
-         ZAP   PWK1(16),K0004(16)  literal
-         UNPK  D0000(2),PWK1(16)   packed -> zoned
-         OI    D0000+1,X'F0'       unsigned: force an F zone
+         MVC   D0000(2),S0013      numeric literal as zoned digits
 T0019    DS    0H
 * MOVE ALL literal -> OUT-AREA
          LA    1,D0004             ALL literal
-         MVC   0(1,1),S0010        the unit
+         MVC   0(1,1),S0014        the unit
          MVC   1(18,1),0(1)        propagate across the item
 T0020    DS    0H
 * MOVE REC -> OUT-AREA
@@ -223,11 +213,11 @@ T0020    DS    0H
          DROP  8
 T0021    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0006
+         MVC   DSPBUF+0(1),S0007
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+1(19),D0004+0
-         MVC   DSPBUF+20(1),S0007
+         MVC   DSPBUF+20(1),S0008
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -272,21 +262,21 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'2'             numeric constants
-K0002    DC    PL16'5'
-K0003    DC    PL16'3'
-K0004    DC    PL16'1'
 H0001    DC    H'3'                element sizes
 S0001    DC    CL3'AAA'            nonnumeric constants
 S0002    DC    CL3'BBB'
 S0003    DC    CL3'CCC'
 S0004    DC    CL3'DDD'
 S0005    DC    CL3'EEE'
-S0006    DC    CL1'['
-S0007    DC    CL1']'
-S0008    DC    CL1'.'
-S0009    DC    CL1'*'
-S0010    DC    CL1'-'
+S0006    DC    CL2'02'
+S0007    DC    CL1'['
+S0008    DC    CL1']'
+S0009    DC    CL2'05'
+S0010    DC    CL1'.'
+S0011    DC    CL2'03'
+S0012    DC    CL1'*'
+S0013    DC    CL2'01'
+S0014    DC    CL1'-'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

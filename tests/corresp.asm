@@ -36,44 +36,39 @@ T0000    DS    0H
          MVC   D0014+7(1),D0014+6
 T0001    DS    0H
 * MOVE AGE -> AGE
-         PACK  PWK1(16),D0003(2)   zoned -> packed
-         UNPK  D0016(3),PWK1(16)   packed -> zoned
-         OI    D0016+2,X'F0'       unsigned: force an F zone
+         MVC   D0016(1),S0001      leading zeros
+         MVC   D0016+1(2),D0003    then the digits
 T0002    DS    0H
 * MOVE CITY -> CITY
          MVC   D0019(5),D0005      alphanumeric move
 T0003    DS    0H
 * MOVE ZIP -> ZIP
-         PACK  PWK1(16),D0006(5)   zoned -> packed
-         UNPK  D0018(5),PWK1(16)   packed -> zoned
-         OI    D0018+4,X'F0'       unsigned: force an F zone
+         MVC   D0018(5),D0006      zoned to zoned, same picture
 T0004    DS    0H
 * MOVE AMT -> AMT
-         PACK  PWK1(16),D0008(5)   zoned -> packed
-         UNPK  D0021(5),PWK1(16)   packed -> zoned
-         OI    D0021+4,X'F0'       unsigned: force an F zone
+         MVC   D0021(5),D0008      zoned to zoned, same picture
 T0005    DS    0H
 * MOVE KIND -> KIND
          MVC   D0025(1),D0012      alphanumeric move
 T0006    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0001
+         MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(8),D0014+0
-         MVC   DSPBUF+9(2),S0002
+         MVC   DSPBUF+9(2),S0003
          MVC   DSPBUF+11(3),D0016+0
-         MVC   DSPBUF+14(1),S0003
+         MVC   DSPBUF+14(1),S0004
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 T0007    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0001
+         MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(5),D0019+0
-         MVC   DSPBUF+6(2),S0002
+         MVC   DSPBUF+6(2),S0003
          MVC   DSPBUF+8(5),D0018+0
-         MVC   DSPBUF+13(2),S0002
+         MVC   DSPBUF+13(2),S0003
          MVC   DSPBUF+15(3),D0020+0
-         MVC   DSPBUF+18(1),S0003
+         MVC   DSPBUF+18(1),S0004
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
@@ -93,21 +88,21 @@ T0009    DS    0H
          OI    D0029+0,X'F0'       unsigned: force an F zone
 T0010    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0001
+         MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(6),D0027+0
-         MVC   DSPBUF+7(2),S0002
+         MVC   DSPBUF+7(2),S0003
          MVC   DSPBUF+9(3),D0022+0
-         MVC   DSPBUF+12(1),S0003
+         MVC   DSPBUF+12(1),S0004
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 T0011    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0001
+         MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(1),D0029+0
-         MVC   DSPBUF+2(2),S0002
+         MVC   DSPBUF+2(2),S0003
          MVC   DSPBUF+4(1),D0025+0
-         MVC   DSPBUF+5(1),S0003
+         MVC   DSPBUF+5(1),S0004
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
@@ -151,13 +146,13 @@ T0016    DS    0H
          MVC   D0028(3),EDWK+1     the edited result
 T0017    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(5),S0004
+         MVC   DSPBUF+0(5),S0005
          MVC   DSPBUF+5(6),D0027+0
-         MVC   DSPBUF+11(2),S0002
+         MVC   DSPBUF+11(2),S0003
          MVC   DSPBUF+13(3),D0028+0
-         MVC   DSPBUF+16(2),S0002
+         MVC   DSPBUF+16(2),S0003
          MVC   DSPBUF+18(5),D0018+0
-         MVC   DSPBUF+23(1),S0003
+         MVC   DSPBUF+23(1),S0004
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
@@ -201,21 +196,19 @@ T0022    DS    0H
          MVC   D0028(3),EDWK+1     the edited result
 T0023    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(5),S0005
+         MVC   DSPBUF+0(5),S0006
          MVC   DSPBUF+5(6),D0027+0
-         MVC   DSPBUF+11(2),S0002
+         MVC   DSPBUF+11(2),S0003
          MVC   DSPBUF+13(3),D0028+0
-         MVC   DSPBUF+16(2),S0002
+         MVC   DSPBUF+16(2),S0003
          MVC   DSPBUF+18(5),D0018+0
-         MVC   DSPBUF+23(1),S0003
+         MVC   DSPBUF+23(1),S0004
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
 T0024    DS    0H
 * MOVE 99 -> AGE
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(2),PWK1(16)   packed -> zoned
-         OI    D0003+1,X'F0'       unsigned: force an F zone
+         MVC   D0003(2),S0007      numeric literal as zoned digits
 T0025    DS    0H
 * COMPUTE AGE ROUNDED = ... (ON SIZE ERROR)
          MVI   SZFLG,X'00'         no size error yet
@@ -225,7 +218,7 @@ T0025    DS    0H
          ZAP   PWK1(16),WK0(16)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0002(16)   against 10 ** digits
+         CP    WK1(16),K0001(16)   against 10 ** digits
          BL    L0002               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0003
@@ -247,7 +240,7 @@ T0026    DS    0H
          ZAP   PWK1(16),WK0(16)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0003(16)   against 10 ** digits
+         CP    WK1(16),K0002(16)   against 10 ** digits
          BL    L0004               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0005
@@ -269,7 +262,7 @@ T0027    DS    0H
          ZAP   PWK1(16),WK0(16)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0003(16)   against 10 ** digits
+         CP    WK1(16),K0002(16)   against 10 ** digits
          BL    L0006               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0007
@@ -285,7 +278,7 @@ L0007    DS    0H
          BE    L0001               none: past the imperative statements
 T0028    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0006
+         MVC   DSPBUF+0(4),S0008
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
@@ -301,9 +294,9 @@ T0029    DS    0H
          MVC   D0028(3),EDWK+1     the edited result
 T0030    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0007
+         MVC   DSPBUF+0(7),S0009
          MVC   DSPBUF+7(3),D0028+0
-         MVC   DSPBUF+10(1),S0003
+         MVC   DSPBUF+10(1),S0004
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
@@ -358,18 +351,19 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'99'            numeric constants
-K0002    DC    PL16'1000'
-K0003    DC    PL16'100000'
+K0001    DC    PL16'1000'          numeric constants
+K0002    DC    PL16'100000'
 M0001    DC    XL7'402021204B2020'  ED patterns
 M0002    DC    XL4'40202120'
-S0001    DC    CL1'['              nonnumeric constants
-S0002    DC    CL2']['
-S0003    DC    CL1']'
-S0004    DC    CL5'ADD ['
-S0005    DC    CL5'SUB ['
-S0006    DC    CL4'SIZE'
-S0007    DC    CL7'AFTER ['
+S0001    DC    CL1'0'              nonnumeric constants
+S0002    DC    CL1'['
+S0003    DC    CL2']['
+S0004    DC    CL1']'
+S0005    DC    CL5'ADD ['
+S0006    DC    CL5'SUB ['
+S0007    DC    CL2'99'
+S0008    DC    CL4'SIZE'
+S0009    DC    CL7'AFTER ['
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

@@ -7062,6 +7062,41 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
     if (sv->is_alpha || sv->is_group)
         die("MOVE of an alphanumeric item to a numeric one is legal but not "
             "implemented yet -- the characters would have to be packed");
+    if (sv->usage == U_DISPLAY && d->usage == U_DISPLAY && sv->scale == d->scale
+        && !d->edited && !sv->edited && !d->is_signed && !sv->is_signed
+        && !d->sgn_lead && !d->sgn_sep && !sv->sgn_lead && !sv->sgn_sep
+        && d->bytes == d->digits && sv->bytes == sv->digits
+        && !var_len(d) && !var_len(sv) && d->digits <= 18 && sv->digits <= 18) {
+        /* Two unsigned zoned items at one scale: the digits are bytes, and a
+         * numeric move at one scale is a copy aligned on the right -- leading
+         * zeros into a wider receiver, the left end lost into a narrower one.
+         * One or two MVCs where PACK, UNPK and OI were. */
+        char bb[128], fd[64], fs[64];
+        int dn = d->digits, sn = sv->digits;
+        need_sym_base(d); need_sym_base(sv);
+        if (dn == sn) {
+            field_ref_m(sv, ssub, FR_SS_NOLEN, sn, 7, fs, sizeof fs);
+            field_ref(d, dsub, dn, 6, fd, sizeof fd);
+            snprintf(bb, sizeof bb, "%s,%s", fd, fs);
+            asm_line("", "MVC", bb, "zoned to zoned, same picture");
+        } else if (dn > sn) {
+            char z[24]; memset(z, '0', (size_t)(dn - sn)); z[dn - sn] = 0;
+            field_ref(d, dsub, dn - sn, 6, fd, sizeof fd);
+            snprintf(bb, sizeof bb, "%s,%s", fd, intern_str(z, dn - sn, dn - sn));
+            asm_line("", "MVC", bb, "leading zeros");
+            field_ref_m(sv, ssub, FR_SS_NOLEN, sn, 7, fs, sizeof fs);
+            if (dsub) snprintf(bb, sizeof bb, "%d(%d,6),%s", dn - sn, sn, fs);
+            else snprintf(bb, sizeof bb, "%s+%d(%d),%s", d->label, dn - sn, sn, fs);
+            asm_line("", "MVC", bb, "then the digits");
+        } else {
+            field_ref_m(sv, ssub, FR_SS_NOLEN, sn, 7, fs, sizeof fs);
+            field_ref(d, dsub, dn, 6, fd, sizeof fd);
+            if (ssub) snprintf(bb, sizeof bb, "%s,%d(7)", fd, sn - dn);
+            else snprintf(bb, sizeof bb, "%s,%s+%d", fd, sv->label, sn - dn);
+            asm_line("", "MVC", bb, "the low-order digits: truncated on the left");
+        }
+        return;
+    }
     if (sv->usage == U_COMP && d->usage == U_COMP && sv->scale == d->scale
         && !d->edited) {
         /* Binary to binary at the same scale is a copy. The general path spends
@@ -8839,7 +8874,20 @@ static void generate(void)
                     emit_move(d, st->dsub, sv, st->ssub);
                     break;
                 }
-                if (st->imm) {
+                int alldig = st->imm;
+                for (const char *q = st->immdigits; alldig && *q; q++) if (!isdigit((unsigned char)*q)) alldig = 0;
+                if (st->imm && alldig && d->usage == U_DISPLAY && !d->edited && !d->is_signed
+                    && !d->sgn_lead && !d->sgn_sep && d->bytes == d->digits && !var_len(d)
+                    && d->digits <= 18 && (int)strlen(st->immdigits) <= 34) {
+                    /* The literal is already scaled to the receiver: as a
+                     * zoned constant of the receiver's width it is one MVC. */
+                    char z[40], fd[64];
+                    zero_pad(st->immdigits, d->digits, z, sizeof z);
+                    need_sym_base(d);
+                    field_ref(d, st->dsub, d->digits, 6, fd, sizeof fd);
+                    snprintf(b, sizeof b, "%s,%s", fd, intern_str(z, d->digits, d->digits));
+                    asm_line("", "MVC", b, "numeric literal as zoned digits");
+                } else if (st->imm) {
                     gen_load_imm(intern_const(st->immdigits), "PWK1");
                     gen_store(d, st->dsub, "PWK1");
                 } else {

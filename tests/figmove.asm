@@ -90,9 +90,7 @@ T0007    DS    0H
          MVC   1(5,1),0(1)         propagate across the item
 T0008    DS    0H
 * MOVE 0 -> WS-NUM
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0003(5),PWK1(16)   packed -> zoned
-         OI    D0003+4,X'F0'       unsigned: force an F zone
+         MVC   D0003(5),S0006      numeric literal as zoned digits
 T0009    DS    0H
 * MOVE 0 -> WS-PK
          ZAP   PWK1(16),K0001(16)  literal
@@ -123,7 +121,7 @@ T0013    DS    0H
          OI    D0007+3,X'F0'       unsigned: force an F zone
 T0014    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(8),S0006
+         MVC   DSPBUF+0(8),S0007
          MVC   DSPBUF+8(20),D0000+0
          MVC   DSPBUF+28(2),S0002
          MVC   DSPBUF+30(1),D0001+0
@@ -135,7 +133,7 @@ T0014    DS    0H
          BALR  14,15
 T0015    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0007
+         MVC   DSPBUF+0(7),S0008
          MVC   DSPBUF+7(5),D0003+0
          MVC   DSPBUF+12(1),S0005
          MVC   DSPBUF+13(5),D0006+0
@@ -146,7 +144,7 @@ T0015    DS    0H
          BALR  14,15
 T0016    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(8),S0006
+         MVC   DSPBUF+0(8),S0007
          MVC   DSPBUF+8(3),D0009+0
          MVC   DSPBUF+11(2),S0002
          MVC   DSPBUF+13(3),D0010+0
@@ -156,11 +154,11 @@ T0016    DS    0H
          BALR  14,15
 T0017    DS    0H
 * IF
-         CLC   D0000(20),S0008     alphanumeric compare
+         CLC   D0000(20),S0009     alphanumeric compare
          BNE   L0001
 T0018    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(14),S0009
+         MVC   DSPBUF+0(14),S0010
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
@@ -170,7 +168,7 @@ T0019    DS    0H
 L0001    DS    0H
 T0020    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(18),S0010
+         MVC   DSPBUF+0(18),S0011
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
@@ -184,11 +182,11 @@ T0021    DS    0H
          MVC   1(3,1),0(1)         propagate across the item
 T0022    DS    0H
 * IF
-         CLC   D0011(4),S0011      alphanumeric compare
+         CLC   D0011(4),S0012      alphanumeric compare
          BNE   L0003
 T0023    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0012
+         MVC   DSPBUF+0(12),S0013
          LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
@@ -253,13 +251,14 @@ S0002    DC    CL2']['
 S0003    DC    CL1']'
 S0004    DC    CL7'BEFORE '
 S0005    DC    CL1' '
-S0006    DC    CL8'AFTER  ['
-S0007    DC    CL7'AFTER  '
-S0008    DC    CL20'                    '
-S0009    DC    CL14'NAME IS SPACES'
-S0010    DC    CL18'NAME IS NOT SPACES'
-S0011    DC    CL4'    '
-S0012    DC    CL12'FLAG CLEARED'
+S0006    DC    CL5'00000'
+S0007    DC    CL8'AFTER  ['
+S0008    DC    CL7'AFTER  '
+S0009    DC    CL20'                    '
+S0010    DC    CL14'NAME IS SPACES'
+S0011    DC    CL18'NAME IS NOT SPACES'
+S0012    DC    CL4'    '
+S0013    DC    CL12'FLAG CLEARED'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

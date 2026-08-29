@@ -103,9 +103,7 @@ T0001    DS    0H
          BALR  14,15
 T0002    DS    0H
 * MOVE 0 -> N
-         ZAP   PWK1(16),K0004(16)  literal
-         UNPK  D0003(2),PWK1(16)   packed -> zoned
-         OI    D0003+1,X'F0'       unsigned: force an F zone
+         MVC   D0003(2),S0006      numeric literal as zoned digits
 T0003    DS    0H
 * PERFORM COUNT-IT
          ZAP   WK0(16),K0001(16)   literal
@@ -116,7 +114,7 @@ T0003    DS    0H
          ZAP   PWK1(16),WK0(16)
          UNPK  D0001(2),PWK1(16)   packed -> zoned
          OI    D0001+1,X'F0'       unsigned: force an F zone
-         ZAP   WK0(16),K0005(16)   literal
+         ZAP   WK0(16),K0004(16)   literal
          ZAP   PWK1(16),WK0(16)
          UNPK  D0002(2),PWK1(16)   packed -> zoned
          OI    D0002+1,X'F0'       unsigned: force an F zone
@@ -151,7 +149,7 @@ R0002    DS    0H
          DROP  8
          LA    15,F0002            restore fall-through
          ST    15,X0002
-         ZAP   WK0(16),K0006(16)   literal
+         ZAP   WK0(16),K0005(16)   literal
          ZAP   PWK2(16),WK0(16)
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -162,7 +160,7 @@ R0002    DS    0H
          B     L0010
 L0012    DS    0H                  innermost done: reset it, step the m
          DROP  8
-         ZAP   WK0(16),K0005(16)   literal
+         ZAP   WK0(16),K0004(16)   literal
          ZAP   PWK1(16),WK0(16)
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -194,20 +192,18 @@ L0013    DS    0H
          DROP  8
 T0004    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(8),S0006
+         MVC   DSPBUF+0(8),S0007
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+8(2),D0003+0
-         MVC   DSPBUF+10(3),S0007
+         MVC   DSPBUF+10(3),S0008
          MVC   DSPBUF+13(2),D0002+0
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
 T0005    DS    0H
 * MOVE 0 -> N
-         ZAP   PWK1(16),K0004(16)  literal
-         UNPK  D0003(2),PWK1(16)   packed -> zoned
-         OI    D0003+1,X'F0'       unsigned: force an F zone
+         MVC   D0003(2),S0006      numeric literal as zoned digits
 T0006    DS    0H
 * PERFORM COUNT-IT
          ZAP   WK0(16),K0001(16)   literal
@@ -223,7 +219,7 @@ L0014    DS    0H                  outer test
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   WK1(16),K0007(16)   literal
+         ZAP   WK1(16),K0006(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0019
 L0015    DS    0H                  AFTER test
@@ -231,7 +227,7 @@ L0015    DS    0H                  AFTER test
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0001(2)    zoned -> packed
-         ZAP   WK1(16),K0004(16)   literal
+         ZAP   WK1(16),K0007(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0017
          LA    15,R0003            return here
@@ -269,7 +265,7 @@ L0019    DS    0H
          DROP  8
 T0007    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0008
+         MVC   DSPBUF+0(12),S0009
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+12(2),D0003+0
@@ -278,9 +274,7 @@ T0007    DS    0H
          BALR  14,15
 T0008    DS    0H
 * MOVE 0 -> N
-         ZAP   PWK1(16),K0004(16)  literal
-         UNPK  D0003(2),PWK1(16)   packed -> zoned
-         OI    D0003+1,X'F0'       unsigned: force an F zone
+         MVC   D0003(2),S0006      numeric literal as zoned digits
 T0009    DS    0H
 * PERFORM COUNT-IT THRU COUNT-X
          ZAP   WK0(16),K0001(16)   literal
@@ -296,7 +290,7 @@ L0020    DS    0H                  outer test
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0000(2)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
+         ZAP   WK1(16),K0004(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0025
 L0021    DS    0H                  AFTER test
@@ -304,7 +298,7 @@ L0021    DS    0H                  AFTER test
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0(16),D0001(2)    zoned -> packed
-         ZAP   WK1(16),K0005(16)   literal
+         ZAP   WK1(16),K0004(16)   literal
          CP    WK0(16),WK1(16)     numeric compare
          BH    L0023
          LA    15,R0004            return here
@@ -342,7 +336,7 @@ L0025    DS    0H
          DROP  8
 T0010    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(9),S0009
+         MVC   DSPBUF+0(9),S0010
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+9(2),D0003+0
@@ -502,20 +496,21 @@ WK5      DS    PL16
 K0001    DC    PL16'1'             numeric constants
 K0002    DC    PL16'3'
 K0003    DC    PL16'2'
-K0004    DC    PL16'0'
-K0005    DC    PL16'5'
-K0006    DC    PL16'-2'
-K0007    DC    PL16'9'
+K0004    DC    PL16'5'
+K0005    DC    PL16'-2'
+K0006    DC    PL16'9'
+K0007    DC    PL16'0'
 K0008    DC    PL16'6'
 S0001    DC    CL1','              nonnumeric constants
 S0002    DC    CL1' '
 S0003    DC    CL6'PAIRS '
 S0004    DC    CL3' I='
 S0005    DC    CL3' J='
-S0006    DC    CL8'TRIPLES '
-S0007    DC    CL3' K='
-S0008    DC    CL12'EMPTY INNER '
-S0009    DC    CL9'TRIANGLE '
+S0006    DC    CL2'00'
+S0007    DC    CL8'TRIPLES '
+S0008    DC    CL3' K='
+S0009    DC    CL12'EMPTY INNER '
+S0010    DC    CL9'TRIANGLE '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

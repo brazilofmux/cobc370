@@ -279,12 +279,10 @@ T0020    DS    0H
          BALR  14,15
 T0021    DS    0H
 * MOVE 99 -> ESRI-HIGH
-         ZAP   PWK1(16),K0005(16)  literal
-         UNPK  D0002(2),PWK1(16)   packed -> zoned
-         OI    D0002+1,X'F0'       unsigned: force an F zone
+         MVC   D0002(2),S0008      numeric literal as zoned digits
 T0022    DS    0H
 * MOVE N -> OP-FAILED-SWITCH
-         MVC   D0009(1),S0008      literal move, space padded
+         MVC   D0009(1),S0009      literal move, space padded
 T0023    DS    0H
 * REWRITE ESDS-RECORD
          PUT   RPL=FD000R          put the held record back
@@ -385,7 +383,7 @@ T0025    DS    0H
          BE    L0008
 T0026    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(12),S0009
+         MVC   DSPBUF+0(12),S0010
          MVC   DSPBUF+12(80),D0000+0
          LA    1,PARM0006
          L     15,VDISP
@@ -400,7 +398,7 @@ T0027    DS    0H
          BNE   L0009
 T0028    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(30),S0010
+         MVC   DSPBUF+0(30),S0011
          MVC   DSPBUF+30(2),D0006+0
          LA    1,PARM0007
          L     15,VDISP
@@ -465,7 +463,6 @@ K0001    DC    PL16'1'             numeric constants
 K0002    DC    PL16'2'
 K0003    DC    PL16'6'
 K0004    DC    PL16'7'
-K0005    DC    PL16'99'
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
 S0001    DC    CL40'ESDSUPDT: READ/REWRITE ESDS SEQUENTIALLY'  nonnumer
 S0002    DC    CL40'----------------------------------------'
@@ -474,9 +471,10 @@ S0004    DC    CL2'00'
 S0005    DC    CL31'VSAM ERROR DURING OPEN, STATUS '
 S0006    DC    CL1'Y'
 S0007    DC    CL2': '
-S0008    DC    CL1'N'
-S0009    DC    CL12'   UPDATED: '
-S0010    DC    CL30'VSAM ERROR ON REWRITE, STATUS '
+S0008    DC    CL2'99'
+S0009    DC    CL1'N'
+S0010    DC    CL12'   UPDATED: '
+S0011    DC    CL30'VSAM ERROR ON REWRITE, STATUS '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

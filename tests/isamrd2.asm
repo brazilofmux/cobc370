@@ -50,9 +50,7 @@ T0003    DS    0H
 * MOVE DESC-KEY -> OUT-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0002(10)  zoned -> packed
-         UNPK  D0004(10),PWK1(16)  packed -> zoned
-         OI    D0004+9,X'F0'       unsigned: force an F zone
+         MVC   D0004(10),D0002     zoned to zoned, same picture
 T0004    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0001

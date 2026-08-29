@@ -29,32 +29,24 @@ SPIEARMD DS    0H
 P0000    DS    0H
 T0000    DS    0H
 * MOVE 7 -> IN-ID
-         ZAP   PWK1(16),K0001(16)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
-         UNPK  D0003(3),PWK1(16)   packed -> zoned
-         OI    D0003+2,X'F0'       unsigned: force an F zone
+         MVC   D0003(3),S0001      numeric literal as zoned digits
 T0001    DS    0H
 * MOVE ALPHA -> IN-NAME
-         MVC   D0004(6),S0001      literal move, space padded
+         MVC   D0004(6),S0002      literal move, space padded
 T0002    DS    0H
 * MOVE 1250 -> IN-AMT
-         ZAP   PWK1(16),K0002(16)  literal
-         UNPK  D0005(5),PWK1(16)   packed -> zoned
-         OI    D0005+4,X'F0'       unsigned: force an F zone
+         MVC   D0005(5),S0003      numeric literal as zoned digits
 T0003    DS    0H
 * MOVE IN-ID -> OUT-ID
-         PACK  PWK1(16),D0003(3)   zoned -> packed
-         UNPK  D0007(3),PWK1(16)   packed -> zoned
-         OI    D0007+2,X'F0'       unsigned: force an F zone
+         MVC   D0007(3),D0003      zoned to zoned, same picture
 T0004    DS    0H
 * MOVE IN-NAME -> OUT-NAME
          MVC   D0008(6),D0004      alphanumeric move
 T0005    DS    0H
 * MOVE IN-AMT -> OUT-AMT
-         PACK  PWK1(16),D0005(5)   zoned -> packed
-         UNPK  D0009(5),PWK1(16)   packed -> zoned
-         OI    D0009+4,X'F0'       unsigned: force an F zone
+         MVC   D0009(5),D0005      zoned to zoned, same picture
 T0006    DS    0H
 * MOVE OUT-AMT -> E-AMT
          PACK  PWK1(16),D0009(5)   zoned -> packed
@@ -64,21 +56,19 @@ T0006    DS    0H
          MVC   D0012(6),EDWK+1     the edited result
 T0007    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(1),S0002
+         MVC   DSPBUF+0(1),S0004
          MVC   DSPBUF+1(3),D0007+0
-         MVC   DSPBUF+4(2),S0003
+         MVC   DSPBUF+4(2),S0005
          MVC   DSPBUF+6(6),D0008+0
-         MVC   DSPBUF+12(2),S0003
+         MVC   DSPBUF+12(2),S0005
          MVC   DSPBUF+14(6),D0012+0
-         MVC   DSPBUF+20(1),S0004
+         MVC   DSPBUF+20(1),S0006
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 T0008    DS    0H
 * MOVE 000 -> TOTAL
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0010(7),PWK1(16)   packed -> zoned
-         OI    D0010+6,X'F0'       unsigned: force an F zone
+         MVC   D0010(7),S0007      numeric literal as zoned digits
 T0009    DS    0H
 * ADD IN-AMT -> TOTAL
          PACK  PWK1(16),D0010(7)   zoned -> packed
@@ -88,7 +78,7 @@ T0009    DS    0H
          OI    D0010+6,X'F0'       unsigned: force an F zone
 T0010    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0005
+         MVC   DSPBUF+0(6),S0008
          MVC   DSPBUF+6(5),D0005+0
          LA    1,PARM0002
          L     15,VDISP
@@ -104,7 +94,7 @@ T0011    DS    0H
          OI    D0000+3,X'F0'       unsigned: force an F zone
 T0012    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0005
+         MVC   DSPBUF+0(6),S0008
          MVC   DSPBUF+6(5),D0009+0
          LA    1,PARM0003
          L     15,VDISP
@@ -118,11 +108,11 @@ T0013    DS    0H
          MVC   D0011(8),EDWK+1     the edited result
 T0014    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(6),S0006
+         MVC   DSPBUF+0(6),S0009
          MVC   DSPBUF+6(8),D0011+0
-         MVC   DSPBUF+14(9),S0007
+         MVC   DSPBUF+14(9),S0010
          MVC   DSPBUF+23(4),D0000+0
-         MVC   DSPBUF+27(1),S0008
+         MVC   DSPBUF+27(1),S0011
          MVC   DSPBUF+28(1),D0001+0
          LA    1,PARM0004
          L     15,VDISP
@@ -165,19 +155,19 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'7'             numeric constants
-K0002    DC    PL16'1250'
-K0003    DC    PL16'000'
 M0001    DC    XL7'402021204B2020'  ED patterns
 M0002    DC    XL9'4020202021204B2020'
-S0001    DC    CL6'ALPHA '         nonnumeric constants
-S0002    DC    CL1'['
-S0003    DC    CL2']['
-S0004    DC    CL1']'
-S0005    DC    CL6'ADDED '
-S0006    DC    CL6'TOTAL '
-S0007    DC    CL9' COUNTER '
-S0008    DC    CL1' '
+S0001    DC    CL3'007'            nonnumeric constants
+S0002    DC    CL6'ALPHA '
+S0003    DC    CL5'01250'
+S0004    DC    CL1'['
+S0005    DC    CL2']['
+S0006    DC    CL1']'
+S0007    DC    CL7'0000000'
+S0008    DC    CL6'ADDED '
+S0009    DC    CL6'TOTAL '
+S0010    DC    CL9' COUNTER '
+S0011    DC    CL1' '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

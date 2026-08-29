@@ -219,9 +219,7 @@ T0027    DS    0H
          BALR  14,15
 T0028    DS    0H
 * MOVE 000 -> N
-         ZAP   PWK1(16),K0002(16)  literal
-         UNPK  D0003(7),PWK1(16)   packed -> zoned
-         OI    D0003+6,X'F0'       unsigned: force an F zone
+         MVC   D0003(7),S0015      numeric literal as zoned digits
 T0029    DS    0H
 * MOVE N -> E-N
          PACK  PWK1(16),D0003(7)   zoned -> packed
@@ -301,7 +299,6 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    DC    PL16'123455'        numeric constants
-K0002    DC    PL16'000'
 M0001    DC    XL11'40202120202020204B2020'  ED patterns
 H0001    DC    H'4'                element sizes
 S0001    DC    CL2'AB'             nonnumeric constants
@@ -318,6 +315,7 @@ S0011    DC    CL11'Q IS QUOTES'
 S0012    DC    CL4'    '
 S0013    DC    CL15'Q IS NOT SPACES'
 S0014    DC    CL3'XYZ'
+S0015    DC    CL7'0000000'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

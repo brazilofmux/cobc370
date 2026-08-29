@@ -56,9 +56,7 @@ T0001    DS    0H
          BALR  14,15
 T0002    DS    0H
 * MOVE 3 -> WS-RRN
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
-         OI    D0001+4,X'F0'       unsigned: force an F zone
+         MVC   D0001(5),S0002      numeric literal as zoned digits
 T0003    DS    0H
 * READ RRDS-FILE
 *  the RELATIVE KEY into VSAM's search argument
@@ -134,19 +132,17 @@ T0004    DS    0H
          MVC   D0003(20),D0000     alphanumeric move
 T0005    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0002
+         MVC   DSPBUF+0(7),S0003
          MVC   DSPBUF+7(2),D0002+0
-         MVC   DSPBUF+9(2),S0003
+         MVC   DSPBUF+9(2),S0004
          MVC   DSPBUF+11(20),D0003+0
-         MVC   DSPBUF+31(1),S0004
+         MVC   DSPBUF+31(1),S0005
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
 T0006    DS    0H
 * MOVE 1 -> WS-RRN
-         ZAP   PWK1(16),K0002(16)  literal
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
-         OI    D0001+4,X'F0'       unsigned: force an F zone
+         MVC   D0001(5),S0006      numeric literal as zoned digits
 T0007    DS    0H
 * READ RRDS-FILE
 *  the RELATIVE KEY into VSAM's search argument
@@ -222,19 +218,17 @@ T0008    DS    0H
          MVC   D0003(20),D0000     alphanumeric move
 T0009    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0005
+         MVC   DSPBUF+0(7),S0007
          MVC   DSPBUF+7(2),D0002+0
-         MVC   DSPBUF+9(2),S0003
+         MVC   DSPBUF+9(2),S0004
          MVC   DSPBUF+11(20),D0003+0
-         MVC   DSPBUF+31(1),S0004
+         MVC   DSPBUF+31(1),S0005
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
 T0010    DS    0H
 * MOVE 99999 -> WS-RRN
-         ZAP   PWK1(16),K0003(16)  literal
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
-         OI    D0001+4,X'F0'       unsigned: force an F zone
+         MVC   D0001(5),S0008      numeric literal as zoned digits
 T0011    DS    0H
 * READ RRDS-FILE
 *  the RELATIVE KEY into VSAM's search argument
@@ -305,7 +299,7 @@ G0025    DS    0H
 L0006    DS    0H
 T0012    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0006
+         MVC   DSPBUF+0(7),S0009
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+7(2),D0002+0
@@ -330,7 +324,7 @@ G0030    DS    0H
 G0029    DS    0H
 T0014    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(7),S0007
+         MVC   DSPBUF+0(7),S0010
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   DSPBUF+7(2),D0002+0
@@ -384,16 +378,16 @@ FD000R   RPL   ACB=FD000,AREA=D0000,                                   X
                AREALEN=80,RECLEN=80,ARG=FD000K,OPTCD=(KEY,DIR,KEQ,NUP, X
                MVE)
 FD000K   DS    F                   relative record number
-K0001    DC    PL16'3'             numeric constants
-K0002    DC    PL16'1'
-K0003    DC    PL16'99999'
 S0001    DC    CL7'OPEN   '        nonnumeric constants
-S0002    DC    CL7'REC 3  '
-S0003    DC    CL2' ['
-S0004    DC    CL1']'
-S0005    DC    CL7'REC 1  '
-S0006    DC    CL7'REC 99 '
-S0007    DC    CL7'CLOSE  '
+S0002    DC    CL5'00003'
+S0003    DC    CL7'REC 3  '
+S0004    DC    CL2' ['
+S0005    DC    CL1']'
+S0006    DC    CL5'00001'
+S0007    DC    CL7'REC 1  '
+S0008    DC    CL5'99999'
+S0009    DC    CL7'REC 99 '
+S0010    DC    CL7'CLOSE  '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

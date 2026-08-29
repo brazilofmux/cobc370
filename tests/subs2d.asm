@@ -154,14 +154,10 @@ T0014    DS    0H
          BALR  14,15
 T0015    DS    0H
 * MOVE 2 -> I
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0007(1),PWK1(16)   packed -> zoned
-         OI    D0007+0,X'F0'       unsigned: force an F zone
+         MVC   D0007(1),S0011      numeric literal as zoned digits
 T0016    DS    0H
 * MOVE 2 -> J
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0008(1),PWK1(16)   packed -> zoned
-         OI    D0008+0,X'F0'       unsigned: force an F zone
+         MVC   D0008(1),S0011      numeric literal as zoned digits
 T0017    DS    0H
 * MOVE CELL -> SEEN
          PACK  DWK(8),D0007(1)     subscript
@@ -177,20 +173,20 @@ T0017    DS    0H
          MVC   D0010(2),0(7)       alphanumeric move
 T0018    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0011
+         MVC   DSPBUF+0(3),S0012
          MVC   DSPBUF+3(2),D0010+0
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
 T0019    DS    0H
 * MOVE 3 -> R
-         ZAP   PWK1(16),K0002(16)  literal
+         ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0013
 T0020    DS    0H
 * MOVE 4 -> C
-         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   PWK1(16),K0002(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0014
@@ -207,7 +203,7 @@ T0021    DS    0H
          MVC   D0010(2),0(7)       alphanumeric move
 T0022    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0012
+         MVC   DSPBUF+0(3),S0013
          MVC   DSPBUF+3(2),D0010+0
          LA    1,PARM0007
          L     15,VDISP
@@ -222,7 +218,7 @@ T0023    DS    0H
          LA    0,0                 subscript-1
          AR    6,0                 add this dimension
          LA    6,D0006(6)          element address
-         MVC   0(1,6),S0013        literal move, space padded
+         MVC   0(1,6),S0014        literal move, space padded
 T0024    DS    0H
 * MOVE Q -> SPOT
          LA    6,1                 subscript-1
@@ -233,7 +229,7 @@ T0024    DS    0H
          LA    0,1                 subscript-1
          AR    6,0                 add this dimension
          LA    6,D0006(6)          element address
-         MVC   0(1,6),S0014        literal move, space padded
+         MVC   0(1,6),S0015        literal move, space padded
 T0025    DS    0H
 * MOVE Z -> SPOT
          LA    6,0                 subscript-1
@@ -244,7 +240,7 @@ T0025    DS    0H
          LA    0,0                 subscript-1
          AR    6,0                 add this dimension
          LA    6,D0006(6)          element address
-         MVC   0(1,6),S0015        literal move, space padded
+         MVC   0(1,6),S0016        literal move, space padded
 T0026    DS    0H
 * MOVE SPOT -> ONE-SPOT
          LA    7,0                 subscript-1
@@ -258,7 +254,7 @@ T0026    DS    0H
          MVC   D0011(1),0(7)       alphanumeric move
 T0027    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0016
+         MVC   DSPBUF+0(4),S0017
          MVC   DSPBUF+4(1),D0011+0
          LA    1,PARM0008
          L     15,VDISP
@@ -276,7 +272,7 @@ T0028    DS    0H
          MVC   D0011(1),0(7)       alphanumeric move
 T0029    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0017
+         MVC   DSPBUF+0(4),S0018
          MVC   DSPBUF+4(1),D0011+0
          LA    1,PARM0009
          L     15,VDISP
@@ -294,26 +290,20 @@ T0030    DS    0H
          MVC   D0011(1),0(7)       alphanumeric move
 T0031    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0018
+         MVC   DSPBUF+0(4),S0019
          MVC   DSPBUF+4(1),D0011+0
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
 T0032    DS    0H
 * MOVE 1 -> I
-         ZAP   PWK1(16),K0004(16)  literal
-         UNPK  D0007(1),PWK1(16)   packed -> zoned
-         OI    D0007+0,X'F0'       unsigned: force an F zone
+         MVC   D0007(1),S0020      numeric literal as zoned digits
 T0033    DS    0H
 * MOVE 2 -> J
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0008(1),PWK1(16)   packed -> zoned
-         OI    D0008+0,X'F0'       unsigned: force an F zone
+         MVC   D0008(1),S0011      numeric literal as zoned digits
 T0034    DS    0H
 * MOVE 1 -> K
-         ZAP   PWK1(16),K0004(16)  literal
-         UNPK  D0009(1),PWK1(16)   packed -> zoned
-         OI    D0009+0,X'F0'       unsigned: force an F zone
+         MVC   D0009(1),S0020      numeric literal as zoned digits
 T0035    DS    0H
 * MOVE SPOT -> ONE-SPOT
          PACK  DWK(8),D0007(1)     subscript
@@ -333,7 +323,7 @@ T0035    DS    0H
          MVC   D0011(1),0(7)       alphanumeric move
 T0036    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(4),S0019
+         MVC   DSPBUF+0(4),S0021
          MVC   DSPBUF+4(1),D0011+0
          LA    1,PARM0011
          L     15,VDISP
@@ -346,14 +336,14 @@ T0037    DS    0H
          MVC   D0012(8),0(7)       alphanumeric move
 T0038    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(5),S0020
+         MVC   DSPBUF+0(5),S0022
          MVC   DSPBUF+5(8),D0012+0
          LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
 T0039    DS    0H
 * MOVE 4 -> C2
-         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   PWK1(16),K0002(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          STH   2,D0015
@@ -369,7 +359,7 @@ T0040    DS    0H
          MVC   D0010(2),0(7)       alphanumeric move
 T0041    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(5),S0021
+         MVC   DSPBUF+0(5),S0023
          MVC   DSPBUF+5(2),D0010+0
          LA    1,PARM0013
          L     15,VDISP
@@ -439,10 +429,8 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'2'             numeric constants
-K0002    DC    PL16'3'
-K0003    DC    PL16'4'
-K0004    DC    PL16'1'
+K0001    DC    PL16'3'             numeric constants
+K0002    DC    PL16'4'
 H0001    DC    H'8'                element sizes
 H0002    DC    H'2'
 H0003    DC    H'4'
@@ -456,17 +444,19 @@ S0007    DC    CL3'14 '
 S0008    DC    CL3'22 '
 S0009    DC    CL3'33 '
 S0010    DC    CL3'34 '
-S0011    DC    CL3'IJ '
-S0012    DC    CL3'RC '
-S0013    DC    CL1'P'
-S0014    DC    CL1'Q'
-S0015    DC    CL1'Z'
-S0016    DC    CL4'111 '
-S0017    DC    CL4'222 '
-S0018    DC    CL4'121 '
-S0019    DC    CL4'IJK '
-S0020    DC    CL5'ROW3 '
-S0021    DC    CL5'C2   '
+S0011    DC    CL1'2'
+S0012    DC    CL3'IJ '
+S0013    DC    CL3'RC '
+S0014    DC    CL1'P'
+S0015    DC    CL1'Q'
+S0016    DC    CL1'Z'
+S0017    DC    CL4'111 '
+S0018    DC    CL4'222 '
+S0019    DC    CL4'121 '
+S0020    DC    CL1'1'
+S0021    DC    CL4'IJK '
+S0022    DC    CL5'ROW3 '
+S0023    DC    CL5'C2   '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

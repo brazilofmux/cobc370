@@ -47,12 +47,10 @@ T0004    DS    0H
          MVC   D0004(4),S0003      literal move, space padded
 T0005    DS    0H
 * MOVE 42 -> D-NUM
-         ZAP   PWK1(16),K0001(16)  literal
-         UNPK  D0005(6),PWK1(16)   packed -> zoned
-         OI    D0005+5,X'F0'       unsigned: force an F zone
+         MVC   D0005(6),S0004      numeric literal as zoned digits
 T0006    DS    0H
 * MOVE FORTY-TWO            -> D-NAME
-         MVC   D0006(20),S0004     literal move, space padded
+         MVC   D0006(20),S0005     literal move, space padded
 T0007    DS    0H
 * WRITE DETAIL-REC
          PUT   FD000,D0000
@@ -62,7 +60,7 @@ T0008    DS    0H
 * MOVE WHOLEREC WRITTEN AS ONE FIELD  -> WHOLE-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0007(30),S0005     literal move, space padded
+         MVC   D0007(30),S0006     literal move, space padded
 T0009    DS    0H
 * WRITE WHOLE-REC
          PUT   FD000,D0000
@@ -112,12 +110,12 @@ WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=OUTFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
                LRECL=30,BLKSIZE=30
-K0001    DC    PL16'42'            numeric constants
 S0001    DC    CL4'HDR '           nonnumeric constants
 S0002    DC    CL26'A HEADER LINE             '
 S0003    DC    CL4'DTL '
-S0004    DC    CL20'FORTY-TWO           '
-S0005    DC    CL30'WHOLEREC WRITTEN AS ONE FIELD '
+S0004    DC    CL6'000042'
+S0005    DC    CL20'FORTY-TWO           '
+S0006    DC    CL30'WHOLEREC WRITTEN AS ONE FIELD '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 SAVEAREA DS    18F

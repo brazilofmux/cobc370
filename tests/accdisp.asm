@@ -34,9 +34,7 @@ T0000    DS    0H
          BALR  14,15               the digits into ZWK
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),ZWK(6)     zoned -> packed
-         UNPK  D0000(6),PWK1(16)   packed -> zoned
-         OI    D0000+5,X'F0'       unsigned: force an F zone
+         MVC   D0000(6),ZWK        zoned to zoned, same picture
          DROP  8
 T0001    DS    0H
 * ACCEPT D5 FROM DAY
@@ -45,9 +43,7 @@ T0001    DS    0H
          BALR  14,15               the digits into ZWK
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),ZWK(5)     zoned -> packed
-         UNPK  D0001(5),PWK1(16)   packed -> zoned
-         OI    D0001+4,X'F0'       unsigned: force an F zone
+         MVC   D0001(5),ZWK        zoned to zoned, same picture
          DROP  8
 T0002    DS    0H
 * ACCEPT T8 FROM TIME
@@ -56,9 +52,7 @@ T0002    DS    0H
          BALR  14,15               the digits into ZWK
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),ZWK(8)     zoned -> packed
-         UNPK  D0002(8),PWK1(16)   packed -> zoned
-         OI    D0002+7,X'F0'       unsigned: force an F zone
+         MVC   D0002(8),ZWK        zoned to zoned, same picture
          DROP  8
 T0003    DS    0H
 * ACCEPT DX FROM DATE

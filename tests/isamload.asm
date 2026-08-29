@@ -110,9 +110,7 @@ T0011    DS    0H
 * MOVE IN-KEY -> DESC-KEY
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0005(10)  zoned -> packed
-         UNPK  D0002(10),PWK1(16)  packed -> zoned
-         OI    D0002+9,X'F0'       unsigned: force an F zone
+         MVC   D0002(10),D0005     zoned to zoned, same picture
 T0012    DS    0H
 * MOVE IN-TEXT -> DESC-TEXT
          MVC   D0003(70),D0006     alphanumeric move
