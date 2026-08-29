@@ -602,7 +602,7 @@ static Node *node(int kind)
 enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_PARA, ST_PERFORM, ST_STOP, ST_EXIT, ST_INSPECT, ST_ALTER, ST_ACCEPT,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
-       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP,
+       ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP, ST_STRING, ST_UNSTRING,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_CALL, ST_SEARCH,
        ST_REWRITE, ST_DELETE, ST_START };
 
@@ -618,6 +618,11 @@ typedef struct {
     Node *expr;             /* COMPUTE */
     int  rounded;
     int  size_err;          /* ON SIZE ERROR governs this statement */
+    int  sop_first, sop_n;  /* STRING: sending items; UNSTRING: receivers */
+    int  sdl_first, sdl_n;  /* UNSTRING: delimiters */
+    int  ptr_sym, tally_sym; /* WITH POINTER, TALLYING IN: -1 when absent */
+    Node *ptr_sub, *tally_sub;
+    int  ovf;               /* ON OVERFLOW present; lab2 is the continue label */
     int  size_first, size_last; /* first and last of the series it governs */
     char para[31];          /* ST_PARA name, or PERFORM's first paragraph */
     char thru[31];          /* PERFORM ... THRU */
@@ -784,6 +789,24 @@ static int para_index(const char *n)
 
 #define MAXSTMT 4096
 static Stmt stmts[MAXSTMT];
+
+/* Operands of STRING and UNSTRING, in a side table the statement indexes --
+ * a literal or figurative is an interned constant, an identifier is a symbol
+ * and subscript whose address is stored into the parameter block at run
+ * time. For a STRING sending item the delimiter rides alongside; for an
+ * UNSTRING receiver, its DELIMITER IN and COUNT IN items do. */
+typedef struct {
+    int  sym; Node *sub; char lab[12]; int len;   /* the operand itself */
+    int  dsym; Node *dsub; char dlab[12]; int dlen; int dsize; /* STRING: DELIMITED BY; dsize = SIZE */
+    int  all;                                     /* UNSTRING delimiter: ALL */
+    int  insym; Node *insub;                      /* UNSTRING: DELIMITER IN */
+    int  cntsym; Node *cntsub;                    /* UNSTRING: COUNT IN */
+} SOp;
+#define MAXSOP 2048
+static SOp sops[MAXSOP];
+static int nsops;
+static const char *intern_str(const char *text, int len, int pad);
+static int use_hvals, use_lvals, use_qvals, use_spcs;
 static int nstmt;
 
 /* Each LINKAGE SECTION 01 is a separate area: the caller owns the storage and
@@ -2107,8 +2130,6 @@ static Node *parse_expr(void)
  * literal in this compiler's world is delimited with. */
 enum { FIG_NONE = 0, FIG_SPACE = 1, FIG_ZERO = 2, FIG_HIGH = 3, FIG_LOW = 4,
        FIG_QUOTE = 5, FIG_ALL = 6 };
-static int use_hvals, use_lvals, use_qvals, use_spcs;
-
 static int fig_code(const char *w)
 {
     if (!strcmp(w, "SPACE")  || !strcmp(w, "SPACES"))  return FIG_SPACE;
@@ -2181,7 +2202,8 @@ static int starts_statement(void)
         "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
-        "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT", 0
+        "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT",
+        "STRING", "UNSTRING", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -2289,6 +2311,33 @@ static void giving_target(Stmt *st)
 }
 
 static void eat_period(void);
+/* One operand of STRING or UNSTRING: an identifier, a nonnumeric literal, or a
+ * one-character figurative constant. A literal becomes an interned constant
+ * of exactly its own length; a figurative becomes the first byte of the run
+ * a comparison would use. */
+static void parse_sop(SOp *o, int is_delim)
+{
+    o->sym = -1; o->sub = NULL;
+    if (tok.literal) {
+        snprintf(o->lab, sizeof o->lab, "%s", intern_str(tok.text, tok.len, tok.len));
+        o->len = tok.len;
+        next();
+        return;
+    }
+    int fg = fig_code(tok.text);
+    if (fg == FIG_SPACE) { snprintf(o->lab, sizeof o->lab, "%s", intern_str(" ", 1, 1)); o->len = 1; next(); return; }
+    if (fg == FIG_ZERO)  { snprintf(o->lab, sizeof o->lab, "%s", intern_str("0", 1, 1)); o->len = 1; next(); return; }
+    if (fg == FIG_HIGH)  { use_hvals = 1; strcpy(o->lab, "HVALS"); o->len = 1; next(); return; }
+    if (fg == FIG_LOW)   { use_lvals = 1; strcpy(o->lab, "LVALS"); o->len = 1; next(); return; }
+    if (fg == FIG_QUOTE) { use_qvals = 1; strcpy(o->lab, "QVALS"); o->len = 1; next(); return; }
+    if (is("ALL")) die("ALL literal as a STRING or UNSTRING operand is not implemented");
+    if (is_numeric_literal(tok.text)) die("STRING and UNSTRING operands are nonnumeric; a numeric literal is not");
+    o->sym = consume_sym(); o->sub = opt_subscript();
+    if (!(syms[o->sym].is_alpha || syms[o->sym].is_group))
+        die(is_delim ? "a delimiter must be an alphanumeric item"
+                     : "a STRING sending item must be alphanumeric");
+}
+
 /* Every arithmetic statement ends the same way: perhaps more receivers, then
  * perhaps ON SIZE ERROR. Level 2 allows a series of results on all of them. */
 static int at_arith_end(void)
@@ -2699,6 +2748,115 @@ static void parse_one_statement(void)
             scale_literal(save, st->immscale, st->immdigits, sizeof st->immdigits);
         } else st->src = resolve_sym(save, squal2, snq2);
         eat_period();
+        return;
+    }
+
+    if (is("STRING") || is("UNSTRING")) {
+        int un = is("UNSTRING");
+        next();
+        Stmt *st = new_stmt(un ? ST_UNSTRING : ST_STRING);
+        st->ptr_sym = st->tally_sym = -1;
+        st->sop_first = nsops; st->sdl_first = nsops;
+        if (!un) {
+            /* STRING item ... DELIMITED BY x ... INTO recv [WITH POINTER p]
+             * [ON OVERFLOW ...]. Several items may share one DELIMITED BY;
+             * each item records its own. */
+            int grp = nsops;
+            while (!is("INTO")) {
+                if (tok.eof || is(".")) die("STRING needs INTO");
+                if (is("DELIMITED")) {
+                    next(); if (is("BY")) next();
+                    SOp d; memset(&d, 0, sizeof d); d.sym = -1;
+                    if (is("SIZE")) { d.dsize = 1; next(); }
+                    else parse_sop(&d, 1);
+                    for (int k = grp; k < nsops; k++) {
+                        sops[k].dsym = d.sym; sops[k].dsub = d.sub;
+                        memcpy(sops[k].dlab, d.lab, sizeof d.lab);
+                        sops[k].dlen = d.len; sops[k].dsize = d.dsize;
+                    }
+                    grp = nsops;
+                    continue;
+                }
+                if (nsops >= MAXSOP) die("too many STRING/UNSTRING operands");
+                SOp *o = &sops[nsops++];
+                memset(o, 0, sizeof *o); o->sym = o->dsym = o->insym = o->cntsym = -1;
+                parse_sop(o, 0);
+                o->dsize = -1;                     /* no DELIMITED BY yet */
+            }
+            st->sop_n = nsops - st->sop_first;
+            if (st->sop_n == 0) die("STRING has nothing to send");
+            for (int k = st->sop_first; k < nsops; k++)
+                if (sops[k].dsize < 0) die("every STRING sending item needs a DELIMITED BY phrase");
+            next();
+            st->dst = consume_sym(); st->dsub = opt_subscript();
+            if (!(syms[st->dst].is_alpha || syms[st->dst].is_group))
+                die("STRING INTO needs an alphanumeric item");
+        } else {
+            /* UNSTRING send [DELIMITED BY [ALL] d [OR [ALL] d]...]
+             * INTO recv [DELIMITER IN x] [COUNT IN y] ... [WITH POINTER p]
+             * [TALLYING IN t] [ON OVERFLOW ...]. */
+            st->src = consume_sym(); st->ssub = opt_subscript();
+            if (!(syms[st->src].is_alpha || syms[st->src].is_group))
+                die("UNSTRING needs an alphanumeric sending item");
+            if (is("DELIMITED")) {
+                next(); if (is("BY")) next();
+                for (;;) {
+                    if (nsops >= MAXSOP) die("too many STRING/UNSTRING operands");
+                    SOp *d = &sops[nsops++];
+                    memset(d, 0, sizeof *d); d->sym = d->dsym = d->insym = d->cntsym = -1;
+                    if (is("ALL")) { d->all = 1; next(); }
+                    parse_sop(d, 1);
+                    if (!is("OR")) break;
+                    next();
+                }
+            }
+            st->sdl_n = nsops - st->sdl_first;
+            expect("INTO");
+            st->sop_first = nsops;
+            while (!tok.eof && !is(".") && !is("WITH") && !is("POINTER") && !is("TALLYING")
+                   && !is("ON") && !is("OVERFLOW") && !starts_statement()) {
+                if (nsops >= MAXSOP) die("too many STRING/UNSTRING operands");
+                SOp *o = &sops[nsops++];
+                memset(o, 0, sizeof *o); o->sym = o->dsym = o->insym = o->cntsym = -1;
+                o->sym = consume_sym(); o->sub = opt_subscript();
+                if (!(syms[o->sym].is_alpha || syms[o->sym].is_group))
+                    die("an UNSTRING receiver that is numeric is not implemented; the receivers must be alphanumeric");
+                if (is("DELIMITER")) {
+                    next(); if (is("IN")) next();
+                    o->insym = consume_sym(); o->insub = opt_subscript();
+                    if (!(syms[o->insym].is_alpha || syms[o->insym].is_group))
+                        die("DELIMITER IN needs an alphanumeric item");
+                }
+                if (is("COUNT")) {
+                    next(); if (is("IN")) next();
+                    o->cntsym = consume_sym(); o->cntsub = opt_subscript();
+                    if (syms[o->cntsym].is_alpha || syms[o->cntsym].is_group || syms[o->cntsym].scale)
+                        die("COUNT IN needs an integer item");
+                }
+            }
+            st->sop_n = nsops - st->sop_first;
+            if (st->sop_n == 0) die("UNSTRING INTO names no receiver");
+        }
+        if (is("WITH")) next();
+        if (is("POINTER")) {
+            next();
+            st->ptr_sym = consume_sym(); st->ptr_sub = opt_subscript();
+            if (syms[st->ptr_sym].is_alpha || syms[st->ptr_sym].is_group || syms[st->ptr_sym].scale)
+                die("WITH POINTER needs an integer item");
+        }
+        if (un && is("TALLYING")) {
+            next(); if (is("IN")) next();
+            st->tally_sym = consume_sym(); st->tally_sub = opt_subscript();
+            if (syms[st->tally_sym].is_alpha || syms[st->tally_sym].is_group || syms[st->tally_sym].scale)
+                die("TALLYING IN needs an integer item");
+        }
+        if (is("ON")) next();
+        if (is("OVERFLOW")) {
+            next();
+            st->ovf = 1; st->lab2 = ++nlabel;
+            parse_stmt_list(1);
+            new_stmt(ST_LABEL)->dst = st->lab2;
+        } else eat_period();
         return;
     }
 
@@ -4395,6 +4553,65 @@ static void gen_rescale16(const char *wk, int from, int to, int round)
 #define DIVGUARD 4
 #define DIVSCALEMAX 12
 
+/* Constants a statement wants placed in the data area: parameter blocks for
+ * STRING and UNSTRING. Collected while the code is generated and emitted with
+ * the work areas, where the permanent base covers them. */
+static struct { char lab[12], op[8], opd[80], cmt[48]; } pend_dc[MAXSOP * 4];
+static int npend_dc;
+static int use_str, use_uns;
+static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
+{
+    if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
+    snprintf(pend_dc[npend_dc].lab, 12, "%s", lab);
+    snprintf(pend_dc[npend_dc].op, 8, "%s", op);
+    snprintf(pend_dc[npend_dc].opd, 80, "%s", opd);
+    snprintf(pend_dc[npend_dc].cmt, 48, "%s", cmt);
+    npend_dc++;
+}
+
+/* The address of an operand into a parameter block slot -- at run time for an
+ * identifier, whose subscript or base locator only exists then. */
+static void sop_addr(const SOp *o, int use_delim, const char *slot)
+{
+    char b[128], f[64];
+    int sy = use_delim ? o->dsym : o->sym;
+    Node *sb = use_delim ? o->dsub : o->sub;
+    if (sy < 0) return;                      /* a constant: assembled in */
+    const Sym *y = &syms[sy];
+    int n = sb ? y->elem : y->bytes;
+    field_ref_m(y, sb, FR_RX, n, 6, f, sizeof f);
+    snprintf(b, sizeof b, "1,%s", f);
+    asm_line("", "LA", b, y->name);
+    snprintf(b, sizeof b, "1,%s", slot);
+    asm_line("", "ST", b, "");
+}
+static int sop_len(const SOp *o, int use_delim)
+{
+    int sy = use_delim ? o->dsym : o->sym;
+    if (sy < 0) return use_delim ? o->dlen : o->len;
+    Node *sb = use_delim ? o->dsub : o->sub;
+    return sb ? syms[sy].elem : syms[sy].bytes;
+}
+/* An integer item to a fullword cell, and back. */
+static void cell_in(int sy, Node *sb, const char *cell)
+{
+    char b[64];
+    need_sym_base(&syms[sy]);
+    gen_load(&syms[sy], sb, "PWK1");
+    asm_line("", "ZAP", "DWK(8),PWK1(16)", "");
+    asm_line("", "CVB", "2,DWK", "");
+    snprintf(b, sizeof b, "2,%s", cell); asm_line("", "ST", b, syms[sy].name);
+}
+static void cell_out(int sy, Node *sb, const char *cell)
+{
+    char b[64];
+    snprintf(b, sizeof b, "2,%s", cell); asm_line("", "L", b, "");
+    asm_line("", "CVD", "2,DWK", "");
+    asm_line("", "ZAP", "PWK1(16),DWK(8)", "");
+    need_sym_base(&syms[sy]);
+    gen_store(&syms[sy], sb, "PWK1");
+}
+
 /* While a statement under ON SIZE ERROR is being generated: where a detected
  * error branches to, past the store. Empty otherwise. */
 static char gen_size_skip[16];
@@ -4695,6 +4912,255 @@ static void emit_literal(const char *label, const char *text, int len)
     asm_line(label, "DC", op, "");
 }
 
+/* COBSTR and COBUNS. Both take R1 -> a parameter block laid out by the code
+ * generator (see ST_STRING and ST_UNSTRING), work in bytes, and return the
+ * overflow condition in R15. They know nothing about pictures: POINTER,
+ * TALLYING and COUNT are fullword cells the caller converts. */
+static void emit_string_runtime(void)
+{
+    asm_comment("");
+    asm_comment(" COBSTR -- STRING. R1 -> AL4(receiver), AL2(len), AL2(n),");
+    asm_comment("   AL4(pointer cell or 0); then per item AL4(addr), AL2(len),");
+    asm_comment("   AL2(delimiter len, 0 for SIZE), AL4(delimiter addr).");
+    asm_comment(" Each item goes byte by byte until its delimiter matches or");
+    asm_comment(" it runs out; the receiver filling up is the overflow, and");
+    asm_comment(" a pointer outside 1..len is overflow with nothing moved.");
+    asm_comment(" R15 = 0 done, 1 overflow. Other bytes of the receiver are");
+    asm_comment(" not touched, which is the rule: STRING does not space-fill.");
+    asm_line("COBSTR", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE8+4", "");
+    asm_line("", "LA", "11,RTSAVE8", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "LR", "2,1", "the block");
+    asm_line("", "L", "3,0(2)", "receiver");
+    asm_line("", "LH", "5,4(2)", "its length");
+    asm_line("", "LH", "7,6(2)", "items");
+    asm_line("", "L", "4,8(2)", "pointer cell");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BZ", "STR010", "none: start at 1");
+    asm_line("", "L", "4,0(4)", "");
+    asm_line("", "B", "STR020", "");
+    asm_line("STR010", "LA", "4,1", "");
+    asm_line("STR020", "BCTR", "4,0", "position, from 0");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BM", "STRBAD", "pointer below 1");
+    asm_line("", "CR", "4,5", "");
+    asm_line("", "BNL", "STRBAD", "pointer past the end");
+    asm_line("", "LA", "6,12(2)", "the first item");
+    asm_line("STR100", "LTR", "7,7", "");
+    asm_line("", "BZ", "STRDONE", "all items sent");
+    asm_line("", "L", "8,0(6)", "item");
+    asm_line("", "LH", "9,4(6)", "its length");
+    asm_line("", "LH", "11,6(6)", "delimiter length");
+    asm_line("", "L", "10,8(6)", "delimiter");
+    asm_line("STR110", "LTR", "9,9", "");
+    asm_line("", "BZ", "STR190", "item exhausted");
+    asm_line("", "LTR", "11,11", "");
+    asm_line("", "BZ", "STR120", "SIZE: no delimiter to look for");
+    asm_line("", "CR", "9,11", "");
+    asm_line("", "BL", "STR120", "too few left to hold the delimiter");
+    asm_line("", "LR", "15,11", "");
+    asm_line("", "BCTR", "15,0", "");
+    asm_line("", "EX", "15,STRCLC", "delimiter here?");
+    asm_line("", "BE", "STR190", "yes: the item ends");
+    asm_line("STR120", "CR", "4,5", "");
+    asm_line("", "BNL", "STROVF", "receiver full");
+    asm_line("", "LA", "15,0(3,4)", "");
+    asm_line("", "MVC", "0(1,15),0(8)", "one byte");
+    asm_line("", "LA", "8,1(8)", "");
+    asm_line("", "BCTR", "9,0", "");
+    asm_line("", "LA", "4,1(4)", "");
+    asm_line("", "B", "STR110", "");
+    asm_line("STR190", "LA", "6,12(6)", "next item");
+    asm_line("", "BCTR", "7,0", "");
+    asm_line("", "B", "STR100", "");
+    asm_line("STRDONE", "SR", "15,15", "");
+    asm_line("", "B", "STRRET", "");
+    asm_line("STROVF", "LA", "15,1", "overflow");
+    asm_line("STRRET", "L", "14,8(2)", "pointer cell");
+    asm_line("", "LTR", "14,14", "");
+    asm_line("", "BZ", "STRX", "");
+    asm_line("", "LA", "4,1(4)", "back to counting from 1");
+    asm_line("", "ST", "4,0(14)", "");
+    asm_line("", "B", "STRX", "");
+    asm_line("STRBAD", "LA", "15,1", "pointer out of range: overflow, nothing moved");
+    asm_line("STRX", "L", "13,4(13)", "");
+    asm_line("", "ST", "15,16(13)", "R15 survives the LM through its own slot");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "BR", "14", "");
+    asm_line("STRCLC", "CLC", "0(0,8),0(10)", "executed with the delimiter length");
+    asm_line("RTSAVE8", "DS", "18F", "");
+    asm_comment("");
+    asm_comment(" COBUNS -- UNSTRING. R1 -> AL4(sender), AL2(len), AL2(nd),");
+    asm_comment("   AL4(pointer cell or 0), AL4(tally cell or 0), AL2(nr),");
+    asm_comment("   AL2(0), AL4(0); then nd delimiters AL4(addr), AL2(len),");
+    asm_comment("   AL2(ALL); then nr receivers AL4(addr), AL2(len),");
+    asm_comment("   AL2(DELIMITER IN len), AL4(DELIMITER IN or 0),");
+    asm_comment("   AL4(COUNT IN cell or 0).");
+    asm_comment(" For each receiver the sender is scanned from the position");
+    asm_comment(" for the first place any delimiter matches, delimiters tried");
+    asm_comment(" in order; the bytes before it go to the receiver, left");
+    asm_comment(" justified and space filled. No delimiters means a receiver");
+    asm_comment(" takes its own length. Bytes left when the receivers are");
+    asm_comment(" used up are the overflow. R15 = 0 done, 1 overflow.");
+    asm_line("COBUNS", "STM", "14,12,12(13)", "");
+    asm_line("", "BALR", "12,0", "");
+    asm_line("", "USING", "*,12", "");
+    asm_line("", "ST", "13,RTSAVE9+4", "");
+    asm_line("", "LA", "11,RTSAVE9", "");
+    asm_line("", "ST", "11,8(13)", "");
+    asm_line("", "LR", "13,11", "");
+    asm_line("", "LR", "2,1", "the block");
+    asm_line("", "L", "3,0(2)", "sender");
+    asm_line("", "LH", "5,4(2)", "its length");
+    asm_line("", "LH", "10,6(2)", "delimiters");
+    asm_line("", "L", "4,8(2)", "pointer cell");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BZ", "UNS010", "");
+    asm_line("", "L", "4,0(4)", "");
+    asm_line("", "B", "UNS020", "");
+    asm_line("UNS010", "LA", "4,1", "");
+    asm_line("UNS020", "BCTR", "4,0", "position, from 0");
+    asm_line("", "LTR", "4,4", "");
+    asm_line("", "BM", "UNSBAD", "");
+    asm_line("", "CR", "4,5", "");
+    asm_line("", "BNL", "UNSBAD", "pointer past the end");
+    asm_line("", "LH", "7,16(2)", "receivers");
+    asm_line("", "LR", "6,10", "");
+    asm_line("", "SLL", "6,3", "eight bytes per delimiter");
+    asm_line("", "LA", "6,24(6,2)", "the first receiver");
+    asm_line("UNS100", "LTR", "7,7", "");
+    asm_line("", "BZ", "UNSEND", "receivers used up");
+    asm_line("", "CR", "4,5", "");
+    asm_line("", "BNL", "UNSEND", "sender used up: the rest stay as they were");
+    asm_line("", "LR", "8,4", "scan from the position");
+    asm_line("", "SR", "9,9", "no delimiter matched yet");
+    asm_line("", "LTR", "10,10", "");
+    asm_line("", "BZ", "UNS140", "no delimiters: take the receiver's length");
+    asm_line("UNS110", "CR", "8,5", "");
+    asm_line("", "BNL", "UNS170", "end of the sender, no delimiter");
+    asm_line("", "LA", "9,24(2)", "the first delimiter");
+    asm_line("", "LR", "0,10", "");
+    asm_line("UNS120", "L", "14,0(9)", "delimiter");
+    asm_line("", "LH", "15,4(9)", "its length");
+    asm_line("", "LR", "1,5", "");
+    asm_line("", "SR", "1,8", "bytes left");
+    asm_line("", "CR", "1,15", "");
+    asm_line("", "BL", "UNS130", "not enough left for this one");
+    asm_line("", "LA", "1,0(3,8)", "");
+    asm_line("", "BCTR", "15,0", "");
+    asm_line("", "EX", "15,UNSCLC", "matches here?");
+    asm_line("", "BE", "UNS170", "yes, R9 says which");
+    asm_line("UNS130", "LA", "9,8(9)", "next delimiter");
+    asm_line("", "BCT", "0,UNS120", "");
+    asm_line("", "SR", "9,9", "none matched at this byte");
+    asm_line("", "LA", "8,1(8)", "");
+    asm_line("", "B", "UNS110", "");
+    asm_line("UNS140", "LH", "1,4(6)", "receiver length");
+    asm_line("", "LA", "8,0(4,1)", "position plus that");
+    asm_line("", "CR", "8,5", "");
+    asm_line("", "BNH", "UNS170", "");
+    asm_line("", "LR", "8,5", "but no further than the end");
+    /* The bytes from 4 to 8 go to the receiver: space-fill it, then move. */
+    asm_line("UNS170", "L", "14,0(6)", "receiver");
+    asm_line("", "LH", "15,4(6)", "its length");
+    asm_line("", "MVI", "0(14),C' '", "");
+    asm_line("", "LR", "11,15", "");
+    asm_line("", "BCTR", "11,0", "");
+    asm_line("", "LTR", "11,11", "");
+    asm_line("", "BZ", "UNS172", "a one-byte receiver is filled");
+    asm_line("", "BCTR", "11,0", "");
+    asm_line("", "EX", "11,UNSPAD", "space fill");
+    asm_line("UNS172", "LR", "1,8", "");
+    asm_line("", "SR", "1,4", "bytes to move");
+    asm_line("", "L", "11,12(6)", "COUNT IN cell");
+    asm_line("", "LTR", "11,11", "");
+    asm_line("", "BZ", "UNS174", "");
+    asm_line("", "ST", "1,0(11)", "the count, before truncation");
+    asm_line("UNS174", "CR", "1,15", "");
+    asm_line("", "BNH", "UNS176", "");
+    asm_line("", "LR", "1,15", "truncated on the right");
+    asm_line("UNS176", "LTR", "1,1", "");
+    asm_line("", "BZ", "UNS180", "nothing to move");
+    asm_line("", "BCTR", "1,0", "");
+    asm_line("", "LA", "15,0(3,4)", "");
+    asm_line("", "EX", "1,UNSMVC", "the bytes");
+    /* DELIMITER IN: the delimiter that ended the receiver, or spaces. */
+    asm_line("UNS180", "L", "14,8(6)", "DELIMITER IN");
+    asm_line("", "LTR", "14,14", "");
+    asm_line("", "BZ", "UNS186", "");
+    asm_line("", "LH", "15,6(6)", "its length");
+    asm_line("", "MVI", "0(14),C' '", "");
+    asm_line("", "LR", "11,15", "");
+    asm_line("", "BCTR", "11,0", "");
+    asm_line("", "LTR", "11,11", "");
+    asm_line("", "BZ", "UNS182", "");
+    asm_line("", "BCTR", "11,0", "");
+    asm_line("", "EX", "11,UNSPAD", "space fill");
+    asm_line("UNS182", "LTR", "9,9", "");
+    asm_line("", "BZ", "UNS186", "no delimiter: spaces");
+    asm_line("", "LH", "1,4(9)", "delimiter length");
+    asm_line("", "CR", "1,15", "");
+    asm_line("", "BNH", "UNS184", "");
+    asm_line("", "LR", "1,15", "");
+    asm_line("UNS184", "BCTR", "1,0", "");
+    asm_line("", "L", "15,0(9)", "");
+    asm_line("", "EX", "1,UNSMVC", "the delimiter");
+    /* Tally, then advance past the delimiter (and its repeats, for ALL). */
+    asm_line("UNS186", "L", "14,12(2)", "TALLYING cell");
+    asm_line("", "LTR", "14,14", "");
+    asm_line("", "BZ", "UNS188", "");
+    asm_line("", "L", "15,0(14)", "");
+    asm_line("", "LA", "15,1(15)", "one more receiver acted on");
+    asm_line("", "ST", "15,0(14)", "");
+    asm_line("UNS188", "LTR", "9,9", "");
+    asm_line("", "BZ", "UNS196", "no delimiter: position is where the scan stopped");
+    asm_line("", "LH", "1,4(9)", "delimiter length");
+    asm_line("", "LA", "4,0(1,8)", "past the delimiter");
+    asm_line("", "LH", "0,6(9)", "ALL?");
+    asm_line("", "LTR", "0,0", "");
+    asm_line("", "BZ", "UNS198", "");
+    asm_line("UNS190", "LR", "0,5", "");
+    asm_line("", "SR", "0,4", "bytes left");
+    asm_line("", "CR", "0,1", "");
+    asm_line("", "BL", "UNS198", "not enough for another copy");
+    asm_line("", "LA", "15,0(3,4)", "");
+    asm_line("", "L", "14,0(9)", "");
+    asm_line("", "LR", "11,1", "");
+    asm_line("", "BCTR", "11,0", "");
+    asm_line("", "EX", "11,UNSCLC2", "another copy of the delimiter?");
+    asm_line("", "BNE", "UNS198", "");
+    asm_line("", "LA", "4,0(1,4)", "skip it too");
+    asm_line("", "B", "UNS190", "");
+    asm_line("UNS196", "LR", "4,8", "");
+    asm_line("UNS198", "LA", "6,16(6)", "next receiver");
+    asm_line("", "BCTR", "7,0", "");
+    asm_line("", "B", "UNS100", "");
+    asm_line("UNSEND", "SR", "15,15", "");
+    asm_line("", "CR", "4,5", "");
+    asm_line("", "BNL", "UNS200", "");
+    asm_line("", "LA", "15,1", "bytes left over: overflow");
+    asm_line("UNS200", "L", "14,8(2)", "pointer cell");
+    asm_line("", "LTR", "14,14", "");
+    asm_line("", "BZ", "UNSX", "");
+    asm_line("", "LA", "4,1(4)", "");
+    asm_line("", "ST", "4,0(14)", "");
+    asm_line("", "B", "UNSX", "");
+    asm_line("UNSBAD", "LA", "15,1", "pointer out of range: overflow, nothing done");
+    asm_line("UNSX", "L", "13,4(13)", "");
+    asm_line("", "ST", "15,16(13)", "R15 survives the LM through its own slot");
+    asm_line("", "LM", "14,12,12(13)", "");
+    asm_line("", "BR", "14", "");
+    asm_line("UNSCLC", "CLC", "0(0,1),0(14)", "executed with the delimiter length");
+    asm_line("UNSCLC2", "CLC", "0(0,15),0(14)", "");
+    asm_line("UNSMVC", "MVC", "0(0,14),0(15)", "executed with the byte count");
+    asm_line("UNSPAD", "MVC", "1(0,14),0(14)", "executed: propagate the space");
+    asm_line("RTSAVE9", "DS", "18F", "");
+}
+
 static void emit_runtime(void)
 {
     asm_comment("---------------------------------------------------------------");
@@ -4704,7 +5170,8 @@ static void emit_runtime(void)
     asm_comment(" Not reentrant: MVS 3.8j batch does not require it.");
     asm_comment("---------------------------------------------------------------");
     asm_line("COBRT", "CSECT", "", "");
-    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI,COBADV", "");
+    asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI", "");
+    asm_line("", "ENTRY", "COBADV,COBSTR,COBUNS", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -4821,6 +5288,7 @@ static void emit_runtime(void)
     asm_line("ADVPAGE", "DC", "H'999'", "the page-skip request");
     asm_line("ADVTHREE", "DC", "H'3'", "");
     asm_line("RTSAVE7", "DS", "18F", "");
+    emit_string_runtime();
     asm_comment("");
     asm_comment(" COBUPSI -- set the eight switches from the EXEC PARM.");
     asm_comment("");
@@ -5997,6 +6465,160 @@ static void generate(void)
             } else asm_line("", "B", p, "");
             break;
         }
+        case ST_STRING: {
+            const Sym *d = &syms[st->dst];
+            int si = (int)(st - stmts);
+            char blk[12], cell[12], slot[24];
+            snprintf(blk, sizeof blk, "SB%04d", si);
+            snprintf(cell, sizeof cell, "SP%04d", si);
+            snprintf(b, sizeof b, " STRING ... INTO %s", d->name);
+            asm_comment(b);
+            use_str = 1;
+            /* The block: receiver, its length, the item count, the pointer
+             * cell; then per item its address, length, delimiter length and
+             * delimiter address. Twelve bytes each, so every address is on a
+             * fullword. */
+            int rn = st->dsub ? d->elem : d->bytes;
+            pend(blk, "DS", "0F", "STRING parameter block");
+            pend("", "DC", "AL4(0)", "the receiver");
+            snprintf(b, sizeof b, "AL2(%d),AL2(%d)", rn, st->sop_n); pend("", "DC", b, "its length, the item count");
+            if (st->ptr_sym >= 0) { snprintf(b, sizeof b, "AL4(%s)", cell); pend("", "DC", b, "WITH POINTER cell"); }
+            else pend("", "DC", "AL4(0)", "no POINTER");
+            for (int k = 0; k < st->sop_n; k++) {
+                const SOp *o = &sops[st->sop_first + k];
+                if (o->sym >= 0) pend("", "DC", "AL4(0)", "item, stored at run time");
+                else { snprintf(b, sizeof b, "AL4(%s)", o->lab); pend("", "DC", b, "item, a constant"); }
+                snprintf(b, sizeof b, "AL2(%d),AL2(%d)", sop_len(o, 0), o->dsize ? 0 : sop_len(o, 1));
+                pend("", "DC", b, o->dsize ? "length; DELIMITED BY SIZE" : "length, delimiter length");
+                if (o->dsize) pend("", "DC", "AL4(0)", "");
+                else if (o->dsym >= 0) pend("", "DC", "AL4(0)", "delimiter, stored at run time");
+                else { snprintf(b, sizeof b, "AL4(%s)", o->dlab); pend("", "DC", b, "delimiter, a constant"); }
+            }
+            if (st->ptr_sym >= 0) pend(cell, "DS", "F", "the POINTER as a fullword");
+            /* Fill in what only exists at run time, convert the pointer, call. */
+            {
+                char f[64];
+                field_ref_m(d, st->dsub, FR_RX, rn, 6, f, sizeof f);
+                snprintf(b, sizeof b, "1,%s", f); asm_line("", "LA", b, "the receiver");
+                snprintf(b, sizeof b, "1,%s", blk); asm_line("", "ST", b, "");
+            }
+            for (int k = 0; k < st->sop_n; k++) {
+                const SOp *o = &sops[st->sop_first + k];
+                snprintf(slot, sizeof slot, "%s+%d", blk, 12 + 12 * k);
+                sop_addr(o, 0, slot);
+                snprintf(slot, sizeof slot, "%s+%d", blk, 12 + 12 * k + 8);
+                if (!o->dsize) sop_addr(o, 1, slot);
+            }
+            if (st->ptr_sym >= 0) cell_in(st->ptr_sym, st->ptr_sub, cell);
+            snprintf(b, sizeof b, "1,%s", blk); asm_line("", "LA", b, "");
+            asm_line("", "L", "15,VSTR", "");
+            asm_line("", "BALR", "14,15", "COBSTR");
+            reset_bases();
+            if (st->ptr_sym >= 0) {
+                asm_line("", "LR", "3,15", "keep the overflow flag");
+                cell_out(st->ptr_sym, st->ptr_sub, cell);
+                asm_line("", "LTR", "3,3", "overflow?");
+            } else asm_line("", "LTR", "15,15", "overflow?");
+            if (st->ovf) {
+                snprintf(b, sizeof b, "L%04d", st->lab2);
+                asm_line("", "BZ", b, "no: past the ON OVERFLOW statements");
+            }
+            reset_bases();
+            break;
+        }
+        case ST_UNSTRING: {
+            const Sym *sv = &syms[st->src];
+            int si = (int)(st - stmts);
+            char blk[12], pcell[12], tcell[12], slot[24];
+            snprintf(blk, sizeof blk, "UB%04d", si);
+            snprintf(pcell, sizeof pcell, "SP%04d", si);
+            snprintf(tcell, sizeof tcell, "ST%04d", si);
+            snprintf(b, sizeof b, " UNSTRING %s ...", sv->name);
+            asm_comment(b);
+            use_uns = 1;
+            int sn = st->ssub ? sv->elem : sv->bytes;
+            /* The block: sending item and length, delimiter count, pointer
+             * cell, tally cell, receiver count; then the delimiters at eight
+             * bytes each and the receivers at sixteen. */
+            pend(blk, "DS", "0F", "UNSTRING parameter block");
+            pend("", "DC", "AL4(0)", "the sending item");
+            snprintf(b, sizeof b, "AL2(%d),AL2(%d)", sn, st->sdl_n); pend("", "DC", b, "its length, the delimiter count");
+            if (st->ptr_sym >= 0) { snprintf(b, sizeof b, "AL4(%s)", pcell); pend("", "DC", b, "WITH POINTER cell"); }
+            else pend("", "DC", "AL4(0)", "no POINTER");
+            if (st->tally_sym >= 0) { snprintf(b, sizeof b, "AL4(%s)", tcell); pend("", "DC", b, "TALLYING cell"); }
+            else pend("", "DC", "AL4(0)", "no TALLYING");
+            snprintf(b, sizeof b, "AL2(%d),AL2(0)", st->sop_n); pend("", "DC", b, "the receiver count");
+            pend("", "DC", "AL4(0)", "");
+            for (int k = 0; k < st->sdl_n; k++) {
+                const SOp *o = &sops[st->sdl_first + k];
+                if (o->sym >= 0) pend("", "DC", "AL4(0)", "delimiter, stored at run time");
+                else { snprintf(b, sizeof b, "AL4(%s)", o->lab); pend("", "DC", b, "delimiter, a constant"); }
+                snprintf(b, sizeof b, "AL2(%d),AL2(%d)", sop_len(o, 0), o->all);
+                pend("", "DC", b, o->all ? "length; ALL" : "length");
+            }
+            for (int k = 0; k < st->sop_n; k++) {
+                const SOp *o = &sops[st->sop_first + k];
+                const Sym *r = &syms[o->sym];
+                int rl = o->sub ? r->elem : r->bytes;
+                int il = o->insym >= 0 ? (o->insub ? syms[o->insym].elem : syms[o->insym].bytes) : 0;
+                pend("", "DC", "AL4(0)", r->name);
+                snprintf(b, sizeof b, "AL2(%d),AL2(%d)", rl, il); pend("", "DC", b, "length, DELIMITER IN length");
+                pend("", "DC", "AL4(0)", o->insym >= 0 ? "DELIMITER IN, stored at run time" : "no DELIMITER IN");
+                if (o->cntsym >= 0) { snprintf(b, sizeof b, "AL4(SC%04d%c)", si, 'A' + k); pend("", "DC", b, "COUNT IN cell"); }
+                else pend("", "DC", "AL4(0)", "no COUNT IN");
+            }
+            if (st->ptr_sym >= 0) pend(pcell, "DS", "F", "the POINTER as a fullword");
+            if (st->tally_sym >= 0) pend(tcell, "DS", "F", "TALLYING as a fullword");
+            for (int k = 0; k < st->sop_n; k++)
+                if (sops[st->sop_first + k].cntsym >= 0) {
+                    snprintf(b, sizeof b, "SC%04d%c", si, 'A' + k);
+                    pend(b, "DS", "F", "COUNT IN as a fullword");
+                }
+            /* Run-time addresses, the cells in, the call, the cells out. */
+            {
+                char f[64];
+                field_ref_m(sv, st->ssub, FR_RX, sn, 6, f, sizeof f);
+                snprintf(b, sizeof b, "1,%s", f); asm_line("", "LA", b, "the sending item");
+                snprintf(b, sizeof b, "1,%s", blk); asm_line("", "ST", b, "");
+            }
+            for (int k = 0; k < st->sdl_n; k++) {
+                snprintf(slot, sizeof slot, "%s+%d", blk, 24 + 8 * k);
+                sop_addr(&sops[st->sdl_first + k], 0, slot);
+            }
+            for (int k = 0; k < st->sop_n; k++) {
+                const SOp *o = &sops[st->sop_first + k];
+                int base = 24 + 8 * st->sdl_n + 16 * k;
+                snprintf(slot, sizeof slot, "%s+%d", blk, base);
+                sop_addr(o, 0, slot);
+                if (o->insym >= 0) {
+                    SOp t; memset(&t, 0, sizeof t); t.sym = o->insym; t.sub = o->insub;
+                    snprintf(slot, sizeof slot, "%s+%d", blk, base + 8);
+                    sop_addr(&t, 0, slot);
+                }
+            }
+            if (st->ptr_sym >= 0) cell_in(st->ptr_sym, st->ptr_sub, pcell);
+            if (st->tally_sym >= 0) cell_in(st->tally_sym, st->tally_sub, tcell);
+            snprintf(b, sizeof b, "1,%s", blk); asm_line("", "LA", b, "");
+            asm_line("", "L", "15,VUNS", "");
+            asm_line("", "BALR", "14,15", "COBUNS");
+            reset_bases();
+            asm_line("", "LR", "3,15", "keep the overflow flag");
+            if (st->ptr_sym >= 0) cell_out(st->ptr_sym, st->ptr_sub, pcell);
+            if (st->tally_sym >= 0) cell_out(st->tally_sym, st->tally_sub, tcell);
+            for (int k = 0; k < st->sop_n; k++) {
+                const SOp *o = &sops[st->sop_first + k];
+                if (o->cntsym < 0) continue;
+                snprintf(b, sizeof b, "SC%04d%c", si, 'A' + k);
+                cell_out(o->cntsym, o->cntsub, b);
+            }
+            asm_line("", "LTR", "3,3", "overflow?");
+            if (st->ovf) {
+                snprintf(b, sizeof b, "L%04d", st->lab2);
+                asm_line("", "BZ", b, "no: past the ON OVERFLOW statements");
+            }
+            reset_bases();
+            break;
+        }
         case ST_GODEP: {
             const Sym *v = &syms[st->src];
             char lt[16], lx[16];
@@ -6902,6 +7524,10 @@ static void generate(void)
         if (use_qvals) asm_line("QVALS", "DC", "256X'7D'", "QUOTES, for comparison");
         if (use_spcs)  asm_line("SPCS", "DC", "256C' '", "space padding, for comparison");
         if (use_szflg) asm_line("SZFLG", "DS", "X", "ON SIZE ERROR: set by any receiver of a series");
+        if (use_str) asm_line("VSTR", "DC", "V(COBSTR)", "");
+        if (use_uns) asm_line("VUNS", "DC", "V(COBUNS)", "");
+        for (int k = 0; k < npend_dc; k++)
+            asm_line(pend_dc[k].lab, pend_dc[k].op, pend_dc[k].opd, pend_dc[k].cmt);
         asm_line("PWK1", "DS", "PL16", "");
         asm_line("PWK2", "DS", "PL16", "");
         asm_line("EDSRC", "DS", "PL16", "ED source, sized to the selectors");
@@ -7296,6 +7922,12 @@ static void generate(void)
         asm_line("SPIEFND", "CVD", "5,SPIEDW", "");
         asm_line("", "UNPK", "SPIELINE(5),SPIEDW+5(3)", "");
         asm_line("", "OI", "SPIELINE+4,X'F0'", "");
+        /* And the offset itself, in hex: a fault in the runtime maps to the
+         * last statement, which says nothing, and the offset is what the
+         * assembler listing is indexed by. */
+        asm_line("", "ST", "2,SPIEDW", "the offset, relative to COBBEG");
+        asm_line("", "UNPK", "SPIEOFF(7),SPIEDW+1(4)", "low three bytes to zoned");
+        asm_line("", "TR", "SPIEOFF(6),SPIEHEXT", "zoned to hex digits");
         asm_line("", "WTO", "MF=(E,SPIEWTO)", "into the job log, beside the abend");
         asm_comment("  cancel the exit and back up to the failing instruction,");
         asm_comment("  so the abend happens for real -- same code, same dump");
@@ -7316,6 +7948,10 @@ static void generate(void)
         asm_line("", "A", "2,SPIE3000", "");
         asm_line("", "ABEND", "(2),DUMP", "");
         asm_line("SPIEHEX", "DC", "C'0123456789ABCDEF'", "");
+        /* A full translate table: zoned X'F0'-X'FF' to the digit. Indexing
+         * SPIEHEX-240 instead gives a negative displacement under the exit's
+         * base, which assembles without complaint and reads garbage. */
+        asm_line("SPIEHEXT", "DC", "240X'00',C'0123456789ABCDEF'", "");
         asm_line("SPIE15", "DC", "F'15'", "");
         asm_line("SPIE3000", "DC", "F'3000'", "");
         asm_line("SPIEADR", "DC", "X'00FFFFFF'", "");
@@ -7325,10 +7961,11 @@ static void generate(void)
         asm_line("SPIENUM", "DC", nb, "statements in the table");
         asm_line("SPIEREGS", "DS", "15F", "");
         asm_line("SPIEDW", "DS", "D", "");
-        asm_cont("SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',",
+        asm_cont("SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',",
                  "MF=L");
         asm_line("SPIECODE", "EQU", "SPIEWTO+29,1", "the 0C? digit, patched above");
-        asm_line("SPIELINE", "EQU", "SPIEWTO+46,5", "the line number, likewise");
+        asm_line("SPIELINE", "EQU", "SPIEWTO+36,5", "the line number, likewise");
+        asm_line("SPIEOFF", "EQU", "SPIEWTO+49,7", "the offset from COBBEG, in hex");
         asm_comment(" statement offsets, ascending, paired with source lines");
         asm_line("SPIELTB", "DS", "0H", "");
         for (int i = 0; i < nlinetab; i++) {

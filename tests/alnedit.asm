@@ -198,6 +198,9 @@ SPIELOOP LTR   4,4
 SPIEFND  CVD   5,SPIEDW
          UNPK  SPIELINE(5),SPIEDW+5(3)
          OI    SPIELINE+4,X'F0'
+         ST    2,SPIEDW            the offset, relative to COBBEG
+         UNPK  SPIEOFF(7),SPIEDW+1(4)  low three bytes to zoned
+         TR    SPIEOFF(6),SPIEHEXT  zoned to hex digits
          WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
 *  cancel the exit and back up to the failing instruction,
 *  so the abend happens for real -- same code, same dump
@@ -206,6 +209,7 @@ SPIEFND  CVD   5,SPIEDW
          A     2,SPIE3000
          ABEND (2),DUMP
 SPIEHEX  DC    C'0123456789ABCDEF'
+SPIEHEXT DC    240X'00',C'0123456789ABCDEF'
 SPIE15   DC    F'15'
 SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
@@ -214,10 +218,11 @@ SPIETAB  DC    A(SPIELTB)
 SPIENUM  DC    H'13'               statements in the table
 SPIEREGS DS    15F
 SPIEDW   DS    D
-SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
                MF=L
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
-SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
+SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0H
          DC    AL2(T0000-COBBEG),AL2(19)
@@ -256,7 +261,8 @@ D0007    DC    CL4'WXYZ'           SRC4 PIC X(4)
 * Not reentrant: MVS 3.8j batch does not require it.
 *---------------------------------------------------------------
 COBRT    CSECT
-         ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI,COBADV
+         ENTRY COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI
+         ENTRY COBADV,COBSTR,COBUNS
 *
 * COBDISP -- write one line to SYSOUT.
 *   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.
@@ -367,6 +373,244 @@ ADVONE   DC    H'1'
 ADVPAGE  DC    H'999'              the page-skip request
 ADVTHREE DC    H'3'
 RTSAVE7  DS    18F
+*
+* COBSTR -- STRING. R1 -> AL4(receiver), AL2(len), AL2(n),
+*   AL4(pointer cell or 0); then per item AL4(addr), AL2(len),
+*   AL2(delimiter len, 0 for SIZE), AL4(delimiter addr).
+* Each item goes byte by byte until its delimiter matches or
+* it runs out; the receiver filling up is the overflow, and
+* a pointer outside 1..len is overflow with nothing moved.
+* R15 = 0 done, 1 overflow. Other bytes of the receiver are
+* not touched, which is the rule: STRING does not space-fill.
+COBSTR   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE8+4
+         LA    11,RTSAVE8
+         ST    11,8(13)
+         LR    13,11
+         LR    2,1                 the block
+         L     3,0(2)              receiver
+         LH    5,4(2)              its length
+         LH    7,6(2)              items
+         L     4,8(2)              pointer cell
+         LTR   4,4
+         BZ    STR010              none: start at 1
+         L     4,0(4)
+         B     STR020
+STR010   LA    4,1
+STR020   BCTR  4,0                 position, from 0
+         LTR   4,4
+         BM    STRBAD              pointer below 1
+         CR    4,5
+         BNL   STRBAD              pointer past the end
+         LA    6,12(2)             the first item
+STR100   LTR   7,7
+         BZ    STRDONE             all items sent
+         L     8,0(6)              item
+         LH    9,4(6)              its length
+         LH    11,6(6)             delimiter length
+         L     10,8(6)             delimiter
+STR110   LTR   9,9
+         BZ    STR190              item exhausted
+         LTR   11,11
+         BZ    STR120              SIZE: no delimiter to look for
+         CR    9,11
+         BL    STR120              too few left to hold the delimiter
+         LR    15,11
+         BCTR  15,0
+         EX    15,STRCLC           delimiter here?
+         BE    STR190              yes: the item ends
+STR120   CR    4,5
+         BNL   STROVF              receiver full
+         LA    15,0(3,4)
+         MVC   0(1,15),0(8)        one byte
+         LA    8,1(8)
+         BCTR  9,0
+         LA    4,1(4)
+         B     STR110
+STR190   LA    6,12(6)             next item
+         BCTR  7,0
+         B     STR100
+STRDONE  SR    15,15
+         B     STRRET
+STROVF   LA    15,1                overflow
+STRRET   L     14,8(2)             pointer cell
+         LTR   14,14
+         BZ    STRX
+         LA    4,1(4)              back to counting from 1
+         ST    4,0(14)
+         B     STRX
+STRBAD   LA    15,1                pointer out of range: overflow, noth
+STRX     L     13,4(13)
+         ST    15,16(13)           R15 survives the LM through its own
+         LM    14,12,12(13)
+         BR    14
+STRCLC   CLC   0(0,8),0(10)        executed with the delimiter length
+RTSAVE8  DS    18F
+*
+* COBUNS -- UNSTRING. R1 -> AL4(sender), AL2(len), AL2(nd),
+*   AL4(pointer cell or 0), AL4(tally cell or 0), AL2(nr),
+*   AL2(0), AL4(0); then nd delimiters AL4(addr), AL2(len),
+*   AL2(ALL); then nr receivers AL4(addr), AL2(len),
+*   AL2(DELIMITER IN len), AL4(DELIMITER IN or 0),
+*   AL4(COUNT IN cell or 0).
+* For each receiver the sender is scanned from the position
+* for the first place any delimiter matches, delimiters tried
+* in order; the bytes before it go to the receiver, left
+* justified and space filled. No delimiters means a receiver
+* takes its own length. Bytes left when the receivers are
+* used up are the overflow. R15 = 0 done, 1 overflow.
+COBUNS   STM   14,12,12(13)
+         BALR  12,0
+         USING *,12
+         ST    13,RTSAVE9+4
+         LA    11,RTSAVE9
+         ST    11,8(13)
+         LR    13,11
+         LR    2,1                 the block
+         L     3,0(2)              sender
+         LH    5,4(2)              its length
+         LH    10,6(2)             delimiters
+         L     4,8(2)              pointer cell
+         LTR   4,4
+         BZ    UNS010
+         L     4,0(4)
+         B     UNS020
+UNS010   LA    4,1
+UNS020   BCTR  4,0                 position, from 0
+         LTR   4,4
+         BM    UNSBAD
+         CR    4,5
+         BNL   UNSBAD              pointer past the end
+         LH    7,16(2)             receivers
+         LR    6,10
+         SLL   6,3                 eight bytes per delimiter
+         LA    6,24(6,2)           the first receiver
+UNS100   LTR   7,7
+         BZ    UNSEND              receivers used up
+         CR    4,5
+         BNL   UNSEND              sender used up: the rest stay as the
+         LR    8,4                 scan from the position
+         SR    9,9                 no delimiter matched yet
+         LTR   10,10
+         BZ    UNS140              no delimiters: take the receiver's l
+UNS110   CR    8,5
+         BNL   UNS170              end of the sender, no delimiter
+         LA    9,24(2)             the first delimiter
+         LR    0,10
+UNS120   L     14,0(9)             delimiter
+         LH    15,4(9)             its length
+         LR    1,5
+         SR    1,8                 bytes left
+         CR    1,15
+         BL    UNS130              not enough left for this one
+         LA    1,0(3,8)
+         BCTR  15,0
+         EX    15,UNSCLC           matches here?
+         BE    UNS170              yes, R9 says which
+UNS130   LA    9,8(9)              next delimiter
+         BCT   0,UNS120
+         SR    9,9                 none matched at this byte
+         LA    8,1(8)
+         B     UNS110
+UNS140   LH    1,4(6)              receiver length
+         LA    8,0(4,1)            position plus that
+         CR    8,5
+         BNH   UNS170
+         LR    8,5                 but no further than the end
+UNS170   L     14,0(6)             receiver
+         LH    15,4(6)             its length
+         MVI   0(14),C' '
+         LR    11,15
+         BCTR  11,0
+         LTR   11,11
+         BZ    UNS172              a one-byte receiver is filled
+         BCTR  11,0
+         EX    11,UNSPAD           space fill
+UNS172   LR    1,8
+         SR    1,4                 bytes to move
+         L     11,12(6)            COUNT IN cell
+         LTR   11,11
+         BZ    UNS174
+         ST    1,0(11)             the count, before truncation
+UNS174   CR    1,15
+         BNH   UNS176
+         LR    1,15                truncated on the right
+UNS176   LTR   1,1
+         BZ    UNS180              nothing to move
+         BCTR  1,0
+         LA    15,0(3,4)
+         EX    1,UNSMVC            the bytes
+UNS180   L     14,8(6)             DELIMITER IN
+         LTR   14,14
+         BZ    UNS186
+         LH    15,6(6)             its length
+         MVI   0(14),C' '
+         LR    11,15
+         BCTR  11,0
+         LTR   11,11
+         BZ    UNS182
+         BCTR  11,0
+         EX    11,UNSPAD           space fill
+UNS182   LTR   9,9
+         BZ    UNS186              no delimiter: spaces
+         LH    1,4(9)              delimiter length
+         CR    1,15
+         BNH   UNS184
+         LR    1,15
+UNS184   BCTR  1,0
+         L     15,0(9)
+         EX    1,UNSMVC            the delimiter
+UNS186   L     14,12(2)            TALLYING cell
+         LTR   14,14
+         BZ    UNS188
+         L     15,0(14)
+         LA    15,1(15)            one more receiver acted on
+         ST    15,0(14)
+UNS188   LTR   9,9
+         BZ    UNS196              no delimiter: position is where the
+         LH    1,4(9)              delimiter length
+         LA    4,0(1,8)            past the delimiter
+         LH    0,6(9)              ALL?
+         LTR   0,0
+         BZ    UNS198
+UNS190   LR    0,5
+         SR    0,4                 bytes left
+         CR    0,1
+         BL    UNS198              not enough for another copy
+         LA    15,0(3,4)
+         L     14,0(9)
+         LR    11,1
+         BCTR  11,0
+         EX    11,UNSCLC2          another copy of the delimiter?
+         BNE   UNS198
+         LA    4,0(1,4)            skip it too
+         B     UNS190
+UNS196   LR    4,8
+UNS198   LA    6,16(6)             next receiver
+         BCTR  7,0
+         B     UNS100
+UNSEND   SR    15,15
+         CR    4,5
+         BNL   UNS200
+         LA    15,1                bytes left over: overflow
+UNS200   L     14,8(2)             pointer cell
+         LTR   14,14
+         BZ    UNSX
+         LA    4,1(4)
+         ST    4,0(14)
+         B     UNSX
+UNSBAD   LA    15,1                pointer out of range: overflow, noth
+UNSX     L     13,4(13)
+         ST    15,16(13)           R15 survives the LM through its own
+         LM    14,12,12(13)
+         BR    14
+UNSCLC   CLC   0(0,1),0(14)        executed with the delimiter length
+UNSCLC2  CLC   0(0,15),0(14)
+UNSMVC   MVC   0(0,14),0(15)       executed with the byte count
+UNSPAD   MVC   1(0,14),0(14)       executed: propagate the space
+RTSAVE9  DS    18F
 *
 * COBUPSI -- set the eight switches from the EXEC PARM.
 *

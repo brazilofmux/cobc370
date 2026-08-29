@@ -1,0 +1,21 @@
+S1 [JOHN SMITH----------]
+S2 [SPRINGFIELD USA-----]
+S3 [--ABCD--------------] P=07
+S4 [--ABCDEF------------] P=09
+S5 OVERFLOW
+S5 [ABCDEF] P=07
+S6 OVERFLOW
+S6 [------] P=00
+S7 [ABCDEF]
+S8 [BBCCCC--------------]
+U1 ALPHA |BETA  |      |DEL
+U2 ONE   |TWO   |THREE |
+U2 D=  |, |
+U2 C=03 03 T=03
+U3 [ALPHA,][BETA,,][DELTA ]
+U4 OVERFLOW
+U4 [BETA  ][      ] P=13 T=02
+U5 OVERFLOW
+U5 [ONE   ][      ][      ]
+U6 X     |Y     |******|***
+U7 [ALP] D=[, ] C=05

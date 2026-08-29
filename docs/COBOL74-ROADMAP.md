@@ -114,9 +114,19 @@ been abending 0CA rather than truncating, because naming interruption codes
 **`CORRESPONDING`** -- S: `ADD`, `SUBTRACT`, `MOVE`. Pure front end: match
 subordinate names between two groups and expand to the elementary statements.
 
-**`STRING` and `UNSTRING`** -- M: two runtime routines in `COBRT`.
-`DELIMITED BY` series, `POINTER`, `TALLYING`, `ON OVERFLOW`. The runtime
-already has the shape for this (`COBADV` takes a parameter list of addresses).
+**`STRING` and `UNSTRING`** -- DONE 2026-08-29: two runtime routines,
+`COBSTR` and `COBUNS`, driven by a per-statement parameter block in the data
+area. `DELIMITED BY SIZE` and by value, several items sharing one `DELIMITED
+BY`, `WITH POINTER`, `ON OVERFLOW`; `DELIMITED BY ... OR ...`, `ALL`,
+`DELIMITER IN`, `COUNT IN`, `TALLYING IN`, no `DELIMITED BY` at all. The
+routines work in bytes and know nothing about pictures: `POINTER`, `TALLYING`
+and `COUNT` go through fullword cells the caller converts. Not done:
+numeric receivers on `UNSTRING` (refused with a message), and `ALL literal`
+as an operand.
+
+The program-check message now carries the interrupt offset from `COBBEG` in
+hex, because a fault in the runtime maps to the last source line and says
+nothing; the offset is what the assembler listing is indexed by.
 
 **`INSPECT` with multi-character operands** -- S: the single-character
 version exists; widen the compare from `CLI` to `CLC` and step by the operand

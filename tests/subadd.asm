@@ -119,6 +119,9 @@ SPIELOOP LTR   4,4
 SPIEFND  CVD   5,SPIEDW
          UNPK  SPIELINE(5),SPIEDW+5(3)
          OI    SPIELINE+4,X'F0'
+         ST    2,SPIEDW            the offset, relative to COBBEG
+         UNPK  SPIEOFF(7),SPIEDW+1(4)  low three bytes to zoned
+         TR    SPIEOFF(6),SPIEHEXT  zoned to hex digits
          WTO   MF=(E,SPIEWTO)      into the job log, beside the abend
 *  cancel the exit and back up to the failing instruction,
 *  so the abend happens for real -- same code, same dump
@@ -127,6 +130,7 @@ SPIEFND  CVD   5,SPIEDW
          A     2,SPIE3000
          ABEND (2),DUMP
 SPIEHEX  DC    C'0123456789ABCDEF'
+SPIEHEXT DC    240X'00',C'0123456789ABCDEF'
 SPIE15   DC    F'15'
 SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
@@ -135,10 +139,11 @@ SPIETAB  DC    A(SPIELTB)
 SPIENUM  DC    H'5'                statements in the table
 SPIEREGS DS    15F
 SPIEDW   DS    D
-SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 AT SOURCE LINE 00000',      X
+SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
                MF=L
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
-SPIELINE EQU   SPIEWTO+46,5        the line number, likewise
+SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
+SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0H
          DC    AL2(T0000-COBBEG),AL2(15)
