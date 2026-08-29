@@ -7310,7 +7310,17 @@ static void generate(void)
          * and naming them in a SPIE turns their program-mask bits ON. That is
          * how every packed result too wide for its item came to abend 0CA
          * instead of truncating -- the SPM above was being undone here. */
+        /* Once per load module, not once per entry. The SPIE is an SVC, and
+         * a subprogram entered a million times paid for it a million times:
+         * the whole of a 30x gap against IBM on a CALL benchmark. The cost
+         * of arming once is attribution -- after a callee has run, its exit
+         * stays armed, so a later check in the caller is reported against
+         * the callee's line table; the offset in the message is still true. */
+        asm_line("", "CLI", "SPIEDONE,X'01'", "already armed?");
+        asm_line("", "BE", "SPIEARMD", "the macro is several instructions: a label, not *+n");
         asm_line("", "SPIE", "COBSPIE,((1,7),9,(11,12),15)", "report program checks by line");
+        asm_line("", "MVI", "SPIEDONE,X'01'", "");
+        asm_line("SPIEARMD", "DS", "0H", "");
     }
 
     int ndlit = 0, cur_para = -1, nret = 0;
@@ -9522,6 +9532,7 @@ static void generate(void)
         char nb[24]; snprintf(nb, sizeof nb, "H'%d'", nlinetab);
         asm_line("SPIENUM", "DC", nb, "statements in the table");
         asm_line("SPIEREGS", "DS", "15F", "");
+        asm_line("SPIEDONE", "DC", "X'00'", "1 once this module's SPIE is armed");
         asm_line("SPIEDW", "DS", "D", "");
         asm_cont("SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',",
                  "MF=L");

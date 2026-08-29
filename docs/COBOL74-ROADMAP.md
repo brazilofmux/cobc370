@@ -289,3 +289,35 @@ the pace of the last three days, before optimization starts.
   COBOL-85 spelling is a pass. Nothing here widens the language past 1974.
 - **The oracle is GnuCOBOL, and GnuCOBOL is not an authority.** Disagreements
   are narrowed, not settled by deference.
+
+## Optimization
+
+Begun 2026-08-29, once the language work above was done. The instrument is
+`bench/run.sh`: nine constructs a million times each, under both compilers,
+CPU from the step accounting. The production batch is the safety net, not the
+score -- it spends its time in I/O, SORT and `COMPUTE`, where the two
+compilers are level, and its 13% gap hid primitives that were two to seven
+times behind.
+
+| construct (x1,000,000) | cobc370 at start | IKFCBL00 | after |
+|---|---|---|---|
+| packed `ADD` | 0.18 | 0.09 | **0.09** (1) |
+| packed compare | 0.17 | 0.07 | **0.09** (1) |
+| `CALL` a subprogram | 4.76 | 0.16 | **0.27** (2) |
+| `COMP` `ADD 1` | 0.20 | 0.03 | |
+| `MOVE` same picture, DISPLAY | 0.05 | 0.01 | |
+| `MOVE` to a wider picture | 0.06 | 0.02 | |
+| `IF` same picture, unsigned DISPLAY | 0.02 | 0.10 | already ahead |
+| `COMPUTE` with `*` and `+` | 0.49 | 0.53 | level |
+
+1. Same-scale packed `ADD`/`SUBTRACT`/compare in place: `AP`, `SP`, `CP` on
+   the fields themselves, literals from the tail of their constants.
+2. `SPIE` armed once per load module. The first attempt skipped it with
+   `BE *+14`, which lands inside the macro's expansion and skipped nothing;
+   the benchmark said 4.59 and the label fix said 0.27. Cost: after a callee
+   has run, a program check in the caller is reported against the callee's
+   line table; the offset stays true.
+
+Next: numeric `DISPLAY` moves as `MVC`; `COMP` add and subtract in binary
+with a range guard for picture truncation; then right-sizing the work areas
+`gen_expr` uses, which is the general form of (1).

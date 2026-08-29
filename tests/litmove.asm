@@ -20,7 +20,11 @@ COBBEG   EQU   *
          LR    13,0                our save area is now current
          SR    0,0
          SPM   0                   no overflow interrupts: high-order t
+         CLI   SPIEDONE,X'01'      already armed?
+         BE    SPIEARMD            the macro is several instructions: a
          SPIE  COBSPIE,((1,7),9,(11,12),15)  report program checks by l
+         MVI   SPIEDONE,X'01'
+SPIEARMD DS    0H
 * A.
 P0000    DS    0H
 T0000    DS    0H
@@ -141,6 +145,7 @@ SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
 SPIENUM  DC    H'5'                statements in the table
 SPIEREGS DS    15F
+SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
 SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
                MF=L
