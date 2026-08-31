@@ -1,0 +1,1 @@
+000100     MOVE AA TO BB.

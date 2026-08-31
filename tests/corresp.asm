@@ -485,7 +485,7 @@ D0022    DC    CL3'DST'            ONLY-DST PIC X(3)
 D0023    DS    0CL2                TBL (05 group)
 D0024    DC    2CL1'1'             TE PIC 9(1)v0 DISP table
 D0025    DC    CL1'D'              KIND PIC X(1)
-D0026    EQU   COBWS+33            KIND-R REDEFINES
+D0026    EQU   COBWS+76            KIND-R REDEFINES
          DS    XL3                 reserve the rest of a table
 D0027    DC    CL6' '              E-AMT edited, 6 chars
          DS    XL2                 reserve the rest of a table
@@ -1281,13 +1281,21 @@ COBDCAL  STM   14,12,12(13)
          L     3,4(0,1)            the parameter list
          LA    4,DCTAB
          LA    5,16                entries
-DCA010   CLI   0(4),X'00'          an empty entry?
-         BE    DCA050              then it is not loaded
-         CLC   0(8,4),0(2)         this one?
-         BE    DCA030
-         LA    4,12(4)
+         SR    6,6                 no hole yet
+DCA010   CLC   0(8,4),0(2)         this one?
+         BE    DCA030              already loaded
+         CLI   0(4),X'00'          an empty entry?
+         BNE   DCA020
+         LTR   6,6
+         BNZ   DCA020              keep the first hole
+         LR    6,4
+DCA020   LA    4,12(4)
          BCT   5,DCA010
-         LOAD  EPLOC=(2)           table full: load without remembering
+         LTR   6,6                 a hole to remember this load?
+         BZ    DCAFULL             table full
+         LR    4,6
+         B     DCA050
+DCAFULL  LOAD  EPLOC=(2)           table full: load without remembering
          LR    15,0
          B     DCA040
 DCA050   MVC   0(8,4),0(2)         remember the name
@@ -1315,10 +1323,10 @@ COBCANC  STM   14,12,12(13)
          LA    4,DCTAB
          LA    5,16
 CAN010   CLI   0(4),X'00'
-         BE    CANX                not loaded: nothing to do
+         BE    CANNEXT             empty: keep looking
          CLC   0(8,4),0(2)
          BE    CAN020
-         LA    4,12(4)
+CANNEXT  LA    4,12(4)
          BCT   5,CAN010
          B     CANX
 CAN020   DELETE EPLOC=(2)          release it

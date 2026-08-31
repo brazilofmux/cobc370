@@ -33,12 +33,12 @@ T0000    DS    0H
 * ADD 1 -> WS-CALLS
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000             binary, same scale: in the register
-         AH    2,H0001
+         LH    2,D0000
+         AH    2,H0001             binary, same scale: in the register
          STH   2,D0000
 T0001    DS    0H
 * MOVE WS-CALLS -> OUT-CALLS
-         LH    2,D0000             binary move, no decimal detour
+         LH    2,D0000
          L     9,PBL0000           parameter address
          USING LS0000,9
          STH   2,D0002

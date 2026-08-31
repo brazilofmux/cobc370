@@ -31,8 +31,8 @@ T0000    DS    0H
 * ADD 1 -> HW1
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0000             binary, same scale: in the register
-         AH    2,H0001
+         LH    2,D0000
+         AH    2,H0001             binary, same scale: in the register
          STH   2,D0000
 T0001    DS    0H
 * MOVE HW1 -> E4
@@ -55,8 +55,8 @@ T0002    DS    0H
          BALR  14,15
 T0003    DS    0H
 * ADD 5000 -> HW1
-         LH    2,D0000             binary, same scale: in the register
-         AH    2,H0002
+         LH    2,D0000
+         AH    2,H0002             binary, same scale: in the register
          STH   2,D0000
 T0004    DS    0H
 * MOVE HW1 -> E4
@@ -79,8 +79,8 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * SUBTRACT 10000 -> HW1
-         LH    2,D0000             binary, same scale: in the register
-         SH    2,H0003
+         LH    2,D0000
+         SH    2,H0003             binary, same scale: in the register
          STH   2,D0000
 T0007    DS    0H
 * MOVE HW1 -> E4
@@ -103,8 +103,8 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * ADD HW2 -> HW1
-         LH    2,D0000             binary, same scale: in the register
-         AH    2,D0001
+         LH    2,D0000
+         AH    2,D0001             binary, same scale: in the register
          STH   2,D0000
 T0010    DS    0H
 * MOVE HW1 -> E4
@@ -127,8 +127,8 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * ADD FW3 -> HW1
-         LH    2,D0000             binary, same scale: in the register
-         A     2,D0004
+         LH    2,D0000
+         A     2,D0004             binary, same scale: in the register
          STH   2,D0000
 T0013    DS    0H
 * MOVE HW1 -> E4
@@ -151,8 +151,8 @@ T0014    DS    0H
          BALR  14,15
 T0015    DS    0H
 * ADD 1 -> FW1
-         L     2,D0002             binary, same scale: in the register
-         AH    2,H0001
+         L     2,D0002
+         AH    2,H0001             binary, same scale: in the register
          ST    2,D0002
 T0016    DS    0H
 * MOVE FW1 -> E8
@@ -175,8 +175,8 @@ T0017    DS    0H
          BALR  14,15
 T0018    DS    0H
 * SUBTRACT 40000 -> FW1
-         L     2,D0002             binary, same scale: in the register
-         S     2,FC001
+         L     2,D0002
+         S     2,FC001             binary, same scale: in the register
          ST    2,D0002
 T0019    DS    0H
 * MOVE FW1 -> E8
@@ -199,8 +199,8 @@ T0020    DS    0H
          BALR  14,15
 T0021    DS    0H
 * SUBTRACT 12000000 -> FW1
-         L     2,D0002             binary, same scale: in the register
-         S     2,FC002
+         L     2,D0002
+         S     2,FC002             binary, same scale: in the register
          ST    2,D0002
 T0022    DS    0H
 * MOVE FW1 -> E8
@@ -223,8 +223,8 @@ T0023    DS    0H
          BALR  14,15
 T0024    DS    0H
 * ADD FW2 -> FW1
-         L     2,D0002             binary, same scale: in the register
-         A     2,D0003
+         L     2,D0002
+         A     2,D0003             binary, same scale: in the register
          ST    2,D0002
 T0025    DS    0H
 * MOVE FW1 -> E8
@@ -247,8 +247,8 @@ T0026    DS    0H
          BALR  14,15
 T0027    DS    0H
 * ADD HW2 -> FW1
-         L     2,D0002             binary, same scale: in the register
-         AH    2,D0001
+         L     2,D0002
+         AH    2,D0001             binary, same scale: in the register
          ST    2,D0002
 T0028    DS    0H
 * MOVE FW1 -> E8
@@ -329,8 +329,8 @@ T0035    DS    0H
          BALR  14,15
 T0036    DS    0H
 * SUBTRACT 3 -> UW1
-         L     2,D0005             binary, same scale: in the register
-         SH    2,H0004
+         L     2,D0005
+         SH    2,H0004             binary, same scale: in the register
          ST    2,D0005
 T0037    DS    0H
 * MOVE UW1 -> E8
@@ -353,8 +353,8 @@ T0038    DS    0H
          BALR  14,15
 T0039    DS    0H
 * ADD 25 -> SC1
-         L     2,D0006             binary, same scale: in the register
-         AH    2,H0005
+         L     2,D0006
+         AH    2,H0005             binary, same scale: in the register
          ST    2,D0006
 T0040    DS    0H
 * MOVE SC1 -> ES
@@ -377,8 +377,8 @@ T0041    DS    0H
          BALR  14,15
 T0042    DS    0H
 * ADD 1 -> SC1
-         L     2,D0006             binary, same scale: in the register
-         AH    2,H0006
+         L     2,D0006
+         AH    2,H0006             binary, same scale: in the register
          ST    2,D0006
 T0043    DS    0H
 * MOVE SC1 -> ES
@@ -401,8 +401,8 @@ T0044    DS    0H
          BALR  14,15
 T0045    DS    0H
 * SUBTRACT 005 -> SC1
-         L     2,D0006             binary, same scale: in the register
-         SH    2,H0007
+         L     2,D0006
+         SH    2,H0007             binary, same scale: in the register
          ST    2,D0006
 T0046    DS    0H
 * MOVE SC1 -> ES
@@ -425,8 +425,8 @@ T0047    DS    0H
          BALR  14,15
 T0048    DS    0H
 * ADD SC2 -> SC1
-         L     2,D0006             binary, same scale: in the register
-         A     2,D0007
+         L     2,D0006
+         A     2,D0007             binary, same scale: in the register
          ST    2,D0006
 T0049    DS    0H
 * MOVE SC1 -> ES
@@ -539,52 +539,68 @@ T0059    DS    0H
          STH   2,0(,6)
 T0060    DS    0H
 * ADD 1 -> CELL
+         LA    7,1                 subscript-1
+         MH    7,H0008             times element size
+         LA    7,D0012(7)          element address
+         LH    2,0(,7)
+         AH    2,H0001             binary, same scale: in the register
          LA    6,1                 subscript-1
          MH    6,H0008             times element size
          LA    6,D0012(6)          element address
-         LH    2,0(,6)             binary, same scale: in the register
-         AH    2,H0001
          STH   2,0(,6)
 T0061    DS    0H
 * ADD CELL -> CELL
+         LA    7,2                 subscript-1
+         MH    7,H0008             times element size
+         LA    7,D0012(7)          element address
+         LH    2,0(,7)
          LA    7,0                 subscript-1
          MH    7,H0008             times element size
          LA    7,D0012(7)          element address
+         AH    2,0(,7)             binary, same scale: in the register
          LA    6,2                 subscript-1
          MH    6,H0008             times element size
          LA    6,D0012(6)          element address
-         LH    2,0(,6)             binary, same scale: in the register
-         AH    2,0(,7)
          STH   2,0(,6)
 T0062    DS    0H
 * ADD CELL -> CELL
+         PACK  DWK(8),D0014(1)     subscript
+         CVB   7,DWK
+         BCTR  7,0                 subscript-1
+         MH    7,H0008             times element size
+         LA    7,D0012(7)          element address
+         LH    2,0(,7)
          PACK  DWK(8),D0013(1)     subscript
          CVB   7,DWK
          BCTR  7,0                 subscript-1
          MH    7,H0008             times element size
          LA    7,D0012(7)          element address
+         AH    2,0(,7)             binary, same scale: in the register
          PACK  DWK(8),D0014(1)     subscript
          CVB   6,DWK
          BCTR  6,0                 subscript-1
          MH    6,H0008             times element size
          LA    6,D0012(6)          element address
-         LH    2,0(,6)             binary, same scale: in the register
-         AH    2,0(,7)
          STH   2,0(,6)
 T0063    DS    0H
 * SUBTRACT CELL -> CELL
+         PACK  DWK(8),D0013(1)     subscript
+         CVB   7,DWK
+         BCTR  7,0                 subscript-1
+         MH    7,H0008             times element size
+         LA    7,D0012(7)          element address
+         LH    2,0(,7)
          PACK  DWK(8),D0014(1)     subscript
          CVB   7,DWK
          BCTR  7,0                 subscript-1
          MH    7,H0008             times element size
          LA    7,D0012(7)          element address
+         SH    2,0(,7)             binary, same scale: in the register
          PACK  DWK(8),D0013(1)     subscript
          CVB   6,DWK
          BCTR  6,0                 subscript-1
          MH    6,H0008             times element size
          LA    6,D0012(6)          element address
-         LH    2,0(,6)             binary, same scale: in the register
-         SH    2,0(,7)
          STH   2,0(,6)
 T0064    DS    0H
 * MOVE CELL -> E4
@@ -1745,13 +1761,21 @@ COBDCAL  STM   14,12,12(13)
          L     3,4(0,1)            the parameter list
          LA    4,DCTAB
          LA    5,16                entries
-DCA010   CLI   0(4),X'00'          an empty entry?
-         BE    DCA050              then it is not loaded
-         CLC   0(8,4),0(2)         this one?
-         BE    DCA030
-         LA    4,12(4)
+         SR    6,6                 no hole yet
+DCA010   CLC   0(8,4),0(2)         this one?
+         BE    DCA030              already loaded
+         CLI   0(4),X'00'          an empty entry?
+         BNE   DCA020
+         LTR   6,6
+         BNZ   DCA020              keep the first hole
+         LR    6,4
+DCA020   LA    4,12(4)
          BCT   5,DCA010
-         LOAD  EPLOC=(2)           table full: load without remembering
+         LTR   6,6                 a hole to remember this load?
+         BZ    DCAFULL             table full
+         LR    4,6
+         B     DCA050
+DCAFULL  LOAD  EPLOC=(2)           table full: load without remembering
          LR    15,0
          B     DCA040
 DCA050   MVC   0(8,4),0(2)         remember the name
@@ -1779,10 +1803,10 @@ COBCANC  STM   14,12,12(13)
          LA    4,DCTAB
          LA    5,16
 CAN010   CLI   0(4),X'00'
-         BE    CANX                not loaded: nothing to do
+         BE    CANNEXT             empty: keep looking
          CLC   0(8,4),0(2)
          BE    CAN020
-         LA    4,12(4)
+CANNEXT  LA    4,12(4)
          BCT   5,CAN010
          B     CANX
 CAN020   DELETE EPLOC=(2)          release it

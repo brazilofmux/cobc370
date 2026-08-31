@@ -36,7 +36,7 @@ T0001    DS    0H
          USING WSC0000,8
          MVC   D0005(4),S0001      literal move, space padded
 T0002    DS    0H
-* MOVE first long record, thirty-six chars.$ -> VOL-TEXT
+* MOVE first long record, thirty-six chars. -> VOL-TEXT
          MVC   D0006(36),S0002     literal move, space padded
 T0003    DS    0H
 * WRITE VO-LONG
@@ -211,7 +211,7 @@ T0027    DS    0H
          DROP  8
 L0018    DS    0H
 T0028    DS    0H
-* MOVE THIRD LONG RECORD, REWRITTEN IN PLAC% -> VUL-TEXT
+* MOVE THIRD LONG RECORD, REWRITTEN IN PLACE -> VUL-TEXT
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0013(36),S0014     literal move, space padded
@@ -379,7 +379,7 @@ S0010    DC    CL6'short5'
 S0011    DC    CL9'WRITTEN 5'
 S0012    DC    CL1'Y'
 S0013    DC    CL6'SHORT2'
-S0014    DC    CL37'THIRD LONG RECORD, REWRITTEN IN PLAC%'
+S0014    DC    CL37'THIRD LONG RECORD, REWRITTEN IN PLACE'
 S0015    DC    CL11'REWRITTEN 2'
 S0016    DC    CL1'N'
 S0017    DC    CL2' ['
@@ -1311,13 +1311,21 @@ COBDCAL  STM   14,12,12(13)
          L     3,4(0,1)            the parameter list
          LA    4,DCTAB
          LA    5,16                entries
-DCA010   CLI   0(4),X'00'          an empty entry?
-         BE    DCA050              then it is not loaded
-         CLC   0(8,4),0(2)         this one?
-         BE    DCA030
-         LA    4,12(4)
+         SR    6,6                 no hole yet
+DCA010   CLC   0(8,4),0(2)         this one?
+         BE    DCA030              already loaded
+         CLI   0(4),X'00'          an empty entry?
+         BNE   DCA020
+         LTR   6,6
+         BNZ   DCA020              keep the first hole
+         LR    6,4
+DCA020   LA    4,12(4)
          BCT   5,DCA010
-         LOAD  EPLOC=(2)           table full: load without remembering
+         LTR   6,6                 a hole to remember this load?
+         BZ    DCAFULL             table full
+         LR    4,6
+         B     DCA050
+DCAFULL  LOAD  EPLOC=(2)           table full: load without remembering
          LR    15,0
          B     DCA040
 DCA050   MVC   0(8,4),0(2)         remember the name
@@ -1345,10 +1353,10 @@ COBCANC  STM   14,12,12(13)
          LA    4,DCTAB
          LA    5,16
 CAN010   CLI   0(4),X'00'
-         BE    CANX                not loaded: nothing to do
+         BE    CANNEXT             empty: keep looking
          CLC   0(8,4),0(2)
          BE    CAN020
-         LA    4,12(4)
+CANNEXT  LA    4,12(4)
          BCT   5,CAN010
          B     CANX
 CAN020   DELETE EPLOC=(2)          release it

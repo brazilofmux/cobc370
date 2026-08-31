@@ -41,10 +41,47 @@ L0001    DS    0H
 T0001    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),D0000+0
+         MVC   DSPBUF+5(1),S0002
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
 T0002    DS    0H
+* MOVE 42 -> N
+         ZAP   PWK1(16),K0002(16)  literal
+         CP    PWK1(16),K0001+15(1)  BLANK WHEN ZERO: is it zero?
+         BNE   L0004
+         MVC   D0000(5),S0001      then spaces
+         B     L0003
+L0004    DS    0H
+         UNPK  D0000(5),PWK1(16)   packed -> zoned
+         OI    D0000+4,X'F0'       unsigned: force an F zone
+L0003    DS    0H
+T0003    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(5),D0000+0
+         MVC   DSPBUF+5(1),S0002
+         LA    1,PARM0002
+         L     15,VDISP
+         BALR  14,15
+T0004    DS    0H
+* MOVE 0 -> N
+         ZAP   PWK1(16),K0001(16)  literal
+         CP    PWK1(16),K0001+15(1)  BLANK WHEN ZERO: is it zero?
+         BNE   L0006
+         MVC   D0000(5),S0001      then spaces
+         B     L0005
+L0006    DS    0H
+         UNPK  D0000(5),PWK1(16)   packed -> zoned
+         OI    D0000+4,X'F0'       unsigned: force an F zone
+L0005    DS    0H
+T0005    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(5),D0000+0
+         MVC   DSPBUF+5(1),S0002
+         LA    1,PARM0003
+         L     15,VDISP
+         BALR  14,15
+T0006    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -56,7 +93,13 @@ VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
-LEN0001  DC    H'5'
+LEN0001  DC    H'6'
+PARM0002 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0002)  last parameter
+LEN0002  DC    H'6'
+PARM0003 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0003)  last parameter
+LEN0003  DC    H'6'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL16
@@ -73,7 +116,9 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    DC    PL16'0'             numeric constants
+K0002    DC    PL16'42'
 S0001    DC    CL5'     '          nonnumeric constants
+S0002    DC    CL1'<'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
@@ -129,7 +174,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'3'                statements in the table
+SPIENUM  DC    H'7'                statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -143,6 +188,10 @@ SPIELTB  DS    0H
          DC    AL2(T0000-COBBEG),AL2(8)
          DC    AL2(T0001-COBBEG),AL2(9)
          DC    AL2(T0002-COBBEG),AL2(10)
+         DC    AL2(T0003-COBBEG),AL2(11)
+         DC    AL2(T0004-COBBEG),AL2(12)
+         DC    AL2(T0005-COBBEG),AL2(13)
+         DC    AL2(T0006-COBBEG),AL2(14)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

@@ -76,8 +76,8 @@ T0007    DS    0H
 * ADD 1 -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010             binary, same scale: in the register
-         AH    2,H0002
+         LH    2,D0010
+         AH    2,H0002             binary, same scale: in the register
          STH   2,D0010
 T0008    DS    0H
 * PERFORM SHOW
@@ -92,8 +92,8 @@ T0009    DS    0H
 * ADD BUMP -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010             binary, same scale: in the register
-         AH    2,D0005
+         LH    2,D0010
+         AH    2,D0005             binary, same scale: in the register
          STH   2,D0010
 T0010    DS    0H
 * PERFORM SHOW
@@ -108,12 +108,12 @@ T0011    DS    0H
 * MOVE IX -> SAVED-IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010             binary move, no decimal detour
+         LH    2,D0010
          ST    2,D0002
 T0012    DS    0H
 * SUBTRACT 2 -> IX
-         LH    2,D0010             binary, same scale: in the register
-         SH    2,H0003
+         LH    2,D0010
+         SH    2,H0003             binary, same scale: in the register
          STH   2,D0010
 T0013    DS    0H
 * PERFORM SHOW
@@ -128,7 +128,7 @@ T0014    DS    0H
 * MOVE SAVED-IX -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         L     2,D0002             binary move, no decimal detour
+         L     2,D0002
          STH   2,D0010
 T0015    DS    0H
 * PERFORM SHOW
@@ -157,11 +157,11 @@ T0017    DS    0H
          BALR  14,15
 T0018    DS    0H
 * MOVE SAVED-IX -> OTHER-IX
-         L     2,D0002             binary move, no decimal detour
+         L     2,D0002
          ST    2,D0003
 T0019    DS    0H
 * MOVE OTHER-IX -> IX
-         L     2,D0003             binary move, no decimal detour
+         L     2,D0003
          STH   2,D0010
 T0020    DS    0H
 * PERFORM SHOW
@@ -205,8 +205,8 @@ T0025    DS    0H
 * SUBTRACT 3 -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010             binary, same scale: in the register
-         SH    2,H0004
+         LH    2,D0010
+         SH    2,H0004             binary, same scale: in the register
          STH   2,D0010
 T0026    DS    0H
 * IF
@@ -1305,13 +1305,21 @@ COBDCAL  STM   14,12,12(13)
          L     3,4(0,1)            the parameter list
          LA    4,DCTAB
          LA    5,16                entries
-DCA010   CLI   0(4),X'00'          an empty entry?
-         BE    DCA050              then it is not loaded
-         CLC   0(8,4),0(2)         this one?
-         BE    DCA030
-         LA    4,12(4)
+         SR    6,6                 no hole yet
+DCA010   CLC   0(8,4),0(2)         this one?
+         BE    DCA030              already loaded
+         CLI   0(4),X'00'          an empty entry?
+         BNE   DCA020
+         LTR   6,6
+         BNZ   DCA020              keep the first hole
+         LR    6,4
+DCA020   LA    4,12(4)
          BCT   5,DCA010
-         LOAD  EPLOC=(2)           table full: load without remembering
+         LTR   6,6                 a hole to remember this load?
+         BZ    DCAFULL             table full
+         LR    4,6
+         B     DCA050
+DCAFULL  LOAD  EPLOC=(2)           table full: load without remembering
          LR    15,0
          B     DCA040
 DCA050   MVC   0(8,4),0(2)         remember the name
@@ -1339,10 +1347,10 @@ COBCANC  STM   14,12,12(13)
          LA    4,DCTAB
          LA    5,16
 CAN010   CLI   0(4),X'00'
-         BE    CANX                not loaded: nothing to do
+         BE    CANNEXT             empty: keep looking
          CLC   0(8,4),0(2)
          BE    CAN020
-         LA    4,12(4)
+CANNEXT  LA    4,12(4)
          BCT   5,CAN010
          B     CANX
 CAN020   DELETE EPLOC=(2)          release it

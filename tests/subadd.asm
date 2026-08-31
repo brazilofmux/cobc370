@@ -35,18 +35,18 @@ T0000    DS    0H
 * MOVE IN-VAL -> WS-T
          L     8,PBL0000           parameter address
          USING LS0000,8
-         L     2,D0002             binary move, no decimal detour
+         L     2,D0002
          L     9,BL0000            base locator
          USING WSC0000,9
          ST    2,D0000
 T0001    DS    0H
 * ADD 1000 -> WS-T
-         L     2,D0000             binary, same scale: in the register
-         AH    2,H0001
+         L     2,D0000
+         AH    2,H0001             binary, same scale: in the register
          ST    2,D0000
 T0002    DS    0H
 * MOVE WS-T -> OUT-VAL
-         L     2,D0000             binary move, no decimal detour
+         L     2,D0000
          DROP  8
          L     8,PBL0001           parameter address
          USING LS0001,8

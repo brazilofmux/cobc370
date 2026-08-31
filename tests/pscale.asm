@@ -29,7 +29,7 @@ T0000    DS    0H
 * MOVE TRAIL2 -> SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0000(5)   zoned -> packed
+         PACK  PWK1(16),D0000(3)   zoned -> packed
          SRP   PWK1(16),11,0       align scale (left)
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
          MVC   EDWK(22),M0001      load the ED pattern
@@ -47,7 +47,7 @@ T0001    DS    0H
          BALR  14,15
 T0002    DS    0H
 * MOVE TRAIL1 -> SHOW
-         PACK  PWK1(16),D0001(3)   zoned -> packed
+         PACK  PWK1(16),D0001(2)   zoned -> packed
          SRP   PWK1(16),10,0       align scale (left)
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
          MVC   EDWK(22),M0001      load the ED pattern
@@ -65,7 +65,7 @@ T0003    DS    0H
          BALR  14,15
 T0004    DS    0H
 * MOVE LEAD2 -> SHOW
-         PACK  PWK1(16),D0002(5)   zoned -> packed
+         PACK  PWK1(16),D0002(3)   zoned -> packed
          SRP   PWK1(16),4,0        align scale (left)
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
          MVC   EDWK(22),M0001      load the ED pattern
@@ -83,7 +83,7 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * MOVE LEAD8 -> SHOW
-         PACK  PWK1(16),D0003(9)   zoned -> packed
+         PACK  PWK1(16),D0003(1)   zoned -> packed
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
          MVC   EDWK(22),M0001      load the ED pattern
          ED    EDWK(22),EDSRC
@@ -100,9 +100,9 @@ T0007    DS    0H
          BALR  14,15
 T0008    DS    0H
 * COMPUTE ACC = ...
-         PACK  WK0+7(9),D0000(5)   zoned -> packed
+         PACK  WK0+7(9),D0000(3)   zoned -> packed
          SRP   WK0+7(9),1,0        align scale (left)
-         PACK  WK1+14(2),D0001(3)  zoned -> packed
+         PACK  WK1+14(2),D0001(2)  zoned -> packed
          AP    WK0+7(9),WK1+14(2)
          SRP   WK0+7(9),10,0       align scale (left)
          ZAP   PWK1(16),WK0+7(9)
@@ -136,9 +136,9 @@ T0010    DS    0H
          BALR  14,15
 T0011    DS    0H
 * COMPUTE ACC = ...
-         PACK  WK0+10(6),D0002(5)  zoned -> packed
+         PACK  WK0+10(6),D0002(3)  zoned -> packed
          SRP   WK0+10(6),4,0       align scale (left)
-         PACK  WK1+11(5),D0003(9)  zoned -> packed
+         PACK  WK1+11(5),D0003(1)  zoned -> packed
          AP    WK0+10(6),WK1+11(5)
          ZAP   PWK1(16),WK0+10(6)
          UNPK  ZWK+2(16),PWK1+7(9)  the low 16 digits, sign and all
@@ -171,16 +171,16 @@ T0013    DS    0H
          BALR  14,15
 T0014    DS    0H
 * ADD 100 -> TRAIL2
-         PACK  PWK1(16),D0000(5)   zoned -> packed
+         PACK  PWK1(16),D0000(3)   zoned -> packed
          SRP   PWK1(16),2,0        align scale (left)
          ZAP   PWK2(16),K0001(16)  literal
          AP    PWK1(16),PWK2(16)
          SRP   PWK1(16),62,0       align scale (right)
-         UNPK  D0000(5),PWK1(16)   packed -> zoned
-         OI    D0000+4,X'F0'       unsigned: force an F zone
+         UNPK  D0000(3),PWK1(16)   packed -> zoned
+         OI    D0000+2,X'F0'       unsigned: force an F zone
 T0015    DS    0H
 * MOVE TRAIL2 -> SHOW
-         PACK  PWK1(16),D0000(5)   zoned -> packed
+         PACK  PWK1(16),D0000(3)   zoned -> packed
          SRP   PWK1(16),11,0       align scale (left)
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
          MVC   EDWK(22),M0001      load the ED pattern
@@ -338,13 +338,13 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL5'00123'          TRAIL2 PIC 9(5)v-2 DISP
-         DS    XL3                 reserve the rest of a table
-D0001    DC    ZL3'99'             TRAIL1 PIC S9(3)v-1 DISP
+D0000    DC    CL3'123'            TRAIL2 PIC 9(5)v-2 DISP
          DS    XL5                 reserve the rest of a table
-D0002    DC    CL5'00123'          LEAD2 PIC 9(5)v5 DISP
-         DS    XL3                 reserve the rest of a table
-D0003    DC    ZL9'000000007'      LEAD8 PIC S9(9)v9 DISP
+D0001    DC    ZL2'99'             TRAIL1 PIC S9(3)v-1 DISP
+         DS    XL6                 reserve the rest of a table
+D0002    DC    CL3'123'            LEAD2 PIC 9(5)v5 DISP
+         DS    XL5                 reserve the rest of a table
+D0003    DC    ZL1'000000007'      LEAD8 PIC S9(9)v9 DISP
          DS    XL7                 reserve the rest of a table
 D0004    DC    CL19' '             SHOW edited, 19 chars
          DS    XL5                 reserve the rest of a table
@@ -1138,13 +1138,21 @@ COBDCAL  STM   14,12,12(13)
          L     3,4(0,1)            the parameter list
          LA    4,DCTAB
          LA    5,16                entries
-DCA010   CLI   0(4),X'00'          an empty entry?
-         BE    DCA050              then it is not loaded
-         CLC   0(8,4),0(2)         this one?
-         BE    DCA030
-         LA    4,12(4)
+         SR    6,6                 no hole yet
+DCA010   CLC   0(8,4),0(2)         this one?
+         BE    DCA030              already loaded
+         CLI   0(4),X'00'          an empty entry?
+         BNE   DCA020
+         LTR   6,6
+         BNZ   DCA020              keep the first hole
+         LR    6,4
+DCA020   LA    4,12(4)
          BCT   5,DCA010
-         LOAD  EPLOC=(2)           table full: load without remembering
+         LTR   6,6                 a hole to remember this load?
+         BZ    DCAFULL             table full
+         LR    4,6
+         B     DCA050
+DCAFULL  LOAD  EPLOC=(2)           table full: load without remembering
          LR    15,0
          B     DCA040
 DCA050   MVC   0(8,4),0(2)         remember the name
@@ -1172,10 +1180,10 @@ COBCANC  STM   14,12,12(13)
          LA    4,DCTAB
          LA    5,16
 CAN010   CLI   0(4),X'00'
-         BE    CANX                not loaded: nothing to do
+         BE    CANNEXT             empty: keep looking
          CLC   0(8,4),0(2)
          BE    CAN020
-         LA    4,12(4)
+CANNEXT  LA    4,12(4)
          BCT   5,CAN010
          B     CANX
 CAN020   DELETE EPLOC=(2)          release it

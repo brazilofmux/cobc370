@@ -671,3 +671,41 @@ unblocked fixed file, which is the same dataset under another name. The
 first run of the matrix as one job stopped at the first abend and hid the
 rest -- one job per cell is the way to run a matrix that is expected to
 abend.
+
+## The external review round
+
+On 2026-08-30 the compiler was reviewed by a second machine -- xAI's Grok
+Build, reading the source cold -- which filed issues 1-20 on the tracker and
+committed fixes for all of them, with test programs, but had no way to run
+the guest. This session reviewed that commit line by line, wired the tests
+into the harness with oracles, and put everything through TK5.
+
+What the review found was real: an interior COMP item after a PIC X was
+loaded with LH off its halfword boundary (a S0C6 on real iron -- the sweep
+never noticed because every COMP item it declared happened to land aligned);
+PICTURE P occupied storage inside a group; a MOVE literal past 33 characters
+overflowed a buffer; USAGE on a group was not inherited; a D in column 7
+compiled; CURRENT-DATE named only in COPY text was never created; and the
+rest. The fix quality was good, and two fixes came with design sense: the
+dynamic-CALL table now reuses freed slots instead of treating the first
+empty one as end-of-table, and COPY REPLACING no longer re-scans its own
+substitutions.
+
+Three fixes arrived with no test at all and have them now: `searchz`
+(SEARCH from index 0), `copyrep2` (AA BY BB, BB BY CC on one line of COPY
+text), `mp16` (a 16-digit multiplicand on the right of `*`, which MP's
+8-byte second operand used to truncate to 15 digits silently -- now the
+operands swap sides). One issue was not a bug: the text defines AT END only
+for an index past the last occurrence, so an index below 1 is undefined --
+taking AT END is this compiler's choice, and GnuCOBOL, which reads storage
+in front of the table and answers HIT, is no counter-argument.
+
+Verified the usual three ways: the host checks, the sweep (111 tests before
+the three new ones, 114 after, all green), and the production batch --
+figure multiset identical to the previous build, the only diffs job
+numbers, device allocations and step accounting.
+
+Left as a note rather than fixed: the QISAM WRITE error path stores FILE
+STATUS 30 where the status-key table gives 21 (sequence) and 22 (duplicate),
+and REWRITE paths store no status yet. FILE STATUS on QSAM stores 00/10,
+which is what the corpus reads.

@@ -21,7 +21,7 @@ COBBEG   EQU   *
 * CURRENT-DATE, from the system clock
          L     8,BL0000            base locator
          USING WSC0000,8
-         LA    1,D0001
+         LA    1,D0007
          L     15,VDATE
          BALR  14,15
          DROP  8
@@ -36,14 +36,35 @@ T0000    DS    0H
 * MOVE CURRENT-DATE -> SHOW-DATE
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0000(8),D0001      alphanumeric move
+         MVC   D0000(8),D0007      alphanumeric move
 T0001    DS    0H
+* IF
+         CLC   D0003(1),S0001      alphanumeric compare
+         BNE   L0001
+         CLC   D0005(1),S0001      alphanumeric compare
+         BNE   L0001
+T0002    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(8),D0000+0
+         MVC   DSPBUF+0(2),S0002
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
-T0002    DS    0H
+T0003    DS    0H
+         B     L0002
+         DROP  8
+L0001    DS    0H
+T0004    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(4),S0003
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+4(8),D0000+0
+         LA    1,PARM0002
+         L     15,VDISP
+         BALR  14,15
+         DROP  8
+L0002    DS    0H
+T0005    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -56,7 +77,10 @@ VTERM    DC    V(COBTERM)
 VDATE    DC    V(COBDATE)
 PARM0001 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0001)  last parameter
-LEN0001  DC    H'8'
+LEN0001  DC    H'2'
+PARM0002 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0002)  last parameter
+LEN0002  DC    H'12'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL16
@@ -72,6 +96,9 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
+S0001    DC    CL1'/'              nonnumeric constants
+S0002    DC    CL2'OK'
+S0003    DC    CL4'BAD '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
@@ -127,7 +154,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'3'                statements in the table
+SPIENUM  DC    H'6'                statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -139,13 +166,22 @@ SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0H
          DC    AL2(T0000-COBBEG),AL2(1)
-         DC    AL2(T0001-COBBEG),AL2(8)
-         DC    AL2(T0002-COBBEG),AL2(9)
+         DC    AL2(T0001-COBBEG),AL2(17)
+         DC    AL2(T0002-COBBEG),AL2(17)
+         DC    AL2(T0003-COBBEG),AL2(19)
+         DC    AL2(T0004-COBBEG),AL2(19)
+         DC    AL2(T0005-COBBEG),AL2(20)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    CL8' '              SHOW-DATE PIC X(8)
-D0001    DC    CL8' '              CURRENT-DATE PIC X(8)
+D0001    EQU   COBWS+0             SD-R REDEFINES
+D0002    EQU   COBWS+0             FILL0002 REDEFINES
+D0003    EQU   COBWS+2             SL1 REDEFINES
+D0004    EQU   COBWS+3             FILL0004 REDEFINES
+D0005    EQU   COBWS+5             SL2 REDEFINES
+D0006    EQU   COBWS+6             FILL0006 REDEFINES
+D0007    DC    CL8' '              CURRENT-DATE PIC X(8)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

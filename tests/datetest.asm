@@ -21,7 +21,7 @@ COBBEG   EQU   *
 * CURRENT-DATE, from the system clock
          L     8,BL0000            base locator
          USING WSC0000,8
-         LA    1,D0000
+         LA    1,D0008
          L     15,VDATE
          BALR  14,15
          DROP  8
@@ -38,89 +38,89 @@ T0000    DS    0H
 * MOVE CURRENT-DATE -> CD-DATE
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(8),D0000      alphanumeric move
+         MVC   D0000(8),D0008      alphanumeric move
 T0001    DS    0H
 * IF
-         CLC   D0003(1),S0001      alphanumeric compare
+         CLC   D0002(1),S0001      alphanumeric compare
          BE    L0001
 T0002    DS    0H
 * MOVE Y -> BAD-SWITCH
-         MVC   D0007(1),S0002      literal move, space padded
+         MVC   D0006(1),S0002      literal move, space padded
          DROP  8
 L0001    DS    0H
 T0003    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0005(1),S0001      alphanumeric compare
+         CLC   D0004(1),S0001      alphanumeric compare
          BE    L0002
 T0004    DS    0H
 * MOVE Y -> BAD-SWITCH
-         MVC   D0007(1),S0002      literal move, space padded
+         MVC   D0006(1),S0002      literal move, space padded
          DROP  8
 L0002    DS    0H
 T0005    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0+14(2),D0002(2)  zoned -> packed
+         PACK  WK0+14(2),D0001(2)  zoned -> packed
          ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNL   L0003
 T0006    DS    0H
 * MOVE Y -> BAD-SWITCH
-         MVC   D0007(1),S0002      literal move, space padded
+         MVC   D0006(1),S0002      literal move, space padded
          DROP  8
 L0003    DS    0H
 T0007    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0+14(2),D0002(2)  zoned -> packed
+         PACK  WK0+14(2),D0001(2)  zoned -> packed
          ZAP   WK1+14(2),K0002+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BNH   L0004
 T0008    DS    0H
 * MOVE Y -> BAD-SWITCH
-         MVC   D0007(1),S0002      literal move, space padded
+         MVC   D0006(1),S0002      literal move, space padded
          DROP  8
 L0004    DS    0H
 T0009    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0+14(2),D0004(2)  zoned -> packed
+         PACK  WK0+14(2),D0003(2)  zoned -> packed
          ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNL   L0005
 T0010    DS    0H
 * MOVE Y -> BAD-SWITCH
-         MVC   D0007(1),S0002      literal move, space padded
+         MVC   D0006(1),S0002      literal move, space padded
          DROP  8
 L0005    DS    0H
 T0011    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  WK0+14(2),D0004(2)  zoned -> packed
+         PACK  WK0+14(2),D0003(2)  zoned -> packed
          ZAP   WK1+14(2),K0003+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BNH   L0006
 T0012    DS    0H
 * MOVE Y -> BAD-SWITCH
-         MVC   D0007(1),S0002      literal move, space padded
+         MVC   D0006(1),S0002      literal move, space padded
          DROP  8
 L0006    DS    0H
 T0013    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0007(1),S0002      alphanumeric compare
+         CLC   D0006(1),S0002      alphanumeric compare
          BNE   L0007
 T0014    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(24),S0003
-         MVC   DSPBUF+24(8),D0001+0
+         MVC   DSPBUF+24(8),D0000+0
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
@@ -130,7 +130,7 @@ T0015    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         CLC   D0007(1),S0002      alphanumeric compare
+         CLC   D0006(1),S0002      alphanumeric compare
          BE    L0008
 T0016    DS    0H
 * DISPLAY
@@ -266,14 +266,14 @@ SPIELTB  DS    0H
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    CL8' '              CURRENT-DATE PIC X(8)
-D0001    DS    0CL8                CD-DATE (01 group)
-D0002    DC    CL2'00'             CD-MONTH PIC 9(2)v0 DISP
-D0003    DC    CL1' '              CD-SL1 PIC X(1)
-D0004    DC    CL2'00'             CD-DAY PIC 9(2)v0 DISP
-D0005    DC    CL1' '              CD-SL2 PIC X(1)
-D0006    DC    CL2'00'             CD-YEAR PIC 9(2)v0 DISP
-D0007    DC    CL1'N'              BAD-SWITCH PIC X(1)
+D0000    DS    0CL8                CD-DATE (01 group)
+D0001    DC    CL2'00'             CD-MONTH PIC 9(2)v0 DISP
+D0002    DC    CL1' '              CD-SL1 PIC X(1)
+D0003    DC    CL2'00'             CD-DAY PIC 9(2)v0 DISP
+D0004    DC    CL1' '              CD-SL2 PIC X(1)
+D0005    DC    CL2'00'             CD-YEAR PIC 9(2)v0 DISP
+D0006    DC    CL1'N'              BAD-SWITCH PIC X(1)
+D0008    DC    CL8' '              CURRENT-DATE PIC X(8)
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the
@@ -1063,13 +1063,21 @@ COBDCAL  STM   14,12,12(13)
          L     3,4(0,1)            the parameter list
          LA    4,DCTAB
          LA    5,16                entries
-DCA010   CLI   0(4),X'00'          an empty entry?
-         BE    DCA050              then it is not loaded
-         CLC   0(8,4),0(2)         this one?
-         BE    DCA030
-         LA    4,12(4)
+         SR    6,6                 no hole yet
+DCA010   CLC   0(8,4),0(2)         this one?
+         BE    DCA030              already loaded
+         CLI   0(4),X'00'          an empty entry?
+         BNE   DCA020
+         LTR   6,6
+         BNZ   DCA020              keep the first hole
+         LR    6,4
+DCA020   LA    4,12(4)
          BCT   5,DCA010
-         LOAD  EPLOC=(2)           table full: load without remembering
+         LTR   6,6                 a hole to remember this load?
+         BZ    DCAFULL             table full
+         LR    4,6
+         B     DCA050
+DCAFULL  LOAD  EPLOC=(2)           table full: load without remembering
          LR    15,0
          B     DCA040
 DCA050   MVC   0(8,4),0(2)         remember the name
@@ -1097,10 +1105,10 @@ COBCANC  STM   14,12,12(13)
          LA    4,DCTAB
          LA    5,16
 CAN010   CLI   0(4),X'00'
-         BE    CANX                not loaded: nothing to do
+         BE    CANNEXT             empty: keep looking
          CLC   0(8,4),0(2)
          BE    CAN020
-         LA    4,12(4)
+CANNEXT  LA    4,12(4)
          BCT   5,CAN010
          B     CANX
 CAN020   DELETE EPLOC=(2)          release it

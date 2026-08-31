@@ -43,7 +43,7 @@ aggregate on the measurement in `docs/MEASUREMENTS.md`, a third on the later
 full build -- and, after the optimization pass, the CPU time of the COBOL steps
 is at IBM's (0.6s either way, at the noise floor of the step accounting).
 
-101 regression tests, all green, every one diffed against an oracle -- and
+114 regression tests, all green, every one diffed against an oracle -- and
 for the Report Writer the oracle is the 1974 text itself, hand-derived from
 its presentation-rule tables, with IBM's own compiler run on the same
 source wherever its 1968-vintage Report Writer reaches.
@@ -161,7 +161,7 @@ what each change was, are under Optimization in `docs/COBOL74-ROADMAP.md`.
 ## Layout
 
     src/     the compiler: one C file, plus a Ragel scanner for PICTURE
-    tests/   109 COBOL programs and their oracles
+    tests/   127 COBOL programs and their oracles
     bin/     the regression harness, the three round-trip checks, and
              cobc-ccvs to run the NIST CCVS-85 corpus through the front end
     bench/   the micro-benchmarks
