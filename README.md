@@ -161,7 +161,7 @@ what each change was, are under Optimization in `docs/COBOL74-ROADMAP.md`.
 ## Layout
 
     src/     the compiler: one C file, plus a Ragel scanner for PICTURE
-    tests/   127 COBOL programs and their oracles
+    tests/   129 COBOL programs and their oracles
     bin/     the regression harness, the three round-trip checks, and
              cobc-ccvs to run the NIST CCVS-85 corpus through the front end
     bench/   the micro-benchmarks

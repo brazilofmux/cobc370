@@ -11,9 +11,12 @@ CC="$(cd "$(dirname "$0")/../src" && pwd)"
 TDIR="$(cd "$(dirname "$0")/../tests" && pwd)"
 WORK=${TMPDIR:-/tmp}/cobc-isam; mkdir -p "$WORK"
 DSN=SVD001.TESTIDX
+DSN2=SVD001.TESTIDX2
 
 "$CC/cobc370" "$TDIR/isamload.cbl" > "$TDIR/isamload.asm" || die "isamload did not compile"
 "$CC/cobc370" "$TDIR/isamrd2.cbl"  > "$TDIR/isamrd2.asm"  || die "isamrd2 did not compile"
+"$CC/cobc370" "$TDIR/isamstat.cbl" > "$TDIR/isamstat.asm" || die "isamstat did not compile"
+"$CC/cobc370" "$TDIR/isamrnf.cbl"  > "$TDIR/isamrnf.asm"  || die "isamrnf did not compile"
 
 {
 cat <<EOF
@@ -66,11 +69,49 @@ cat <<EOF
 //S4      EXEC PGM=IEFBR14
 //DSN2DEL  DD  DSN=$DSN,DISP=(MOD,DELETE,DELETE),
 //             UNIT=3380,VOL=SER=SVD003
+//* 5. FILE STATUS in load mode: a second scratch dataset takes a clean
+//*    write, a duplicate (22), a key out of sequence (21), and one more
+//*    clean write to show loading continues.
+//S5      EXEC PGM=IEFBR14
+//DSN3DEL  DD  DSN=$DSN2,DISP=(MOD,DELETE,DELETE),
+//             UNIT=3380,VOL=SER=SVD003
+//S6      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/isamstat.asm"
+cat <<EOF
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET3(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+//GO.DESCIDX DD  DSNAME=$DSN2(INDEX),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,1),
+//             DCB=(DSORG=IS,RECFM=F)
+//           DD  DSNAME=$DSN2(PRIME),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,2),DCB=*.DESCIDX
+//           DD  DSNAME=$DSN2(OVFLOW),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,1),DCB=*.DESCIDX
+//* 6. FILE STATUS on a BISAM random read: found (00), missing (23).
+//S7      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/isamrnf.asm"
+cat <<EOF
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET4(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+//GO.DESCIDX DD  DSNAME=$DSN2,DISP=(OLD,KEEP),
+//             VOL=SER=SVD003,UNIT=3380
+//* 7. leave the volume as we found it
+//S8      EXEC PGM=IEFBR14
+//DSN3DEL  DD  DSN=$DSN2,DISP=(MOD,DELETE,DELETE),
+//             UNIT=3380,VOL=SER=SVD003
 EOF
 } > "$WORK/roundtrip.jcl"
 
 run_deck "$WORK/roundtrip.jcl" "$WORK/roundtrip.out"
-grep -a "^DESCIDX LOADED\|^BACK \|^DUPLICATE" "$WORK/roundtrip.out" > "$WORK/got.txt"
+grep -a "^DESCIDX LOADED\|^BACK \|^DUPLICATE\|^W[0-9] \|^IK[0-9] \|^R[0-9] " "$WORK/roundtrip.out" > "$WORK/got.txt"
 
 exp="$TDIR/isamroundtrip.expected"
 if [ ! -r "$exp" ]; then

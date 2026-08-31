@@ -705,7 +705,18 @@ the three new ones, 114 after, all green), and the production batch --
 figure multiset identical to the previous build, the only diffs job
 numbers, device allocations and step accounting.
 
-Left as a note rather than fixed: the QISAM WRITE error path stores FILE
-STATUS 30 where the status-key table gives 21 (sequence) and 22 (duplicate),
-and REWRITE paths store no status yet. FILE STATUS on QSAM stores 00/10,
-which is what the corpus reads.
+The status-key loose ends were then finished in a follow-up commit. The
+QISAM load DCB says why a PUT failed in DCBEXCD2 (DCB+81, X'80' sequence,
+X'40' duplicate), so the WRITE error path now stores 21 or 22 by cause and
+30 otherwise, clearing the exception bytes before each PUT so one error
+cannot masquerade as the next; a failed BISAM READ tests the DECB's
+exception byte (DECB+24, X'80' record not found) and stores 23 or 30; the
+QSAM update REWRITE stores 00 after its PUTX. Proved on the guest by two
+programs added to the ISAM roundtrip on a second scratch dataset:
+`tests/isamstat` loads clean/duplicate/out-of-sequence/clean and reads back
+00, 22, 21, 00 -- showing loading continues past both errors, which is
+QISAM's documented behaviour when SYNAD returns -- and `tests/isamrnf`
+reads a present key (00), a missing one (23), and a present one again.
+There is no oracle for these values but the VI-3 table itself: IBM's ANS
+COBOL predates FILE STATUS entirely. Also removed: `emit_literal`, orphaned
+by the review commit's MOVE-literal rework.

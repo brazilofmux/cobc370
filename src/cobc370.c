@@ -6011,6 +6011,54 @@ static void gen_file_status(const File *f, const char *code)
     asm_line("", "MVC", b, "FILE STATUS");
 }
 
+/* The QISAM load DCB says why a PUT failed in DCBEXCD2 (DCB+81): X'80' is
+ * a sequence check, X'40' a duplicate -- status 21 and 22 on the VI-3
+ * table; anything else is 30. The status item's base is established before
+ * the first branch so every path finds it loaded. */
+static void gen_isam_wr_status(const File *f)
+{
+    if (f->status_sym < 0) { gen_use_call(); return; }
+    need_sym_base(&syms[f->status_sym]);
+    char b[128], l21[16], l22[16], lend[16];
+    snprintf(l21,  sizeof l21,  "L%04d", ++genlabel);
+    snprintf(l22,  sizeof l22,  "L%04d", ++genlabel);
+    snprintf(lend, sizeof lend, "L%04d", ++genlabel);
+    snprintf(b, sizeof b, "%s+81,X'80'", f->label);
+    asm_line("", "TM", b, "DCBEXCD2: sequence check?");
+    asm_line("", "BO", l21, "");
+    snprintf(b, sizeof b, "%s+81,X'40'", f->label);
+    asm_line("", "TM", b, "a duplicate?");
+    asm_line("", "BO", l22, "");
+    gen_file_status(f, "30");
+    asm_line("", "B", lend, "");
+    asm_line(l21, "DS", "0H", "");
+    gen_file_status(f, "21");
+    asm_line("", "B", lend, "");
+    asm_line(l22, "DS", "0H", "");
+    gen_file_status(f, "22");
+    asm_line(lend, "DS", "0H", "");
+    gen_use_call();
+}
+
+/* A failed BISAM READ: the DECB's first exception byte (DECB+24) has X'80'
+ * for record not found -- status 23; anything else is 30. */
+static void gen_isam_rd_status(const File *f, int fno)
+{
+    if (f->status_sym < 0) return;
+    need_sym_base(&syms[f->status_sym]);
+    char b[128], l23[16], lend[16];
+    snprintf(l23,  sizeof l23,  "L%04d", ++genlabel);
+    snprintf(lend, sizeof lend, "L%04d", ++genlabel);
+    snprintf(b, sizeof b, "DB%03d+24,X'80'", fno);
+    asm_line("", "TM", b, "DECB exception: record not found?");
+    asm_line("", "BO", l23, "");
+    gen_file_status(f, "30");
+    asm_line("", "B", lend, "");
+    asm_line(l23, "DS", "0H", "");
+    gen_file_status(f, "23");
+    asm_line(lend, "DS", "0H", "");
+}
+
 static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
 {
     char b[128], fd[64];
@@ -7040,22 +7088,6 @@ static void asm_cont(const char *first, const char *second)
         else b[15 + n] = 0;
         fprintf(out, "%s\n", b);
     }
-}
-
-/* Assembler C'...' needs both quotes and ampersands doubled. */
-static void emit_literal(const char *label, const char *text, int len)
-{
-    char op[MAXTOK * 2 + 8];
-    int j = 0;
-    op[j++] = 'C'; op[j++] = '\'';
-    for (int i = 0; i < len; i++) {
-        if (text[i] == '\'' || text[i] == '&') op[j++] = text[i];
-        op[j++] = text[i];
-    }
-    op[j++] = '\''; op[j] = 0;
-    if (15 + (int)strlen(op) > 71)
-        die("literal too long for one assembler statement");
-    asm_line(label, "DC", op, "");
 }
 
 /* COBSTR and COBUNS. Both take R1 -> a parameter block laid out by the code
@@ -9457,9 +9489,11 @@ static void generate(void)
                     need_sym_base(t); need_sym_base(&syms[f->rec_sym]);
                     gen_move_alpha(t, NULL, &syms[f->rec_sym], NULL);
                 }
+                gen_file_status(f, "00");
                 asm_line("", "B", lc, "");
                 asm_line(le, "DS", "0H", "INVALID KEY");
                 reset_bases();
+                gen_isam_rd_status(f, st->dst);
                 gen_use_call();
                 reset_bases();
                 break;
@@ -10073,6 +10107,8 @@ static void generate(void)
                  * tests. Records must be presented in ascending key order;
                  * ISAM has no way to insert during a load. */
                 asm_line("", "MVI", "ISFLG,X'00'", "");
+                snprintf(b, sizeof b, "%s+80(2),%s+80", f->label, f->label);
+                asm_line("", "XC", b, "clear DCBEXCD before each PUT");
                 need_sym_base(&syms[f->rec_sym]);
                 snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
                 asm_line("", "PUT", b, "QISAM load");
@@ -10082,8 +10118,7 @@ static void generate(void)
                 asm_line("", "B", wlc, "");
                 asm_line(wle, "DS", "0H", "INVALID KEY");
                 reset_bases();
-                gen_file_status(f, "30");
-                gen_use_call();
+                gen_isam_wr_status(f);
                 break;
             }
             if (f->print) {
@@ -10374,6 +10409,7 @@ static void generate(void)
                     asm_line("", "MVC", b, "back into the buffer");
                 }
                 asm_line("", "PUTX", f->label, "write that block back");
+                gen_file_status(f, "00");
                 break;
             }
             if (f->org == 2 && f->access != 0) gen_rrn_to_cell(f);
