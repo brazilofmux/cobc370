@@ -182,9 +182,14 @@ not redistributed here.
 ## Credits
 
 Jay Moseley's VSAMIO package is the reference implementation the VSAM support is
-verified against, and reading it answered questions no manual did. The test
-fixtures under `tests/data/` are action cards from his test suite; the package
-itself is not redistributed here.
+verified against, and reading it answered questions no manual did: MODCB
+flipping OPTCD to NUP around an insert and back, ARG pointing into the record
+area at the key offset rather than at a field of its own, and ARG being set for
+every non-ESDS request whether or not the program uses it -- which is why an
+RRDS load does not abend on its first WRITE. The test fixtures under
+`tests/data/` are action cards from his test suite; the package itself is not
+redistributed here. He was told what his work is holding up here, offered the
+removal of even those cards, and was glad to see it in use.
 
 The TK5 distribution by Rob Prins, and TK4- by Juergen Winkelmann and TK3 by
 Volker Bandke before it, are what make running MVS 3.8j practical at all.
