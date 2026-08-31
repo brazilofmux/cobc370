@@ -10,35 +10,63 @@ cobc370: cobc370.c picture.c picture_scan.c picture.h
 ragel: picture.rl
 	ragel -G2 -o picture_scan.c picture.rl
 
+T=../tests
 test: cobc370
-	./cobc370 tests/stoprun.cbl -o tests/stoprun.asm
-	./cobc370 tests/hello.cbl   -o tests/hello.asm
-	./cobc370 tests/arith.cbl   -o tests/arith.asm
-	./cobc370 tests/compute.cbl -o tests/compute.asm
-	./cobc370 tests/grpperf.cbl -o tests/grpperf.asm
-	./cobc370 tests/iftest.cbl  -o tests/iftest.asm
-	./cobc370 tests/filetest.cbl -o tests/filetest.asm
-	./cobc370 tests/occtest.cbl -o tests/occtest.asm
-	./cobc370 tests/edtest.cbl  -o tests/edtest.asm
-	./cobc370 tests/perftest.cbl -o tests/perftest.asm
-	./cobc370 tests/rpttest.cbl -o tests/rpttest.asm
+	./cobc370 $(T)/stoprun.cbl -o $(T)/stoprun.asm
+	./cobc370 $(T)/hello.cbl   -o $(T)/hello.asm
+	./cobc370 $(T)/arith.cbl   -o $(T)/arith.asm
+	./cobc370 $(T)/compute.cbl -o $(T)/compute.asm
+	./cobc370 $(T)/grpperf.cbl -o $(T)/grpperf.asm
+	./cobc370 $(T)/iftest.cbl  -o $(T)/iftest.asm
+	./cobc370 $(T)/filetest.cbl -o $(T)/filetest.asm
+	./cobc370 $(T)/occtest.cbl -o $(T)/occtest.asm
+	./cobc370 $(T)/edtest.cbl  -o $(T)/edtest.asm
+	./cobc370 $(T)/perftest.cbl -o $(T)/perftest.asm
+	./cobc370 $(T)/rpttest.cbl -o $(T)/rpttest.asm
+	./cobc370 $(T)/link1st.cbl -o $(T)/link1st.asm
+	./cobc370 $(T)/nextsent.cbl -o $(T)/nextsent.asm
+	./cobc370 $(T)/dup88.cbl -o $(T)/dup88.asm
+	./cobc370 $(T)/pgroup.cbl -o $(T)/pgroup.asm
+	./cobc370 $(T)/gusage.cbl -o $(T)/gusage.asm
+	./cobc370 $(T)/ucomp.cbl -o $(T)/ucomp.asm
+	./cobc370 $(T)/bwzdisp.cbl -o $(T)/bwzdisp.asm
+	./cobc370 $(T)/dline.cbl -o $(T)/dline.asm
+	./cobc370 $(T)/use77.cbl -o $(T)/use77.asm
+	./cobc370 $(T)/exitonly.cbl -o $(T)/exitonly.asm
+	./cobc370 $(T)/callsub.cbl -o $(T)/callsub.asm
+	./cobc370 $(T)/sub2dif.cbl -o $(T)/sub2dif.asm
+	./cobc370 $(T)/movelit.cbl -o $(T)/movelit.asm
+	./cobc370 $(T)/cdcopy.cbl -o $(T)/cdcopy.asm -I $(T)
 	@echo "--- column 72 is the continuation flag, not spare room ---"
 	@# A statement must stop at column 71. A line reaching column 72 is only
 	@# legal when that column holds the deliberate X of a continued statement;
 	@# anything else makes the assembler read the next line as a continuation
 	@# and report IFO026. Checking >72 misses this by exactly one column.
 	@! awk 'length($$0)>72 || (length($$0)==72 && substr($$0,72,1)!="X")' \
-	    tests/*.asm | grep . || (echo "COLUMN 72 VIOLATION"; exit 1)
+	    $(T)/*.asm | grep . || (echo "COLUMN 72 VIOLATION"; exit 1)
 	@echo "--- STOP RUN alone must not drag in the runtime ---"
-	@! grep -q 'COBRT' tests/stoprun.asm || (echo "runtime emitted needlessly"; exit 1)
+	@! grep -q 'COBRT' $(T)/stoprun.asm || (echo "runtime emitted needlessly"; exit 1)
+	@echo "--- P occupies no storage: a group PIC 9(3)PP is three bytes ---"
+	@grep -q "CL3'123'" $(T)/pgroup.asm || (echo "PGROUP layout wrong"; exit 1)
+	@echo "--- group USAGE COMP-3 is inherited ---"
+	@grep -q 'COMP-3' $(T)/gusage.asm || (echo "GUSAGE not packed"; exit 1)
+	@echo "--- unaligned COMP goes through DWK, not LH on the field ---"
+	@grep -q 'not on its boundary' $(T)/ucomp.asm || (echo "UCOMP still uses LH on an odd offset"; exit 1)
+	@echo "--- BLANK WHEN ZERO skips the UNPK when the value is zero ---"
+	@grep -q 'then spaces' $(T)/bwzdisp.asm || (echo "BWZDISP missing space fill"; exit 1)
+	@echo "--- a D in column 7 is a comment ---"
+	@! grep -q "DEBUG" $(T)/dline.asm || (echo "DLINE compiled a debugging line"; exit 1)
+	@echo "--- a 40-character MOVE literal is stored whole ---"
+	@grep -q "CL40'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'" $(T)/movelit.asm \
+	    || (echo "MOVELIT constant truncated"; exit 1)
 	@echo "--- bad input must be rejected, not silently accepted ---"
 	@# Assert a nonzero exit rather than matching wording, and use fixtures
 	@# that cannot become valid as coverage grows: an undeclared name and a
 	@# duplicate name are errors forever, and ALTER has zero uses in the
 	@# corpus and is not going to be implemented. Twice now a fixture went
 	@# stale because the next slice implemented the very thing it tested.
-	@for t in bad-undeclared bad-verb bad-duplicate bad-ambiguous; do \
-	   if ./cobc370 tests/$$t.cbl -o /dev/null >/dev/null 2>&1; then \
+	@for t in bad-undeclared bad-verb bad-duplicate bad-ambiguous bad-vspace; do \
+	   if ./cobc370 $(T)/$$t.cbl -o /dev/null >/dev/null 2>&1; then \
 	     echo "  $$t ACCEPTED -- it should have been rejected"; exit 1; \
 	   else echo "  $$t rejected"; fi; \
 	 done
@@ -66,6 +94,6 @@ oracle:
 	done
 
 clean:
-	rm -f cobc370 tests/*.asm
+	rm -f cobc370 ../tests/*.asm
 
 .PHONY: test oracle ragel clean

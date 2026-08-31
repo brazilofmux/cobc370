@@ -49,7 +49,7 @@ typedef struct {
      * read. A pseudo-text operand replaces wherever its characters occur; a
      * word or literal operand replaces whole words only. */
     int   nrep;
-    struct { char from[120], to[120]; int pseudo; } rep[16];
+    struct { char from[120], to[120]; int pseudo, qfrom, qto; } rep[16];
 } Src;
 
 /* COPY nests: the source being read, and the sources it was copied into. The
@@ -69,36 +69,63 @@ static void die(const char *msg);
  * end, and a card image is what it was before the copy, not after. */
 static void copy_replace(Src *s)
 {
+    /* Match every pair against the original line. Replacements are not
+     * re-scanned -- REPLACING A BY B B BY C leaves A as B, not C. */
+    char orig[MAXLINE * 2];
+    snprintf(orig, sizeof orig, "%s", s->buf + 7);
     char out[MAXLINE * 2];
-    for (int k = 0; k < s->nrep; k++) {
-        const char *from = s->rep[k].from, *to = s->rep[k].to;
-        size_t fl = strlen(from);
-        if (!fl) continue;
-        const char *p = s->buf + 7; char *o = out; int changed = 0;
-        while (*p) {
-            int hit = 0;
-            if (s->rep[k].pseudo) {
-                /* compare with runs of blanks collapsed */
+    char *o = out;
+    const char *p = orig;
+    int changed = 0;
+    while (*p) {
+        int hit = 0;
+        for (int k = 0; k < s->nrep && !hit; k++) {
+            const char *from = s->rep[k].from, *to = s->rep[k].to;
+            size_t fl = strlen(from);
+            if (!fl) continue;
+            const char *nxt = p;
+            char qch = 0;
+            if (s->rep[k].qfrom) {
+                char q = *p;
+                if ((q == '\'' || q == '"') && !strncasecmp(p + 1, from, fl) && p[1 + fl] == q)
+                    { hit = 1; nxt = p + 1 + fl + 1; qch = q; }
+            } else if (s->rep[k].pseudo) {
                 const char *a = p, *b = from;
                 while (*b) {
                     if (*b == ' ') { if (*a != ' ') break; while (*a == ' ') a++; while (*b == ' ') b++; continue; }
                     if (toupper((unsigned char)*a) != toupper((unsigned char)*b)) break;
                     a++; b++;
                 }
-                if (!*b) { hit = 1; p = a; }
+                if (!*b) { hit = 1; nxt = a; }
             } else if (!strncasecmp(p, from, fl)
-                       && (p == s->buf + 7 || strchr(" .,;()'\"", p[-1]))
+                       && (p == orig || strchr(" .,;()'\"", p[-1]))
                        && (!p[fl] || strchr(" .,;()'\"", p[fl]))) {
-                hit = 1; p += fl;
+                hit = 1; nxt = p + fl;
             }
-            if (hit) { size_t tl = strlen(to); if ((size_t)(o - out) + tl >= sizeof out - 1) die("COPY REPLACING made a line too long"); memcpy(o, to, tl); o += tl; changed = 1; }
-            else { if ((size_t)(o - out) >= sizeof out - 1) die("COPY REPLACING made a line too long"); *o++ = *p++; }
+            if (!hit) continue;
+            if (s->rep[k].qto) {
+                if (!qch) qch = '\'';
+                size_t tl = strlen(to);
+                if ((size_t)(o - out) + tl + 2 >= sizeof out - 1)
+                    die("COPY REPLACING made a line too long");
+                *o++ = qch; memcpy(o, to, tl); o += tl; *o++ = qch;
+            } else {
+                size_t tl = strlen(to);
+                if ((size_t)(o - out) + tl >= sizeof out - 1)
+                    die("COPY REPLACING made a line too long");
+                memcpy(o, to, tl); o += tl;
+            }
+            p = nxt; changed = 1;
         }
-        *o = 0;
-        if (changed) {
-            if (strlen(out) >= MAXLINE - 8) die("COPY REPLACING made a line too long");
-            strcpy(s->buf + 7, out);
+        if (!hit) {
+            if ((size_t)(o - out) >= sizeof out - 1) die("COPY REPLACING made a line too long");
+            *o++ = *p++;
         }
+    }
+    *o = 0;
+    if (changed) {
+        if (strlen(out) >= MAXLINE - 8) die("COPY REPLACING made a line too long");
+        strcpy(s->buf + 7, out);
     }
 }
 
@@ -110,7 +137,10 @@ static int src_fill(Src *s)
         size_t n = strlen(s->buf);
         while (n && (s->buf[n-1] == '\n' || s->buf[n-1] == '\r')) s->buf[--n] = 0;
         if (n < 7) continue;                       /* blank or short: skip */
-        if (s->buf[6] == '*' || s->buf[6] == '/') continue;   /* comment */
+        /* A D in the indicator area is a debugging line. Debug is the null
+         * level here, so those lines are comments -- I-106, without
+         * WITH DEBUGGING MODE. */
+        if (s->buf[6] == '*' || s->buf[6] == '/' || s->buf[6] == 'D' || s->buf[6] == 'd') continue;
         if (n > 72) s->buf[72] = 0;                /* drop cols 73-80 */
         s->cont = (s->buf[6] == '-');
         s->p = s->buf + 7;                         /* code starts col 8 */
@@ -1016,6 +1046,8 @@ static int lookup(const char *n)
     return -1;
 }
 
+static void make_curdate(int *cursor);
+
 /* CURRENT-DATE is a special register, not something the program declares: an
  * 8-character MM/DD/YY filled from the system clock. It is only created when
  * the source actually mentions it, so programs that do not pay nothing. */
@@ -1068,6 +1100,11 @@ static int resolve_sym_quiet(const char *name, char q[][31], int nq)
                  "qualify it with OF or IN", name, count);
         die(m);
     }
+    if (found < 0 && !nq && !strcmp(name, "CURRENT-DATE")) {
+        int cur = wslen;
+        make_curdate(&cur);
+        return curdate_sym;
+    }
     return found;
 }
 
@@ -1084,6 +1121,13 @@ static int resolve_sym(const char *name, char q[][31], int nq)
     }
     char m[160];
     if (count == 0) {
+        if (!nq && !strcmp(name, "CURRENT-DATE")) {
+            /* A special register, created on first use so a mention in COPY
+             * text still finds it. Storage is claimed at the end of WS. */
+            int cur = wslen;
+            make_curdate(&cur);
+            return curdate_sym;
+        }
         if (nq) snprintf(m, sizeof m, "no '%s' is inside '%s'", name, q[0]);
         else    snprintf(m, sizeof m, "undeclared identifier '%s'", name);
         die(m);
@@ -1144,8 +1188,9 @@ static FILE *copy_open(const char *name, const char *lib, char *path, size_t pn)
 
 /* A REPLACING operand, from the raw source. Pseudo-text is everything
  * between == and ==, on one line or several; anything else is one token. */
-static void copy_operand(char *out, size_t on, int *pseudo)
+static void copy_operand(char *out, size_t on, int *pseudo, int *quoted)
 {
+    *quoted = 0;
     for (;;) {
         while (*src.p == ' ') src.p++;
         if (*src.p) break;
@@ -1171,7 +1216,7 @@ static void copy_operand(char *out, size_t on, int *pseudo)
     }
     *pseudo = 0;
     scan_token();
-    if (tok.literal) snprintf(out, on, "'%s'", tok.text);
+    if (tok.literal) { *quoted = 1; snprintf(out, on, "%s", tok.text); }
     else snprintf(out, on, "%s", tok.text);
 }
 
@@ -1192,12 +1237,14 @@ static void copy_statement(void)
     if (is("REPLACING")) {
         for (;;) {
             if (cb.nrep >= 16) die("too many COPY REPLACING pairs");
-            int ps;
-            copy_operand(cb.rep[cb.nrep].from, sizeof cb.rep[0].from, &ps);
+            int ps, qf, qt;
+            copy_operand(cb.rep[cb.nrep].from, sizeof cb.rep[0].from, &ps, &qf);
             cb.rep[cb.nrep].pseudo = ps;
+            cb.rep[cb.nrep].qfrom = qf;
             scan_token();
             if (!is("BY")) die("COPY REPLACING wants  operand BY operand");
-            copy_operand(cb.rep[cb.nrep].to, sizeof cb.rep[0].to, &ps);
+            copy_operand(cb.rep[cb.nrep].to, sizeof cb.rep[0].to, &ps, &qt);
+            cb.rep[cb.nrep].qto = qt;
             cb.nrep++;
             /* another pair, or the period */
             while (*src.p == ' ') src.p++;
@@ -1643,7 +1690,11 @@ static void parse_report_section(void)
                     if (sm.nops >= MAXSUMOP) die("too many SUM operands");
                     if (strlen(tok.text) > 30) die("data name too long");
                     strcpy(sm.op_name[sm.nops], tok.text); next();
-                    if (is("OF") || is("IN")) { next(); strcpy(sm.op_qual[sm.nops], tok.text); next(); }
+                    if (is("OF") || is("IN")) {
+                        next();
+                        if (strlen(tok.text) > 30) die("data name too long");
+                        strcpy(sm.op_qual[sm.nops], tok.text); next();
+                    }
                     if (is("(")) {
                         char q[MAXQUAL][31]; int nq = 0;
                         if (sm.op_qual[sm.nops][0]) { strcpy(q[0], sm.op_qual[sm.nops]); nq = 1; }
@@ -1824,7 +1875,7 @@ static void parse_report_section(void)
             sy->sign_pos = pi.sign_pos; sy->first_sel = pi.first_sel;
             sy->need_lead_start = pi.need_lead_start;
             memcpy(sy->mask, pi.mask, sizeof sy->mask);
-            sy->bytes = pi.is_alpha || pi.edited ? pi.bytes : pi.digits;
+            sy->bytes = pi.bytes;
             sy->elem = sy->bytes;
             if (just) { if (!pi.is_alpha) die("JUSTIFIED needs an alphabetic or alphanumeric item"); sy->just = 1; }
             if (bwz)  { if (pi.is_alpha) die("BLANK WHEN ZERO needs a numeric or numeric edited item"); sy->bwz = 1; }
@@ -1888,7 +1939,9 @@ static void parse_report_section(void)
  * pic_analyse so there is no second path to keep in step. */
 static void make_curdate(int *cursor)
 {
-    if (!uses_curdate || curdate_sym >= 0) return;
+    if (curdate_sym >= 0) return;
+    if (nsym >= MAXSYM) die("too many data items");
+    uses_curdate = 1;
     Sym *sy = &syms[nsym];
     memset(sy, 0, sizeof *sy);
     snprintf(sy->name, sizeof sy->name, "CURRENT-DATE");
@@ -1924,10 +1977,10 @@ static void parse_data_division(void)
 {
     if (!is("DATA")) return;
     next(); expect("DIVISION"); expect(".");
-    int opened_ws = 0;
+    int in_linkage = 0;
     if (is("FILE")) { next(); expect("SECTION"); expect("."); }
-    else if (is("WORKING-STORAGE")) { next(); expect("SECTION"); expect("."); opened_ws = 1; }
-    else if (is("LINKAGE")) { next(); expect("SECTION"); expect("."); }
+    else if (is("WORKING-STORAGE")) { next(); expect("SECTION"); expect("."); }
+    else if (is("LINKAGE")) { next(); expect("SECTION"); expect("."); in_linkage = 1; }
     else { while (!tok.eof && !is("PROCEDURE")) next(); return; }
     int cur_file = -1;
 
@@ -1936,12 +1989,8 @@ static void parse_data_division(void)
     int stack[32], sp = 0;
     int redef_limit = -1;
     int cursor = 0;
-    /* Share the real cursor, so the register claims storage nothing else can
-     * also claim -- the offset drives base-locator addressing, not just the
-     * order the DCs come out in. */
-    if (opened_ws) make_curdate(&cursor);
-
-    int in_linkage = is("LINKAGE") || 0;
+    /* CURRENT-DATE is created on first use, so a mention only in COPY text
+     * still finds it, and a comment does not pay for the register. */
     while (!tok.eof && !is("PROCEDURE")) {
         if (is("LINKAGE")) {
             next(); expect("SECTION"); expect(".");
@@ -1966,7 +2015,6 @@ static void parse_data_division(void)
             }
             if (cursor > wslen) wslen = cursor;
             cur_file = -1;
-            make_curdate(&cursor);
             continue;
         }
 
@@ -2216,11 +2264,14 @@ static void parse_data_division(void)
             cn->level = 88; cn->is_88 = 1;
             snprintf(cn->label, sizeof cn->label, "C%04d", nsym);
             snprintf(cn->name, sizeof cn->name, "%s", tok.text);
-            if (lookup(cn->name) >= 0) die("duplicate data name");
             int p = nsym - 1;
             while (p >= 0 && (syms[p].is_88 || syms[p].is_group)) p--;
             if (p < 0) die("level 88 must follow an elementary item");
             cn->parent = p;
+            cn->gparent = p;            /* FLAG OF item, the same as a data-name */
+            for (int k = 0; k < nsym; k++)
+                if (!strcmp(syms[k].name, cn->name) && syms[k].gparent == cn->gparent)
+                    die("duplicate data name in the same group");
             cn->c88_next = -1;
             next();
             expect("VALUE"); if (is("IS")) next();
@@ -2236,7 +2287,7 @@ static void parse_data_division(void)
                 if (nsym != first) {
                     if (nsym >= MAXSYM) die("too many data items");
                     memset(e, 0, sizeof *e);
-                    e->level = 88; e->is_88 = 1; e->parent = p; e->c88_next = -1;
+                    e->level = 88; e->is_88 = 1; e->parent = p; e->gparent = p; e->c88_next = -1;
                     snprintf(e->label, sizeof e->label, "C%04d", nsym);
                     snprintf(e->name, sizeof e->name, "*88-%d", nsym); /* unnameable */
                     syms[prev].c88_next = nsym;
@@ -2335,6 +2386,7 @@ static void parse_data_division(void)
         int item_redef = (fd_from >= 0);  /* REDEFINES, or an FD's later record */
         if (fd_from >= 0) { sy->alias = 1; sy->redef_from = fd_from; }
         sy->usage = U_DISPLAY;
+        int saw_usage = 0, saw_sign = 0;
         while (!tok.eof && !is(".")) {
             if (is("PIC") || is("PICTURE")) {
                 next_pic();
@@ -2411,10 +2463,24 @@ static void parse_data_division(void)
             } else if (is("REDEFINES")) {
                 /* The redefining item is laid down on top of the redefined one:
                  * point the cursor at it so this item and everything
-                 * subordinate to it takes the same offsets. */
+                 * subordinate to it takes the same offsets. II-27: the
+                 * redefined name is a preceding item at this level, so an
+                 * unqualified name takes the nearest earlier one in this
+                 * group -- not the first KIND in the whole program. */
                 next();
-                int t = lookup(tok.text);
-                if (t < 0) die("REDEFINES names an item that was not declared");
+                char rnm[31], rq[MAXQUAL][31];
+                if (strlen(tok.text) > 30) die("data name too long");
+                snprintf(rnm, sizeof rnm, "%s", tok.text);
+                next();
+                int rnq = consume_quals(rq);
+                int t = -1;
+                if (rnq) t = resolve_sym(rnm, rq, rnq);
+                else {
+                    for (int k = nsym - 1; k >= 0; k--)
+                        if (!strcmp(syms[k].name, rnm) && syms[k].level == level
+                            && syms[k].gparent == sy->gparent) { t = k; break; }
+                    if (t < 0) t = resolve_sym(rnm, rq, 0);
+                }
                 if (syms[t].level != level)
                     die("REDEFINES must name an item at the same level");
                 sy->alias = 1;
@@ -2426,7 +2492,6 @@ static void parse_data_division(void)
                 cursor = syms[t].offset;
                 sy->redef_cap = syms[t].offset + syms[t].bytes;
                 redef_limit = sy->redef_cap;
-                next();
             } else if (is("JUST") || is("JUSTIFIED")) {
                 /* JUSTIFIED RIGHT, II-16: on the way in the data is aligned at
                  * the right of the receiver and space filled on the left, and
@@ -2452,6 +2517,7 @@ static void parse_data_division(void)
                  * when no clause is given, which is the implementor's choice
                  * general rule 2 leaves open. */
                 next(); if (is("IS")) next();
+                saw_sign = 1;
                 if (is("LEADING")) { sy->sgn_lead = 1; next(); }
                 else if (is("TRAILING")) next();
                 else die("SIGN IS needs LEADING or TRAILING");
@@ -2465,18 +2531,18 @@ static void parse_data_division(void)
                 sy->sync = 1;
                 next();
                 if (is("LEFT") || is("RIGHT")) next();
-            } else if (is("USAGE")) { next(); if (is("IS")) next(); }
-            else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; next(); }
-            else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; next(); }
+            } else if (is("USAGE")) { next(); if (is("IS")) next(); saw_usage = 1; }
+            else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; saw_usage = 1; next(); }
+            else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; saw_usage = 1; next(); }
             else if (is("INDEX")) {
                 /* An index data item holds a value corresponding to an
                  * occurrence number, in a form the implementor chooses. This
                  * compiler keeps the occurrence number itself, exactly as an
                  * index-name does, so SET between the two is a plain move.
                  * It has no PICTURE -- the standard forbids one. */
-                sy->usage = U_COMP; sy->is_index = 1; next();
+                sy->usage = U_COMP; sy->is_index = 1; saw_usage = 1; next();
             }
-            else if (is("DISPLAY")) { sy->usage = U_DISPLAY; next(); }
+            else if (is("DISPLAY")) { sy->usage = U_DISPLAY; saw_usage = 1; next(); }
             else if (is("VALUE")) {
                 next(); if (is("IS")) next();
                 if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(sy->value, "0"); sy->has_value = 1; next(); }
@@ -2509,6 +2575,25 @@ static void parse_data_division(void)
             }
         }
         expect(".");
+
+        /* USAGE and SIGN on a group apply to every elementary item that does
+         * not carry its own -- II-17, II-31. Walk enclosing groups, inner
+         * first, so a nested USAGE wins. */
+        if (!saw_usage || !saw_sign) {
+            for (int k = sp - 1; k >= 0; k--) {
+                const Sym *g = &syms[stack[k]];
+                if (!saw_usage && (g->usage != U_DISPLAY || g->is_index)) {
+                    sy->usage = g->usage;
+                    sy->is_index = g->is_index;
+                    saw_usage = 1;
+                }
+                if (!saw_sign && (g->sgn_lead || g->sgn_sep)) {
+                    sy->sgn_lead = g->sgn_lead;
+                    sy->sgn_sep = g->sgn_sep;
+                    saw_sign = 1;
+                }
+            }
+        }
 
         if (!pic[0] && sy->is_index) {
             /* USAGE IS INDEX carries no PICTURE but is elementary all the
@@ -2570,6 +2655,8 @@ static void parse_data_division(void)
                     die("a numeric VALUE on a PIC X item is not implemented yet");
                 sy->bytes = pi.bytes;
             } else {
+                if (sy->has_value == 2)
+                    die("VALUE SPACES is alphanumeric; a numeric item takes ZERO");
                 if (sy->has_value == 3)
                     die("a nonnumeric VALUE on a numeric item is not implemented yet");
                 if (sy->has_value >= 4)
@@ -2599,13 +2686,15 @@ static void parse_data_division(void)
                     if (pi.digits > 16 && (sy->sgn_lead || sy->sgn_sep))
                         die("a SIGN clause on an item of more than 16 digits is "
                             "not implemented: the conversion is already split");
-                    sy->bytes = pi.digits + (sy->sgn_sep ? 1 : 0);
+                    /* P occupies no character position -- II-21. pi.bytes is
+                     * the stored width; pi.digits counts P as well. */
+                    sy->bytes = pi.bytes + (sy->sgn_sep ? 1 : 0);
                     break;
                 case U_COMP3:
                     if (sy->sgn_lead || sy->sgn_sep)
                         die("the SIGN clause applies only to USAGE DISPLAY -- "
                             "syntax rule 2 on II-31");
-                    sy->bytes = pi.digits / 2 + 1; break;
+                    sy->bytes = pi.bytes / 2 + 1; break;
                 case U_COMP:
                     if (pi.digits <= 4)      sy->bytes = 2;
                     else if (pi.digits <= 9) sy->bytes = 4;
@@ -2615,6 +2704,9 @@ static void parse_data_division(void)
                     break;
                 }
             }
+            if (sy->bwz && sy->usage != U_DISPLAY)
+                die("BLANK WHEN ZERO applies only to USAGE DISPLAY -- syntax "
+                    "rule 1 on II-14");
         }
         sy->elem = sy->bytes;
         if (sy->occurs > 0) {
@@ -3059,12 +3151,7 @@ static Node *parse_primary(void)
     if (!tok.text[0]) die("expression ended unexpectedly");
     Node *n = node(N_SYM);
     n->sym = consume_sym();
-    if (is("(")) {                       /* a subscript, not a grouping paren */
-        next();
-        n->sub = parse_expr();
-        if (is(",")) die("only one-dimensional tables are implemented");
-        expect(")");
-    }
+    n->sub = opt_subscript();
     return n;
 }
 
@@ -3087,6 +3174,7 @@ static Node *parse_power(void)
         /* Both integer literals: fold it here. 2 ** 3 ** 2 is 2 ** 9, and the
          * generator would otherwise see an exponent that is an expression. */
         long long base = atoll(l->lit), e = atoll(r->lit), v = 1;
+        if (e < 0) die("a negative exponent is not implemented -- it has no exact decimal value");
         for (long long k = 0; k < e; k++) {
             v *= base;
             if (v > 999999999999999999LL) die("a literal ** literal exceeds eighteen digits");
@@ -3188,6 +3276,7 @@ static Stmt *new_stmt(int op)
  * open IF. at_period carries that up through the nested statement lists. */
 static int at_period;
 static int nlabel;
+static int next_sentence_lab;   /* NEXT SENTENCE: branch here when the period lands */
 
 static void parse_stmt_list(int allow_else);
 
@@ -3203,7 +3292,7 @@ static int starts_statement(void)
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
         "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT",
-        "STRING", "UNSTRING", "CANCEL", 0
+        "STRING", "UNSTRING", "CANCEL", "SUPPRESS", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
     for (int i = 0; verbs[i]; i++) if (is(verbs[i])) return 1;
@@ -3593,7 +3682,16 @@ static Cond *parse_cond(void)
 
 /* ---- statements -------------------------------------------------------- */
 
-static void eat_period(void) { if (is(".")) { next(); at_period = 1; } }
+static void eat_period(void)
+{
+    if (!is(".")) return;
+    next();
+    at_period = 1;
+    if (next_sentence_lab) {
+        new_stmt(ST_LABEL)->dst = next_sentence_lab;
+        next_sentence_lab = 0;
+    }
+}
 
 /* A subscript directly after an identifier, or NULL. */
 /* The subscripts on a reference, as a list. A comma between them has already
@@ -3748,7 +3846,8 @@ static void parse_one_statement(void)
                 m->litlen = unitlen;
             } else if (savelit) {
                 m->imm = 2;                       /* nonnumeric literal */
-                memcpy(m->immdigits, save, (size_t)savelen + 1);
+                memcpy(m->lit, save, (size_t)savelen + 1);
+                m->litlen = savelen;
                 m->immscale = savelen;
             } else if (is_numeric_literal(save)) {
                 m->imm = 1; m->immscale = syms[m->dst].scale;
@@ -4348,6 +4447,7 @@ static void parse_one_statement(void)
             /* WRITE r FROM x is MOVE x TO r followed by WRITE r. */
             next();
             st->src = consume_sym();
+            st->ssub = opt_subscript();
         }
         if (is("BEFORE") || is("AFTER")) {
             int after = is("AFTER");
@@ -4740,6 +4840,7 @@ static void parse_one_statement(void)
             while (!tok.eof && !is(".") && !starts_statement()) {
                 if (st->ndop >= 8) die("too many CALL arguments");
                 st->dop[st->ndop].sym = consume_sym();
+                st->dop[st->ndop].sub = opt_subscript();
                 st->dop[st->ndop].litlen = 0;
                 st->ndop++;
             }
@@ -4894,6 +4995,18 @@ static void parse_one_statement(void)
         return;
     }
 
+    if (is("NEXT")) {
+        /* II-66: skip to the period that ends this sentence. The label is
+         * planted when that period is eaten, so a NEXT SENTENCE inside IF
+         * lands after the ELSE as well. */
+        next();
+        expect("SENTENCE");
+        if (!next_sentence_lab) next_sentence_lab = ++nlabel;
+        new_stmt(ST_BRANCH)->dst = next_sentence_lab;
+        eat_period();
+        return;
+    }
+
     if (is("GOBACK")) {                 /* what the corpus uses, not STOP RUN */
         next();
         new_stmt(ST_STOP);
@@ -4994,8 +5107,8 @@ static void parse_procedure(void)
             if (!syms[i].linkage)
                 die("PROCEDURE DIVISION USING names an item that is not in the "
                     "LINKAGE SECTION");
-            if (syms[i].level != 1)
-                die("PROCEDURE DIVISION USING needs an 01-level item");
+            if (syms[i].level != 1 && syms[i].level != 77)
+                die("PROCEDURE DIVISION USING needs a level 01 or 77 item");
             using_parm[nusing++] = i;
         }
     }
@@ -5064,7 +5177,9 @@ static void parse_procedure(void)
         at_period = 0;
         parse_stmt_list(0);
     }
-    for (int i = 0; i < nstmt; i++) if (stmts[i].op == ST_STOP) stopped = 1;
+    for (int i = 0; i < nstmt; i++)
+        if (stmts[i].op == ST_STOP || (is_subprogram && stmts[i].op == ST_EXITPGM))
+            stopped = 1;
     if (!stopped) die("PROCEDURE DIVISION has no STOP RUN");
     for (int i = 0; i < nstmt; i++) {
         if (stmts[i].op == ST_ALTER) {
@@ -5610,6 +5725,47 @@ static void gen_wide_store(const Sym *sy, Node *sub, const char *wk)
     }
 }
 
+/* LH/L/STH/ST need the field on a halfword or fullword. Interiors are packed
+ * with no slack, so a COMP after a PIC X sits at offset 1 and those RX
+ * instructions take a specification exception. MVC through DWK, which is
+ * aligned, is the byte-oriented way to the same register. */
+static int comp_rx_aligned(const Sym *sy)
+{
+    return sy->elem > 0 && sy->offset % sy->elem == 0;
+}
+
+static void gen_comp_load_r(const Sym *sy, Node *sub, int reg)
+{
+    char b[96], f[64];
+    if (comp_rx_aligned(sy)) {
+        field_ref(sy, sub, 0, 7, f, sizeof f);
+        snprintf(b, sizeof b, "%d,%s", reg, f);
+        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
+    } else {
+        field_ref_m(sy, sub, FR_SS_NOLEN, sy->elem, 7, f, sizeof f);
+        snprintf(b, sizeof b, "DWK(%d),%s", sy->elem, f);
+        asm_line("", "MVC", b, "COMP, not on its boundary");
+        snprintf(b, sizeof b, "%d,DWK", reg);
+        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
+    }
+}
+
+static void gen_comp_store_r(const Sym *sy, Node *sub, int reg)
+{
+    char b[96], f[64];
+    if (comp_rx_aligned(sy)) {
+        field_ref(sy, sub, 0, 6, f, sizeof f);
+        snprintf(b, sizeof b, "%d,%s", reg, f);
+        asm_line("", sy->elem == 2 ? "STH" : "ST", b, "");
+    } else {
+        snprintf(b, sizeof b, "%d,DWK", reg);
+        asm_line("", sy->elem == 2 ? "STH" : "ST", b, "");
+        field_ref_m(sy, sub, FR_SS_LEN, sy->elem, 6, f, sizeof f);
+        snprintf(b, sizeof b, "%s,DWK", f);
+        asm_line("", "MVC", b, "COMP, not on its boundary");
+    }
+}
+
 static void gen_load(const Sym *sy, Node *sub, const char *wk)
 {
     char b[128], f[64];
@@ -5627,9 +5783,7 @@ static void gen_load(const Sym *sy, Node *sub, const char *wk)
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
-        field_ref(sy, sub, 0, 7, f, sizeof f);
-        snprintf(b, sizeof b, "2,%s", f);
-        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
+        gen_comp_load_r(sy, sub, 2);
         asm_line("", "CVD", "2,DWK", "binary -> packed");
         snprintf(b, sizeof b, "%s(16),DWK(8)", wk);
         asm_line("", "ZAP", b, "");
@@ -5846,11 +6000,23 @@ static void gen_use_call(void)
  * duplicate. VSAM reports it as feedback 8 on a successful request. */
 static int vs_dupcheck;
 
+static void gen_file_status(const File *f, const char *code)
+{
+    if (f->status_sym < 0) return;
+    char b[128], fd[64];
+    const Sym *st = &syms[f->status_sym];
+    need_sym_base(st);
+    field_ref(st, NULL, 2, 6, fd, sizeof fd);
+    snprintf(b, sizeof b, "%s,=C'%s'", fd, code);
+    asm_line("", "MVC", b, "FILE STATUS");
+}
+
 static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
 {
     char b[128], fd[64];
-    if (f->status_sym < 0) return;
-    const Sym *st = &syms[f->status_sym];
+    int has_st = f->status_sym >= 0;
+    if (!has_st && gen_use_decl < 0) return;
+    const Sym *st = has_st ? &syms[f->status_sym] : NULL;
     int lok = ++gen_edited_labels, ldone = ++gen_edited_labels;
     char aok[16], adone[16];
     snprintf(aok,   sizeof aok,   "G%04d", lok);
@@ -5861,10 +6027,12 @@ static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
      * what it believes is loaded at each one. That is the whole of the S0C4
      * slice 1 cost: a base loaded on one path only, then used on both. */
     #define VS_SET(code, why) do {                                          \
-        need_sym_base(st);                                                  \
-        field_ref(st, NULL, 2, 6, fd, sizeof fd);                           \
-        snprintf(b, sizeof b, "%s,=C'%s'", fd, (code));                     \
-        asm_line("", "MVC", b, (why));                                      \
+        if (has_st) {                                                       \
+            need_sym_base(st);                                              \
+            field_ref(st, NULL, 2, 6, fd, sizeof fd);                       \
+            snprintf(b, sizeof b, "%s,=C'%s'", fd, (code));                 \
+            asm_line("", "MVC", b, (why));                                  \
+        }                                                                   \
     } while (0)
 
     asm_line("", "LTR", "15,15", "VSAM request succeeded?");
@@ -6071,7 +6239,43 @@ static void gen_store_op(const Sym *sy, Node *sub, const char *op)
         if (sy->bwz) gen_blank_when_zero(sy, sub, "PWK1(16)");
         return;
     }
-    if (sy->bwz) gen_blank_when_zero(sy, sub, op);
+    if (sy->bwz) {
+        /* For a non-edited item the spaces ARE the stored value, so skip the
+         * UNPK/ZAP/ST when the packed source is zero. Edited items overlay
+         * the picture after the store; blanking those stays after it. */
+        char lz[16], ls[16];
+        snprintf(lz, sizeof lz, "L%04d", ++genlabel);
+        snprintf(ls, sizeof ls, "L%04d", ++genlabel);
+        snprintf(b, sizeof b, "%s,%s+15(1)", op, intern_const("0"));
+        asm_line("", "CP", b, "BLANK WHEN ZERO: is it zero?");
+        asm_line("", "BNE", ls, "");
+        field_ref(sy, sub, sy->elem, 6, f, sizeof f);
+        snprintf(b, sizeof b, "%s,%s", f, intern_str(" ", 1, sy->elem));
+        asm_line("", "MVC", b, "then spaces");
+        asm_line("", "B", lz, "");
+        asm_line(ls, "DS", "0H", "");
+        switch (sy->usage) {
+        case U_DISPLAY:
+            field_ref(sy, sub, sy->elem, 6, f, sizeof f);
+            snprintf(b, sizeof b, "%s,%s", f, op);
+            asm_line("", "UNPK", b, "packed -> zoned");
+            if (!sy->is_signed) {
+                if (sub) snprintf(b, sizeof b, "%d(6),X'F0'", sy->elem - 1);
+                else     snprintf(b, sizeof b, "%s+%d,X'F0'", sy->label, sy->elem - 1);
+                asm_line("", "OI", b, "unsigned: force an F zone");
+            }
+            break;
+        case U_COMP3:
+            field_ref(sy, sub, sy->elem, 6, f, sizeof f);
+            snprintf(b, sizeof b, "%s,%s", f, op);
+            asm_line("", "ZAP", b, "");
+            break;
+        default:
+            die("BLANK WHEN ZERO applies only to USAGE DISPLAY");
+        }
+        asm_line(lz, "DS", "0H", "");
+        return;
+    }
     switch (sy->usage) {
     case U_DISPLAY:
         field_ref(sy, sub, sy->elem, 6, f, sizeof f);
@@ -6100,9 +6304,7 @@ static void gen_store_op(const Sym *sy, Node *sub, const char *op)
         snprintf(b, sizeof b, "DWK(8),%s", op);
         asm_line("", "ZAP", b, "");
         asm_line("", "CVB", "2,DWK", "packed -> binary");
-        field_ref(sy, sub, 0, 6, f, sizeof f);
-        snprintf(b, sizeof b, "2,%s", f);
-        asm_line("", sy->elem == 2 ? "STH" : "ST", b, "");
+        gen_comp_store_r(sy, sub, 2);
         break;
     }
 }
@@ -6122,7 +6324,8 @@ static const char *intern_const(const char *digits)
 }
 
 /* Nonnumeric constants, padded to the length the comparison or move needs. */
-static struct { char label[16]; char text[MAXTOK]; int len; } sconsts[256];
+#define MAXSCONST 257
+static struct { char label[16]; char text[MAXSCONST]; int len; } sconsts[256];
 static int nsconst;
 
 /* Right-justify a digit string in WIDTH, zero filled. COBOL truncates on the
@@ -6138,9 +6341,9 @@ static void zero_pad(const char *v, int width, char *out, size_t n)
 
 static const char *intern_str(const char *text, int len, int pad)
 {
-    char buf[MAXTOK];
+    char buf[MAXSCONST];
     int n = len > pad ? len : pad;
-    if (n >= MAXTOK) die("literal too long");
+    if (n >= MAXSCONST) die("literal too long");
     for (int i = 0; i < n; i++) buf[i] = i < len ? text[i] : ' ';
     buf[n] = 0;
     for (int i = 0; i < nsconst; i++)
@@ -6387,9 +6590,7 @@ static void gen_load_t(const Sym *sy, Node *sub, const char *wk, int len)
         asm_line("", "ZAP", b, "");
         break;
     case U_COMP:
-        field_ref(sy, sub, 0, 7, f, sizeof f);
-        snprintf(b, sizeof b, "2,%s", f);
-        asm_line("", sy->elem == 2 ? "LH" : "L", b, "");
+        gen_comp_load_r(sy, sub, 2);
         asm_line("", "CVD", "2,DWK", "binary -> packed");
         snprintf(b, sizeof b, "%s,DWK(8)", t);
         asm_line("", "ZAP", b, "");
@@ -6482,6 +6683,29 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
          * bytes plus the multiplier's. */
         int direct = direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
         int L2 = direct ? oplen : pk_bytes(pr);
+        /* MP's second operand is at most 8 bytes. A 16-18 digit right
+         * operand used to be truncated to its low 15 digits. Put the
+         * wider one on the left when the other fits, otherwise refuse. */
+        int swap = 0;
+        if (L2 > 8) {
+            int Ll = pk_bytes(pl);
+            if (Ll <= 8) swap = 1;
+            else die("a multiplier of more than 15 digits is not implemented");
+        }
+        if (swap) {
+            int L1 = pk_bytes(pr) + pk_bytes(pl);
+            if (L1 > 16) L1 = 16;
+            if (L < L1) L = L1;
+            gen_expr(n->r, d, tgtscale, L);
+            if (!direct_operand(n->l, sl, 1, 8, op, sizeof op, &oplen)) {
+                gen_expr(n->l, d + 1, tgtscale, 1);
+                tail_op(wk2, pk_bytes(pl) > 8 ? 8 : pk_bytes(pl), op, sizeof op);
+            }
+            tail_op(wk, L, t, sizeof t);
+            snprintf(b, sizeof b, "%s,%s", t, op);
+            asm_line("", "MP", b, "scale becomes the sum of the scales");
+            return L;
+        }
         if (L2 > 8) L2 = 8;
         int L1 = pk_bytes(pl) + L2;
         if (L1 > 16) L1 = 16;
@@ -6508,7 +6732,8 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
          * the divisor's. */
         int direct = direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
         int L2 = direct ? oplen : pk_bytes(pr);
-        if (L2 > 8) L2 = 8;
+        if (L2 > 8)
+            die("a divisor of more than 15 digits is not implemented");
         int L1 = pk_bytes(prec) + L2;
         if (L1 > 16) L1 = 16;
         gen_expr(n->l, d, tgtscale, L1);
@@ -6564,6 +6789,7 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
         if (r->kind == N_LIT) {
             if (r->litscale != 0) die("a fractional exponent is not implemented -- it has no exact decimal value");
             int e = atoi(r->lit);
+            if (e < 0) die("a negative exponent is not implemented -- it has no exact decimal value");
             int sl, pl;
             expr_shape(n->l, tgtscale, &sl, &pl);
             gen_expr(n->l, d, tgtscale, 16);
@@ -7662,13 +7888,21 @@ static void emit_runtime(void)
     asm_line("", "L", "3,4(0,1)", "the parameter list");
     asm_line("", "LA", "4,DCTAB", "");
     asm_line("", "LA", "5,16", "entries");
-    asm_line("DCA010", "CLI", "0(4),X'00'", "an empty entry?");
-    asm_line("", "BE", "DCA050", "then it is not loaded");
-    asm_line("", "CLC", "0(8,4),0(2)", "this one?");
-    asm_line("", "BE", "DCA030", "");
-    asm_line("", "LA", "4,12(4)", "");
+    asm_line("", "SR", "6,6", "no hole yet");
+    asm_line("DCA010", "CLC", "0(8,4),0(2)", "this one?");
+    asm_line("", "BE", "DCA030", "already loaded");
+    asm_line("", "CLI", "0(4),X'00'", "an empty entry?");
+    asm_line("", "BNE", "DCA020", "");
+    asm_line("", "LTR", "6,6", "");
+    asm_line("", "BNZ", "DCA020", "keep the first hole");
+    asm_line("", "LR", "6,4", "");
+    asm_line("DCA020", "LA", "4,12(4)", "");
     asm_line("", "BCT", "5,DCA010", "");
-    asm_line("", "LOAD", "EPLOC=(2)", "table full: load without remembering");
+    asm_line("", "LTR", "6,6", "a hole to remember this load?");
+    asm_line("", "BZ", "DCAFULL", "table full");
+    asm_line("", "LR", "4,6", "");
+    asm_line("", "B", "DCA050", "");
+    asm_line("DCAFULL", "LOAD", "EPLOC=(2)", "table full: load without remembering");
     asm_line("", "LR", "15,0", "");
     asm_line("", "B", "DCA040", "");
     asm_line("DCA050", "MVC", "0(8,4),0(2)", "remember the name");
@@ -7696,10 +7930,10 @@ static void emit_runtime(void)
     asm_line("", "LA", "4,DCTAB", "");
     asm_line("", "LA", "5,16", "");
     asm_line("CAN010", "CLI", "0(4),X'00'", "");
-    asm_line("", "BE", "CANX", "not loaded: nothing to do");
+    asm_line("", "BE", "CANNEXT", "empty: keep looking");
     asm_line("", "CLC", "0(8,4),0(2)", "");
     asm_line("", "BE", "CAN020", "");
-    asm_line("", "LA", "4,12(4)", "");
+    asm_line("CANNEXT", "LA", "4,12(4)", "");
     asm_line("", "BCT", "5,CAN010", "");
     asm_line("", "B", "CANX", "");
     asm_line("CAN020", "DELETE", "EPLOC=(2)", "release it");
@@ -8209,13 +8443,8 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
          * STH keeps the same low halfword. Neither path forces a sign on an
          * unsigned receiver or truncates to the declared digit count, so the
          * stored bytes agree in every case. */
-        char bb[128], fs[64], fd[64];
-        field_ref(sv, ssub, 0, 7, fs, sizeof fs);
-        snprintf(bb, sizeof bb, "2,%s", fs);
-        asm_line("", sv->elem == 2 ? "LH" : "L", bb, "binary move, no decimal detour");
-        field_ref(d, dsub, 0, 6, fd, sizeof fd);
-        snprintf(bb, sizeof bb, "2,%s", fd);
-        asm_line("", d->elem == 2 ? "STH" : "ST", bb, "");
+        gen_comp_load_r(sv, ssub, 2);
+        gen_comp_store_r(d, dsub, 2);
         return;
     }
     gen_load(sv, ssub, "PWK1");
@@ -9117,6 +9346,7 @@ static void generate(void)
                      : st->src == 1 ? (f->reversed ? "RDBACK" : "INPUT") : "OUTPUT");
             asm_line("", "OPEN", b, st->src == 3 ? "QSAM update mode" : st->src == 4 ? "append" : "");
             if (lskip[0]) { asm_line(lskip, "DS", "0H", ""); reset_bases(); }
+            gen_file_status(f, "00");
             if (f->isam == 2) {
                 /* BISAM reads a whole BLOCK, not a record, and wants 16 bytes
                  * of working room in front of it. BLKSIZE is only known once
@@ -9169,6 +9399,7 @@ static void generate(void)
             }
             if (lsk[0]) { asm_line(lsk, "DS", "0H", ""); reset_bases(); }
             if (f->vsam) { gen_vsam_status(f, NULL, vs_simple); reset_bases(); }
+            else gen_file_status(f, "00");
             break;
         }
         case ST_READ: {
@@ -9381,9 +9612,11 @@ static void generate(void)
                 need_sym_base(t); need_sym_base(&syms[f->rec_sym]);
                 gen_move_alpha(t, NULL, &syms[f->rec_sym], NULL);
             }
+            gen_file_status(f, "00");
             asm_line("", "B", lc, "");
             asm_line(le, "DS", "0H", "AT END");
             reset_bases();
+            gen_file_status(f, "10");
             if (decl >= 0) gen_call_range(decls[decl].sect,
                                           section_end(decls[decl].sect), &nret);
             break;
@@ -9805,7 +10038,7 @@ static void generate(void)
                 const Sym *sv = &syms[st->src];
                 asm_comment("  FROM: fill the record area first");
                 need_sym_base(wrec); need_sym_base(sv);
-                gen_move_alpha(wrec, NULL, sv, NULL);
+                gen_move_alpha(wrec, NULL, sv, st->ssub);
             }
             if (f->vsam) {
                 /* PUT stores from the FD area because the RPL says MVE. In
@@ -9845,9 +10078,11 @@ static void generate(void)
                 asm_line("", "PUT", b, "QISAM load");
                 asm_line("", "CLI", "ISFLG,X'00'", "sequence or duplicate?");
                 asm_line("", "BNE", wle, "");
+                gen_file_status(f, "00");
                 asm_line("", "B", wlc, "");
                 asm_line(wle, "DS", "0H", "INVALID KEY");
                 reset_bases();
+                gen_file_status(f, "30");
                 gen_use_call();
                 break;
             }
@@ -9886,6 +10121,7 @@ static void generate(void)
                 asm_line("", "L", "15,VADV", "");
                 asm_line("", "BALR", "14,15", "carriage control and PUT");
                 reset_bases();
+                gen_file_status(f, "00");
                 if (st->eop) {
                     snprintf(b, sizeof b, "L%04d", st->lab2);
                     asm_line("", "LTR", "15,15", "END-OF-PAGE?");
@@ -9904,11 +10140,13 @@ static void generate(void)
                 asm_line("", "XC", b, "");
                 snprintf(b, sizeof b, "%s,%s", f->label, rw->label);
                 asm_line("", "PUT", b, "variable-length record");
+                gen_file_status(f, "00");
                 break;
             }
             need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "%s,%s", f->label, syms[f->rec_sym].label);
             asm_line("", "PUT", b, "");
+            gen_file_status(f, "00");
             break;
         }
         case ST_INSPECT: {
@@ -10289,8 +10527,17 @@ static void generate(void)
                 need_sym_base(ix);
                 field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, fx, sizeof fx);
                 snprintf(b, sizeof b, "1,%s", fx); asm_line("", "LH", b, "the index");
-                snprintf(b, sizeof b, "1,%s", intern_half(tb->occurs));
-                asm_line("", "CH", b, "past the last occurrence?");
+                asm_line("", "LTR", "1,1", "below the first occurrence?");
+                asm_line("", "BNP", le, "AT END");
+                if (tb->odo_dep >= 0) {
+                    gen_load(&syms[tb->odo_dep], NULL, "PWK2");
+                    asm_line("", "ZAP", "DWK(8),PWK2(16)", "");
+                    asm_line("", "CVB", "2,DWK", "DEPENDING ON count");
+                    asm_line("", "CR", "1,2", "past the current last?");
+                } else {
+                    snprintf(b, sizeof b, "1,%s", intern_half(tb->occurs));
+                    asm_line("", "CH", b, "past the last occurrence?");
+                }
                 asm_line("", "BH", le, "AT END");
                 for (int k = 0; k < st->nwhen; k++) {
                     reset_bases();
@@ -10323,8 +10570,14 @@ static void generate(void)
             asm_comment(b);
             asm_line("", "LA", "1,1", "");
             snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "STH", b, "low = 1");
-            snprintf(b, sizeof b, "1,%d", tb->occurs);
-            asm_line("", "LA", b, "");
+            if (tb->odo_dep >= 0) {
+                gen_load(&syms[tb->odo_dep], NULL, "PWK2");
+                asm_line("", "ZAP", "DWK(8),PWK2(16)", "");
+                asm_line("", "CVB", "1,DWK", "DEPENDING ON count");
+            } else {
+                snprintf(b, sizeof b, "1,%d", tb->occurs);
+                asm_line("", "LA", b, "");
+            }
             snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "STH", b, "high = OCCURS");
             asm_line(lp, "DS", "0H", "");
             reset_bases();
@@ -10372,7 +10625,7 @@ static void generate(void)
                 const Sym *a = &syms[st->dop[k].sym];
                 char fa[64];
                 need_sym_base(a);
-                field_ref_m(a, NULL, FR_RX, a->bytes, 6, fa, sizeof fa);
+                field_ref_m(a, st->dop[k].sub, FR_RX, a->bytes, 6, fa, sizeof fa);
                 snprintf(b, sizeof b, "0,%s", fa);
                 asm_line("", "LA", b, a->name);
                 snprintf(b, sizeof b, "0,%s+%d", pl, k * 4);
@@ -10561,6 +10814,7 @@ static void generate(void)
                                st->op == ST_ADD  ? "ADD"  : "SUBTRACT";
             const char *figname = fig_name(st->fig);
             if (st->fig)      snprintf(b, sizeof b, " %s %s -> %s", verb, figname, d->name);
+            else if (st->imm == 2) snprintf(b, sizeof b, " %s %s -> %s", verb, st->lit, d->name);
             else if (st->imm) snprintf(b, sizeof b, " %s %s -> %s", verb, st->immdigits, d->name);
             else              snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
             asm_comment(b);
@@ -10617,18 +10871,18 @@ static void generate(void)
                         die("MOVE of a nonnumeric literal to that numeric item "
                             "is not implemented yet -- only an unsigned display "
                             "integer");
-                    for (int k = 0; k < st->immscale; k++)
-                        if (!isdigit((unsigned char)st->immdigits[k]))
+                    for (int k = 0; k < st->litlen; k++)
+                        if (!isdigit((unsigned char)st->lit[k]))
                             die("MOVE of a nonnumeric literal to a numeric item "
                                 "needs the literal to be all digits");
                     int dn = st->dsub ? d->elem : d->bytes;
-                    int sn = st->immscale;
+                    int sn = st->litlen;
                     if (dn > 256) die("MVC is limited to 256 bytes");
-                    char pad[MAXTOK];
-                    if (sn >= dn) memcpy(pad, st->immdigits + (sn - dn), dn);
+                    char pad[MAXSCONST];
+                    if (sn >= dn) memcpy(pad, st->lit + (sn - dn), dn);
                     else {
                         memset(pad, '0', dn - sn);
-                        memcpy(pad + dn - sn, st->immdigits, sn);
+                        memcpy(pad + dn - sn, st->lit, sn);
                     }
                     const char *sl = intern_str(pad, dn, dn);
                     char fd[64];
@@ -10646,15 +10900,15 @@ static void generate(void)
                         /* A literal is a compile-time string, so JUSTIFIED
                          * costs nothing at run time: pad it on the left, and
                          * keep the right-hand characters when it is too long. */
-                        char pad[260];
-                        int sn = st->immscale;
-                        if (sn >= dn) memcpy(pad, st->immdigits + (sn - dn), dn);
+                        char pad[MAXSCONST];
+                        int sn = st->litlen;
+                        if (sn >= dn) memcpy(pad, st->lit + (sn - dn), dn);
                         else {
                             memset(pad, ' ', dn - sn);
-                            memcpy(pad + dn - sn, st->immdigits, sn);
+                            memcpy(pad + dn - sn, st->lit, sn);
                         }
                         sl = intern_str(pad, dn, dn);
-                    } else sl = intern_str(st->immdigits, st->immscale, dn);
+                    } else sl = intern_str(st->lit, st->litlen, dn);
                     char fd[64];
                     field_ref(d, st->dsub, dn, 6, fd, sizeof fd);
                     snprintf(b, sizeof b, "%s,%s", fd, sl);
@@ -10756,10 +11010,22 @@ static void generate(void)
                      * comes from a halfword constant when it fits one. */
                     const char *op = NULL; long v = 0;
                     if (!st->imm && syms[st->src].usage == U_COMP && syms[st->src].scale == d->scale) {
-                        need_sym_base(&syms[st->src]);
-                        field_ref(&syms[st->src], st->ssub, 0, 7, fop, sizeof fop);
-                        op = syms[st->src].elem == 2 ? (st->op == ST_ADD ? "AH" : "SH")
-                                                     : (st->op == ST_ADD ? "A"  : "S");
+                        const Sym *sv = &syms[st->src];
+                        need_sym_base(d); need_sym_base(sv);
+                        gen_comp_load_r(d, st->dsub, 2);
+                        if (comp_rx_aligned(sv)) {
+                            field_ref(sv, st->ssub, 0, 7, fop, sizeof fop);
+                            snprintf(b, sizeof b, "2,%s", fop);
+                            asm_line("", sv->elem == 2 ? (st->op == ST_ADD ? "AH" : "SH")
+                                                       : (st->op == ST_ADD ? "A"  : "S"),
+                                     b, "binary, same scale: in the register");
+                        } else {
+                            gen_comp_load_r(sv, st->ssub, 3);
+                            asm_line("", st->op == ST_ADD ? "AR" : "SR", "2,3",
+                                     "binary, same scale: in the register");
+                        }
+                        gen_comp_store_r(d, st->dsub, 2);
+                        break;
                     } else if (st->imm && binary_lit_value(st->immdigits, st->immscale, d->scale, &v)) {
                         if (v >= -32768 && v <= 32767) {
                             snprintf(fop, sizeof fop, "%s", intern_half((int)v));
@@ -10770,15 +11036,11 @@ static void generate(void)
                         }
                     }
                     if (op) {
-                        char fd2[64];
                         need_sym_base(d);
-                        field_ref(d, st->dsub, 0, 6, fd2, sizeof fd2);
-                        snprintf(b, sizeof b, "2,%s", fd2);
-                        asm_line("", d->elem == 2 ? "LH" : "L", b, "binary, same scale: in the register");
+                        gen_comp_load_r(d, st->dsub, 2);
                         snprintf(b, sizeof b, "2,%s", fop);
-                        asm_line("", op, b, "");
-                        snprintf(b, sizeof b, "2,%s", fd2);
-                        asm_line("", d->elem == 2 ? "STH" : "ST", b, "");
+                        asm_line("", op, b, "binary, same scale: in the register");
+                        gen_comp_store_r(d, st->dsub, 2);
                         break;
                     }
                 }
@@ -11775,18 +12037,6 @@ int main(int argc, char **argv)
     if (in) {
         const char *sl = strrchr(in, '/');
         if (sl) snprintf(src_dir, sizeof src_dir, "%.*s", (int)(sl - in), in);
-    }
-    /* One look at the source decides whether the CURRENT-DATE register is
-     * worth creating. Cheaper than looking ahead in the parser, and a false
-     * positive from a comment costs eight bytes. */
-    if (in) {
-        FILE *scan = fopen(in, "r");
-        if (scan) {
-            char ln[512];
-            while (fgets(ln, sizeof ln, scan))
-                if (strstr(ln, "CURRENT-DATE")) { uses_curdate = 1; break; }
-            fclose(scan);
-        }
     }
     if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s] [-I dir]...\n"
                        "  -s      strip the line table and program-check exit\n"

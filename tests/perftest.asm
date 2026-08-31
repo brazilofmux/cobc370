@@ -278,7 +278,7 @@ T0021    DS    0H
 * MOVE WS-IDX -> ENT-YEAR
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0003             binary move, no decimal detour
+         LH    2,D0003
          LH    6,D0003             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
@@ -299,17 +299,17 @@ T0023    DS    0H
 * ADD ENT-YEAR -> WS-TOT
          L     8,BL0000            base locator
          USING WSC0000,8
+         L     2,D0004
          LH    7,D0003             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
-         L     2,D0004             binary, same scale: in the register
-         AH    2,0(,7)
+         AH    2,0(,7)             binary, same scale: in the register
          ST    2,D0004
 T0024    DS    0H
 * ADD 1 -> WS-IDX
-         LH    2,D0003             binary, same scale: in the register
-         AH    2,H0002
+         LH    2,D0003
+         AH    2,H0002             binary, same scale: in the register
          STH   2,D0003
          DROP  8
 * SUM-EXIT.
@@ -326,8 +326,8 @@ T0026    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0005             binary, same scale: in the register
-         AH    2,H0002
+         LH    2,D0005
+         AH    2,H0002             binary, same scale: in the register
          STH   2,D0005
 T0027    DS    0H
 * IF
@@ -356,8 +356,8 @@ T0030    DS    0H
 * ADD 1 -> WS-CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0005             binary, same scale: in the register
-         AH    2,H0002
+         LH    2,D0005
+         AH    2,H0002             binary, same scale: in the register
          STH   2,D0005
          DROP  8
 * BUMP-EXIT.
@@ -1317,13 +1317,21 @@ COBDCAL  STM   14,12,12(13)
          L     3,4(0,1)            the parameter list
          LA    4,DCTAB
          LA    5,16                entries
-DCA010   CLI   0(4),X'00'          an empty entry?
-         BE    DCA050              then it is not loaded
-         CLC   0(8,4),0(2)         this one?
-         BE    DCA030
-         LA    4,12(4)
+         SR    6,6                 no hole yet
+DCA010   CLC   0(8,4),0(2)         this one?
+         BE    DCA030              already loaded
+         CLI   0(4),X'00'          an empty entry?
+         BNE   DCA020
+         LTR   6,6
+         BNZ   DCA020              keep the first hole
+         LR    6,4
+DCA020   LA    4,12(4)
          BCT   5,DCA010
-         LOAD  EPLOC=(2)           table full: load without remembering
+         LTR   6,6                 a hole to remember this load?
+         BZ    DCAFULL             table full
+         LR    4,6
+         B     DCA050
+DCAFULL  LOAD  EPLOC=(2)           table full: load without remembering
          LR    15,0
          B     DCA040
 DCA050   MVC   0(8,4),0(2)         remember the name
@@ -1351,10 +1359,10 @@ COBCANC  STM   14,12,12(13)
          LA    4,DCTAB
          LA    5,16
 CAN010   CLI   0(4),X'00'
-         BE    CANX                not loaded: nothing to do
+         BE    CANNEXT             empty: keep looking
          CLC   0(8,4),0(2)
          BE    CAN020
-         LA    4,12(4)
+CANNEXT  LA    4,12(4)
          BCT   5,CAN010
          B     CANX
 CAN020   DELETE EPLOC=(2)          release it
