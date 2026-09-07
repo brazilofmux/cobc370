@@ -2834,6 +2834,15 @@ static void parse_data_division(void)
         snprintf(ix->label, sizeof ix->label, "D%04d", nsym);
         snprintf(ix->name, sizeof ix->name, "%s", pend_idx[k].name);
         if (lookup(ix->name) >= 0) die("INDEXED BY name is already declared");
+        /* An index item is a signed halfword, so it cannot count past 32767.
+         * Nothing downstream notices: the index is loaded with LH, the compare
+         * against a larger bound never succeeds, and a serial SEARCH takes
+         * AT END at once -- a wrong answer with a clean assembly. Refuse the
+         * table until the index is a fullword. USAGE IS INDEX is already one,
+         * which is the other half of the same inconsistency. */
+        if (syms[pend_idx[k].table].occurs > 32767)
+            die("INDEXED BY on a table of more than 32767 occurrences is not "
+                "implemented: the index item is a halfword");
         ix->usage = U_COMP; ix->digits = 4; ix->is_signed = 1; ix->is_index = 1;
         ix->bytes = ix->elem = 2;
         wslen = (wslen + 7) & ~7;
@@ -5413,6 +5422,13 @@ static int nhconst;
 
 static const char *intern_half(int v)
 {
+    /* A halfword holds -32768..32767. Past that the assembler takes IFO203,
+     * truncates, and carries on at RC=4 -- so the program assembles and is
+     * quietly wrong. An OCCURS of 40000 became -25536 and every serial SEARCH
+     * took AT END at once. Refuse instead. */
+    if (v < -32768 || v > 32767)
+        die("a table or element this large needs a fullword constant, which "
+            "this path does not emit yet");
     for (int i = 0; i < nhconst; i++) if (hconsts[i].v == v) return hconsts[i].label;
     if (nhconst >= 64) die("too many halfword constants");
     snprintf(hconsts[nhconst].label, sizeof hconsts[nhconst].label, "H%04d", nhconst + 1);
@@ -10599,9 +10615,12 @@ static void generate(void)
                     asm_line("", "ZAP", "DWK(8),PWK2(16)", "");
                     asm_line("", "CVB", "2,DWK", "DEPENDING ON count");
                     asm_line("", "CR", "1,2", "past the current last?");
-                } else {
+                } else if (tb->occurs <= 32767) {
                     snprintf(b, sizeof b, "1,%s", intern_half(tb->occurs));
                     asm_line("", "CH", b, "past the last occurrence?");
+                } else {
+                    snprintf(b, sizeof b, "1,%s", intern_full(tb->occurs));
+                    asm_line("", "C", b, "past the last occurrence?");
                 }
                 asm_line("", "BH", le, "AT END");
                 for (int k = 0; k < st->nwhen; k++) {

@@ -762,3 +762,19 @@ CSECT ends, and says that the job's REGION will run out well before that.
 65535-byte gap, and past a 4096 subscript, and it does a SEARCH ALL for one
 of them.
 
+### And a fourth, one level down (issue #22)
+
+Pushing the same test to `OCCURS 40000` found the next limit, and it was the
+dangerous kind. `intern_half()` emitted `DC H'40000'`; the assembler took
+IFO203, truncated to -25536, and carried on at RC=4. The program assembled
+clean and every serial SEARCH took AT END at once -- a wrong answer with no
+diagnostic. `intern_half()` now refuses a value a halfword cannot hold, and
+the serial SEARCH bound uses a fullword compare past 32767.
+
+That exposed the real ceiling underneath: an `INDEXED BY` item is a signed
+halfword (`ix->bytes = ix->elem = 2`), so it cannot count past 32767 whatever
+the bound is compared against. `USAGE IS INDEX` is a fullword, so the two
+kinds of index disagree about their own width. Refused with a message for now;
+issue #22 carries the fullword change, which touches every SEARCH site and
+regenerates the code of every program with a table.
+
