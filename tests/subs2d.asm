@@ -183,19 +183,19 @@ T0019    DS    0H
          ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0013
+         ST    2,D0013
 T0020    DS    0H
 * MOVE 4 -> C
          ZAP   PWK1(16),K0002(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0014
+         ST    2,D0014
 T0021    DS    0H
 * MOVE CELL -> SEEN
-         LH    7,D0013             subscript
+         L     7,D0013             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
-         LH    0,D0014             subscript
+         L     0,D0014             subscript
          BCTR  0,0                 subscript-1
          MH    0,H0002             times element size
          AR    7,0                 add this dimension
@@ -346,12 +346,12 @@ T0039    DS    0H
          ZAP   PWK1(16),K0002(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0015
+         ST    2,D0015
 T0040    DS    0H
 * MOVE CELL -> SEEN
          LA    7,0                 subscript-1
          MH    7,H0001             times element size
-         LH    0,D0015             subscript
+         L     0,D0015             subscript
          BCTR  0,0                 subscript-1
          MH    0,H0002             times element size
          AR    7,0                 add this dimension
@@ -588,11 +588,11 @@ D0010    DC    CL2' '              SEEN PIC X(2)
 D0011    DC    CL1' '              ONE-SPOT PIC X(1)
          DS    XL7                 reserve the rest of a table
 D0012    DC    CL8' '              WHOLE-ROW PIC X(8)
-D0013    DC    HL2'0'              R PIC S9(4)v0 COMP
-         DS    XL6                 reserve the rest of a table
-D0014    DC    HL2'0'              C PIC S9(4)v0 COMP
-         DS    XL6                 reserve the rest of a table
-D0015    DC    HL2'0'              C2 PIC S9(4)v0 COMP
+D0013    DC    FL4'0'              R PIC S9(9)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0014    DC    FL4'0'              C PIC S9(9)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0015    DC    FL4'0'              C2 PIC S9(9)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

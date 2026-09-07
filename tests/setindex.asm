@@ -62,7 +62,7 @@ T0005    DS    0H
          ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0010
+         ST    2,D0010
 T0006    DS    0H
 * PERFORM SHOW
          LA    15,R0001            return here
@@ -76,9 +76,9 @@ T0007    DS    0H
 * ADD 1 -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          AH    2,H0002             binary, same scale: in the register
-         STH   2,D0010
+         ST    2,D0010
 T0008    DS    0H
 * PERFORM SHOW
          LA    15,R0002            return here
@@ -92,9 +92,9 @@ T0009    DS    0H
 * ADD BUMP -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          AH    2,D0005             binary, same scale: in the register
-         STH   2,D0010
+         ST    2,D0010
 T0010    DS    0H
 * PERFORM SHOW
          LA    15,R0003            return here
@@ -108,13 +108,13 @@ T0011    DS    0H
 * MOVE IX -> SAVED-IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          ST    2,D0002
 T0012    DS    0H
 * SUBTRACT 2 -> IX
-         LH    2,D0010
+         L     2,D0010
          SH    2,H0003             binary, same scale: in the register
-         STH   2,D0010
+         ST    2,D0010
 T0013    DS    0H
 * PERFORM SHOW
          LA    15,R0004            return here
@@ -129,7 +129,7 @@ T0014    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0002
-         STH   2,D0010
+         ST    2,D0010
 T0015    DS    0H
 * PERFORM SHOW
          LA    15,R0005            return here
@@ -143,7 +143,7 @@ T0016    DS    0H
 * MOVE IX -> N
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          UNPK  D0004(4),PWK1(16)   packed -> zoned
@@ -162,7 +162,7 @@ T0018    DS    0H
 T0019    DS    0H
 * MOVE OTHER-IX -> IX
          L     2,D0003
-         STH   2,D0010
+         ST    2,D0010
 T0020    DS    0H
 * PERFORM SHOW
          LA    15,R0006            return here
@@ -176,13 +176,13 @@ T0021    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          CVD   2,DWK               binary -> packed
-         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK0+10(6),DWK(8)
          L     2,D0002
          CVD   2,DWK               binary -> packed
          ZAP   WK1+10(6),DWK(8)
-         CP    WK0+13(3),WK1+10(6)  numeric compare
+         CP    WK0+10(6),WK1+10(6)  numeric compare
          BNE   L0001
 T0022    DS    0H
 * DISPLAY
@@ -205,18 +205,18 @@ T0025    DS    0H
 * SUBTRACT 3 -> IX
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          SH    2,H0004             binary, same scale: in the register
-         STH   2,D0010
+         ST    2,D0010
 T0026    DS    0H
 * IF
-         LH    2,D0010
+         L     2,D0010
          CVD   2,DWK               binary -> packed
-         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK0+10(6),DWK(8)
          L     2,D0002
          CVD   2,DWK               binary -> packed
          ZAP   WK1+10(6),DWK(8)
-         CP    WK0+13(3),WK1+10(6)  numeric compare
+         CP    WK0+10(6),WK1+10(6)  numeric compare
          BNL   L0003
 T0027    DS    0H
 * DISPLAY
@@ -253,7 +253,7 @@ T0031    DS    0H
          PACK  PWK1(16),0(4,7)     zoned -> packed
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0010
+         ST    2,D0010
 T0032    DS    0H
 * PERFORM SHOW
          LA    15,R0007            return here
@@ -267,7 +267,7 @@ T0033    DS    0H
 * MOVE IX -> NUM
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          LA    6,3                 subscript-1
@@ -305,14 +305,14 @@ T0037    DS    0H
 * MOVE IX -> SHOWN
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0010
+         L     2,D0010
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          UNPK  D0006(1),PWK1(16)   packed -> zoned
          OI    D0006+0,X'F0'       unsigned: force an F zone
 T0038    DS    0H
 * MOVE ENT -> WORK
-         LH    7,D0010             subscript
+         L     7,D0010             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0001(7)          element address
@@ -515,7 +515,7 @@ D0007    DC    CL4' '              WORK PIC X(4)
 D0008    DS    0CL20               NUMS (01 group)
 D0009    DC    5CL4'0000'          NUM PIC 9(4)v0 DISP table
          DS    XL4                 reserve the rest of a table
-D0010    DC    HL2'0'              IX PIC S9(4)v0 COMP
+D0010    DC    FL4'0'              IX PIC S9(9)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

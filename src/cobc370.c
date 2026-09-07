@@ -2834,19 +2834,14 @@ static void parse_data_division(void)
         snprintf(ix->label, sizeof ix->label, "D%04d", nsym);
         snprintf(ix->name, sizeof ix->name, "%s", pend_idx[k].name);
         if (lookup(ix->name) >= 0) die("INDEXED BY name is already declared");
-        /* An index item is a signed halfword, so it cannot count past 32767.
-         * Nothing downstream notices: the index is loaded with LH, the compare
-         * against a larger bound never succeeds, and a serial SEARCH takes
-         * AT END at once -- a wrong answer with a clean assembly. Refuse the
-         * table until the index is a fullword. USAGE IS INDEX is already one,
-         * which is the other half of the same inconsistency. */
-        if (syms[pend_idx[k].table].occurs > 32767)
-            die("INDEXED BY on a table of more than 32767 occurrences is not "
-                "implemented: the index item is a halfword");
-        ix->usage = U_COMP; ix->digits = 4; ix->is_signed = 1; ix->is_index = 1;
-        ix->bytes = ix->elem = 2;
+        /* A signed fullword holding the occurrence number -- the same shape
+         * as USAGE IS INDEX. It was a halfword until 2026-09-07, which capped
+         * a table at 32767 entries and, worse, did so silently: past that the
+         * bound compare never succeeded and a serial SEARCH took AT END. */
+        ix->usage = U_COMP; ix->digits = 9; ix->is_signed = 1; ix->is_index = 1;
+        ix->bytes = ix->elem = 4;
         wslen = (wslen + 7) & ~7;
-        ix->offset = wslen; wslen += 2;
+        ix->offset = wslen; wslen += 4;
         ix->has_value = 1; strcpy(ix->value, "0");
         if (syms[pend_idx[k].table].index_sym < 0)
             syms[pend_idx[k].table].index_sym = nsym;   /* the first one wins */
@@ -10607,7 +10602,7 @@ static void generate(void)
                 reset_bases();
                 need_sym_base(ix);
                 field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, fx, sizeof fx);
-                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "LH", b, "the index");
+                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "L", b, "the index");
                 asm_line("", "LTR", "1,1", "below the first occurrence?");
                 asm_line("", "BNP", le, "AT END");
                 if (tb->odo_dep >= 0) {
@@ -10630,9 +10625,9 @@ static void generate(void)
                 reset_bases();
                 need_sym_base(ix);
                 field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, fx, sizeof fx);
-                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "LH", b, "");
+                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "L", b, "");
                 asm_line("", "LA", "1,1(1)", "next occurrence");
-                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "STH", b, "");
+                snprintf(b, sizeof b, "1,%s", fx); asm_line("", "ST", b, "");
                 if (st->vary_sym >= 0) {
                     /* VARYING: stepped in step with the index, whatever it is */
                     Node *one = node(N_LIT); strcpy(one->lit, "1"); one->litscale = 0;
@@ -10653,7 +10648,7 @@ static void generate(void)
             snprintf(b, sizeof b, " SEARCH ALL %s", tb->name);
             asm_comment(b);
             asm_line("", "LA", "1,1", "");
-            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "STH", b, "low = 1");
+            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "ST", b, "low = 1");
             if (tb->odo_dep >= 0) {
                 gen_load(&syms[tb->odo_dep], NULL, "PWK2");
                 asm_line("", "ZAP", "DWK(8),PWK2(16)", "");
@@ -10669,11 +10664,11 @@ static void generate(void)
                     asm_line("", "L", b, "");
                 }
             }
-            snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "STH", b, "high = OCCURS");
+            snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "ST", b, "high = OCCURS");
             asm_line(lp, "DS", "0H", "");
             reset_bases();
-            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "LH", b, "");
-            snprintf(b, sizeof b, "2,%s", hi);  asm_line("", "LH", b, "");
+            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "L", b, "");
+            snprintf(b, sizeof b, "2,%s", hi);  asm_line("", "L", b, "");
             asm_line("", "CR", "1,2", "low > high means it is not there");
             snprintf(b, sizeof b, "L%04d", st->lab1);
             asm_line("", "BH", b, "");
@@ -10682,16 +10677,16 @@ static void generate(void)
             need_sym_base(ix);
             field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, b + 64, 64);
             snprintf(b, sizeof b, "1,%s", b + 64);
-            asm_line("", "STH", b, "the index is the occurrence number");
+            asm_line("", "ST", b, "the index is the occurrence number");
             gen_cond(st->cond,  st->lab2, 1);      /* key = value: found */
             gen_cond(st->cond2, st->src, 1);       /* key < value: raise low */
             /* key > value: lower the high bound and go round again. */
             need_sym_base(ix);
             field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, b + 64, 64);
             snprintf(b, sizeof b, "1,%s", b + 64);
-            asm_line("", "LH", b, "");
+            asm_line("", "L", b, "");
             asm_line("", "BCTR", "1,0", "");
-            snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "STH", b, "high = mid - 1");
+            snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "ST", b, "high = mid - 1");
             asm_line("", "B", lp, "");
             snprintf(up, sizeof up, "L%04d", st->src);
             asm_line(up, "DS", "0H", "");
@@ -10699,9 +10694,9 @@ static void generate(void)
             need_sym_base(ix);
             field_ref_m(ix, NULL, FR_RX, ix->bytes, 6, b + 64, 64);
             snprintf(b, sizeof b, "1,%s", b + 64);
-            asm_line("", "LH", b, "");
+            asm_line("", "L", b, "");
             asm_line("", "LA", "1,1(1)", "");
-            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "STH", b, "low = mid + 1");
+            snprintf(b, sizeof b, "1,%s", lo);  asm_line("", "ST", b, "low = mid + 1");
             asm_line("", "B", lp, "");
             reset_bases();
             break;
@@ -11219,9 +11214,9 @@ static void generate(void)
         if (stmts[i].op == ST_SEARCH) {
             char lab[16];
             snprintf(lab, sizeof lab, "SL%03d", i);
-            asm_line(lab, "DC", "H'0'", "SEARCH ALL low bound");
+            asm_line(lab, "DC", "F'0'", "SEARCH ALL low bound");
             snprintf(lab, sizeof lab, "SH%03d", i);
-            asm_line(lab, "DC", "H'0'", "high bound");
+            asm_line(lab, "DC", "F'0'", "high bound");
         }
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_PERFORM && stmts[i].times_expr) {

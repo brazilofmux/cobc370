@@ -138,42 +138,42 @@ P0001    DS    0H
 T0015    DS    0H
 * SEARCH ALL CLASS-ENTRY
          LA    1,1
-         STH   1,SL017             low = 1
+         ST    1,SL017             low = 1
          LA    1,5
-         STH   1,SH017             high = OCCURS
+         ST    1,SH017             high = OCCURS
 SP017    DS    0H
-         LH    1,SL017
-         LH    2,SH017
+         L     1,SL017
+         L     2,SH017
          CR    1,2                 low > high means it is not there
          BH    L0001
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   1,D0012             the index is the occurrence number
-         LH    6,D0012             subscript
+         ST    1,D0012             the index is the occurrence number
+         L     6,D0012             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0008(6)          element address
          CLC   0(1,6),D0010        alphanumeric compare
          BE    L0002
-         LH    6,D0012             subscript
+         L     6,D0012             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0008(6)          element address
          CLC   0(1,6),D0010        alphanumeric compare
          BL    L0004
-         LH    1,D0012
+         L     1,D0012
          BCTR  1,0
-         STH   1,SH017             high = mid - 1
+         ST    1,SH017             high = mid - 1
          B     SP017
 L0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0012
+         L     1,D0012
          LA    1,1(1)
-         STH   1,SL017             low = mid + 1
+         ST    1,SL017             low = mid + 1
          B     SP017
          DROP  8
 L0001    DS    0H
@@ -190,7 +190,7 @@ T0018    DS    0H
 * MOVE CLASS-NAME -> WS-NAME
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    7,D0012             subscript
+         L     7,D0012             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0009(7)          element address
@@ -212,8 +212,8 @@ T0019    DS    0H
          L     15,X0001
          BR    15
 F0001    DS    0H                  fall-through when not performed
-SL017    DC    H'0'                SEARCH ALL low bound
-SH017    DC    H'0'                high bound
+SL017    DC    F'0'                SEARCH ALL low bound
+SH017    DC    F'0'                high bound
 X0001    DC    A(F0001)            LOOKUP
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
@@ -350,7 +350,7 @@ D0010    DC    CL1' '              WS-WANT PIC X(1)
          DS    XL7                 reserve the rest of a table
 D0011    DC    CL13' '             WS-NAME PIC X(13)
          DS    XL3                 reserve the rest of a table
-D0012    DC    HL2'0'              CL PIC S9(4)v0 COMP
+D0012    DC    FL4'0'              CL PIC S9(9)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

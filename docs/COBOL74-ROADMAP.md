@@ -774,7 +774,18 @@ the serial SEARCH bound uses a fullword compare past 32767.
 That exposed the real ceiling underneath: an `INDEXED BY` item is a signed
 halfword (`ix->bytes = ix->elem = 2`), so it cannot count past 32767 whatever
 the bound is compared against. `USAGE IS INDEX` is a fullword, so the two
-kinds of index disagree about their own width. Refused with a message for now;
-issue #22 carries the fullword change, which touches every SEARCH site and
-regenerates the code of every program with a table.
+kinds of index disagree about their own width. Refused with a message for a
+day; then fixed (issue #22, 2026-09-08): an `INDEXED BY` item is a signed
+fullword now, the same shape as `USAGE IS INDEX`, and the serial SEARCH's
+read-and-bump, SEARCH ALL's low/high cells and its index store all went from
+halfword to fullword instructions with it. `SET`, `MOVE` and the subscript
+load already chose their instruction by the item's width, so they followed
+for free. `tests/bigidx` runs a serial and a binary SEARCH over 40,000
+entries; the serial one finds 39,999 and the binary one 40,000.
 
+What stays refused, and why: an element *itself* wider than 32,767 bytes.
+The subscript multiply is an `MH` against a halfword constant, and the
+fullword `M` needs an even-odd register pair whose even half would clobber
+whatever the caller left there -- a base register or the outer subscript.
+Nothing in the corpus has a table entry a tenth that wide, so `intern_half`
+refusing it is the right answer until something does.

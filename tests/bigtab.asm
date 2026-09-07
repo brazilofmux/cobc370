@@ -100,21 +100,21 @@ T0004    DS    0H
 T0005    DS    0H
 * SEARCH ALL BIG-ENTRY
          LA    1,1
-         STH   1,SL006             low = 1
+         ST    1,SL006             low = 1
          L     1,FC002
-         STH   1,SH006             high = OCCURS
+         ST    1,SH006             high = OCCURS
 SP006    DS    0H
          DROP  8,9
-         LH    1,SL006
-         LH    2,SH006
+         L     1,SL006
+         L     2,SH006
          CR    1,2                 low > high means it is not there
          BH    L0001
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0024            base locator
          USING WSC0024,8
-         STH   1,D0007             the index is the occurrence number
-         LH    7,D0007             subscript
+         ST    1,D0007             the index is the occurrence number
+         L     7,D0007             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          L     9,BL0000            base locator
@@ -124,7 +124,7 @@ SP006    DS    0H
          ZAP   WK1+13(3),K0003+13(3)  literal
          CP    WK0+13(3),WK1+13(3)  numeric compare
          BE    L0002
-         LH    7,D0007             subscript
+         L     7,D0007             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
@@ -132,17 +132,17 @@ SP006    DS    0H
          ZAP   WK1+13(3),K0003+13(3)  literal
          CP    WK0+13(3),WK1+13(3)  numeric compare
          BL    L0004
-         LH    1,D0007
+         L     1,D0007
          BCTR  1,0
-         STH   1,SH006             high = mid - 1
+         ST    1,SH006             high = mid - 1
          B     SP006
 L0004    DS    0H
          DROP  8,9
          L     8,BL0024            base locator
          USING WSC0024,8
-         LH    1,D0007
+         L     1,D0007
          LA    1,1(1)
-         STH   1,SL006             low = mid + 1
+         ST    1,SL006             low = mid + 1
          B     SP006
          DROP  8
 L0001    DS    0H
@@ -161,7 +161,7 @@ T0008    DS    0H
          USING WSC0024,8
          L     9,BL0000            base locator
          USING WSC0000,9
-         LH    7,D0007             subscript
+         L     7,D0007             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
@@ -221,8 +221,8 @@ T0013    DS    0H
          L     15,X0001
          BR    15
 F0001    DS    0H                  fall-through when not performed
-SL006    DC    H'0'                SEARCH ALL low bound
-SH006    DC    H'0'                high bound
+SL006    DC    F'0'                SEARCH ALL low bound
+SH006    DC    F'0'                high bound
 X0001    DC    A(F0001)            B010-FILL
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
@@ -410,7 +410,7 @@ D0005    DC    HL2'0'              SUB PIC S9(4)v0 COMP
          DS    XL6                 reserve the rest of a table
 D0006    DC    CL5'00000'          SHOW PIC 9(5)v0 DISP
          DS    XL3                 reserve the rest of a table
-D0007    DC    HL2'0'              BX PIC S9(4)v0 COMP
+D0007    DC    FL4'0'              BX PIC S9(9)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

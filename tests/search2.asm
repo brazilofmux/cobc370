@@ -106,14 +106,14 @@ T0012    DS    0H
          ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0016
+         ST    2,D0016
 T0013    DS    0H
 * SEARCH E1
 L0035    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0016             the index
+         L     1,D0016             the index
          LTR   1,1                 below the first occurrence?
          BNP   L0001               AT END
          CH    1,H0001             past the last occurrence?
@@ -121,7 +121,7 @@ L0035    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    7,D0016             subscript
+         L     7,D0016             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
@@ -132,7 +132,7 @@ L0035    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    7,D0016             subscript
+         L     7,D0016             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
@@ -143,9 +143,9 @@ L0035    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0016
+         L     1,D0016
          LA    1,1(1)              next occurrence
-         STH   1,D0016
+         ST    1,D0016
          B     L0035
          DROP  8
 L0001    DS    0H
@@ -163,7 +163,7 @@ T0016    DS    0H
          MVC   DSPBUF+0(6),S0014
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    6,D0016             subscript
+         L     6,D0016             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
@@ -181,7 +181,7 @@ T0018    DS    0H
          MVC   DSPBUF+0(7),S0015
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    6,D0016             subscript
+         L     6,D0016             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
@@ -198,7 +198,7 @@ T0020    DS    0H
 * MOVE X1 -> IX-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0016
+         L     2,D0016
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          UNPK  D0015(1),PWK1(16)   packed -> zoned
@@ -215,7 +215,7 @@ T0022    DS    0H
          ZAP   PWK1(16),K0001(16)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
-         STH   2,D0016
+         ST    2,D0016
 T0023    DS    0H
 * MOVE 0 -> N
          MVC   D0013(2),S0017      numeric literal as zoned digits
@@ -225,7 +225,7 @@ L0036    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0016             the index
+         L     1,D0016             the index
          LTR   1,1                 below the first occurrence?
          BNP   L0005               AT END
          CH    1,H0001             past the last occurrence?
@@ -233,7 +233,7 @@ L0036    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    6,D0016             subscript
+         L     6,D0016             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
@@ -242,9 +242,9 @@ L0036    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0016
+         L     1,D0016
          LA    1,1(1)              next occurrence
-         STH   1,D0016
+         ST    1,D0016
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0013(2)   zoned -> packed
@@ -283,7 +283,7 @@ T0029    DS    0H
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0016
+         ST    2,D0016
 T0030    DS    0H
 * MOVE 0 -> N
          MVC   D0013(2),S0017      numeric literal as zoned digits
@@ -293,7 +293,7 @@ L0037    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0016             the index
+         L     1,D0016             the index
          LTR   1,1                 below the first occurrence?
          BNP   L0008               AT END
          CH    1,H0001             past the last occurrence?
@@ -301,7 +301,7 @@ L0037    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    7,D0016             subscript
+         L     7,D0016             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
@@ -312,9 +312,9 @@ L0037    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0016
+         L     1,D0016
          LA    1,1(1)              next occurrence
-         STH   1,D0016
+         ST    1,D0016
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
          PACK  PWK1(16),D0013(2)   zoned -> packed
@@ -411,21 +411,21 @@ T0045    DS    0H
 T0046    DS    0H
 * SEARCH ALL E2
          LA    1,1
-         STH   1,SL057             low = 1
+         ST    1,SL057             low = 1
          LA    1,5
-         STH   1,SH057             high = OCCURS
+         ST    1,SH057             high = OCCURS
 SP057    DS    0H
          DROP  8
-         LH    1,SL057
-         LH    2,SH057
+         L     1,SL057
+         L     2,SH057
          CR    1,2                 low > high means it is not there
          BH    L0011
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   1,D0017             the index is the occurrence number
-         LH    7,D0017             subscript
+         ST    1,D0017             the index is the occurrence number
+         L     7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
@@ -433,7 +433,7 @@ SP057    DS    0H
          ZAP   WK1+14(2),K0003+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0012
-         LH    7,D0017             subscript
+         L     7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
@@ -441,17 +441,17 @@ SP057    DS    0H
          ZAP   WK1+14(2),K0003+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0014
-         LH    1,D0017
+         L     1,D0017
          BCTR  1,0
-         STH   1,SH057             high = mid - 1
+         ST    1,SH057             high = mid - 1
          B     SP057
 L0014    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0017
+         L     1,D0017
          LA    1,1(1)
-         STH   1,SL057             low = mid + 1
+         ST    1,SL057             low = mid + 1
          B     SP057
          DROP  8
 L0011    DS    0H
@@ -469,7 +469,7 @@ T0049    DS    0H
          MVC   DSPBUF+0(3),S0027
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    6,D0017             subscript
+         L     6,D0017             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
@@ -483,20 +483,20 @@ L0013    DS    0H
 T0050    DS    0H
 * SEARCH ALL E2
          LA    1,1
-         STH   1,SL064             low = 1
+         ST    1,SL064             low = 1
          LA    1,5
-         STH   1,SH064             high = OCCURS
+         ST    1,SH064             high = OCCURS
 SP064    DS    0H
-         LH    1,SL064
-         LH    2,SH064
+         L     1,SL064
+         L     2,SH064
          CR    1,2                 low > high means it is not there
          BH    L0015
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   1,D0017             the index is the occurrence number
-         LH    7,D0017             subscript
+         ST    1,D0017             the index is the occurrence number
+         L     7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
@@ -504,7 +504,7 @@ SP064    DS    0H
          ZAP   WK1+14(2),K0006+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0016
-         LH    7,D0017             subscript
+         L     7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
@@ -512,17 +512,17 @@ SP064    DS    0H
          ZAP   WK1+14(2),K0006+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0018
-         LH    1,D0017
+         L     1,D0017
          BCTR  1,0
-         STH   1,SH064             high = mid - 1
+         ST    1,SH064             high = mid - 1
          B     SP064
 L0018    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0017
+         L     1,D0017
          LA    1,1(1)
-         STH   1,SL064             low = mid + 1
+         ST    1,SL064             low = mid + 1
          B     SP064
          DROP  8
 L0015    DS    0H
@@ -540,7 +540,7 @@ T0053    DS    0H
          MVC   DSPBUF+0(3),S0029
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    6,D0017             subscript
+         L     6,D0017             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0007(6)          element address
@@ -554,20 +554,20 @@ L0017    DS    0H
 T0054    DS    0H
 * SEARCH ALL E2
          LA    1,1
-         STH   1,SL071             low = 1
+         ST    1,SL071             low = 1
          LA    1,5
-         STH   1,SH071             high = OCCURS
+         ST    1,SH071             high = OCCURS
 SP071    DS    0H
-         LH    1,SL071
-         LH    2,SH071
+         L     1,SL071
+         L     2,SH071
          CR    1,2                 low > high means it is not there
          BH    L0019
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   1,D0017             the index is the occurrence number
-         LH    7,D0017             subscript
+         ST    1,D0017             the index is the occurrence number
+         L     7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
@@ -575,7 +575,7 @@ SP071    DS    0H
          ZAP   WK1+14(2),K0002+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BE    L0020
-         LH    7,D0017             subscript
+         L     7,D0017             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
          LA    7,D0006(7)          element address
@@ -583,17 +583,17 @@ SP071    DS    0H
          ZAP   WK1+14(2),K0002+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0022
-         LH    1,D0017
+         L     1,D0017
          BCTR  1,0
-         STH   1,SH071             high = mid - 1
+         ST    1,SH071             high = mid - 1
          B     SP071
 L0022    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0017
+         L     1,D0017
          LA    1,1(1)
-         STH   1,SL071             low = mid + 1
+         ST    1,SL071             low = mid + 1
          B     SP071
          DROP  8
 L0019    DS    0H
@@ -726,21 +726,21 @@ T0075    DS    0H
 T0076    DS    0H
 * SEARCH ALL E3
          LA    1,1
-         STH   1,SL096             low = 1
+         ST    1,SL096             low = 1
          LA    1,6
-         STH   1,SH096             high = OCCURS
+         ST    1,SH096             high = OCCURS
 SP096    DS    0H
          DROP  8
-         LH    1,SL096
-         LH    2,SH096
+         L     1,SL096
+         L     2,SH096
          CR    1,2                 low > high means it is not there
          BH    L0023
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   1,D0018             the index is the occurrence number
-         LH    7,D0018             subscript
+         ST    1,D0018             the index is the occurrence number
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -748,7 +748,7 @@ SP096    DS    0H
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0038
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
@@ -757,7 +757,7 @@ SP096    DS    0H
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0024
 L0038    DS    0H
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -765,7 +765,7 @@ L0038    DS    0H
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0026
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -773,7 +773,7 @@ L0038    DS    0H
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0039
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
@@ -782,17 +782,17 @@ L0038    DS    0H
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0026
 L0039    DS    0H
-         LH    1,D0018
+         L     1,D0018
          BCTR  1,0
-         STH   1,SH096             high = mid - 1
+         ST    1,SH096             high = mid - 1
          B     SP096
 L0026    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0018
+         L     1,D0018
          LA    1,1(1)
-         STH   1,SL096             low = mid + 1
+         ST    1,SL096             low = mid + 1
          B     SP096
          DROP  8
 L0023    DS    0H
@@ -810,7 +810,7 @@ T0079    DS    0H
          MVC   DSPBUF+0(3),S0039
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    6,D0018             subscript
+         L     6,D0018             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
@@ -824,20 +824,20 @@ L0025    DS    0H
 T0080    DS    0H
 * SEARCH ALL E3
          LA    1,1
-         STH   1,SL103             low = 1
+         ST    1,SL103             low = 1
          LA    1,6
-         STH   1,SH103             high = OCCURS
+         ST    1,SH103             high = OCCURS
 SP103    DS    0H
-         LH    1,SL103
-         LH    2,SH103
+         L     1,SL103
+         L     2,SH103
          CR    1,2                 low > high means it is not there
          BH    L0027
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   1,D0018             the index is the occurrence number
-         LH    7,D0018             subscript
+         ST    1,D0018             the index is the occurrence number
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -845,7 +845,7 @@ SP103    DS    0H
          ZAP   WK1+15(1),K0008+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0040
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
@@ -854,7 +854,7 @@ SP103    DS    0H
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0028
 L0040    DS    0H
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -862,7 +862,7 @@ L0040    DS    0H
          ZAP   WK1+15(1),K0008+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0030
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -870,7 +870,7 @@ L0040    DS    0H
          ZAP   WK1+15(1),K0008+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0041
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
@@ -879,17 +879,17 @@ L0040    DS    0H
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0030
 L0041    DS    0H
-         LH    1,D0018
+         L     1,D0018
          BCTR  1,0
-         STH   1,SH103             high = mid - 1
+         ST    1,SH103             high = mid - 1
          B     SP103
 L0030    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0018
+         L     1,D0018
          LA    1,1(1)
-         STH   1,SL103             low = mid + 1
+         ST    1,SL103             low = mid + 1
          B     SP103
          DROP  8
 L0027    DS    0H
@@ -907,7 +907,7 @@ T0083    DS    0H
          MVC   DSPBUF+0(3),S0041
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    6,D0018             subscript
+         L     6,D0018             subscript
          BCTR  6,0                 subscript-1
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
@@ -921,20 +921,20 @@ L0029    DS    0H
 T0084    DS    0H
 * SEARCH ALL E3
          LA    1,1
-         STH   1,SL110             low = 1
+         ST    1,SL110             low = 1
          LA    1,6
-         STH   1,SH110             high = OCCURS
+         ST    1,SH110             high = OCCURS
 SP110    DS    0H
-         LH    1,SL110
-         LH    2,SH110
+         L     1,SL110
+         L     2,SH110
          CR    1,2                 low > high means it is not there
          BH    L0031
          AR    1,2
          SRA   1,1                 mid = (low + high) / 2
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   1,D0018             the index is the occurrence number
-         LH    7,D0018             subscript
+         ST    1,D0018             the index is the occurrence number
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -942,7 +942,7 @@ SP110    DS    0H
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0042
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
@@ -951,7 +951,7 @@ SP110    DS    0H
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BE    L0032
 L0042    DS    0H
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -959,7 +959,7 @@ L0042    DS    0H
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0034
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0010(7)          element address
@@ -967,7 +967,7 @@ L0042    DS    0H
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BNE   L0043
-         LH    7,D0018             subscript
+         L     7,D0018             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0002             times element size
          LA    7,D0011(7)          element address
@@ -976,17 +976,17 @@ L0042    DS    0H
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0034
 L0043    DS    0H
-         LH    1,D0018
+         L     1,D0018
          BCTR  1,0
-         STH   1,SH110             high = mid - 1
+         ST    1,SH110             high = mid - 1
          B     SP110
 L0034    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    1,D0018
+         L     1,D0018
          LA    1,1(1)
-         STH   1,SL110             low = mid + 1
+         ST    1,SL110             low = mid + 1
          B     SP110
          DROP  8
 L0031    DS    0H
@@ -1014,24 +1014,24 @@ T0088    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
-SL014    DC    H'0'                SEARCH ALL low bound
-SH014    DC    H'0'                high bound
-SL029    DC    H'0'                SEARCH ALL low bound
-SH029    DC    H'0'                high bound
-SL039    DC    H'0'                SEARCH ALL low bound
-SH039    DC    H'0'                high bound
-SL057    DC    H'0'                SEARCH ALL low bound
-SH057    DC    H'0'                high bound
-SL064    DC    H'0'                SEARCH ALL low bound
-SH064    DC    H'0'                high bound
-SL071    DC    H'0'                SEARCH ALL low bound
-SH071    DC    H'0'                high bound
-SL096    DC    H'0'                SEARCH ALL low bound
-SH096    DC    H'0'                high bound
-SL103    DC    H'0'                SEARCH ALL low bound
-SH103    DC    H'0'                high bound
-SL110    DC    H'0'                SEARCH ALL low bound
-SH110    DC    H'0'                high bound
+SL014    DC    F'0'                SEARCH ALL low bound
+SH014    DC    F'0'                high bound
+SL029    DC    F'0'                SEARCH ALL low bound
+SH029    DC    F'0'                high bound
+SL039    DC    F'0'                SEARCH ALL low bound
+SH039    DC    F'0'                high bound
+SL057    DC    F'0'                SEARCH ALL low bound
+SH057    DC    F'0'                high bound
+SL064    DC    F'0'                SEARCH ALL low bound
+SH064    DC    F'0'                high bound
+SL071    DC    F'0'                SEARCH ALL low bound
+SH071    DC    F'0'                high bound
+SL096    DC    F'0'                SEARCH ALL low bound
+SH096    DC    F'0'                high bound
+SL103    DC    F'0'                SEARCH ALL low bound
+SH103    DC    F'0'                high bound
+SL110    DC    F'0'                SEARCH ALL low bound
+SH110    DC    F'0'                high bound
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 PARM0001 DC    A(DSPBUF)
@@ -1342,11 +1342,11 @@ D0014    DC    CL3' '              R PIC X(3)
          DS    XL5                 reserve the rest of a table
 D0015    DC    CL1'0'              IX-SHOW PIC 9(1)v0 DISP
          DS    XL7                 reserve the rest of a table
-D0016    DC    HL2'0'              X1 PIC S9(4)v0 COMP
-         DS    XL6                 reserve the rest of a table
-D0017    DC    HL2'0'              X2 PIC S9(4)v0 COMP
-         DS    XL6                 reserve the rest of a table
-D0018    DC    HL2'0'              X3 PIC S9(4)v0 COMP
+D0016    DC    FL4'0'              X1 PIC S9(9)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0017    DC    FL4'0'              X2 PIC S9(9)v0 COMP
+         DS    XL4                 reserve the rest of a table
+D0018    DC    FL4'0'              X3 PIC S9(9)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the
