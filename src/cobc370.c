@@ -2951,9 +2951,16 @@ static void parse_data_division(void)
             }
         }
     }
-    if (wslen > 64 * 1024)
-        die("WORKING-STORAGE beyond 64K would need more base locator cells "
-            "than this emits");
+    /* WORKING-STORAGE is its own CSECT reached through one base locator per
+     * 4096 bytes, so its size costs base reloads, not addressability. This
+     * guard was 64K, which was a guess: what actually broke past it was a
+     * DS length modifier over 65535 and two LA instructions carrying a count
+     * in a 12-bit displacement, all fixed. 1.9MB is verified on the guest.
+     * The real ceiling is the job's REGION, which the compiler cannot know;
+     * 16MB is where a 24-bit CSECT ends. */
+    if (wslen > 16 * 1024 * 1024)
+        die("WORKING-STORAGE beyond 16M cannot be addressed in 24 bits; note "
+            "that the job's REGION will run out well before this");
 }
 
 /* SELECT f ASSIGN TO UT-S-DDNAME.  The ddname is the part after the last
@@ -5307,6 +5314,20 @@ static int section_end(int i)
  * so it is dropped at every label and after every PERFORM -- anywhere control
  * can arrive from somewhere that left different chunks loaded.
  */
+/* A DS length modifier is at most 65535, but the duplication factor is not, so
+ * a reservation wider than that is written as a count of one-byte fields. The
+ * two forms reserve the same bytes; only the assembler's limit differs. A
+ * 4,000-entry table put "DS XL239940" in front of IFOX00, which took IFO199 on
+ * the length and then reported six addressability errors on the items that had
+ * silently moved. */
+#define DSMAX 65535
+static const char *ds_len(char *buf, size_t n, char type, int len)
+{
+    if (len <= DSMAX) snprintf(buf, n, "%cL%d", type, len);
+    else              snprintf(buf, n, "%d%c", len, type);
+    return buf;
+}
+
 #define CHUNK 4096
 /* Two data bases, not three. R10 became a third CODE base when GL042's program
  * CSECT reached 9272 bytes and overran the 8192 that two code bases cover --
@@ -5444,8 +5465,16 @@ static void gen_subscript(Node *sub, int reg)
     if (sub->kind == N_LIT) {
         long v = atol(sub->lit);
         if (v < 1) die("a subscript literal must be 1 or more");
-        snprintf(b, sizeof b, "%d,%ld", reg, v - 1);
-        asm_line("", "LA", b, "subscript-1");
+        /* LA carries the value in a 12-bit displacement, so it can only
+         * reach 4095. A literal subscript past that -- a table of more than
+         * 4096 elements -- has to come from a constant instead. */
+        if (v - 1 <= 4095) {
+            snprintf(b, sizeof b, "%d,%ld", reg, v - 1);
+            asm_line("", "LA", b, "subscript-1");
+        } else {
+            snprintf(b, sizeof b, "%d,%s", reg, intern_full((int)(v - 1)));
+            asm_line("", "L", b, "subscript-1");
+        }
         return;
     }
     if (sub->kind != N_SYM) die("a subscript must be a literal or a data name");
@@ -10611,8 +10640,15 @@ static void generate(void)
                 asm_line("", "ZAP", "DWK(8),PWK2(16)", "");
                 asm_line("", "CVB", "1,DWK", "DEPENDING ON count");
             } else {
-                snprintf(b, sizeof b, "1,%d", tb->occurs);
-                asm_line("", "LA", b, "");
+                /* LA reaches 4095; a longer table needs the count as a
+                 * constant. */
+                if (tb->occurs <= 4095) {
+                    snprintf(b, sizeof b, "1,%d", tb->occurs);
+                    asm_line("", "LA", b, "");
+                } else {
+                    snprintf(b, sizeof b, "1,%s", intern_full(tb->occurs));
+                    asm_line("", "L", b, "");
+                }
             }
             snprintf(b, sizeof b, "1,%s", hi);  asm_line("", "STH", b, "high = OCCURS");
             asm_line(lp, "DS", "0H", "");
@@ -11876,7 +11912,7 @@ static void generate(void)
                 continue;
             }
             if (sy->offset > at) {
-                snprintf(b, sizeof b, "XL%d", sy->offset - at);
+                ds_len(b, sizeof b, 'X', sy->offset - at);
                 asm_line("", "DS", b, "reserve the rest of a table");
                 at = sy->offset;
             }
@@ -12016,7 +12052,7 @@ static void generate(void)
             at = sy->offset + sy->bytes;
         }
         if (wslen > at) {
-            snprintf(b, sizeof b, "XL%d", wslen - at);
+            ds_len(b, sizeof b, 'X', wslen - at);
             asm_line("", "DS", b, "reserve the rest of the last table");
         }
     }
@@ -12035,7 +12071,7 @@ static void generate(void)
             Sym *sy = &syms[i];
             if (!sy->linkage || sy->link_area != a || sy->is_88 || sy->is_switch) continue;
             if (sy->offset > at) {
-                snprintf(b, sizeof b, "XL%d", sy->offset - at);
+                ds_len(b, sizeof b, 'X', sy->offset - at);
                 asm_line("", "DS", b, "");
                 at = sy->offset;
             }
@@ -12047,7 +12083,7 @@ static void generate(void)
                 asm_line(sy->label, "DS", b, cmt);
                 continue;
             }
-            snprintf(b, sizeof b, "CL%d", sy->elem * (sy->occurs ? sy->occurs : 1));
+            ds_len(b, sizeof b, 'C', sy->elem * (sy->occurs ? sy->occurs : 1));
             snprintf(cmt, sizeof cmt, "%s", sy->name);
             asm_line(sy->label, "DS", b, cmt);
             at = sy->offset + sy->bytes;

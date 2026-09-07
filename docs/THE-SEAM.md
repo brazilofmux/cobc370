@@ -78,8 +78,10 @@ anyone believes the boundary is free:
   anything wider; COMP-3 is `digits/2 + 1`, which is packed decimal and nothing
   else. A machine with different integer widths, or without packed decimal,
   needs both parameterised.
-- **`wslen > 64 * 1024` is diagnosed in the front end**, because that is where
-  base locator cells run out. That check belongs to the back end.
+- **The WORKING-STORAGE size check is diagnosed in the front end**, and its
+  bound is a target fact: 16M is where a 24-bit CSECT ends. That check belongs
+  to the back end. (It read 64K until 2026-09-07, on the belief that base
+  locator cells ran out there. They do not -- see the roadmap.)
 - **Column 72** is a fixed-format COBOL rule, not an S/370 one, so it stays —
   but the *assembler* continuation convention that `asm_cont` implements is
   target-specific and lives in the shared emitter section.

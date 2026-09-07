@@ -720,3 +720,45 @@ reads a present key (00), a missing one (23), and a present one again.
 There is no oracle for these values but the VI-3 table itself: IBM's ANS
 COBOL predates FILE STATUS entirely. Also removed: `emit_literal`, orphaned
 by the review commit's MOVE-literal rework.
+
+## The WORKING-STORAGE ceiling was three unrelated bugs (issue #21)
+
+A program was refused at 64K of WORKING-STORAGE with "would need more base
+locator cells than this emits". The reason given was wrong. WORKING-STORAGE
+is its own CSECT reached through one base locator per 4096 bytes, the cell
+count is computed from `wslen`, and the labels allow four digits of chunk --
+nothing there runs out at 64K. The number was a guess that had never been
+tested, and it was reached for real while restructuring the production batch,
+where an in-storage account table had to be cut to 1000 entries to fit.
+
+Raising the bound and assembling a 240K program on the guest found what the
+guess had been hiding. Three separate defects, none of them about base
+locators:
+
+1. **`DS XL239940`** -- IFO199, invalid length modifier. A DS length modifier
+   stops at 65535; the duplication factor does not. The gap filler that
+   reserves the tail of a table, and three other reservation sites, now go
+   through `ds_len()`, which writes `XL<n>` up to 65535 and `<n>X` past it.
+   The same bytes either way.
+2. **`LA 7,7999`** -- IFO208, displacement greater than X'FFF'. A literal
+   subscript is loaded with `LA`, whose value rides in a 12-bit displacement,
+   so any subscript past 4096 assembled to nonsense. Now a fullword constant
+   above 4095.
+3. **`LA 1,<occurs>`** -- the same instruction, the same limit, in the
+   SEARCH ALL upper bound. A binary search over a table longer than 4096
+   entries started from a wrong high.
+
+The six IFO209 addressability errors that came with the first attempt were a
+consequence, not a cause: the oversized DS reserved nothing, so every item
+after the table sat at an offset the compiler had not predicted and no USING
+could cover it. One defect wearing seven error messages.
+
+Verified on the guest at 240K, 960K and **1.92M** of WORKING-STORAGE --
+assembled clean, linked, and printed the first, middle and last element of the
+table plus the item behind it. The guard is now 16M, which is where a 24-bit
+CSECT ends, and says that the job's REGION will run out well before that.
+
+`tests/bigtab` pins all three: 5000 entries of 20 bytes is past 64K, past a
+65535-byte gap, and past a 4096 subscript, and it does a SEARCH ALL for one
+of them.
+
