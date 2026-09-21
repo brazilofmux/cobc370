@@ -205,9 +205,14 @@ static char currency_sym = '$';
 static int  decimal_is_comma;
 
 /* Host character to EBCDIC (CP037), for the one byte a CURRENCY SIGN puts in
- * an ED pattern. Printable ASCII only; the standard forbids everything else. */
+ * an ED pattern. Printable ASCII only; the standard forbids everything else.
+ * A build on MVS itself reads EBCDIC source, so there the translation is the
+ * identity -- see docs/PORT-PLAN.md. */
 static unsigned char host_ebcdic(char c)
 {
+#ifdef HOST_EBCDIC
+    return (unsigned char)c;
+#else
     static const unsigned char t[95] = {
         0x40,0x5A,0x7F,0x7B,0x5B,0x6C,0x50,0x7D,0x4D,0x5D,0x5C,0x4E,0x6B,0x60,0x4B,0x61,
         0xF0,0xF1,0xF2,0xF3,0xF4,0xF5,0xF6,0xF7,0xF8,0xF9,0x7A,0x5E,0x4C,0x7E,0x6E,0x6F,
@@ -217,6 +222,7 @@ static unsigned char host_ebcdic(char c)
         0x97,0x98,0x99,0xA2,0xA3,0xA4,0xA5,0xA6,0xA7,0xA8,0xA9,0xC0,0x4F,0xD0,0xA1 };
     unsigned char u = (unsigned char)c;
     return (u >= 0x20 && u <= 0x7E) ? t[u - 0x20] : 0x40;
+#endif
 }
 
 /* Move a nonnumeric literal onto its continuation line, or return 0 if the
@@ -4114,6 +4120,12 @@ static void parse_one_statement(void)
                 }
                 if (is("COUNT")) {
                     next(); if (is("IN")) next();
+                    /* The COUNT IN cell's label is SCnnnn plus a letter picked
+                     * by receiver position, so a receiver past the 26th has no
+                     * label to give it -- and an EBCDIC build caps at the 9th,
+                     * where the alphabet's contiguity ends. */
+                    if (nsops - st->sop_first > 26)
+                        die("COUNT IN on an UNSTRING receiver past the 26th is not implemented");
                     o->cntsym = consume_sym(); o->cntsub = opt_subscript();
                     if (syms[o->cntsym].is_alpha || syms[o->cntsym].is_group || syms[o->cntsym].scale)
                         die("COUNT IN needs an integer item");
