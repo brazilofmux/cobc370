@@ -63,6 +63,25 @@ static char src_dir[512];
 
 static void die(const char *msg);
 
+/* Statement text -- MOVE and DISPLAY literals, GO TO DEPENDING names, the
+ * pending DC lines -- lives in one append-only pool rather than in per-slot
+ * buffers sized for the worst case. The worst case made the statement table
+ * alone 7.9MB of BSS, which an MVS 3.8j region cannot hold; the pool holds
+ * what the program actually says. */
+#define MAXPOOL (1u << 20)
+static char strpool[MAXPOOL];
+static unsigned npool;
+
+static const char *pool_str(const char *s, int len)
+{
+    if (npool + (unsigned)len + 1 > MAXPOOL) die("literal pool exhausted");
+    char *p = strpool + npool;
+    memcpy(p, s, (size_t)len);
+    p[len] = 0;
+    npool += (unsigned)len + 1;
+    return p;
+}
+
 /* One copybook line through its REPLACING pairs. Pseudo-text is matched as
  * characters, blanks collapsed on both sides; a word operand only between
  * separators. The line may grow past column 72 -- the scanner reads to its
@@ -723,7 +742,7 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
 typedef struct {
     int  op;
     int  dst, src;          /* symbol indices, -1 when unused */
-    char lit[MAXTOK];       /* DISPLAY literal */
+    const char *lit;        /* MOVE literal source, in the pool */
     int  litlen;
     int  imm;               /* source is a numeric literal */
     int  fig;               /* source is a figurative constant: FIG_SPACE/FIG_ZERO */
@@ -763,7 +782,7 @@ typedef struct {
     Node *vary2_from, *vary2_by, *vary3_from, *vary3_by;
     Cond *acond2, *acond3;
     int  ndop;              /* DISPLAY operands */
-    struct { int sym; char lit[MAXTOK]; int litlen; Node *sub; int part_off, part_len; } dop[8];
+    struct { int sym; const char *lit; int litlen; Node *sub; int part_off, part_len; } dop[8];
     int  upon_console;      /* DISPLAY UPON CONSOLE: a WTO rather than SYSOUT */
     int  serial;            /* ST_SEARCH: a serial SEARCH rather than SEARCH ALL */
     struct Cond *whens[8]; int when_lab[8]; int nwhen;   /* serial SEARCH: WHEN series */
@@ -3758,8 +3777,7 @@ static void parse_one_statement(void)
                 if (line >= 120 || st->ndop >= 8) { st = new_stmt(ST_DISPLAY_LIT); line = 0; }
                 int take = n - off < 120 - line ? n - off : 120 - line;
                 if (islit) {
-                    memcpy(st->dop[st->ndop].lit, lit + off, (size_t)take);
-                    st->dop[st->ndop].lit[take] = 0;
+                    st->dop[st->ndop].lit = pool_str(lit + off, take);
                     st->dop[st->ndop].litlen = take;
                     st->dop[st->ndop].sym = -1;
                 } else {
@@ -3853,11 +3871,11 @@ static void parse_one_statement(void)
                 if (!(d->is_alpha || d->is_group))
                     die("MOVE ALL literal to a numeric item is not implemented");
                 m->fig = FIG_ALL;
-                memcpy(m->lit, unit, (size_t)unitlen + 1);
+                m->lit = pool_str(unit, unitlen);
                 m->litlen = unitlen;
             } else if (savelit) {
                 m->imm = 2;                       /* nonnumeric literal */
-                memcpy(m->lit, save, (size_t)savelen + 1);
+                m->lit = pool_str(save, savelen);
                 m->litlen = savelen;
                 m->immscale = savelen;
             } else if (is_numeric_literal(save)) {
@@ -4312,11 +4330,11 @@ static void parse_one_statement(void)
              * slots, which nothing else in a GO TO uses. */
             st->op = ST_GODEP;
             st->ndop = 0;
-            snprintf(st->dop[st->ndop++].lit, MAXTOK, "%s", st->para);
+            st->dop[st->ndop++].lit = pool_str(st->para, (int)strlen(st->para));
             while (!is("DEPENDING")) {
                 if (tok.eof || is(".")) die("GO TO names several procedures but has no DEPENDING ON");
                 if (st->ndop >= 8) die("GO TO ... DEPENDING ON takes at most eight procedure-names here");
-                snprintf(st->dop[st->ndop++].lit, MAXTOK, "%s", tok.text);
+                st->dop[st->ndop++].lit = pool_str(tok.text, tok.len);
                 next();
             }
             next();
@@ -6480,16 +6498,16 @@ static void gen_rescale_t(const char *wk, int len, int from, int to, int round)
 /* Constants a statement wants placed in the data area: parameter blocks for
  * STRING and UNSTRING. Collected while the code is generated and emitted with
  * the work areas, where the permanent base covers them. */
-static struct { char lab[12], op[8], opd[80], cmt[48]; } pend_dc[MAXSOP * 4];
+static struct { const char *lab, *op, *opd, *cmt; } pend_dc[MAXSOP * 4];
 static int npend_dc;
 static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt, use_mvl, use_devtype, use_dcal;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
     if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
-    snprintf(pend_dc[npend_dc].lab, 12, "%s", lab);
-    snprintf(pend_dc[npend_dc].op, 8, "%s", op);
-    snprintf(pend_dc[npend_dc].opd, 80, "%s", opd);
-    snprintf(pend_dc[npend_dc].cmt, 48, "%s", cmt);
+    pend_dc[npend_dc].lab = pool_str(lab, (int)strlen(lab));
+    pend_dc[npend_dc].op  = pool_str(op,  (int)strlen(op));
+    pend_dc[npend_dc].opd = pool_str(opd, (int)strlen(opd));
+    pend_dc[npend_dc].cmt = pool_str(cmt, (int)strlen(cmt));
     npend_dc++;
 }
 
