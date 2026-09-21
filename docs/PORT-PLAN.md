@@ -36,13 +36,14 @@ not five megabytes smaller):
 | `syms` | 0.8MB | fine |
 | `nodes` | 0.75MB | fine |
 
-The fix is machinery the compiler already has: `intern_str`. Intern
-the `dop` literals instead of embedding them, pool the `pend_dc`
-text, and a `Stmt` drops from ~1.9KB to a few hundred bytes. Total
-static footprint lands near 3-4MB and fits a TK4-/TK5 region with
-room for PDPCLIB's own stack and heap. This is the only genuine
-compiler surgery in the port, and the host build benefits from the
-same diet.
+The fix was machinery the compiler already had: an append-only text
+pool in the spirit of `intern_str`, plus a side table for the
+DISPLAY/CALL/DEPENDING operands most statements do not have. Done --
+see Order of work, item 1. A `Stmt` is 464 bytes, the static tables
+5.69MB on the host and less on the guest, and a TK4-/TK5 region
+holds it with room for PDPCLIB's own stack and heap. This was the
+only genuine compiler surgery in the port, and the host build keeps
+the same diet.
 
 ## EBCDIC
 
@@ -95,10 +96,23 @@ definition, located to the line by the diff.
 
 ## Order of work
 
-1. The memory diet (intern `dop`, pool `pend_dc`) -- on the host,
-   under the existing regression suite, before any 370 code exists.
-2. The EBCDIC audit -- `host_ebcdic` behind `#ifdef`, the
-   contiguity grep.
+1. The memory diet -- **done, 2026-09-21**. Statement text (MOVE and
+   DISPLAY literals, GO TO DEPENDING names, the pending DC lines,
+   `para`/`thru`/`immdigits`) moved to one append-only 1MB pool; the
+   DISPLAY/CALL/DEPENDING operand array became a side table the
+   statement points into. A `Stmt` is 464 bytes, from 1,928; the
+   static tables total 5.69MB, from 11.26MB, and the guest's 4-byte
+   pointers shave roughly another megabyte off that. Verified the
+   strong way: all 131 test programs compile to byte-identical
+   assembler before and after, refusals to identical messages.
+2. The EBCDIC audit -- **done, 2026-09-21**. Clean of letter-range
+   comparisons; classification is ctype throughout; the Ragel tables
+   compare character literals, so the scanner ports by
+   recompilation. `host_ebcdic()` is the identity under
+   `-DHOST_EBCDIC`. One find: the COUNT IN cell label (`SCnnnn` plus
+   a letter by receiver position) ran out of alphabet at the 27th
+   receiver, and would have run out at the 10th on EBCDIC where
+   contiguity ends at I -- now refused at parse either way.
 3. The DD-name boundary layer.
 4. GCCMVS build; first guest compile of `hello.cbl`.
 5. The full-suite byte-diff.
