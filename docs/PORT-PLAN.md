@@ -177,8 +177,14 @@ definition, located to the line by the diff.
    alphabet), emits symbols back in the execution character set, and
    parses repeat counts with explicit ASCII arithmetic -- the host
    build's output is unchanged, byte for byte, across all 131 tests.
-6. XMIT packaging and the compile-assemble-link proc, now with
-   ld370 doing the packaging.
+6. The proc -- **done, 2026-09-21**: `jcl/COBCCLG.jcl`, verified on
+   TK5 end to end. COBOL member in, COBC370 -> IFOX00 -> IEWL -> GO,
+   program output out, no host anywhere in the loop (job 706:
+   RC=0000 four times, then HELLO's two DISPLAY lines). One trap
+   recorded in the proc: IFOX00 wants `PARM='OBJ,NODECK'` or it
+   assembles cleanly and produces nothing, RC=16 IFO257. The
+   installable remains `COBC370.xmit`, which ld370 already packages;
+   what is left of this step is only an install writeup.
 
 ## cc370 findings to send upstream
 
