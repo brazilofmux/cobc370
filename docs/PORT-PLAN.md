@@ -158,10 +158,25 @@ definition, located to the line by the diff.
    SYSTERM -- and SYSIN must be a real dataset: libc370's open path
    013-C0s on JES2 instream data.
 
-5. The byte-diff -- **holds.** `hello.cbl` compiled on MVS 3.8j
-   emits 1,036 lines of assembler identical to the host compiler's
-   but one: the provenance comment names `dd:SYSIN` instead of the
-   file. The full 131-test sweep on the guest remains to be scripted.
+5. The byte-diff -- **done, 2026-09-21: 126 of 126 identical.**
+   Every compiling test, compiled ON MVS 3.8j (`bin/cobc-port-sweep`:
+   sources aboard as a PDS by xmit370 and tape, one COBC370 step per
+   test, IEBPTPCH back, diff against fresh host references). What is
+   normalized and why it is honest to: the provenance comment (the
+   guest names dd:SYSIN), IEBPTPCH page furniture, and three bytes of
+   the Hercules printer's EBCDIC-to-ASCII display table that disagree
+   with CP037 on the way out -- `[`, `]` and `|` read back as 0xAA,
+   0xB3, 0xD7. The dataset bytes are CP037; only the readback skews.
+
+   One real port bug was found and fixed on the way, and it falsifies
+   what the step-2 audit claimed about the scanner: Ragel bakes
+   character RANGES as numeric ASCII byte values in the DFA tables
+   (`48 <= (*p) && (*p) <= 57`), which no recompilation fixes. Every
+   PICTURE was refused at character 1 on the guest. `picture.rl` now
+   translates EBCDIC input to ASCII at pic_scan's entry (the DFA's
+   alphabet), emits symbols back in the execution character set, and
+   parses repeat counts with explicit ASCII arithmetic -- the host
+   build's output is unchanged, byte for byte, across all 131 tests.
 6. XMIT packaging and the compile-assemble-link proc, now with
    ld370 doing the packaging.
 

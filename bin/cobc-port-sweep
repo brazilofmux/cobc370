@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Prove the MVS 3.8j port: compile every test ON the guest, byte-diff here.
+
+The claim PORT-PLAN.md makes for step 5 is that the ported compiler emits
+assembler identical to the host compiler's, so every oracle-checked test
+result transfers. This script earns that claim, end to end:
+
+  1. compile every tests/*.cbl on the host (the references);
+  2. pack the sources and copybooks into a PDS XMIT (xmit370), wrap it in
+     an AWS tape, mount it on 0480, IEBGENER it aboard, NJE38-RECEIVE it;
+  3. run one COBC370 step per test, SYSIN from the source PDS, SYSPUNCH
+     into an output PDS -- the compiler under test is the load module in
+     HERC01.COBC370.LOAD, built by cc370 (see PORT-PLAN.md step 4);
+  4. IEBPTPCH the output PDS to the captured printer and diff every member
+     against its reference.
+
+What is normalized before the diff, and why it is honest to do so:
+  - the provenance comment: the guest names its input dd:SYSIN;
+  - IEBPTPCH page furniture (MEMBER NAME headers, trailing PAGE numbers);
+  - three bytes of the Hercules printer's EBCDIC->ASCII display table that
+    disagree with CP037 on the way OUT of the machine: [ ] and | read back
+    as 0xAA, 0xB3, 0xD7. The bytes in the dataset are CP037; only the
+    verification channel skews them.
+
+The five bad-* refusal tests stay home: their names exceed a member name,
+and what they prove -- the refusal text -- is proven on the host.
+
+Assumes the TK5 rig this repository is developed against: tk5-run on PATH
+(or COBC370_RUNNER), a tape at 0480, the Hercules HTTP console on :8038,
+and the captured printer at ~/tk5/prt/prt00f.txt. Run from the repo root:
+
+    bin/cobc-port-sweep
+"""
+import glob, os, re, struct, subprocess, sys, time, difflib
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WORK = os.environ.get('SWEEP_WORK', '/tmp/cobc-port-sweep')
+RUNNER = os.environ.get('COBC370_RUNNER', 'tk5-run')
+CONSOLE = os.environ.get('HERC_CONSOLE', 'http://localhost:8038/cgi-bin/tasks/syslog')
+PRT = os.path.expanduser(os.environ.get('TK5_PRT', '~/tk5/prt/prt00f.txt'))
+JOBCARD = ("//HERC01%s  JOB (TEST),'PORT SWEEP',CLASS=A,MSGCLASS=Z,\n"
+           "//         USER=HERC01,PASSWORD=@HERC01PW@\n")
+
+def sh(*args, **kw):
+    r = subprocess.run(args, capture_output=True, text=True, **kw)
+    if r.returncode != 0:
+        sys.exit(f"failed: {' '.join(args)}\n{r.stderr}")
+    return r.stdout
+
+def run_jcl(path, out):
+    sh(RUNNER, path, out)
+
+def console(cmd):
+    from urllib.request import urlopen
+    from urllib.parse import quote_plus
+    urlopen(f"{CONSOLE}?command={quote_plus(cmd)}", timeout=10).read()
+
+def awswrap(src, dst):
+    data = open(src, 'rb').read()
+    assert len(data) % 80 == 0
+    out = bytearray(); prev = 0
+    for i in range(0, len(data), 3120):
+        b = data[i:i+3120]
+        out += struct.pack('<HHBB', len(b), prev, 0xA0, 0) + b
+        prev = len(b)
+    out += struct.pack('<HHBB', 0, prev, 0x40, 0)
+    out += struct.pack('<HHBB', 0, 0, 0x40, 0)
+    open(dst, 'wb').write(out)
+
+def main():
+    os.makedirs(f'{WORK}/src', exist_ok=True)
+    os.makedirs(f'{WORK}/ref', exist_ok=True)
+    members = []
+    for f in sorted(glob.glob(f'{REPO}/tests/*.cbl')):
+        b = os.path.basename(f)[:-4]
+        if b.startswith('bad-'): continue
+        m = b.upper()
+        members.append(m)
+        open(f'{WORK}/src/{m}', 'w').write(open(f).read())
+        sh(f'{REPO}/src/cobc370', f, '-I', f'{REPO}/tests', '-o', f'{WORK}/ref/{m}.asm')
+    for c in glob.glob(f'{REPO}/tests/*.cpy'):
+        m = os.path.basename(c)[:-4].upper()
+        open(f'{WORK}/src/{m}', 'w').write(open(c).read())
+    print(f'{len(members)} tests staged and host-compiled')
+
+    sh('xmit370', 'create', '-o', f'{WORK}/CBLSRC.xmit', '--dsn', 'HERC01.CBLSRC',
+       f'{WORK}/src')
+    awswrap(f'{WORK}/CBLSRC.xmit', f'{WORK}/cblsrc.aws')
+    console(f'devinit 0480 {WORK}/cblsrc.aws')
+
+    xfer = JOBCARD % 'S' + """\
+//DEL      EXEC PGM=IEFBR14
+//DD1      DD DSN=HERC01.CBLSRC.XMIT,DISP=(MOD,DELETE),
+//            SPACE=(TRK,(1)),UNIT=SYSDA
+//DD2      DD DSN=HERC01.CBLSRC,DISP=(MOD,DELETE),
+//            SPACE=(TRK,(1)),UNIT=SYSDA
+//DD3      DD DSN=HERC01.ASMOUT,DISP=(MOD,DELETE),
+//            SPACE=(TRK,(1)),UNIT=SYSDA
+//GEN      EXEC PGM=IEBGENER
+//SYSUT1   DD UNIT=480,VOL=SER=CBLS01,LABEL=(1,NL),DISP=(OLD,KEEP),
+//            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+//SYSUT2   DD DSN=HERC01.CBLSRC.XMIT,DISP=(NEW,CATLG),UNIT=SYSDA,
+//            SPACE=(CYL,(10,5)),DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+//SYSPRINT DD SYSOUT=Z
+//SYSIN    DD DUMMY
+//RECV     EXEC PGM=IKJEFT01,DYNAMNBR=60,COND=(0,NE)
+//SYSTSPRT DD SYSOUT=Z
+//SYSPRINT DD SYSOUT=Z
+//SYSTSIN  DD *
+RECEIVE INDATASET('HERC01.CBLSRC.XMIT') -
+  DATASET('HERC01.CBLSRC') DIR(30) NOPROMPT
+/*
+//ALLOC    EXEC PGM=IEFBR14,COND=(0,NE)
+//DD1      DD DSN=HERC01.ASMOUT,DISP=(NEW,CATLG),UNIT=SYSDA,
+//            SPACE=(CYL,(30,10,50)),
+//            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+"""
+    open(f'{WORK}/xfer.jcl', 'w').write(xfer)
+    # the mount request may need the drive re-inited once MVS asks
+    import threading
+    threading.Timer(15, lambda: console(f'devinit 0480 {WORK}/cblsrc.aws')).start()
+    run_jcl(f'{WORK}/xfer.jcl', f'{WORK}/xfer.out')
+    print('sources aboard')
+
+    step = """\
+//T{k:03d}     EXEC PGM=COBC370,REGION=8192K
+//STEPLIB  DD DSN=HERC01.COBC370.LOAD,DISP=SHR
+//SYSPRINT DD SYSOUT=Z
+//SYSTERM  DD SYSOUT=Z
+//SYSLIB   DD DSN=HERC01.CBLSRC,DISP=SHR
+//SYSIN    DD DSN=HERC01.CBLSRC({m}),DISP=SHR
+//SYSPUNCH DD DSN=HERC01.ASMOUT({m}),DISP=SHR
+"""
+    for j in range(4):
+        chunk = members[j::4]
+        jcl = JOBCARD % chr(ord('E') + j)
+        for k, m in enumerate(chunk):
+            jcl += step.format(k=k, m=m)
+        open(f'{WORK}/sweep{j}.jcl', 'w').write(jcl)
+        run_jcl(f'{WORK}/sweep{j}.jcl', f'{WORK}/sweep{j}.out')
+        ok = open(f'{WORK}/sweep{j}.out', encoding='latin-1').read().count('RC= 0000')
+        print(f'sweep{j}: {ok}/{len(chunk)} steps RC=0000')
+
+    ptpch = JOBCARD % 'P' + """\
+//PRT      EXEC PGM=IEBPTPCH,REGION=2048K
+//SYSUT1   DD DSN=HERC01.ASMOUT,DISP=SHR
+//SYSUT2   DD SYSOUT=Z
+//SYSPRINT DD SYSOUT=Z
+//SYSIN    DD *
+ PRINT TYPORG=PO,MAXFLDS=1
+ RECORD FIELD=(80)
+/*
+"""
+    open(f'{WORK}/ptpch.jcl', 'w').write(ptpch)
+    mark = os.path.getsize(PRT)
+    run_jcl(f'{WORK}/ptpch.jcl', f'{WORK}/ptpch.out')
+    # the print drains after the job ends; wait for it to go quiet
+    prev = -1
+    while True:
+        cur = os.path.getsize(PRT)
+        if cur == prev: break
+        prev = cur; time.sleep(10)
+
+    raw = open(PRT, 'rb').read()[mark:].decode('latin-1')
+    cur = None; got = {}
+    for l in raw.split('\n'):
+        l = re.sub(r'\s+PAGE \d+\s*$', '', l)
+        if l.startswith('MEMBER NAME'):
+            cur = l.split()[-1].strip(); got.setdefault(cur, []); continue
+        if cur is None or l.startswith('****') or 'HASP' in l[:20]: continue
+        got[cur].append(l.rstrip())
+
+    prov = lambda ls: [re.sub(r'^\* Generated by cobc370 from .*',
+                              '* Generated by cobc370', l.rstrip()) for l in ls]
+    idn = 0; bad = []
+    for m in members:
+        a = prov(open(f'{WORK}/ref/{m}.asm'))
+        btxt = '\n'.join(got.get(m, []))
+        btxt = btxt.replace('\xaa', '[').replace('\xb3', ']').replace('\xd7', '|')
+        b = btxt.split('\n')
+        for i, l in enumerate(b):
+            if re.match(r'^ +END\s*$', l): b = b[:i+1]; break
+        b = prov(b)
+        while a and not a[-1]: a.pop()
+        while b and not b[-1]: b.pop()
+        if a == b: idn += 1
+        else: bad.append(m)
+    print(f'identical={idn} differ={len(bad)}')
+    for m in bad: print('  DIFFERS:', m)
+    sys.exit(0 if not bad else 1)
+
+if __name__ == '__main__':
+    main()
