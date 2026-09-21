@@ -739,6 +739,11 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_SUPPRESS, ST_CALL, ST_SEARCH,
        ST_REWRITE, ST_DELETE, ST_START };
 
+/* DISPLAY operands, CALL arguments and GO TO DEPENDING names -- at most
+ * eight per statement, and most statements have none, so they live in a
+ * side table the statement points into rather than an array it embeds. */
+typedef struct { int sym; const char *lit; int litlen; Node *sub; int part_off, part_len; } Dop;
+
 typedef struct {
     int  op;
     int  dst, src;          /* symbol indices, -1 when unused */
@@ -746,7 +751,7 @@ typedef struct {
     int  litlen;
     int  imm;               /* source is a numeric literal */
     int  fig;               /* source is a figurative constant: FIG_SPACE/FIG_ZERO */
-    char immdigits[34];     /* that literal, scaled to an integer */
+    const char *immdigits;  /* that literal, scaled to an integer */
     int  immscale;
     Node *expr;             /* COMPUTE */
     int  rounded;
@@ -757,8 +762,8 @@ typedef struct {
     Node *ptr_sub, *tally_sub;
     int  ovf;               /* ON OVERFLOW present; lab2 is the continue label */
     int  size_first, size_last; /* first and last of the series it governs */
-    char para[31];          /* ST_PARA name, or PERFORM's first paragraph */
-    char thru[31];          /* PERFORM ... THRU */
+    const char *para;       /* ST_PARA name, or PERFORM's first paragraph */
+    const char *thru;       /* PERFORM ... THRU */
     Cond *cond;             /* ST_IFTEST */
     int  lab1, lab2;        /* ST_READ: the AT END and continue labels */
     int  read_next;         /* ST_READ: READ NEXT on an ACCESS IS DYNAMIC file */
@@ -782,7 +787,7 @@ typedef struct {
     Node *vary2_from, *vary2_by, *vary3_from, *vary3_by;
     Cond *acond2, *acond3;
     int  ndop;              /* DISPLAY operands */
-    struct { int sym; const char *lit; int litlen; Node *sub; int part_off, part_len; } dop[8];
+    Dop *dop;               /* its slice of the operand side table */
     int  upon_console;      /* DISPLAY UPON CONSOLE: a WTO rather than SYSOUT */
     int  serial;            /* ST_SEARCH: a serial SEARCH rather than SEARCH ALL */
     struct Cond *whens[8]; int when_lab[8]; int nwhen;   /* serial SEARCH: WHEN series */
@@ -1017,6 +1022,20 @@ static int para_index(const char *n)
 
 #define MAXSTMT 4096
 static Stmt stmts[MAXSTMT];
+
+#define MAXDOP 8192
+static Dop dops[MAXDOP];
+static int ndops;
+
+/* Claim the next side-table slot for st's operand list. Statements parse one
+ * at a time and append their operands consecutively, so a statement's slice
+ * is contiguous from wherever its first operand landed. */
+static void dop_add(Stmt *st)
+{
+    if (ndops >= MAXDOP) die("too many DISPLAY, CALL or DEPENDING operands");
+    if (!st->ndop) st->dop = &dops[ndops];
+    ndops++;
+}
 
 /* Operands of STRING and UNSTRING, in a side table the statement indexes --
  * a literal or figurative is an interned constant, an identifier is a symbol
@@ -1429,6 +1448,14 @@ static void scale_literal(const char *lit, int scale, char *out, size_t outsz)
     while (frac < scale) { if (nd < (int)sizeof digits - 1) { digits[nd++] = '0'; digits[nd] = 0; } frac++; }
     if (nd == 0) { digits[0] = '0'; digits[1] = 0; }
     snprintf(out, outsz, "%s%s", neg ? "-" : "", digits);
+}
+
+/* A numeric literal scaled to an integer, in the pool. */
+static const char *pool_scaled(const char *lit, int scale)
+{
+    char buf[40];
+    scale_literal(lit, scale, buf, sizeof buf);
+    return pool_str(buf, (int)strlen(buf));
 }
 
 static int is_numeric_literal(const char *t)
@@ -3298,6 +3325,7 @@ static Stmt *new_stmt(int op)
     Stmt *st = &stmts[nstmt++];
     memset(st, 0, sizeof *st);
     st->op = op; st->dst = st->src = -1; st->vary_sym = -1; st->rec = -1; st->adv = -2;
+    st->para = st->thru = st->immdigits = "";
     st->line = tok.line;
     return st;
 }
@@ -3776,6 +3804,7 @@ static void parse_one_statement(void)
             for (int off = 0; off < n; ) {
                 if (line >= 120 || st->ndop >= 8) { st = new_stmt(ST_DISPLAY_LIT); line = 0; }
                 int take = n - off < 120 - line ? n - off : 120 - line;
+                dop_add(st);
                 if (islit) {
                     st->dop[st->ndop].lit = pool_str(lit + off, take);
                     st->dop[st->ndop].litlen = take;
@@ -3880,7 +3909,7 @@ static void parse_one_statement(void)
                 m->immscale = savelen;
             } else if (is_numeric_literal(save)) {
                 m->imm = 1; m->immscale = syms[m->dst].scale;
-                scale_literal(save, syms[m->dst].scale, m->immdigits, sizeof m->immdigits);
+                m->immdigits = pool_scaled(save, syms[m->dst].scale);
             } else {
                 int fg = fig_code(save);
                 const Sym *d = &syms[m->dst];
@@ -3888,7 +3917,7 @@ static void parse_one_statement(void)
                     /* ZERO into a numeric item is simply MOVE 0, so let the
                      * existing numeric path scale and store it. */
                     m->imm = 1; m->immscale = d->scale;
-                    scale_literal("0", d->scale, m->immdigits, sizeof m->immdigits);
+                    m->immdigits = pool_scaled("0", d->scale);
                 } else if (fg != FIG_NONE) {
                     if (!(d->is_alpha || d->is_group))
                         die("only ZERO may be moved to a numeric item; SPACE, "
@@ -4001,7 +4030,7 @@ static void parse_one_statement(void)
             const char *dot = strchr(save, '.');
             st->imm = 1;
             st->immscale = dot ? (int)strlen(dot + 1) : 0;
-            scale_literal(save, st->immscale, st->immdigits, sizeof st->immdigits);
+            st->immdigits = pool_scaled(save, st->immscale);
         } else st->src = resolve_sym(save, squal2, snq2);
         eat_period();
         return;
@@ -4152,7 +4181,7 @@ static void parse_one_statement(void)
                 m->dst = recv[k]; m->dsub = rsub[k]; m->ssub = ssub;
                 if (lit) {
                     m->imm = 1; m->immscale = 0;
-                    scale_literal(save, 0, m->immdigits, sizeof m->immdigits);
+                    m->immdigits = pool_scaled(save, 0);
                 } else m->src = ssym;
             }
             eat_period();
@@ -4185,7 +4214,7 @@ static void parse_one_statement(void)
             m->dst = recv[k]; m->dsub = rsub[k]; m->ssub = ssub;
             if (lit) {
                 m->imm = 1; m->immscale = 0;
-                scale_literal(save, 0, m->immdigits, sizeof m->immdigits);
+                m->immdigits = pool_scaled(save, 0);
             } else m->src = ssym;
         }
         eat_period();
@@ -4265,11 +4294,11 @@ static void parse_one_statement(void)
     if (is("PERFORM")) {
         next();
         Stmt *st = new_stmt(ST_PERFORM);
-        snprintf(st->para, sizeof st->para, "%s", tok.text);
+        st->para = pool_str(tok.text, tok.len);
         next();
         if (is("THRU") || is("THROUGH")) {
-            next(); snprintf(st->thru, sizeof st->thru, "%s", tok.text); next();
-        } else snprintf(st->thru, sizeof st->thru, "%s", st->para);
+            next(); st->thru = pool_str(tok.text, tok.len); next();
+        } else st->thru = st->para;
 
         st->vary2_sym = st->vary3_sym = -1;
         if (is("VARYING")) {
@@ -4317,11 +4346,11 @@ static void parse_one_statement(void)
              * undefined; the cell starts out zero, so an early GO TO takes a
              * program check that names its own line rather than going
              * somewhere plausible. */
-            st->para[0] = 0;
+            st->para = "";
             eat_period();
             return;
         }
-        snprintf(st->para, sizeof st->para, "%s", tok.text);
+        st->para = pool_str(tok.text, tok.len);
         next();
         if (is("DEPENDING") || (!is(".") && !starts_statement())) {
             /* GO TO procedure-name series DEPENDING ON identifier: the value 1
@@ -4330,10 +4359,12 @@ static void parse_one_statement(void)
              * slots, which nothing else in a GO TO uses. */
             st->op = ST_GODEP;
             st->ndop = 0;
+            dop_add(st);
             st->dop[st->ndop++].lit = pool_str(st->para, (int)strlen(st->para));
             while (!is("DEPENDING")) {
                 if (tok.eof || is(".")) die("GO TO names several procedures but has no DEPENDING ON");
                 if (st->ndop >= 8) die("GO TO ... DEPENDING ON takes at most eight procedure-names here");
+                dop_add(st);
                 st->dop[st->ndop++].lit = pool_str(tok.text, tok.len);
                 next();
             }
@@ -4828,13 +4859,13 @@ static void parse_one_statement(void)
             st->src = -1;
             if (tok.literal) {
                 if (tok.len < 1 || tok.len > 8) die("a program name is 1 to 8 characters");
-                memcpy(st->para, tok.text, (size_t)tok.len + 1);
+                st->para = pool_str(tok.text, tok.len);
                 next();
             } else {
                 st->src = consume_sym();
                 if (!syms[st->src].is_alpha || syms[st->src].bytes > 8)
                     die("CANCEL identifier needs an alphanumeric item of at most 8 characters");
-                st->para[0] = 0;
+                st->para = "";
             }
         }
         eat_period();
@@ -4853,7 +4884,7 @@ static void parse_one_statement(void)
         if (tok.literal) {
             if (tok.len < 1 || tok.len > 8)
                 die("a called program name is 1 to 8 characters");
-            memcpy(st->para, tok.text, (size_t)tok.len + 1);
+            st->para = pool_str(tok.text, tok.len);
             next();
         } else {
             /* CALL identifier, 2 IPC 0,2: the name is read at run time and the
@@ -4862,12 +4893,13 @@ static void parse_one_statement(void)
             st->src = consume_sym();
             if (!syms[st->src].is_alpha || syms[st->src].bytes > 8)
                 die("CALL identifier needs an alphanumeric item of at most 8 characters");
-            st->para[0] = 0;
+            st->para = "";
         }
         if (is("USING")) {
             next();
             while (!tok.eof && !is(".") && !starts_statement()) {
                 if (st->ndop >= 8) die("too many CALL arguments");
+                dop_add(st);
                 st->dop[st->ndop].sym = consume_sym();
                 st->dop[st->ndop].sub = opt_subscript();
                 st->dop[st->ndop].litlen = 0;
@@ -4913,11 +4945,11 @@ static void parse_one_statement(void)
         next();
         do {
             Stmt *st = new_stmt(ST_ALTER);
-            snprintf(st->para, sizeof st->para, "%s", tok.text);
+            st->para = pool_str(tok.text, tok.len);
             next();
             expect("TO");
             if (is("PROCEED")) { next(); expect("TO"); }
-            snprintf(st->thru, sizeof st->thru, "%s", tok.text);
+            st->thru = pool_str(tok.text, tok.len);
             next();
         } while (!tok.eof && !is(".") && !starts_statement());
         eat_period();
@@ -5099,7 +5131,7 @@ static void parse_one_statement(void)
             paras[npara].is_range_end = 0;
             paras[npara].is_section = a_section;
             Stmt *st = new_stmt(ST_PARA);
-            snprintf(st->para, sizeof st->para, "%s", nm);
+            st->para = pool_str(nm, (int)strlen(nm));
             st->dst = npara++;
             return;
         }
