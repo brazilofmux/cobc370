@@ -1,0 +1,79 @@
+diff --git a/as370/src/as370.c b/as370/src/as370.c
+index 1c0d7a6..92310f3 100644
+--- a/as370/src/as370.c
++++ b/as370/src/as370.c
+@@ -41,9 +41,9 @@ static size_t bcat(char *d, size_t dsz, size_t at, const char *s) {
+ /* as370 runs on the host (not MVS), so these limits are sized for real
+  * modules, not the 24-bit target. Largest rexx370 CSECT is well under these. */
+ #define MAXSYM 65536
+-#define MAXLIT 8192
++#define MAXLIT 65536
+ #define MAXREL 131072
+-#define TEXTMAX (1024 * 1024)
++#define TEXTMAX (16 * 1024 * 1024)
+ /* Sizes the expanded-statement arrays of the macro preprocessor below, and the
+  * flagged-statement bitmaps right after this -- which the recorders start
+  * marking at note_overlong, long before the preprocessor is declared. */
+@@ -947,6 +947,7 @@ static long eval_reg(const char *s) {
+ }
+ static void put(long at, long v, int n) {
+     if (in_dsect) return;                       /* a DSECT generates no object text */
++    if (at < 0 || at + n > TEXTMAX) { fprintf(stderr, "as370: text beyond TEXTMAX at %ld\n", at); exit(2); }
+     int i; for (i = n - 1; i >= 0; i--) { text[at + i] = (unsigned char)(v & 0xff); defn[at + i] = 1; v >>= 8; }
+     if (txl_on) {                               /* record the emission for the TXT writer (emission-order replay) */
+         if (at < txl_maxend) txl_revisit = 1;   /* writing below the high-water mark = an overlay */
+diff --git a/cc370/gcc/config/i370/i370.h b/cc370/gcc/config/i370/i370.h
+index 14314f4..6dc7bad 100644
+--- a/cc370/gcc/config/i370/i370.h
++++ b/cc370/gcc/config/i370/i370.h
+@@ -1569,6 +1569,11 @@ enum reg_class
+    bytes should be zero when loaded.  */
+ 
+ #ifdef TARGET_PDPMAC
++/* DS, not DC nX'00': a skip's bytes need only BE zero when loaded, and a
++   DS gap emits no object text, so zero-initialized data stops inflating
++   the deck and the load module.  as370 tracks defined ranges and ld370
++   elides all-zero records; program fetch reads sparse text into freshly
++   obtained (zeroed) storage, exactly as IEWL-linked assembler DS behaves. */
+ #define ASM_OUTPUT_SKIP(FILE, SIZE)  					\
+ {									\
+   int s, k;								\
+@@ -1578,7 +1583,7 @@ enum reg_class
+ 	k = MAX_CHUNK;							\
+       else								\
+ 	k = s;								\
+-      fprintf (FILE, "\tDC\t%dX'00'\n", k);				\
++      fprintf (FILE, "\tDS\tXL%d\n", k);				\
+     }									\
+ }
+ #else
+diff --git a/ld370/src/ld370.c b/ld370/src/ld370.c
+index 0627779..22fe57a 100644
+--- a/ld370/src/ld370.c
++++ b/ld370/src/ld370.c
+@@ -1787,7 +1787,7 @@ int main(int argc, char **argv)
+     trace("  module length = %ld  entry point = %06lX", modlen, entry_addr);
+ 
+     /* --- build module text image + relocate address constants --- */
+-    static unsigned char mod[1 << 20];
++    static unsigned char mod[16 << 20];
+     memset(mod, 0, modlen);
+     for (i = 0; i < nO; i++) if (O[i].textlen) memcpy(mod + O[i].object_base, O[i].text, O[i].textlen);
+     trace("=== relocate address constants ===");
+@@ -1913,6 +1913,16 @@ int main(int argc, char **argv)
+                     } else {                            /* one section (whole or a split piece) */
+                         mvs_put16(cr + 16, G[gidx[first]].gid); mvs_put16(cr + 18, (int)rlen);
+                     }
++                    /* An all-zero record carries nothing fetch cannot get
++                     * from freshly obtained storage, which is zeroed -- the
++                     * same behavior IEWL gives assembler DS gaps.  Elide it,
++                     * unless it is the record that must carry MODEND. */
++                    {
++                        long zi; int allz = 1;
++                        for (zi = 0; zi < rlen; zi++)
++                            if (mod[p + zi]) { allz = 0; break; }
++                        if (allz && !(is_last && !have_rld)) { p += rlen; continue; }
++                    }
+                     emit(cr, 16 + idlen);               /* control record */
+                     emit(mod + p, rlen);                /* text record (<= MAXTEXT) */
+                     nchunk++; p += rlen;

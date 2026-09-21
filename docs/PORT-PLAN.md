@@ -183,7 +183,9 @@ definition, located to the line by the diff.
 ## cc370 findings to send upstream
 
 Hit while putting a 6MB-extent module through tools tuned for small
-ones; each fixed locally in the working copy:
+ones. Everything below except the libc370 items is fixed in
+`docs/cc370-fixes.patch` (against mvslovers/cc370 main of
+2026-09-21); the local toolchain install carries it:
 
 - `as370`: `put()` writes past `text[TEXTMAX]` unchecked -- silent
   segfault. Guard added; `TEXTMAX` 1MB -> 16MB (the address space).
@@ -191,16 +193,20 @@ ones; each fixed locally in the working copy:
   has more literals than that).
 - `ld370`: `mod[1 << 20]` overflows on a >1MB module -- fortify
   abort, no message. 1MB -> 16MB.
-- `libc370`: no `strncasecmp`; `fopen` of JES2 instream data abends
-  013-C0.
-- The backend has no BSS story: 4.7MB of zeroed tables emit as
-  `DC X'00'` text, so the load module is 5.2MB where ~450KB is
-  content. The right fix is DS emission (or linker-side gap
-  handling), in cc370 itself.
+- `libc370` (not in the patch): no `strncasecmp`; `fopen` of JES2
+  instream data abends 013-C0.
+- **The BSS story, fixed**: TARGET_PDPMAC's `ASM_OUTPUT_SKIP` emitted
+  `DC nX'00'`, so 4.7MB of zeroed tables shipped as text. It now
+  emits `DS XLn` like the target's other flavor, and `ld370` elides
+  all-zero text records (keeping the one that must carry MODEND).
+  Sound because program fetch reads sparse text into freshly
+  GETMAINed storage, which MVS zeroes -- the same behavior
+  IEWL-linked assembler `DS` has always had; a relocated adcon whose
+  stored addend is zero patches correctly against a zero byte.
+  COBC370 went from 5,169,029 bytes (386 text records) to 469,197
+  (33), and the full sweep still stands at 126 of 126 identical.
 
 ## Open questions
 
 - Guest-side compile time for a large program. Measure, don't
   assume.
-- Whether the DS/BSS fix should trust program fetch to zero text
-  gaps (fresh region pages are zero; reused ones are not).
