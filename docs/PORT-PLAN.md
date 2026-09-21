@@ -113,7 +113,17 @@ definition, located to the line by the diff.
    a letter by receiver position) ran out of alphabet at the 27th
    receiver, and would have run out at the 10th on EBCDIC where
    contiguity ends at I -- now refused at parse either way.
-3. The DD-name boundary layer.
+3. The DD-name boundary layer -- **done, 2026-09-21**, behind
+   `-DMVS370` (which implies `HOST_EBCDIC`). No operands: SYSIN in,
+   SYSPUNCH out, PARM carries only the options. `COPY text-name`
+   reads `dd:SYSLIB(member)`; `COPY ... OF library-name` reads the
+   library-name as a DD, which is what it meant on this system all
+   along; member and DD names past 8 characters are refused with a
+   message. `atoll` went with it -- the operands are validated
+   digits, so a six-line loop reads them. The host build is
+   byte-identical still, and the `-DMVS370` variant compiles clean
+   under -Wall -Wextra; whether PDPCLIB's printf takes the one
+   `%lld` is checked at step 4.
 4. GCCMVS build; first guest compile of `hello.cbl`.
 5. The full-suite byte-diff.
 6. XMIT packaging and the COBCCLG proc.

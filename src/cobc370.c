@@ -28,6 +28,14 @@
 #include <ctype.h>
 #include "picture.h"
 
+/* -DMVS370: the compiler itself runs on MVS 3.8j (docs/PORT-PLAN.md).
+ * Files are DD statements there, not paths, and the host is EBCDIC. */
+#ifdef MVS370
+#ifndef HOST_EBCDIC
+#define HOST_EBCDIC
+#endif
+#endif
+
 #define MAXLINE 256
 /* 1 NUC 1,2 puts a nonnumeric literal at 1 through 120 characters, so a token
  * has to be able to hold one -- with room for the terminator and for a word
@@ -59,7 +67,9 @@ static Src copy_stack[MAXCOPY];
 static int copy_depth;
 static const char *copy_dirs[16];
 static int ncopy_dirs;
-static char src_dir[512];
+#ifndef MVS370
+static char src_dir[512];               /* a path notion; MVS has DDs instead */
+#endif
 
 static void die(const char *msg);
 
@@ -1215,6 +1225,15 @@ static int consume_sym(void)
  * suffixes; under a library subdirectory when OF/IN names one. */
 static FILE *copy_open(const char *name, const char *lib, char *path, size_t pn)
 {
+#ifdef MVS370
+    /* The text-name is a member of the SYSLIB concatenation; COPY ... OF
+     * library-name reads the library-name as a DD, which is what it meant
+     * on this system all along. A member name is at most 8 characters. */
+    if (strlen(name) > 8) die("a copybook member name is at most 8 characters here");
+    if (lib && *lib && strlen(lib) > 8) die("a copy library DD name is at most 8 characters");
+    snprintf(path, pn, "dd:%s(%s)", (lib && *lib) ? lib : "SYSLIB", name);
+    return fopen(path, "r");
+#else
     static const char *sfx[] = { "", ".cpy", ".CPY", ".cob", ".COB", ".cbl", ".txt", NULL };
     const char *dirs[20]; int nd = 0;
     for (int i = 0; i < ncopy_dirs; i++) dirs[nd++] = copy_dirs[i];
@@ -1228,6 +1247,7 @@ static FILE *copy_open(const char *name, const char *lib, char *path, size_t pn)
             if (fp) return fp;
         }
     return NULL;
+#endif
 }
 
 /* A REPLACING operand, from the raw source. Pseudo-text is everything
@@ -1454,6 +1474,15 @@ static void scale_literal(const char *lit, int scale, char *out, size_t outsz)
     while (frac < scale) { if (nd < (int)sizeof digits - 1) { digits[nd++] = '0'; digits[nd] = 0; } frac++; }
     if (nd == 0) { digits[0] = '0'; digits[1] = 0; }
     snprintf(out, outsz, "%s%s", neg ? "-" : "", digits);
+}
+
+/* A validated integer literal's value. */
+static long long ll_digits(const char *s)
+{
+    long long v = 0; int neg = 0;
+    if (*s == '-') { neg = 1; s++; } else if (*s == '+') s++;
+    for (; *s; s++) v = v * 10 + (*s - '0');
+    return neg ? -v : v;
 }
 
 /* A numeric literal scaled to an integer, in the pool. */
@@ -3236,7 +3265,9 @@ static Node *parse_power(void)
     if (l->kind == N_LIT && r->kind == N_LIT && l->litscale == 0 && r->litscale == 0) {
         /* Both integer literals: fold it here. 2 ** 3 ** 2 is 2 ** 9, and the
          * generator would otherwise see an exponent that is an expression. */
-        long long base = atoll(l->lit), e = atoll(r->lit), v = 1;
+        /* Not atoll: that is C99's, and PDPCLIB does not owe us one. The
+         * operands are validated integer literals of at most 18 digits. */
+        long long base = ll_digits(l->lit), e = ll_digits(r->lit), v = 1;
         if (e < 0) die("a negative exponent is not implemented -- it has no exact decimal value");
         for (long long k = 0; k < e; k++) {
             v *= base;
@@ -12182,6 +12213,13 @@ int main(int argc, char **argv)
         else if (!strncmp(argv[i], "-I", 2) && argv[i][2]) { if (ncopy_dirs < 16) copy_dirs[ncopy_dirs++] = argv[i] + 2; }
         else in = argv[i];
     }
+#ifdef MVS370
+    /* No operands: the source is the SYSIN DD, the assembler goes to
+     * SYSPUNCH, and PARM carries only the options. -I is a directory
+     * search this system does not have; SYSLIB is the search. */
+    if (!in) in = "dd:SYSIN";
+    if (!outname) outname = "dd:SYSPUNCH";
+#else
     if (in) {
         const char *sl = strrchr(in, '/');
         if (sl) snprintf(src_dir, sizeof src_dir, "%.*s", (int)(sl - in), in);
@@ -12189,6 +12227,7 @@ int main(int argc, char **argv)
     if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s] [-I dir]...\n"
                        "  -s      strip the line table and program-check exit\n"
                        "  -I dir  a directory to find COPY text in (repeatable)\n"); return 2; }
+#endif
 
     src.fp = fopen(in, "r");
     if (!src.fp) { perror(in); return 2; }
