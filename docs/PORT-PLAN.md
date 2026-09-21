@@ -124,15 +124,68 @@ definition, located to the line by the diff.
    byte-identical still, and the `-DMVS370` variant compiles clean
    under -Wall -Wextra; whether PDPCLIB's printf takes the one
    `%lld` is checked at step 4.
-4. GCCMVS build; first guest compile of `hello.cbl`.
-5. The full-suite byte-diff.
-6. XMIT packaging and the COBCCLG proc.
+4. The toolchain -- **done, 2026-09-21, and not with GCCMVS.** The
+   GCCMVS 3.2.3 route was walked first: patch applied, cross-compiler
+   built (32-bit, in a container -- the shipped config hardcodes
+   SIZEOF_LONG 4 and an LP64 host corrupts its own heap), and it
+   still segfaulted on a three-line program. Abandoned for
+   [mvslovers/cc370](https://github.com/mvslovers/cc370): GCC 3.4.6
+   for i370, `as370` (an IFOX00 clone, byte-identical output),
+   `ld370` (emits the load module *and* the XMIT), against
+   [libc370](https://github.com/mvslovers/libc370). The whole build
+   runs on the host; the guest receives a finished load module. Two
+   -DMVS370 additions: a `strncasecmp` (POSIX's, not libc370's) and
+   `src/mvs370-millicode.c` (`@@MULDI3`/`@@NEGDI2`, the 64-bit
+   helpers `**` folding needs, built from 32-bit halves so they
+   cannot call themselves).
+
+   The build:
+
+       cc370 -DMVS370 -O1 -std=gnu99 -I src \
+             src/cobc370.c src/picture.c src/picture_scan.c \
+             src/mvs370-millicode.c -o COBC370 -flinker-output=xmit
+
+   (-O1 because cc370's backend documents higher levels unsafe. Do
+   NOT write the output into `src/` as COBC370 -- the macOS
+   filesystem is case-insensitive and it lands on the host binary.)
+
+   Delivery to TK5, all verified: the XMIT onto an AWS tape (39
+   cards a block, tapemark, tapemark), `devinit 0480`, IEBGENER to
+   an FB80 dataset, NJE38 RECEIVE (one line, `NOPROMPT`;
+   `INDATASET(...) DATASET(...) DIR(10)` -- TK5's RECV370 abends
+   U0200-09 on this XMIT, its RECEIVE works). Then
+   `EXEC PGM=COBC370,REGION=8192K` with SYSIN, SYSPUNCH, SYSPRINT,
+   SYSTERM -- and SYSIN must be a real dataset: libc370's open path
+   013-C0s on JES2 instream data.
+
+5. The byte-diff -- **holds.** `hello.cbl` compiled on MVS 3.8j
+   emits 1,036 lines of assembler identical to the host compiler's
+   but one: the provenance comment names `dd:SYSIN` instead of the
+   file. The full 131-test sweep on the guest remains to be scripted.
+6. XMIT packaging and the compile-assemble-link proc, now with
+   ld370 doing the packaging.
+
+## cc370 findings to send upstream
+
+Hit while putting a 6MB-extent module through tools tuned for small
+ones; each fixed locally in the working copy:
+
+- `as370`: `put()` writes past `text[TEXTMAX]` unchecked -- silent
+  segfault. Guard added; `TEXTMAX` 1MB -> 16MB (the address space).
+- `as370`: `MAXLIT` 8192 -> 65536 (clean message, but this module
+  has more literals than that).
+- `ld370`: `mod[1 << 20]` overflows on a >1MB module -- fortify
+  abort, no message. 1MB -> 16MB.
+- `libc370`: no `strncasecmp`; `fopen` of JES2 instream data abends
+  013-C0.
+- The backend has no BSS story: 4.7MB of zeroed tables emit as
+  `DC X'00'` text, so the load module is 5.2MB where ~450KB is
+  content. The right fix is DS emission (or linker-side gap
+  handling), in cc370 itself.
 
 ## Open questions
 
-- Which GCCMVS release assembles cleanly under IFOX00 on TK5 as
-  shipped; whether PDPCLIB's `dd:` member syntax behaves on a
-  concatenation.
-- Guest-side compile time for a large program. The emulated CPU is
-  fast; GCCMVS-generated code is not IBM-tuned. Measure, don't
+- Guest-side compile time for a large program. Measure, don't
   assume.
+- Whether the DS/BSS fix should trust program fetch to zero text
+  gaps (fresh region pages are zero; reused ones are not).

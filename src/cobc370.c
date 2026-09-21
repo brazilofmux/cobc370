@@ -34,6 +34,18 @@
 #ifndef HOST_EBCDIC
 #define HOST_EBCDIC
 #endif
+/* POSIX's, not ISO C's, and not libc370's -- COPY REPLACING wants its
+ * operands matched without regard to case. */
+#define strncasecmp cobc_strncasecmp
+static int cobc_strncasecmp(const char *a, const char *b, size_t n)
+{
+    for (; n; a++, b++, n--) {
+        int d = toupper((unsigned char)*a) - toupper((unsigned char)*b);
+        if (d) return d;
+        if (!*a) break;
+    }
+    return 0;
+}
 #endif
 
 #define MAXLINE 256
