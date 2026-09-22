@@ -235,15 +235,23 @@ issue #443, and the libc370 findings are mvslovers/libc370#183 and
   5,528 IFOX00 decks: IFOX00 does leave a `DS` unemitted, but IEWL
   fills it in (1,629 of 1,631), fills it with non-zero binder residue
   rather than zeros, and does not elide all-zero records even when
-  given a pure one. The rework needs a definedness bitmap carried
-  into `moddef[]` and a flag defaulting off.
+  given a pure one. The rework carries definedness as `o->defn` into
+  `moddef[]`, so the emit loop stops asking what the bytes are, and
+  hides it behind `--sparse-text` defaulting off
+  (mvslovers/cc370#447). The win survives the stricter predicate
+  intact -- cc370's skips emit no TXT cards at all -- and with the
+  flag off the output is byte-identical to upstream.
 
-  The 469,197-byte COBC370 that passes 126 of 126 was built with both
-  changes and runs correctly, but every one of those compiles was a
-  fresh batch region. Whether program fetch's storage is reliably
-  zero in a reused subpool -- a resident service doing LOAD / DELETE
-  / LOAD -- is unmeasured, and is what decides whether the elision
-  returns at all.
+  **The storage question is measured, and it holds.** A module
+  region no TXT record covers reads as zero even when the same
+  storage demonstrably held X'FF' moments earlier, under
+  LOAD / DELETE / LOAD landing at an identical address: see
+  `docs/fetch-probe/`, and the maintainer's independent assembler
+  probe in mvslovers/cc370#443, which agrees. It is one system and
+  probably page-level zeroing rather than an architectural promise,
+  which is why the flag defaults off -- but the 469,197-byte COBC370
+  that passes 126 of 126 stands, and the objection is answered
+  rather than assumed.
 
 ## Open questions
 
