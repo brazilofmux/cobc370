@@ -155,8 +155,9 @@ definition, located to the line by the diff.
    `INDATASET(...) DATASET(...) DIR(10)` -- TK5's RECV370 abends
    U0200-09 on this XMIT, its RECEIVE works). Then
    `EXEC PGM=COBC370,REGION=8192K` with SYSIN, SYSPUNCH, SYSPRINT,
-   SYSTERM -- and SYSIN must be a real dataset: libc370's open path
-   013-C0s on JES2 instream data.
+   SYSTERM -- and SYSIN must be a real dataset, because this
+   compiler opens it by name and libc370's startup already holds it,
+   which on instream data is a 013-C0 (mvslovers/libc370#184).
 
 5. The byte-diff -- **done, 2026-09-21: 126 of 126 identical.**
    Every compiling test, compiled ON MVS 3.8j (`bin/cobc-port-sweep`:
@@ -210,16 +211,39 @@ issue #443, and the libc370 findings are mvslovers/libc370#183 and
   spool dataset does not. (First reported here, imprecisely, as
   "fopen of instream data abends"; the minimal reproducer narrowed
   it.)
-- **The BSS story, fixed**: TARGET_PDPMAC's `ASM_OUTPUT_SKIP` emitted
-  `DC nX'00'`, so 4.7MB of zeroed tables shipped as text. It now
-  emits `DS XLn` like the target's other flavor, and `ld370` elides
-  all-zero text records (keeping the one that must carry MODEND).
-  Sound because program fetch reads sparse text into freshly
-  GETMAINed storage, which MVS zeroes -- the same behavior
-  IEWL-linked assembler `DS` has always had; a relocated adcon whose
-  stored addend is zero patches correctly against a zero byte.
-  COBC370 went from 5,169,029 bytes (386 text records) to 469,197
-  (33), and the full sweep still stands at 126 of 126 identical.
+- **The BSS story, half landed and half withdrawn.**
+  TARGET_PDPMAC's `ASM_OUTPUT_SKIP` emitted `DC nX'00'`, so 4.7MB of
+  zeroed tables shipped as text. Two changes were made here; upstream
+  review (mvslovers/cc370#443) accepted one and holed the other.
+
+  *The skip becomes `DS XLn`*, as the target's other flavor already
+  does. Semantically free -- as370 extends the section length, ld370
+  materialises the reservation -- and it carries the whole
+  deck-size win: 7,267,520 bytes to 560,480, with the member
+  unmoved at 5,170,233. Filed as #446.
+
+  *`ld370` elides all-zero text records*: withdrawn to a draft. Three
+  things are wrong with it. It turns `ld370/tests/run.sh` red, by
+  eliding a fixture's 32,000 deliberately written zeros until a guard
+  against packing an oversized block has nothing left to refuse. Its
+  predicate is the byte value while its comment claims definedness,
+  and those differ exactly when something writes a zero on purpose;
+  ld370 discards definedness at `ld370.c:258` before the emit loop
+  can see it. And the justification recorded here and in commit
+  293997f -- "the same behavior IEWL-linked assembler `DS` has always
+  had" -- **is false**, measured over 5,230 `SYS1.AOS*` members and
+  5,528 IFOX00 decks: IFOX00 does leave a `DS` unemitted, but IEWL
+  fills it in (1,629 of 1,631), fills it with non-zero binder residue
+  rather than zeros, and does not elide all-zero records even when
+  given a pure one. The rework needs a definedness bitmap carried
+  into `moddef[]` and a flag defaulting off.
+
+  The 469,197-byte COBC370 that passes 126 of 126 was built with both
+  changes and runs correctly, but every one of those compiles was a
+  fresh batch region. Whether program fetch's storage is reliably
+  zero in a reused subpool -- a resident service doing LOAD / DELETE
+  / LOAD -- is unmeasured, and is what decides whether the elision
+  returns at all.
 
 ## Open questions
 
