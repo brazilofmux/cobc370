@@ -191,7 +191,11 @@ definition, located to the line by the diff.
 Hit while putting a 6MB-extent module through tools tuned for small
 ones. Everything below except the libc370 items is fixed in
 `docs/cc370-fixes.patch` (against mvslovers/cc370 main of
-2026-09-21); the local toolchain install carries it:
+2026-09-21); the local toolchain install carries it. Upstream,
+2026-09-22, at the maintainer's request: the size/bounds fixes are
+mvslovers/cc370#444, the BSS change is #445 with its discussion in
+issue #443, and the libc370 findings are mvslovers/libc370#183 and
+#184 (the latter with the verified minimal reproducer):
 
 - `as370`: `put()` writes past `text[TEXTMAX]` unchecked -- silent
   segfault. Guard added; `TEXTMAX` 1MB -> 16MB (the address space).
@@ -199,8 +203,13 @@ ones. Everything below except the libc370 items is fixed in
   has more literals than that).
 - `ld370`: `mod[1 << 20]` overflows on a >1MB module -- fortify
   abort, no message. 1MB -> 16MB.
-- `libc370` (not in the patch): no `strncasecmp`; `fopen` of JES2
-  instream data abends 013-C0.
+- `libc370` (not in the patch): no `strncasecmp`; and a second
+  concurrent open of an instream DD abends 013-C0 -- the startup
+  already holds SYSIN as stdin, so any `fopen("dd:SYSIN")` is
+  inherently a second open, which a real dataset tolerates and the
+  spool dataset does not. (First reported here, imprecisely, as
+  "fopen of instream data abends"; the minimal reproducer narrowed
+  it.)
 - **The BSS story, fixed**: TARGET_PDPMAC's `ASM_OUTPUT_SKIP` emitted
   `DC nX'00'`, so 4.7MB of zeroed tables shipped as text. It now
   emits `DS XLn` like the target's other flavor, and `ld370` elides
