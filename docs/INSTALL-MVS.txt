@@ -1,0 +1,137 @@
+cobc370 for MVS 3.8j -- installing the compiler
+===============================================
+
+COBC370.xmit holds one load module, COBC370: a COBOL-74 compiler that
+runs on the guest.  Nothing here needs a C compiler on MVS.  The module
+was cross-compiled on a host and this file is the finished result.
+
+These instructions do not go stale, but the figures below describe one
+particular build -- the 2026-09-22 release.  Check them against whatever
+you actually downloaded rather than against this file.
+
+  SHA256   e54a842a5b5b39036e80037d88635e1c385297788b1f767a9b77f5808c235338
+  size     5226080 bytes, FB80 when it lands on the guest
+  built    from cobc370 c4f3cfc with mvslovers/cc370 2c40eb3
+           and mvslovers/libc370 f062522
+  tested   all 126 test programs compiled on the guest by this module,
+           emitting assembler byte-identical to the host compiler's
+
+
+1.  Get the XMIT onto the guest
+-------------------------------
+
+It must arrive as a physical-sequential FB/80 data set, unchanged.  It
+is binary: do not let anything translate it to EBCDIC or strip trailing
+blanks.  Any route works -- FTP in binary with a pre-allocated target,
+IND$FILE, or an emulated tape.  For tape, wrap it in AWS blocks and
+IEBGENER it in.
+
+    //GEN      EXEC PGM=IEBGENER
+    //SYSUT1   DD UNIT=480,VOL=SER=COBC01,LABEL=(1,NL),DISP=(OLD,KEEP),
+    //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+    //SYSUT2   DD DSN=your.COBC370.XMIT,DISP=(NEW,CATLG),UNIT=SYSDA,
+    //            SPACE=(CYL,(10,5)),
+    //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+    //SYSPRINT DD SYSOUT=*
+    //SYSIN    DD DUMMY
+
+
+2.  RECEIVE it into a load library
+-----------------------------------
+
+On TK5 the NJE38 RECEIVE is the one that works; it takes the whole
+command on one line.  (TK5's RECV370 abends U0200-09 on this file.)
+
+    //RECV     EXEC PGM=IKJEFT01,DYNAMNBR=60
+    //SYSTSPRT DD SYSOUT=*
+    //SYSPRINT DD SYSOUT=*
+    //SYSTSIN  DD *
+    RECEIVE INDATASET('your.COBC370.XMIT') -
+      DATASET('your.COBC370.LOAD') DIR(10) NOPROMPT
+    /*
+
+The library wants about 7 cylinders on a 3390.
+
+
+3.  Run it
+----------
+
+    //COBC     EXEC PGM=COBC370,REGION=8192K
+    //STEPLIB  DD DSN=your.COBC370.LOAD,DISP=SHR
+    //SYSPRINT DD SYSOUT=*
+    //SYSTERM  DD SYSOUT=*
+    //SYSLIB   DD DSN=your.COPYBOOK.PDS,DISP=SHR
+    //SYSIN    DD DSN=your.SOURCE.PDS(PROGRAM),DISP=SHR
+    //SYSPUNCH DD DSN=&&ASM,DISP=(NEW,PASS),UNIT=SYSDA,
+    //            SPACE=(TRK,(15,5)),
+    //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+
+  REGION=8192K is not optional.  The compiler's tables are about 5MB
+  and it will not start in less.
+
+  SYSIN must be a real data set, not DD *.  The compiler opens it by
+  name and libc370's startup already holds it, and a second concurrent
+  open of an instream data set is the one thing JES2 refuses (013-C0).
+  Stage instream source to a data set first.
+
+  SYSLIB is the COPY search.  It may be a concatenation.
+
+  SYSPUNCH receives the S/370 assembler.  Feed it to IFOX00 with
+  PARM='OBJ,NODECK' -- without OBJ it assembles cleanly and produces
+  nothing, RC=16 with IFO257.
+
+COBCCLG.jcl beside this file is a cataloged procedure that chains the
+whole thing: COBC370 -> IFOX00 -> IEWL -> GO, in one job.
+
+
+4.  Check it works
+------------------
+
+Compile anything small and assemble the result.  A program with no
+DATA DIVISION and one DISPLAY is enough; if SYSPUNCH fills with
+assembler and IFOX00 takes it at RC=0, the install is good.
+
+
+Rebuilding it yourself
+----------------------
+
+Nothing here is a secret and the build is short.  You need mvslovers'
+cc370 toolchain and libc370 installed (both build host-native with make),
+and then, from a cobc370 checkout:
+
+    ASMDATE=09/22/26 ASMTIME=12.00 LDDATE=26265 LDTIME=120000 \
+    cc370 -DMVS370 -O1 -std=gnu99 -I src \
+          src/cobc370.c src/picture.c src/picture_scan.c \
+          src/mvs370-millicode.c -o COBC370 -flinker-output=xmit
+
+The four clock variables are what make it bit-reproducible: as370 and
+ld370 each stamp the current date and time into the deck and the module,
+so without pinning them two builds of identical source differ in those
+bytes and the SHA256 above will not reproduce.  Pick any values you like
+-- they only have to match between the builds you want to compare.
+
+  -O1 because cc370's backend documents -O2 and above as unsafe on this
+  target.  Do not write the output into src/ as COBC370: a
+  case-insensitive filesystem will land it on top of the host binary.
+
+ld370 takes the member name from -o, so -o COBC370 is what makes the
+module inside the XMIT called COBC370.
+
+docs/PORT-PLAN.md has the reasoning behind all of it, including the
+routes that did not work.
+
+
+What this compiler is
+---------------------
+
+COBOL-74 (ANSI X3.23-1974) plus the IBM spellings of that era.  Seven
+of the twelve modules are complete at the high level, Report Writer is
+complete at its only level, and COBOL-85 constructs are refused on
+purpose.  It supports VSAM natively -- KSDS, ESDS and RRDS -- which the
+ANS COBOL that ships with this system cannot do at all.
+
+The emitted assembler is self-contained: the runtime is emitted into
+the module and SYS1.COBLIB is never referenced.
+
+Source, the conformance map against the 1974 standard, and the porting
+notes are at https://github.com/brazilofmux/cobc370

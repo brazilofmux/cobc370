@@ -149,6 +149,12 @@ definition, located to the line by the diff.
    NOT write the output into `src/` as COBC370 -- the macOS
    filesystem is case-insensitive and it lands on the host binary.)
 
+   For a build whose bytes reproduce, pin the two clocks as well:
+   `ASMDATE`/`ASMTIME` for as370 and `LDDATE`/`LDTIME` for ld370, each
+   of which otherwise stamps the current date and time into the deck
+   and the module. `docs/INSTALL-MVS.txt` carries the full line, and
+   the installation instructions that go with a published module.
+
    Delivery to TK5, all verified: the XMIT onto an AWS tape (39
    cards a block, tapemark, tapemark), `devinit 0480`, IEBGENER to
    an FB80 dataset, NJE38 RECEIVE (one line, `NOPROMPT`;
