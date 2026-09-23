@@ -189,6 +189,25 @@ static int src_fill(Src *s)
         int blank = 1;
         for (char *q = s->p; *q; q++) if (!isspace((unsigned char)*q)) blank = 0;
         if (blank) continue;
+        /* EJECT and SKIP1/2/3 are listing control: IBM's compiler takes them
+         * anywhere a card can go and they affect only the page the listing
+         * prints on, which this compiler does not produce. Consumed here
+         * rather than in the parsers, because a word the parsers do not know
+         * means something different in each of them -- in the DATA DIVISION
+         * it read as an entry with no level number, in the PROCEDURE DIVISION
+         * as an unimplemented verb. Reported by Ed Liss on H390-MVS. */
+        {
+            char *q = s->p, w[8]; int wi = 0;
+            while (*q == ' ') q++;
+            while (wi < 7 && isalnum((unsigned char)*q)) w[wi++] = (char)toupper((unsigned char)*q++);
+            w[wi] = 0;
+            while (*q == ' ') q++;
+            if (*q == '.') q++;
+            while (*q == ' ') q++;
+            if (!*q && (!strcmp(w, "EJECT") || !strcmp(w, "SKIP1") ||
+                        !strcmp(w, "SKIP2") || !strcmp(w, "SKIP3")))
+                continue;
+        }
         return 1;
     }
 }
@@ -1119,6 +1138,11 @@ static void make_curdate(int *cursor);
  * the source actually mentions it, so programs that do not pay nothing. */
 static int uses_curdate;
 static int curdate_sym = -1;
+static void make_retcode(int *cursor);
+/* RETURN-CODE is IBM's other special register: a halfword the program moves
+ * to, which the epilogue hands back in R15 so it becomes the step's condition
+ * code. Created on first use, like CURRENT-DATE. */
+static int retcode_sym = -1;
 
 static int need_sym(const char *n)
 {
@@ -1171,6 +1195,11 @@ static int resolve_sym_quiet(const char *name, char q[][31], int nq)
         make_curdate(&cur);
         return curdate_sym;
     }
+    if (found < 0 && !nq && !strcmp(name, "RETURN-CODE")) {
+        int cur = wslen;
+        make_retcode(&cur);
+        return retcode_sym;
+    }
     return found;
 }
 
@@ -1193,6 +1222,11 @@ static int resolve_sym(const char *name, char q[][31], int nq)
             int cur = wslen;
             make_curdate(&cur);
             return curdate_sym;
+        }
+        if (!nq && !strcmp(name, "RETURN-CODE")) {
+            int cur = wslen;
+            make_retcode(&cur);
+            return retcode_sym;
         }
         if (nq) snprintf(m, sizeof m, "no '%s' is inside '%s'", name, q[0]);
         else    snprintf(m, sizeof m, "undeclared identifier '%s'", name);
@@ -1348,7 +1382,10 @@ static void copy_statement(void)
 
 static void parse_program_id(void)
 {
-    expect("IDENTIFICATION"); expect("DIVISION"); expect(".");
+    /* IBM writes IDENTIFICATION DIVISION and also accepts ID DIVISION;
+     * a great deal of real source uses the short form. */
+    if (is("ID")) next(); else expect("IDENTIFICATION");
+    expect("DIVISION"); expect(".");
     expect("PROGRAM-ID"); expect(".");
     if (!tok.text[0]) die("PROGRAM-ID has no name");
     if (strlen(tok.text) > 8) die("PROGRAM-ID longer than 8 characters "
@@ -2050,6 +2087,35 @@ static void make_curdate(int *cursor)
     *cursor += sy->bytes;
     if (*cursor > wslen) wslen = *cursor;
     curdate_sym = nsym;
+    nsym++;
+}
+
+/* RETURN-CODE, PIC S9(4) COMP -- a halfword, which is what IBM's register is
+ * and what R15 can carry. Declared as an ordinary symbol for the same reason
+ * CURRENT-DATE is: MOVE, arithmetic and comparison all reach it by the
+ * existing paths. Reported missing by Ed Liss on H390-MVS. */
+static void make_retcode(int *cursor)
+{
+    if (retcode_sym >= 0) return;
+    if (nsym >= MAXSYM) die("too many data items");
+    Sym *sy = &syms[nsym];
+    memset(sy, 0, sizeof *sy);
+    snprintf(sy->name, sizeof sy->name, "RETURN-CODE");
+    snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
+    PicInfo pi;
+    if (pic_analyse("S9(4)", &pi) < 0) die(pi.err);
+    sy->digits = pi.digits;
+    sy->scale = pi.scale;
+    sy->is_signed = 1;
+    sy->usage = U_COMP;
+    sy->bytes = 2;
+    sy->elem = sy->bytes;
+    sy->level = 1;
+    if (*cursor & 1) (*cursor)++;          /* a halfword wants alignment */
+    sy->offset = *cursor;
+    *cursor += sy->bytes;
+    if (*cursor > wslen) wslen = *cursor;
+    retcode_sym = nsym;
     nsym++;
 }
 
@@ -10881,9 +10947,31 @@ static void generate(void)
         case ST_EXITPGM:
             if (!is_subprogram) { asm_comment(" EXIT PROGRAM in a main program: no effect"); break; }
             asm_comment(" EXIT PROGRAM: back to the caller");
-            asm_line("", "L", "13,4(13)", "restore caller's save area");
-            asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
-            asm_line("", "SR", "15,15", "return code 0");
+            /* RETURN-CODE, if the program ever named it, is the step's
+             * condition code -- IBM passes it back in R15. It must be loaded
+             * BEFORE the registers are restored, since the restore overwrites
+             * R15's base and the halfword is addressed off it. */
+            if (retcode_sym >= 0) {
+                /* RETURN-CODE is the step's condition code, handed back in
+                 * R15. Two things constrain the order. The value is addressed
+                 * off a base locator, so it must be loaded while the bases
+                 * still hold -- that is, before the registers are restored.
+                 * And the usual LM 14,12,12(13) reloads R15 along with the
+                 * rest, which would discard it. So the restore is split: R14
+                 * and R0-R12 come back individually and R15 is left alone,
+                 * which is what IBM's own epilogue does. */
+                char rf[96], rb[128];
+                field_ref_m(&syms[retcode_sym], NULL, FR_RX, 2, 6, rf, sizeof rf);
+                snprintf(rb, sizeof rb, "15,%s", rf);
+                asm_line("", "LH", rb, "RETURN-CODE -> the step's condition code");
+                asm_line("", "L", "13,4(13)", "restore caller's save area");
+                asm_line("", "L", "14,12(13)", "caller's return address");
+                asm_line("", "LM", "0,12,20(13)", "caller's R0-R12; R15 keeps the code");
+            } else {
+                asm_line("", "L", "13,4(13)", "restore caller's save area");
+                asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
+                asm_line("", "SR", "15,15", "return code 0");
+            }
             asm_line("", "BR", "14", "return to caller");
             break;
         case ST_STOP:
@@ -10894,9 +10982,31 @@ static void generate(void)
                 asm_line("", "L", "15,VTERM", "close anything the runtime opened");
                 asm_line("", "BALR", "14,15", "");
             }
-            asm_line("", "L", "13,4(13)", "restore caller's save area");
-            asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
-            asm_line("", "SR", "15,15", "return code 0");
+            /* RETURN-CODE, if the program ever named it, is the step's
+             * condition code -- IBM passes it back in R15. It must be loaded
+             * BEFORE the registers are restored, since the restore overwrites
+             * R15's base and the halfword is addressed off it. */
+            if (retcode_sym >= 0) {
+                /* RETURN-CODE is the step's condition code, handed back in
+                 * R15. Two things constrain the order. The value is addressed
+                 * off a base locator, so it must be loaded while the bases
+                 * still hold -- that is, before the registers are restored.
+                 * And the usual LM 14,12,12(13) reloads R15 along with the
+                 * rest, which would discard it. So the restore is split: R14
+                 * and R0-R12 come back individually and R15 is left alone,
+                 * which is what IBM's own epilogue does. */
+                char rf[96], rb[128];
+                field_ref_m(&syms[retcode_sym], NULL, FR_RX, 2, 6, rf, sizeof rf);
+                snprintf(rb, sizeof rb, "15,%s", rf);
+                asm_line("", "LH", rb, "RETURN-CODE -> the step's condition code");
+                asm_line("", "L", "13,4(13)", "restore caller's save area");
+                asm_line("", "L", "14,12(13)", "caller's return address");
+                asm_line("", "LM", "0,12,20(13)", "caller's R0-R12; R15 keeps the code");
+            } else {
+                asm_line("", "L", "13,4(13)", "restore caller's save area");
+                asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
+                asm_line("", "SR", "15,15", "return code 0");
+            }
             asm_line("", "BR", "14", "return to caller");
             break;
         case ST_DISPLAY_LIT: {

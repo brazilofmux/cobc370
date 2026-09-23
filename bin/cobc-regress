@@ -256,6 +256,16 @@ for t in $TESTS; do
                 *) say "  $t: expected AB U3007, got '${res##*DD }'"
                    fail=$((fail+1)); continue ;;
             esac ;;
+        retcode)
+            # The point of this one is that MOVE 8 TO RETURN-CODE reaches the
+            # step. IBM's compiler ends it CC 0008 (measured on TK5), so
+            # anything else -- including a clean 0000 -- means the special
+            # register never got through to R15.
+            case "$res" in
+                *"RC= 0008") ;;
+                *) say "  $t: expected RC= 0008 from RETURN-CODE, got '${res##*DD }'"
+                   fail=$((fail+1)); continue ;;
+            esac ;;
         *)
             case "$res" in
                 *"RC= 0000") ;;
