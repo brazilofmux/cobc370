@@ -329,12 +329,16 @@ static void copy_statement(void);
 /* The scanner the parser sees: the raw one, with COPY taken out. A COPY
  * statement is read and its copybook opened here, and the first token the
  * parser gets after COPY is the first token of the copybook. */
+static int copy_opened;   /* the token next() just gave began a copybook */
+
 static void next(void)
 {
     scan_token();
+    copy_opened = 0;
     while (!tok.eof && !tok.literal && !lex_picture && !strcmp(tok.text, "COPY")) {
         copy_statement();
         scan_token();
+        copy_opened = 1;
     }
 }
 
@@ -2540,6 +2544,16 @@ static void parse_data_division(void)
                     die("duplicate data name in the same group");
         }
         next();
+        /* IBM's  01 NAME COPY MEMBER.  -- the COPY stands for the rest of
+         * the entry, and the member's first entry header gives way to the
+         * source's: its level and name are dropped, its clauses and every
+         * entry after it kept. IKFCBL00 does exactly this; a member that
+         * opens with clauses rather than a level number is plain text. */
+        if (copy_opened && !tok.literal && is_numeric_literal(tok.text)
+            && !strchr(tok.text, '.')) {
+            next();                         /* the member's level number */
+            if (!tok.eof && !is(".")) next();   /* and its data-name */
+        }
 
         char pic[64] = "";
         int item_redef = (fd_from >= 0);  /* REDEFINES, or an FD's later record */

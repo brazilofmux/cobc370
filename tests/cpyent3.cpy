@@ -1,0 +1,5 @@
+000100 01  LIB-ONE.
+000200     05  ONE-A         PIC X(3)  VALUE 'AAA'.
+000300     05  ONE-N         PIC 9(3)  VALUE 123.
+000400 01  LIB-TWO.
+000500     05  TWO-A         PIC X(3)  VALUE 'BBB'.

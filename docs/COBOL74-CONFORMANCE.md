@@ -250,6 +250,14 @@ adds `SEGMENT-LIMIT`, which is not.
 2026-08-29, host side: the scanner stacks the copybook, found on the `-I`
 directories or beside the program.
 
+IBM's older form, `01 NAME COPY MEMBER.`, is accepted too: the COPY stands
+for the rest of the entry, and the member's first entry header -- its level
+number and data-name -- gives way to the copying program's, while its
+clauses and every entry after it are copied as written. That is what
+IKFCBL00 does on MVS 3.8j (checked there, with `LIB`); `tests/copyent`
+records its output. A member that opens with clauses rather than a level
+number is inserted as plain text, as before.
+
 ### Null — nothing implemented
 
 `Sort-Merge`, `Debug`, `Communication`. All three have a null level, so all
