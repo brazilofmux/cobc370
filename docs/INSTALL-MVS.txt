@@ -6,14 +6,14 @@ runs on the guest.  Nothing here needs a C compiler on MVS.  The module
 was cross-compiled on a host and this file is the finished result.
 
 These instructions do not go stale, but the figures below describe one
-particular build -- the 2026-09-22 release.  Check them against whatever
+particular build -- the 2026-09-24 release.  Check them against whatever
 you actually downloaded rather than against this file.
 
-  SHA256   e54a842a5b5b39036e80037d88635e1c385297788b1f767a9b77f5808c235338
-  size     5226080 bytes, FB80 when it lands on the guest
-  built    from cobc370 c4f3cfc with mvslovers/cc370 2c40eb3
+  SHA256   6568aae58d9ed99d0b348033398c45a826d13a12faf1111364c85f620ec776f0
+  size     5228240 bytes, FB80 when it lands on the guest
+  built    from cobc370 8fee693 with mvslovers/cc370 2c40eb3
            and mvslovers/libc370 f062522
-  tested   all 126 test programs compiled on the guest by this module,
+  tested   all 130 test programs compiled on the guest by this module,
            emitting assembler byte-identical to the host compiler's
 
 
@@ -99,7 +99,7 @@ Nothing here is a secret and the build is short.  You need mvslovers'
 cc370 toolchain and libc370 installed (both build host-native with make),
 and then, from a cobc370 checkout:
 
-    ASMDATE=09/22/26 ASMTIME=12.00 LDDATE=26265 LDTIME=120000 \
+    ASMDATE=09/24/26 ASMTIME=12.00 LDDATE=26267 LDTIME=120000 \
     cc370 -DMVS370 -O1 -std=gnu99 -I src \
           src/cobc370.c src/picture.c src/picture_scan.c \
           src/mvs370-millicode.c -o COBC370 -flinker-output=xmit
