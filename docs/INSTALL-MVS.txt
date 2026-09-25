@@ -6,9 +6,8 @@ runs on the guest.  Nothing here needs a C compiler on MVS.  The module
 was cross-compiled on a host and this file is the finished result.
 
 These instructions do not go stale, but the figures below describe one
-particular build -- the 2026-09-25 late release.  Check
-them against whatever you actually downloaded rather than against this
-file.
+particular build -- the 2026-09-25 late release.  Check them against
+whatever you actually downloaded rather than against this file.
 
   SHA256   14cf5a983794a0b4bdf6527435c43d833bf7d32890c0b0a3bf9342f6ccb1b75a
   size     523280 bytes, FB80 when it lands on the guest
