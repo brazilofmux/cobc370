@@ -1057,6 +1057,27 @@ system, is the largest real program yet: 1,622 lines. Besides Sort-Merge and
   lived in a side table for a long time; the split at eight was left over
   from the fixed array before it.
 
+And the largest one: COBXREF's code did not fit. Three code base registers
+covered 12K of program, constants included, and COBXREF is 16K. Since
+2026-09-25 code is addressed a block at a time. R12 is the base of the block
+the program is in, and every paragraph starts one with `BALR`, so it is right
+whether control falls in or branches in. A paragraph longer than one base
+reaches is split at a sentence boundary, where nothing branches across,
+using an estimate of the code's size that errs large. Constants, work areas
+and the out-of-line routines are one region after the code on R11 and R10,
+which never change. A branch to a paragraph in another block goes through its
+address; a return into a block -- a `PERFORM` coming back, a sort exit
+resuming -- reloads R12. A program's code has no size limit now: a block has
+4K and the constants 8K (`bigpara` is one 12K paragraph, split ten ways).
+
+With it: numeric constants were 256 at 16 bytes each, a third of the new
+constants region between them; each is now only as long as its longest
+reference, and there may be 2,048, as there may be of nonnumeric ones. The
+program-check line table widened to fullword offsets and moved past the
+literal pool, where it needs no base. And a program that printed but never
+displayed anything linked without the runtime and branched to zero -- the
+runtime is now there for every caller of it, not only `DISPLAY`.
+
 ## What this map is not
 
 It is not a plan. Reading it, the honest conclusions are that Debug and

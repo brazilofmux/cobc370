@@ -7,13 +7,15 @@ SIGNCLAU CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,27 +29,27 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 T0000    DS    0H
 * MOVE -12345 -> DEF-T
-         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
          UNPK  D0000(5),PWK1(16)   packed -> zoned
 T0001    DS    0H
 * MOVE -12345 -> LEA-O
-         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          UNPK  ZWK(5),PWK1(16)     packed -> zoned
          MVZ   ZWK(1),ZWK+4        the sign moves to the leading digit
          OI    ZWK+4,X'F0'         the trailing digit is a digit again
          MVC   D0001(5),ZWK        the item, sign and all
 T0002    DS    0H
 * MOVE -12345 -> TRA-O
-         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          UNPK  D0002(5),PWK1(16)   packed -> zoned
 T0003    DS    0H
 * MOVE -12345 -> LEA-S
-         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          UNPK  ZWK+1(5),PWK1(16)   packed -> zoned
          OI    ZWK+5,X'F0'         no overpunch: the sign has its own p
-         CP    PWK1(16),K0002(16)  negative?
+         CP    PWK1(16),K0002+15(1)  negative?
          BM    L0001
          MVI   ZWK+0,C'+'
          B     L0002
@@ -57,10 +59,10 @@ L0002    DS    0H
          MVC   D0004(6),ZWK        the item, sign and all
 T0004    DS    0H
 * MOVE -12345 -> TRA-S
-         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          UNPK  ZWK+0(5),PWK1(16)   packed -> zoned
          OI    ZWK+4,X'F0'         no overpunch: the sign has its own p
-         CP    PWK1(16),K0002(16)  negative?
+         CP    PWK1(16),K0002+15(1)  negative?
          BM    L0003
          MVI   ZWK+5,C'+'
          B     L0004
@@ -186,10 +188,10 @@ T0016    DS    0H
          BALR  14,15
 T0017    DS    0H
 * MOVE 67890 -> LEA-S
-         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   PWK1(16),K0003+13(3)  literal
          UNPK  ZWK+1(5),PWK1(16)   packed -> zoned
          OI    ZWK+5,X'F0'         no overpunch: the sign has its own p
-         CP    PWK1(16),K0002(16)  negative?
+         CP    PWK1(16),K0002+15(1)  negative?
          BM    L0007
          MVI   ZWK+0,C'+'
          B     L0008
@@ -199,10 +201,10 @@ L0008    DS    0H
          MVC   D0004(6),ZWK        the item, sign and all
 T0018    DS    0H
 * MOVE 67890 -> TRA-S
-         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   PWK1(16),K0003+13(3)  literal
          UNPK  ZWK+0(5),PWK1(16)   packed -> zoned
          OI    ZWK+4,X'F0'         no overpunch: the sign has its own p
-         CP    PWK1(16),K0002(16)  negative?
+         CP    PWK1(16),K0002+15(1)  negative?
          BM    L0009
          MVI   ZWK+5,C'+'
          B     L0010
@@ -212,7 +214,7 @@ L0010    DS    0H
          MVC   D0007(6),ZWK        the item, sign and all
 T0019    DS    0H
 * MOVE 67890 -> LEA-O
-         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   PWK1(16),K0003+13(3)  literal
          UNPK  ZWK(5),PWK1(16)     packed -> zoned
          MVZ   ZWK(1),ZWK+4        the sign moves to the leading digit
          OI    ZWK+4,X'F0'         the trailing digit is a digit again
@@ -259,7 +261,7 @@ T0024    DS    0H
          MVZ   ZWK+4(1),ZWK        the sign moves to where PACK looks f
          OI    ZWK,X'F0'           the leading digit is a digit again
          PACK  PWK1(16),ZWK(5)     zoned -> packed
-         ZAP   PWK2(16),K0004(16)  literal
+         ZAP   PWK2(16),K0004+15(1)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  ZWK(5),PWK1(16)     packed -> zoned
          MVZ   ZWK(1),ZWK+4        the sign moves to the leading digit
@@ -294,11 +296,11 @@ T0027    DS    0H
          NI    PWK1+15,X'F0'       clear the sign nibble
          OI    PWK1+15,X'0D'       and make it negative
 L0011    DS    0H
-         ZAP   PWK2(16),K0005(16)  literal
+         ZAP   PWK2(16),K0005+15(1)  literal
          SP    PWK1(16),PWK2(16)
          UNPK  ZWK+0(5),PWK1(16)   packed -> zoned
          OI    ZWK+4,X'F0'         no overpunch: the sign has its own p
-         CP    PWK1(16),K0002(16)  negative?
+         CP    PWK1(16),K0002+15(1)  negative?
          BM    L0012
          MVI   ZWK+5,C'+'
          B     L0013
@@ -322,6 +324,8 @@ T0029    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 PARM0001 DC    A(DSPBUF)
@@ -375,11 +379,16 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'-12345'        numeric constants
-K0002    DC    PL16'0'
-K0003    DC    PL16'67890'
-K0004    DC    PL16'1'
-K0005    DC    PL16'2'
+K0001    EQU   *-13                numeric constants, as long as used
+         DC    PL3'-12345'
+K0002    EQU   *-15
+         DC    PL1'0'
+K0003    EQU   *-13
+         DC    PL3'67890'
+K0004    EQU   *-15
+         DC    PL1'1'
+K0005    EQU   *-15
+         DC    PL1'2'
 M0001    DC    XL9'402021402020202020'  ED patterns
 S0001    DC    CL7'DEF-T  '        nonnumeric constants
 S0002    DC    CL7'LEA-O  '
@@ -422,11 +431,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -458,38 +467,41 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(26)
-         DC    AL2(T0001-COBBEG),AL2(26)
-         DC    AL2(T0002-COBBEG),AL2(26)
-         DC    AL2(T0003-COBBEG),AL2(26)
-         DC    AL2(T0004-COBBEG),AL2(26)
-         DC    AL2(T0005-COBBEG),AL2(27)
-         DC    AL2(T0006-COBBEG),AL2(28)
-         DC    AL2(T0007-COBBEG),AL2(29)
-         DC    AL2(T0008-COBBEG),AL2(30)
-         DC    AL2(T0009-COBBEG),AL2(31)
-         DC    AL2(T0010-COBBEG),AL2(32)
-         DC    AL2(T0011-COBBEG),AL2(33)
-         DC    AL2(T0012-COBBEG),AL2(34)
-         DC    AL2(T0013-COBBEG),AL2(35)
-         DC    AL2(T0014-COBBEG),AL2(36)
-         DC    AL2(T0015-COBBEG),AL2(37)
-         DC    AL2(T0016-COBBEG),AL2(38)
-         DC    AL2(T0017-COBBEG),AL2(39)
-         DC    AL2(T0018-COBBEG),AL2(39)
-         DC    AL2(T0019-COBBEG),AL2(39)
-         DC    AL2(T0020-COBBEG),AL2(40)
-         DC    AL2(T0021-COBBEG),AL2(41)
-         DC    AL2(T0022-COBBEG),AL2(42)
-         DC    AL2(T0023-COBBEG),AL2(43)
-         DC    AL2(T0024-COBBEG),AL2(44)
-         DC    AL2(T0025-COBBEG),AL2(45)
-         DC    AL2(T0026-COBBEG),AL2(46)
-         DC    AL2(T0027-COBBEG),AL2(47)
-         DC    AL2(T0028-COBBEG),AL2(48)
-         DC    AL2(T0029-COBBEG),AL2(49)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(26,0)
+         DC    A(T0001-COBBEG),AL2(26,0)
+         DC    A(T0002-COBBEG),AL2(26,0)
+         DC    A(T0003-COBBEG),AL2(26,0)
+         DC    A(T0004-COBBEG),AL2(26,0)
+         DC    A(T0005-COBBEG),AL2(27,0)
+         DC    A(T0006-COBBEG),AL2(28,0)
+         DC    A(T0007-COBBEG),AL2(29,0)
+         DC    A(T0008-COBBEG),AL2(30,0)
+         DC    A(T0009-COBBEG),AL2(31,0)
+         DC    A(T0010-COBBEG),AL2(32,0)
+         DC    A(T0011-COBBEG),AL2(33,0)
+         DC    A(T0012-COBBEG),AL2(34,0)
+         DC    A(T0013-COBBEG),AL2(35,0)
+         DC    A(T0014-COBBEG),AL2(36,0)
+         DC    A(T0015-COBBEG),AL2(37,0)
+         DC    A(T0016-COBBEG),AL2(38,0)
+         DC    A(T0017-COBBEG),AL2(39,0)
+         DC    A(T0018-COBBEG),AL2(39,0)
+         DC    A(T0019-COBBEG),AL2(39,0)
+         DC    A(T0020-COBBEG),AL2(40,0)
+         DC    A(T0021-COBBEG),AL2(41,0)
+         DC    A(T0022-COBBEG),AL2(42,0)
+         DC    A(T0023-COBBEG),AL2(43,0)
+         DC    A(T0024-COBBEG),AL2(44,0)
+         DC    A(T0025-COBBEG),AL2(45,0)
+         DC    A(T0026-COBBEG),AL2(46,0)
+         DC    A(T0027-COBBEG),AL2(47,0)
+         DC    A(T0028-COBBEG),AL2(48,0)
+         DC    A(T0029-COBBEG),AL2(49,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

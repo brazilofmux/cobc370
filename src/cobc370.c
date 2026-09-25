@@ -530,9 +530,52 @@ static void expect(const char *w)
 
 static FILE *out;
 
+/* ---- code blocks -------------------------------------------------------
+ * Procedure code is addressed a block at a time: R12 is the base of the
+ * block the program is in, and every paragraph starts a block with BALR, so
+ * it is right whether control falls in or branches in. A paragraph too long
+ * for one base is split at a sentence boundary. Constants, work areas and
+ * the out-of-line routines are one region after the code, based on R11 and
+ * R10, which never change. So a program's code has no size limit; a block
+ * has 4K and the constants 8K.
+ *
+ * Deciding where to split needs to know how big the code is before the
+ * assembler does, so asm_line keeps an estimate: machine instructions by
+ * format, exactly, and macros at a generous guess. It errs large, which
+ * only means a block ends a little early. */
+static int  in_code;            /* estimating: inside the statement code */
+static long est_pc;             /* bytes of code so far, as estimated */
+
+static int op_len(const char *op, const char *operand)
+{
+    static const char *rr[] = { "BALR", "BCR", "BR", "LR", "LTR", "SR", "AR", "CR", "BCTR",
+        "MR", "DR", "SPM", "SVC", "NR", "OR", "XR", "LCR", "LPR", "LNR", "SLR", "ALR",
+        "CLR", "MVCL", "CLCL", "BASR", "NOPR", 0 };
+    static const char *ss[] = { "MVC", "CLC", "ZAP", "AP", "SP", "MP", "DP", "CP", "PACK",
+        "UNPK", "ED", "EDMK", "TR", "TRT", "MVO", "NC", "OC", "XC", "MVN", "MVZ", "SRP", 0 };
+    static const char *rx[] = { "L", "LA", "ST", "STH", "LH", "A", "S", "M", "D", "C", "CH",
+        "AH", "SH", "MH", "N", "O", "X", "IC", "STC", "STM", "LM", "B", "BE", "BNE", "BH",
+        "BL", "BNH", "BNL", "BZ", "BNZ", "BM", "BNM", "BO", "BNO", "BP", "BNP", "BAL", "BAS",
+        "BC", "BCT", "EX", "CL", "CLI", "MVI", "TM", "NI", "OI", "XI", "SLL", "SRL", "SLA",
+        "SRA", "SLDL", "SRDL", "SLDA", "SRDA", "CVB", "CVD", "STCM", "ICM", "CLM", "AL",
+        "SL", "NOP", "BXH", "BXLE", 0 };
+    for (int i = 0; rr[i]; i++) if (!strcmp(op, rr[i])) return 2;
+    for (int i = 0; ss[i]; i++) if (!strcmp(op, ss[i])) return 6;
+    for (int i = 0; rx[i]; i++) if (!strcmp(op, rx[i])) return 4;
+    if (!strcmp(op, "EQU") || !strcmp(op, "USING") || !strcmp(op, "DROP")) return 0;
+    if (!strcmp(op, "DS") || !strcmp(op, "DC")) {
+        /* Inside the code only DS 0H appears; anything else is a surprise
+         * worth over-counting. */
+        if (operand && operand[0] == '0') return 3;
+        return 64;
+    }
+    return 160;                 /* a macro: GET, PUT, OPEN, LINK, ... */
+}
+
 static void asm_line(const char *name, const char *op, const char *operand,
                      const char *comment)
 {
+    if (in_code && op && *op) est_pc += op_len(op, operand);
     char b[128];
     memset(b, ' ', sizeof b);
     size_t n;
@@ -851,6 +894,7 @@ typedef struct {
     struct Cond *whens[8]; int when_lab[8]; int nwhen;   /* serial SEARCH: WHEN series */
     int  acc_from;          /* ACCEPT FROM: 0 SYSIN, 1 DATE, 2 DAY, 3 TIME, 4 CONSOLE */
     int  tod_refresh;       /* the COBOL statement this begins names TIME-OF-DAY */
+    int  new_sentence;      /* the first statement of a sentence: a block may start here */
 } Stmt;
 
 /* Files. One DCB each, emitted into the program CSECT. QSAM move mode: the
@@ -1114,6 +1158,7 @@ typedef struct {
 static SOp sops[MAXSOP];
 static int nsops;
 static const char *intern_str(const char *text, int len, int pad);
+static const char *const_ref(const char *digits, char *out, size_t on);
 static int use_hvals, use_lvals, use_qvals, use_spcs;
 static int nstmt;
 
@@ -5736,6 +5781,16 @@ static void parse_one_statement_body(void)
     die("unexpected token in PROCEDURE DIVISION");
 }
 
+/* One sentence, from the top level: its first statement is marked, since a
+ * code block may begin there and nowhere inside it. */
+static void parse_sentence(void)
+{
+    int s0 = nstmt;
+    at_period = 0;
+    parse_stmt_list(0);
+    if (s0 < nstmt) stmts[s0].new_sentence = 1;
+}
+
 static void parse_stmt_list(int allow_else)
 {
     while (!tok.eof && !at_period) {
@@ -5772,7 +5827,7 @@ static void parse_procedure(void)
             /* Each declarative is a section whose header is followed at once
              * by USE -- syntax rule 1 -- so USE has to be recognised before
              * the statement parser sees it. */
-            if (!is("USE")) { at_period = 0; parse_stmt_list(0); continue; }
+            if (!is("USE")) { parse_sentence(); continue; }
             next();
             if (ndecl >= MAXDECL) die("too many declarative sections");
             if (is("BEFORE")) {
@@ -5826,10 +5881,7 @@ static void parse_procedure(void)
         decl_end_para = npara;
     }
     int stopped = 0;
-    while (!tok.eof) {
-        at_period = 0;
-        parse_stmt_list(0);
-    }
+    while (!tok.eof) parse_sentence();
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_STOP || (is_subprogram && stmts[i].op == ST_EXITPGM))
             stopped = 1;
@@ -6329,7 +6381,7 @@ static void gen_sign_store(const Sym *sy, Node *sub, const char *wk)
         asm_line("", "UNPK", b, "packed -> zoned");
         snprintf(b, sizeof b, "ZWK+%d,X'F0'", (sy->sgn_lead ? 1 : 0) + n - 1);
         asm_line("", "OI", b, "no overpunch: the sign has its own position");
-        snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("0"));
+        { char kr[32]; snprintf(b, sizeof b, "%s(16),%s", wk, const_ref("0", kr, sizeof kr)); }
         asm_line("", "CP", b, "negative?");
         int lneg = ++genlabel, ldone = ++genlabel;
         char ln[16], ld[16];
@@ -6509,10 +6561,10 @@ static void gen_display_digits(const Sym *sy, Node *sub)
     asm_line(lk, "DS", "0H", "");
 }
 
-static void gen_load_imm(const char *label, const char *wk)
+static void gen_load_imm(const char *digits, const char *wk)
 {
-    char b[96];
-    snprintf(b, sizeof b, "%s(16),%s(16)", wk, label);
+    char b[96], kr[48];
+    snprintf(b, sizeof b, "%s(16),%s", wk, const_ref(digits, kr, sizeof kr));
     asm_line("", "ZAP", b, "literal");
 }
 
@@ -7075,23 +7127,49 @@ static void gen_store_op(const Sym *sy, Node *sub, const char *op)
     }
 }
 
-/* Packed constants, interned so a value used twice is emitted once. */
-static struct { char label[16]; char digits[34]; } consts[256];
+/* Packed constants, interned so a value used twice is emitted once. Every
+ * reference names a tail of a notional 16-byte field -- K+15(1) for a small
+ * value, K+off(len) in general -- so a constant is emitted only as long as
+ * its longest reference, with its label EQU'd back to where the 16 bytes
+ * would have started. They were PL16 each, 256 of them; a program with more
+ * values than that ran out, and the 4K they took was a third of what the
+ * constants region has. */
+#define MAXKCONST 2048
+static struct { char label[16]; char digits[34]; int len; } consts[MAXKCONST];
 static int nconst;
 
-static const char *intern_const(const char *digits)
+static const char *intern_const_len(const char *digits, int len)
 {
     for (int i = 0; i < nconst; i++)
-        if (!strcmp(consts[i].digits, digits)) return consts[i].label;
-    if (nconst >= 256) die("too many numeric constants");
+        if (!strcmp(consts[i].digits, digits)) {
+            if (len > consts[i].len) consts[i].len = len;
+            return consts[i].label;
+        }
+    if (nconst >= MAXKCONST) die("too many numeric constants");
     snprintf(consts[nconst].label, sizeof consts[nconst].label, "K%04d", nconst + 1);
     snprintf(consts[nconst].digits, sizeof consts[nconst].digits, "%s", digits);
+    consts[nconst].len = len;
     return consts[nconst++].label;
+}
+
+static const char *intern_const(const char *digits) { return intern_const_len(digits, 1); }
+
+/* A reference to the constant: the shortest packed field that holds it. */
+static const char *const_ref(const char *digits, char *out, size_t on)
+{
+    const char *p = digits;
+    if (*p == '-' || *p == '+') p++;
+    while (p[1] && *p == '0') p++;
+    int len = (int)strlen(p) / 2 + 1;
+    if (len > 16) len = 16;
+    snprintf(out, on, "%s+%d(%d)", intern_const_len(digits, len), 16 - len, len);
+    return out;
 }
 
 /* Nonnumeric constants, padded to the length the comparison or move needs. */
 #define MAXSCONST 257
-static struct { char label[16]; char text[MAXSCONST]; int len; } sconsts[256];
+#define MAXSCONSTS 2048
+static struct { char label[16]; const char *text; int len; } sconsts[MAXSCONSTS];
 static int nsconst;
 
 /* Right-justify a digit string in WIDTH, zero filled. COBOL truncates on the
@@ -7115,9 +7193,9 @@ static const char *intern_str(const char *text, int len, int pad)
     for (int i = 0; i < nsconst; i++)
         if (sconsts[i].len == n && !memcmp(sconsts[i].text, buf, (size_t)n))
             return sconsts[i].label;
-    if (nsconst >= 256) die("too many nonnumeric constants");
+    if (nsconst >= MAXSCONSTS) die("too many nonnumeric constants");
     snprintf(sconsts[nsconst].label, sizeof sconsts[nsconst].label, "S%04d", nsconst + 1);
-    memcpy(sconsts[nsconst].text, buf, (size_t)n + 1);
+    sconsts[nsconst].text = pool_str(buf, n);
     sconsts[nsconst].len = n;
     return sconsts[nsconst++].label;
 }
@@ -7271,7 +7349,7 @@ static int lit_operand(const char *digits, int litscale, int scale, int maxlen,
     d[n] = 0;
     int l = pk_bytes(lit_digits(d));
     if (l > maxlen) return 0;
-    snprintf(out, on, "%s+%d(%d)", intern_const(d), 16 - l, l);
+    snprintf(out, on, "%s+%d(%d)", intern_const_len(d, l), 16 - l, l);
     if (len) *len = l;
     return 1;
 }
@@ -7561,7 +7639,7 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
             gen_expr(n->l, d, tgtscale, 16);
             if (sl * e > 30) die("the result of ** would carry more than thirty decimal places");
             if (e == 0) {
-                snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("1"));
+                { char kr[32]; snprintf(b, sizeof b, "%s(16),%s", wk, const_ref("1", kr, sizeof kr)); }
                 asm_line("", "ZAP", b, "anything to the zero is one");
                 return 16;
             }
@@ -7588,7 +7666,7 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
         snprintf(b, sizeof b, "DWK(8),%s(16)", wk3);
         asm_line("", "ZAP", b, "");
         asm_line("", "CVB", "3,DWK", "the exponent");
-        snprintf(b, sizeof b, "%s(16),%s(16)", wk, intern_const("1"));
+        { char kr[32]; snprintf(b, sizeof b, "%s(16),%s", wk, const_ref("1", kr, sizeof kr)); }
         asm_line("", "ZAP", b, "start from one");
         char lp[16], le[16];
         snprintf(lp, sizeof lp, "L%04d", ++genlabel);
@@ -7649,7 +7727,7 @@ static int packed_lit_operand(const char *digits, int litscale, int scale, char 
     int nd = (int)strlen(p);
     int len = nd / 2 + 1;
     if (len > 8) return 0;
-    snprintf(out, on, "%s+%d(%d)", intern_const(d), 16 - len, len);
+    snprintf(out, on, "%s+%d(%d)", intern_const_len(d, len), 16 - len, len);
     return 1;
 }
 
@@ -8762,19 +8840,69 @@ static void emit_runtime(void)
  * cell, branch to its first paragraph, and put the fall-through back
  * afterwards so the range still runs straight through when nobody performed
  * it. */
+#define MAXBLOCK 4096
+static int  cur_block = -1;     /* the block being emitted; -1 outside the code */
+static int  nblock;
+static long blk_start;          /* est_pc where it began */
+static int  para_block[MAXPARA];/* the block a paragraph starts, -1 not yet */
+static char used_pa[MAXPARA], used_fa[MAXPARA];  /* A(Pnnnn) / A(Fnnnn) cells wanted */
+
+static void start_block(const char *why)
+{
+    char lb[16], b[32];
+    if (nblock >= MAXBLOCK) die("too many code blocks");
+    snprintf(lb, sizeof lb, "B%04d", nblock);
+    asm_line("", "BALR", "12,0", why);
+    asm_line(lb, "EQU", "*", "");
+    snprintf(b, sizeof b, "%s,12", lb);
+    asm_line("", "USING", b, "");
+    cur_block = nblock++;
+    blk_start = est_pc;
+}
+
+/* Back into this block from somewhere else -- a PERFORM returning, a sort
+ * exit resuming -- R12 is whatever the other code left, so reload it. Code
+ * outside the blocks (the report renderers) has no block and never uses R12. */
+static void reload_block(void)
+{
+    char b[32];
+    if (cur_block < 0) return;
+    snprintf(b, sizeof b, "12,CB%04d", cur_block);
+    asm_line("", "L", b, "this block's base again");
+}
+
+/* A branch to a paragraph: direct when it is already behind us in this
+ * block, through its address otherwise. */
+static void branch_para(int p, const char *cmt)
+{
+    char b[32];
+    if (cur_block >= 0 && para_block[p] == cur_block) {
+        /* Its block's base, which is just past the BALR at the paragraph
+         * label: R12 is already right, and the label itself sits two bytes
+         * below the base, out of the USING's reach. */
+        snprintf(b, sizeof b, "B%04d", para_block[p]);
+        asm_line("", "B", b, cmt);
+        return;
+    }
+    used_pa[p] = 1;
+    snprintf(b, sizeof b, "15,PA%04d", p);
+    asm_line("", "L", b, cmt);
+    asm_line("", "BR", "15", "");
+}
+
 static void gen_call_range(int a, int b, int *nret)
 {
-    char p1[16], x[16], f[16], r[16], t[64];
-    snprintf(p1, sizeof p1, "P%04d", a);
+    char x[16], r[16], t[64];
     snprintf(x,  sizeof x,  "X%04d", b);
-    snprintf(f,  sizeof f,  "F%04d", b);
     snprintf(r,  sizeof r,  "R%04d", ++*nret);
     snprintf(t, sizeof t, "15,%s", r);  asm_line("", "LA", t, "return here");
     snprintf(t, sizeof t, "15,%s", x);  asm_line("", "ST", t, "into the range's exit cell");
-    asm_line("", "B", p1, "");
+    branch_para(a, "");
     asm_line(r, "DS", "0H", "");
+    reload_block();
     reset_bases();
-    snprintf(t, sizeof t, "15,%s", f);  asm_line("", "LA", t, "restore fall-through");
+    used_fa[b] = 1;
+    snprintf(t, sizeof t, "15,FA%04d", b);  asm_line("", "L", t, "restore fall-through");
     snprintf(t, sizeof t, "15,%s", x);  asm_line("", "ST", t, "");
 }
 
@@ -9334,7 +9462,7 @@ static void emit_report_group(int gi)
             asm_line("", "CLI", b, "a body group on this page yet?");
             asm_line("", "BE", l2, "");
             snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
-            asm_line("", "BAL", b, "page advance processing");
+            asm_line("", "BAL", b, "page advance processing"); reload_block();
             reset_bases();
             asm_line(l2, "DS", "0H", "");
         } else if (first->absolute) {
@@ -9344,7 +9472,7 @@ static void emit_report_group(int gi)
             asm_line("", "C", b, "below the group's first line?");
             asm_line("", "BL", lfit, "fits");
             snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
-            asm_line("", "BAL", b, "page advance processing");
+            asm_line("", "BAL", b, "page advance processing"); reload_block();
             reset_bases();
         } else {
             /* 3b: the first body group on a page is presented; after that the
@@ -9360,7 +9488,7 @@ static void emit_report_group(int gi)
             asm_line("", "C", b, "against the lower limit");
             asm_line("", "BNH", lfit, "fits");
             snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
-            asm_line("", "BAL", b, "page advance processing");
+            asm_line("", "BAL", b, "page advance processing"); reload_block();
             reset_bases();
             asm_line(l2, "DS", "0H", "");
         }
@@ -9386,7 +9514,7 @@ static void emit_report_group(int gi)
             asm_line("", "BNH", lfit, "fits");
         }
         snprintf(b, sizeof b, "14,%s", rp->lbl_adv);
-        asm_line("", "BAL", b, "page advance processing");
+        asm_line("", "BAL", b, "page advance processing"); reload_block();
         reset_bases();
         asm_line(lfit, "DS", "0H", "");
     }
@@ -9749,7 +9877,7 @@ static void emit_control_groups(const Report *rp, int footings)
         if (gi >= 0) {
             if (footings) emit_crossfoot(gi);
             snprintf(b, sizeof b, "14,RG%03d", gi);
-            asm_line("", "BAL", b, footings ? "CONTROL FOOTING" : "CONTROL HEADING");
+            asm_line("", "BAL", b, footings ? "CONTROL FOOTING" : "CONTROL HEADING"); reload_block();
             reset_bases();
         }
         if (footings) emit_sum_reset(ri, k);
@@ -9772,13 +9900,13 @@ static void emit_report_advance(int ri)
     reset_bases();
     if (rp->pf_group >= 0) {
         snprintf(b, sizeof b, "14,RG%03d", rp->pf_group);
-        asm_line("", "BAL", b, "PAGE FOOTING");
+        asm_line("", "BAL", b, "PAGE FOOTING"); reload_block();
     }
     snprintf(b, sizeof b, "14,%s", rp->lbl_ejc);
-    asm_line("", "BAL", b, "the eject");
+    asm_line("", "BAL", b, "the eject"); reload_block();
     if (rp->ph_group >= 0) {
         snprintf(b, sizeof b, "14,RG%03d", rp->ph_group);
-        asm_line("", "BAL", b, "PAGE HEADING");
+        asm_line("", "BAL", b, "PAGE HEADING"); reload_block();
     }
     reset_bases();
     snprintf(b, sizeof b, "14,%s", rp->lbl_advs);
@@ -9877,15 +10005,19 @@ static void generate(void)
        sit after it. Labelling the BALR itself puts every displacement two
        bytes out. */
     asm_line("COBBEG", "EQU", "*", "");
+    asm_line("B0000", "EQU", "COBBEG", "the first code block");
     asm_line("", "USING", "COBBEG,12", "");
-    /* One base register covers 4096 bytes of code; a second doubles it. The
-     * data no longer competes for this, since it lives in COBWS. */
-    asm_line("", "LA", "11,2048(,12)", "second code base");
-    asm_line("", "LA", "11,2048(,11)", "");
-    asm_line("", "USING", "COBBEG+4096,11", "");
-    asm_line("", "LA", "10,2048(,11)", "third code base");
+    cur_block = 0; nblock = 1; est_pc = 0; blk_start = 0; in_code = 1;
+    for (int k = 0; k < MAXPARA; k++) para_block[k] = -1;
+    memset(used_pa, 0, sizeof used_pa); memset(used_fa, 0, sizeof used_fa);
+    /* The constants region, after all the code, on R11 and R10 for good. */
+    asm_line("", "B", "PRO001", "");
+    asm_line("PROCON", "DC", "A(COBCON)", "");
+    asm_line("PRO001", "L", "11,PROCON", "the constants region");
+    asm_line("", "LA", "10,2048(,11)", "and its second 4K");
     asm_line("", "LA", "10,2048(,10)", "");
-    asm_line("", "USING", "COBBEG+8192,10", "");
+    asm_line("", "USING", "COBCON,11", "");
+    asm_line("", "USING", "COBCON+4096,10", "");
     asm_line("", "ST", "13,SAVEAREA+4", "backward chain to caller");
     asm_line("", "LA", "0,SAVEAREA", "");
     asm_line("", "ST", "0,8(13)", "forward chain from caller");
@@ -9966,12 +10098,16 @@ static void generate(void)
     if (ndecl > 0 && decl_end_para >= 0) {
         /* Declaratives come first in the source and must not be fallen into --
          * syntax rule 3 on IV-32 keeps control from crossing either way. */
-        char pd[16]; snprintf(pd, sizeof pd, "P%04d", decl_end_para);
         asm_comment(" branch around the declaratives");
-        asm_line("", "B", pd, "");
+        branch_para(decl_end_para, "");
     }
     for (int i = 0; i < nstmt; i++) {
         Stmt *st = &stmts[i];
+        /* A block that has grown long ends at the next sentence: nothing
+         * branches within a paragraph across a period, so the new block is
+         * only ever fallen into. */
+        if (st->new_sentence && st->op != ST_PARA && est_pc - blk_start > 3000)
+            start_block("a new code block: the paragraph is long");
         /* Which USE procedure could take an error on this statement. */
         gen_use_decl = -1;
         switch (st->op) {
@@ -10026,6 +10162,8 @@ static void generate(void)
             snprintf(b, sizeof b, " %s.", st->para);
             asm_comment(b);
             asm_line(p, "DS", "0H", "");
+            start_block("this paragraph's code base");
+            para_block[st->dst] = cur_block;
             cur_para = st->dst;
             break;
         }
@@ -10450,16 +10588,16 @@ static void generate(void)
             }
             if (rp->pf_group >= 0) {
                 snprintf(b, sizeof b, "14,RG%03d", rp->pf_group);
-                asm_line("", "BAL", b, "PAGE FOOTING, the last group of the page");
+                asm_line("", "BAL", b, "PAGE FOOTING, the last group of the page"); reload_block();
             }
             if (rp->rf_group >= 0) {
                 const RGroup *rf = &rgroups[rp->rf_group];
                 if (rf->nline > 0 && rlines[rf->first_line].next_page) {
                     snprintf(b, sizeof b, "14,%s", rp->lbl_ejc);
-                    asm_line("", "BAL", b, "REPORT FOOTING on a page by itself");
+                    asm_line("", "BAL", b, "REPORT FOOTING on a page by itself"); reload_block();
                 }
                 snprintf(b, sizeof b, "14,RG%03d", rp->rf_group);
-                asm_line("", "BAL", b, "REPORT FOOTING");
+                asm_line("", "BAL", b, "REPORT FOOTING"); reload_block();
             }
             asm_line(ldone, "DS", "0H", "");
             reset_bases();
@@ -10486,15 +10624,15 @@ static void generate(void)
             asm_line("", "MVI", b, "");
             if (rp->rh_group >= 0) {
                 snprintf(b, sizeof b, "14,RG%03d", rp->rh_group);
-                asm_line("", "BAL", b, "REPORT HEADING");
+                asm_line("", "BAL", b, "REPORT HEADING"); reload_block();
                 if (rgroups[rp->rh_group].ng_kind == NG_PAGE) {
                     snprintf(b, sizeof b, "14,%s", rp->lbl_ejc);
-                    asm_line("", "BAL", b, "it had the first page to itself");
+                    asm_line("", "BAL", b, "it had the first page to itself"); reload_block();
                 }
             }
             if (rp->ph_group >= 0) {
                 snprintf(b, sizeof b, "14,RG%03d", rp->ph_group);
-                asm_line("", "BAL", b, "the first page heading");
+                asm_line("", "BAL", b, "the first page heading"); reload_block();
             }
             reset_bases();
             char ldet[16]; snprintf(ldet, sizeof ldet, "L%04d", ++genlabel);
@@ -10525,7 +10663,7 @@ static void generate(void)
             emit_subtotal((int)(rp - reports), gi);
             if (!summary) {
                 snprintf(b, sizeof b, "14,RG%03d", gi);
-                asm_line("", "BAL", b, "");
+                asm_line("", "BAL", b, ""); reload_block();
                 reset_bases();
             }
             break;
@@ -10540,7 +10678,8 @@ static void generate(void)
                 snprintf(b, sizeof b, "15,AL%04d", cur_para);
                 asm_line("", "L", b, "the current target");
                 asm_line("", "BR", "15", "");
-            } else asm_line("", "B", p, "");
+            } else branch_para(st->dst, "");
+            (void)p;
             break;
         }
         case ST_STRING: {
@@ -10717,12 +10856,20 @@ static void generate(void)
             asm_line("", "CLR", "2,0", "past the last, or negative -- unsigned covers both");
             asm_line("", "BNL", lx, "out of range: fall through");
             asm_line("", "SLL", "2,2", "four bytes per entry");
-            snprintf(b, sizeof b, "%s(2)", lt);
-            asm_line("", "B", b, "into the table");
-            asm_line(lt, "DS", "0H", "");
-            for (int k = 0; k < st->ndop; k++) {
-                snprintf(b, sizeof b, "P%04d", st->dop[k].sym);
-                asm_line("", "B", b, st->dop[k].lit);
+            {
+                /* The table holds addresses, in the constants: the targets
+                 * are other paragraphs, in other code blocks. */
+                char gl[16];
+                snprintf(gl, sizeof gl, "GD%04d", i);
+                snprintf(b, sizeof b, "15,%s(2)", gl);
+                asm_line("", "L", b, "the target's address");
+                asm_line("", "BR", "15", "");
+                pend("", "DS", "0F", "");
+                for (int k = 0; k < st->ndop; k++) {
+                    char a[24];
+                    snprintf(a, sizeof a, "A(P%04d)", st->dop[k].sym);
+                    pend(k ? "" : gl, "DC", a, st->dop[k].lit);
+                }
             }
             asm_line(lx, "DS", "0H", "");
             reset_bases();
@@ -10788,6 +10935,7 @@ static void generate(void)
             pend(lb, "DC", b, "R1 -> this");
 
             asm_line("", "STM", "2,12,SRTBAS", "the registers the exits resume with");
+            asm_line("", "ST", "12,SRTR12", "and the code block, with each resume point");
             snprintf(b, sizeof b, "15,L%04d", st->lab1);
             asm_line("", "LA", b, "");
             asm_line("", "ST", "15,SRTRES", "E15 starts the input part");
@@ -10842,6 +10990,7 @@ static void generate(void)
             asm_comment(" RELEASE: the record to the sort, and back here for the next");
             snprintf(b, sizeof b, "14,%s", lr); asm_line("", "LA", b, "");
             asm_line("", "ST", "14,SRTRES", "");
+            asm_line("", "ST", "12,SRTR12", "");
             need_sym_base(rec);
             field_ref_m(rec, NULL, FR_RX, rec->bytes, 6, fr, sizeof fr);
             snprintf(b, sizeof b, "1,%s", fr); asm_line("", "LA", b, "the record");
@@ -10864,6 +11013,7 @@ static void generate(void)
             asm_line("", "BE", lt, "");
             snprintf(b, sizeof b, "14,%s", lr); asm_line("", "LA", b, "");
             asm_line("", "ST", "14,SRTRES", "");
+            asm_line("", "ST", "12,SRTR12", "");
             asm_line("", "LA", "15,4", "E35: taken; the next one, please");
             asm_line("", "B", "SRTYLD", "");
             asm_line(lr, "DS", "0H", "");
@@ -10894,6 +11044,7 @@ static void generate(void)
                 asm_comment(" end of the SORT's input: E15 says no more");
                 snprintf(b, sizeof b, "15,L%04d", st->dst); asm_line("", "LA", b, "");
                 asm_line("", "ST", "15,SRTRES", "E35 starts the output part");
+                asm_line("", "ST", "12,SRTR12", "");
             } else asm_comment(" end of the SORT's output: E35 says no more");
             asm_line("", "LA", "15,8", "");
             asm_line("", "B", "SRTYLD", "");
@@ -10958,8 +11109,9 @@ static void generate(void)
         case ST_ALTER: {
             snprintf(b, sizeof b, " ALTER %s TO PROCEED TO %s", st->para, st->thru);
             asm_comment(b);
-            snprintf(b, sizeof b, "15,P%04d", st->src);
-            asm_line("", "LA", b, "the new target");
+            used_pa[st->src] = 1;
+            snprintf(b, sizeof b, "15,PA%04d", st->src);
+            asm_line("", "L", b, "the new target");
             snprintf(b, sizeof b, "15,AL%04d", st->dst);
             asm_line("", "ST", b, "into that paragraph's branch cell");
             break;
@@ -11384,10 +11536,12 @@ static void generate(void)
                 snprintf(r, sizeof r, "R%04d", ++nret);
                 snprintf(b, sizeof b, "15,%s", r);  asm_line("", "LA", b, "return here");
                 snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
-                asm_line("", "B", p1, "");
+                branch_para(st->dst, "");
                 asm_line(r, "DS", "0H", "");
+                reload_block();
                 reset_bases();
-                snprintf(b, sizeof b, "15,%s", f);  asm_line("", "LA", b, "restore fall-through");
+                used_fa[st->src] = 1;
+                snprintf(b, sizeof b, "15,FA%04d", st->src);  asm_line("", "L", b, "restore fall-through");
                 snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
                 if (st->vary3_sym >= 0) {
                     emit_set_from_expr(&syms[st->vary3_sym], st->vary3_by, 1);
@@ -11432,10 +11586,12 @@ static void generate(void)
             snprintf(r, sizeof r, "R%04d", ++nret);
             snprintf(b, sizeof b, "15,%s", r);  asm_line("", "LA", b, "return here");
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
-            asm_line("", "B", p1, "");
+            branch_para(st->dst, "");
             asm_line(r, "DS", "0H", "");
+            reload_block();
             reset_bases();
-            snprintf(b, sizeof b, "15,%s", f);  asm_line("", "LA", b, "restore fall-through");
+            used_fa[st->src] = 1;
+            snprintf(b, sizeof b, "15,FA%04d", st->src);  asm_line("", "L", b, "restore fall-through");
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
 
             if (st->vary_sym >= 0)
@@ -11789,7 +11945,7 @@ static void generate(void)
                 lim[d->digits + 1] = 0;
                 asm_line("", "ZAP", "WK1(16),PWK1(16)", "");
                 asm_line("", "OI", "WK1+15,X'0F'", "magnitude");
-                snprintf(b, sizeof b, "WK1(16),%s(16)", intern_const(lim));
+                { char kr[48]; snprintf(b, sizeof b, "WK1(16),%s", const_ref(lim, kr, sizeof kr)); }
                 asm_line("", "CP", b, "against 10 ** digits");
                 asm_line("", "BL", lok, "fits");
                 asm_line("", "MVI", "SZFLG,X'01'", "size error: the item is left alone");
@@ -11973,7 +12129,7 @@ static void generate(void)
                     snprintf(b, sizeof b, "%s,%s", fd, intern_str(z, d->digits, d->digits));
                     asm_line("", "MVC", b, "numeric literal as zoned digits");
                 } else if (st->imm) {
-                    gen_load_imm(intern_const(st->immdigits), "PWK1");
+                    gen_load_imm(st->immdigits, "PWK1");
                     gen_store(d, st->dsub, "PWK1");
                 } else {
                     /* Item to item, through the same dispatcher the
@@ -12070,7 +12226,7 @@ static void generate(void)
                 }
                 gen_load(d, st->dsub, "PWK1");
                 gen_rescale("PWK1", d->scale, ws);
-                if (st->imm) { gen_load_imm(intern_const(st->immdigits), "PWK2"); }
+                if (st->imm) { gen_load_imm(st->immdigits, "PWK2"); }
                 else { gen_load(&syms[st->src], st->ssub, "PWK2"); }
                 gen_rescale("PWK2", ss, ws);
                 asm_line("", st->op == ST_ADD ? "AP" : "SP", "PWK1(16),PWK2(16)", "");
@@ -12091,6 +12247,14 @@ static void generate(void)
         asm_line(f, "DS", "0H", "fall-through when not performed");
     }
 
+    /* ---- the constants region: everything from here on is based on R11
+     * and R10, set once in the prologue. Code here -- the sort exits, the
+     * report renderers, the SPIE exit -- has no block of its own. */
+    in_code = 0;
+    cur_block = -1;
+    asm_line("", "DROP", "12", "");
+    asm_line("COBCON", "DS", "0D", "constants, work areas, out-of-line code");
+
     if (use_sort) {
         /* The sort's exits. Entered from the sort with its registers and its
          * save area; they keep both, take up the program's registers as they
@@ -12101,12 +12265,14 @@ static void generate(void)
         asm_comment(" SORT exits: E15 resumes the input part, E35 the output");
         asm_line("SRTE15", "STM", "14,12,12(13)", "");
         asm_line("", "LM", "2,12,SRTBAS-SRTE15(15)", "the program's registers");
+        asm_line("", "L", "12,SRTR12", "the resume point's code block");
         asm_line("", "ST", "13,SRTR13", "the sort's save area");
         asm_line("", "LA", "13,SAVEAREA", "");
         asm_line("", "L", "14,SRTRES", "");
         asm_line("", "BR", "14", "resume the input part");
         asm_line("SRTE35", "STM", "14,12,12(13)", "");
         asm_line("", "LM", "2,12,SRTBAS-SRTE35(15)", "");
+        asm_line("", "L", "12,SRTR12", "");
         asm_line("", "ST", "13,SRTR13", "");
         asm_line("", "L", "0,0(,1)", "the record leaving the sort; 0 at the end");
         asm_line("", "ST", "0,SRTREC", "");
@@ -12284,6 +12450,7 @@ static void generate(void)
         if (use_sort) {
             asm_line("SRTSAVE", "DS", "18F", "the save area the sort is called with");
             asm_line("SRTR13", "DS", "F", "the sort's save area, inside an exit");
+            asm_line("SRTR12", "DS", "F", "the code block SRTRES is in");
             asm_line("SRTRES", "DS", "F", "where the procedure resumes");
             asm_line("SRTREC", "DS", "F", "E35: the record, or 0 at the end");
             asm_line("SRTHAVE", "DS", "X", "E35 handed a record not yet returned");
@@ -12675,8 +12842,12 @@ static void generate(void)
     }
 
     for (int i = 0; i < nconst; i++) {
-        snprintf(b, sizeof b, "PL16'%s'", consts[i].digits);
-        asm_line(consts[i].label, "DC", b, i ? "" : "numeric constants");
+        char e[16];
+        int l = consts[i].len < 1 ? 1 : consts[i].len;
+        snprintf(e, sizeof e, "*-%d", 16 - l);
+        asm_line(consts[i].label, "EQU", e, i ? "" : "numeric constants, as long as used");
+        snprintf(b, sizeof b, "PL%d'%s'", l, consts[i].digits);
+        asm_line("", "DC", b, "");
     }
     for (int i = 0; i < nmconst; i++) {
         char hex[PIC_MAXMASK * 2 + 8]; int j = 0;
@@ -12778,11 +12949,11 @@ static void generate(void)
         asm_line("", "SR", "5,5", "no line yet");
         asm_line("SPIELOOP", "LTR", "4,4", "");
         asm_line("", "BZ", "SPIEFND", "");
-        asm_line("", "LH", "6,0(,3)", "this statement's offset");
+        asm_line("", "L", "6,0(,3)", "this statement's offset");
         asm_line("", "CR", "6,2", "");
         asm_line("", "BH", "SPIEFND", "past it: the previous one is the answer");
-        asm_line("", "LH", "5,2(,3)", "");
-        asm_line("", "LA", "3,4(,3)", "");
+        asm_line("", "LH", "5,4(,3)", "");
+        asm_line("", "LA", "3,8(,3)", "");
         asm_line("", "BCTR", "4,0", "");
         asm_line("", "B", "SPIELOOP", "");
         asm_line("SPIEFND", "CVD", "5,SPIEDW", "");
@@ -12833,11 +13004,39 @@ static void generate(void)
         asm_line("SPIECODE", "EQU", "SPIEWTO+29,1", "the 0C? digit, patched above");
         asm_line("SPIELINE", "EQU", "SPIEWTO+36,5", "the line number, likewise");
         asm_line("SPIEOFF", "EQU", "SPIEWTO+49,7", "the offset from COBBEG, in hex");
+    }
+
+    /* The code blocks' bases and the paragraph addresses cross-block branches
+     * go through. Last, because the report renderers above ask for some. */
+    asm_line("", "DS", "0F", "");
+    for (int k = 0; k < nblock; k++) {
+        char cl[16], a[24];
+        snprintf(cl, sizeof cl, "CB%04d", k); snprintf(a, sizeof a, "A(B%04d)", k);
+        asm_line(cl, "DC", a, "a code block's base");
+    }
+    for (int k = 0; k < npara; k++) {
+        char cl[16], a[24];
+        if (used_pa[k]) {
+            snprintf(cl, sizeof cl, "PA%04d", k); snprintf(a, sizeof a, "A(P%04d)", k);
+            asm_line(cl, "DC", a, paras[k].name);
+        }
+        if (used_fa[k]) {
+            snprintf(cl, sizeof cl, "FA%04d", k); snprintf(a, sizeof a, "A(F%04d)", k);
+            asm_line(cl, "DC", a, "fall-through, to put back");
+        }
+    }
+    /* The literal pool here, inside the region's 8K, rather than at the end
+     * of the CSECT -- which is past the line table. */
+    asm_line("", "LTORG", "", "");
+    if (gen_lines) {
+        /* Last of all and out of any base's reach, which it needs no base
+         * for: the SPIE exit finds it through SPIETAB. Eight bytes a
+         * statement, so it is also the biggest thing here. */
         asm_comment(" statement offsets, ascending, paired with source lines");
-        asm_line("SPIELTB", "DS", "0H", "");
+        asm_line("SPIELTB", "DS", "0F", "");
         for (int i = 0; i < nlinetab; i++) {
             char t[64];
-            snprintf(t, sizeof t, "AL2(T%04d-COBBEG),AL2(%d)", i, linetab[i].line);
+            snprintf(t, sizeof t, "A(T%04d-COBBEG),AL2(%d,0)", i, linetab[i].line);
             asm_line("", "DC", t, "");
         }
     }
@@ -13059,8 +13258,17 @@ static void generate(void)
     }
 
     /* The runtime carries COBWRL as well as COBDISP, so a report program
-       needs it even with no DISPLAY anywhere. */
-    if (has_display || nreport) emit_runtime();
+       needs it even with no DISPLAY anywhere -- and so does anything else
+       that calls into it: ADVANCING, STRING, UNSTRING, ACCEPT, CALL
+       identifier, the clock. It was once emitted only for DISPLAY and
+       reports, and a program that printed without displaying anything
+       linked with COBADV unresolved and branched to zero. */
+    int need_rt = has_display || nreport || curdate_sym >= 0 || use_str || use_uns
+                  || use_wto || use_wtor || use_dcal || use_mvl || use_adt
+                  || (uses_switches && !is_subprogram);
+    for (int i = 0; i < nfile; i++) if (files[i].print) need_rt = 1;
+    for (int i = 0; i < nstmt; i++) if (stmts[i].op == ST_ACCEPT) need_rt = 1;
+    if (need_rt) emit_runtime();
     asm_line("", "END", "", "");
 }
 

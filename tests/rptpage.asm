@@ -7,13 +7,15 @@ RPTPAGE  CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN-PARA.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * MOVE ALPHA  -> WS-NAME
          LA    6,0                 subscript-1
@@ -87,10 +92,12 @@ L0002    DS    0H
          BH    L0003
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
-         B     P0001
+         L     15,PA0001
+         BR    15
 R0001    DS    0H
+         L     12,CB0001           this block's base again
          DROP  8
-         LA    15,F0001            restore fall-through
+         L     15,FA0001           restore fall-through
          ST    15,X0001
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -143,10 +150,12 @@ L0004    DS    0H
          BH    L0005
          LA    15,R0002            return here
          ST    15,X0002            into the range's exit cell
-         B     P0002
+         L     15,PA0002
+         BR    15
 R0002    DS    0H
+         L     12,CB0001           this block's base again
          DROP  8
-         LA    15,F0002            restore fall-through
+         L     15,FA0002           restore fall-through
          ST    15,X0002
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -168,9 +177,11 @@ T0009    DS    0H
          BNE   L0006
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
+         L     12,CB0001           this block's base again
 L0006    DS    0H
 L0007    DS    0H
          BAL   14,RG003
+         L     12,CB0001           this block's base again
 T0010    DS    0H
 * PERFORM ONE-PARA
          ZAP   WK0+14(2),K0005+14(2)  literal
@@ -192,10 +203,12 @@ L0008    DS    0H
          BH    L0009
          LA    15,R0003            return here
          ST    15,X0002            into the range's exit cell
-         B     P0002
+         L     15,PA0002
+         BR    15
 R0003    DS    0H
+         L     12,CB0001           this block's base again
          DROP  8
-         LA    15,F0002            restore fall-through
+         L     15,FA0002           restore fall-through
          ST    15,X0002
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -213,7 +226,7 @@ L0009    DS    0H
          DROP  8
 T0011    DS    0H
 * MOVE 100 -> PAGE-COUNTER
-         ZAP   PWK1(16),K0007(16)  literal
+         ZAP   PWK1(16),K0007+14(2)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
@@ -238,10 +251,12 @@ L0010    DS    0H
          BH    L0011
          LA    15,R0004            return here
          ST    15,X0001            into the range's exit cell
-         B     P0001
+         L     15,PA0001
+         BR    15
 R0004    DS    0H
+         L     12,CB0001           this block's base again
          DROP  8
-         LA    15,F0001            restore fall-through
+         L     15,FA0001           restore fall-through
          ST    15,X0001
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -275,6 +290,9 @@ T0015    DS    0H
          BR    14                  return to caller
 * TWO-PARA.
 P0001    DS    0H
+         BALR  12,0                this paragraph's code base
+B0002    EQU   *
+         USING B0002,12
 T0016    DS    0H
 * MOVE WS-IDX -> WS-NUM
          L     8,BL0000            base locator
@@ -287,7 +305,7 @@ T0016    DS    0H
 T0017    DS    0H
 * ADD 1 -> WS-K
          PACK  PWK1(16),D0006(1)   zoned -> packed
-         ZAP   PWK2(16),K0001(16)  literal
+         ZAP   PWK2(16),K0001+15(1)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0006(1),PWK1(16)   packed -> zoned
          OI    D0006+0,X'F0'       unsigned: force an F zone
@@ -308,15 +326,20 @@ T0020    DS    0H
          BNE   L0013
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
+         L     12,CB0002           this block's base again
 L0013    DS    0H
 L0014    DS    0H
          BAL   14,RG001
+         L     12,CB0002           this block's base again
 * end of a PERFORM range: return through its cell
          L     15,X0001
          BR    15
 F0001    DS    0H                  fall-through when not performed
 * ONE-PARA.
 P0002    DS    0H
+         BALR  12,0                this paragraph's code base
+B0003    EQU   *
+         USING B0003,12
 T0021    DS    0H
 * MOVE WS-IDX -> WS-NUM
          L     8,BL0000            base locator
@@ -333,13 +356,17 @@ T0022    DS    0H
          BNE   L0015
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
+         L     12,CB0003           this block's base again
 L0015    DS    0H
 L0016    DS    0H
          BAL   14,RG002
+         L     12,CB0003           this block's base again
 * end of a PERFORM range: return through its cell
          L     15,X0002
          BR    15
 F0002    DS    0H                  fall-through when not performed
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 * report group PAGE-HEAD
 RG000    ST    14,RGS000           save the return
          LA    2,2                 LINE n
@@ -645,16 +672,26 @@ WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FBA,             X
                LRECL=133,BLKSIZE=133
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'5'
-K0003    DC    PL16'6'
-K0004    DC    PL16'9'
-K0005    DC    PL16'10'
-K0006    DC    PL16'12'
-K0007    DC    PL16'100'
-K0008    DC    PL16'13'
-K0009    DC    PL16'16'
-K0010    DC    PL16'3'
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'1'
+K0002    EQU   *-15
+         DC    PL1'5'
+K0003    EQU   *-15
+         DC    PL1'6'
+K0004    EQU   *-15
+         DC    PL1'9'
+K0005    EQU   *-14
+         DC    PL2'10'
+K0006    EQU   *-14
+         DC    PL2'12'
+K0007    EQU   *-14
+         DC    PL2'100'
+K0008    EQU   *-14
+         DC    PL2'13'
+K0009    EQU   *-14
+         DC    PL2'16'
+K0010    EQU   *-15
+         DC    PL1'3'
 M0001    DC    XL4'40202120'       ED patterns
 H0001    DC    H'6'                element sizes
 FC001    DC    F'2'                binary literals
@@ -702,11 +739,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -738,31 +775,41 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
+CB0003   DC    A(B0003)            a code block's base
+PA0001   DC    A(P0001)            TWO-PARA
+FA0001   DC    A(F0001)            fall-through, to put back
+PA0002   DC    A(P0002)            ONE-PARA
+FA0002   DC    A(F0002)            fall-through, to put back
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(54)
-         DC    AL2(T0001-COBBEG),AL2(55)
-         DC    AL2(T0002-COBBEG),AL2(56)
-         DC    AL2(T0003-COBBEG),AL2(57)
-         DC    AL2(T0004-COBBEG),AL2(58)
-         DC    AL2(T0005-COBBEG),AL2(59)
-         DC    AL2(T0006-COBBEG),AL2(61)
-         DC    AL2(T0007-COBBEG),AL2(62)
-         DC    AL2(T0008-COBBEG),AL2(63)
-         DC    AL2(T0009-COBBEG),AL2(65)
-         DC    AL2(T0010-COBBEG),AL2(66)
-         DC    AL2(T0011-COBBEG),AL2(68)
-         DC    AL2(T0012-COBBEG),AL2(69)
-         DC    AL2(T0013-COBBEG),AL2(71)
-         DC    AL2(T0014-COBBEG),AL2(72)
-         DC    AL2(T0015-COBBEG),AL2(73)
-         DC    AL2(T0016-COBBEG),AL2(75)
-         DC    AL2(T0017-COBBEG),AL2(76)
-         DC    AL2(T0018-COBBEG),AL2(77)
-         DC    AL2(T0019-COBBEG),AL2(77)
-         DC    AL2(T0020-COBBEG),AL2(78)
-         DC    AL2(T0021-COBBEG),AL2(80)
-         DC    AL2(T0022-COBBEG),AL2(81)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(54,0)
+         DC    A(T0001-COBBEG),AL2(55,0)
+         DC    A(T0002-COBBEG),AL2(56,0)
+         DC    A(T0003-COBBEG),AL2(57,0)
+         DC    A(T0004-COBBEG),AL2(58,0)
+         DC    A(T0005-COBBEG),AL2(59,0)
+         DC    A(T0006-COBBEG),AL2(61,0)
+         DC    A(T0007-COBBEG),AL2(62,0)
+         DC    A(T0008-COBBEG),AL2(63,0)
+         DC    A(T0009-COBBEG),AL2(65,0)
+         DC    A(T0010-COBBEG),AL2(66,0)
+         DC    A(T0011-COBBEG),AL2(68,0)
+         DC    A(T0012-COBBEG),AL2(69,0)
+         DC    A(T0013-COBBEG),AL2(71,0)
+         DC    A(T0014-COBBEG),AL2(72,0)
+         DC    A(T0015-COBBEG),AL2(73,0)
+         DC    A(T0016-COBBEG),AL2(75,0)
+         DC    A(T0017-COBBEG),AL2(76,0)
+         DC    A(T0018-COBBEG),AL2(77,0)
+         DC    A(T0019-COBBEG),AL2(77,0)
+         DC    A(T0020-COBBEG),AL2(78,0)
+         DC    A(T0021-COBBEG),AL2(80,0)
+         DC    A(T0022-COBBEG),AL2(81,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

@@ -7,13 +7,15 @@ ARITHGRP CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * COMPUTE C = ...
          L     8,BL0000            base locator
@@ -364,7 +369,7 @@ T0039    DS    0H
          PACK  WK2(16),D0008(1)    zoned -> packed
          ZAP   DWK(8),WK2(16)
          CVB   3,DWK               the exponent
-         ZAP   WK0(16),K0001(16)   start from one
+         ZAP   WK0(16),K0001+15(1)  start from one
          LTR   3,3
          BNP   L0009               exponent of zero: one
 L0008    ZAP   MULT8(8),WK1(16)    the base
@@ -412,7 +417,7 @@ T0045    DS    0H
          ZAP   PWK1(16),WK0+13(3)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0010(16)   against 10 ** digits
+         CP    WK1(16),K0010+14(2)  against 10 ** digits
          BL    L0010               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0011
@@ -447,7 +452,7 @@ T0047    DS    0H
          ZAP   PWK1(16),WK0+14(2)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0010(16)   against 10 ** digits
+         CP    WK1(16),K0010+14(2)  against 10 ** digits
          BL    L0012               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0013
@@ -485,7 +490,7 @@ T0050    DS    0H
          ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0010(16)   against 10 ** digits
+         CP    WK1(16),K0010+14(2)  against 10 ** digits
          BL    L0014               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0015
@@ -506,7 +511,7 @@ T0051    DS    0H
          ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0010(16)   against 10 ** digits
+         CP    WK1(16),K0010+14(2)  against 10 ** digits
          BL    L0016               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0017
@@ -553,7 +558,7 @@ L0020    DS    0H
          ZAP   PWK1(16),WK0+11(5)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0013(16)   against 10 ** digits
+         CP    WK1(16),K0013+12(4)  against 10 ** digits
          BL    L0018               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0019
@@ -598,7 +603,7 @@ L0023    DS    0H
          ZAP   PWK1(16),WK0+11(5)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0013(16)   against 10 ** digits
+         CP    WK1(16),K0013+12(4)  against 10 ** digits
          BL    L0021               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0022
@@ -631,7 +636,7 @@ T0057    DS    0H
          ZAP   PWK1(16),WK0+14(2)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0010(16)   against 10 ** digits
+         CP    WK1(16),K0010+14(2)  against 10 ** digits
          BL    L0024               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0025
@@ -665,7 +670,7 @@ T0059    DS    0H
          ZAP   PWK1(16),WK0+13(3)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0010(16)   against 10 ** digits
+         CP    WK1(16),K0010+14(2)  against 10 ** digits
          BL    L0026               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0027
@@ -716,6 +721,8 @@ T0064    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 PARM0001 DC    A(DSPBUF)
@@ -806,20 +813,34 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'3'
-K0003    DC    PL16'5'
-K0004    DC    PL16'17'
-K0005    DC    PL16'10'
-K0006    DC    PL16'1024'
-K0007    DC    PL16'15'
-K0008    DC    PL16'512'
-K0009    DC    PL16'999'
-K0010    DC    PL16'100'
-K0011    DC    PL16'20'
-K0012    DC    PL16'0'
-K0013    DC    PL16'100000'
-K0014    DC    PL16'996'
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'1'
+K0002    EQU   *-15
+         DC    PL1'3'
+K0003    EQU   *-15
+         DC    PL1'5'
+K0004    EQU   *-14
+         DC    PL2'17'
+K0005    EQU   *-14
+         DC    PL2'10'
+K0006    EQU   *-13
+         DC    PL3'1024'
+K0007    EQU   *-14
+         DC    PL2'15'
+K0008    EQU   *-14
+         DC    PL2'512'
+K0009    EQU   *-14
+         DC    PL2'999'
+K0010    EQU   *-14
+         DC    PL2'100'
+K0011    EQU   *-14
+         DC    PL2'20'
+K0012    EQU   *-15
+         DC    PL1'0'
+K0013    EQU   *-12
+         DC    PL4'100000'
+K0014    EQU   *-14
+         DC    PL2'996'
 M0001    DC    XL7'402021204B2020'  ED patterns
 S0001    DC    CL7'SERIES '        nonnumeric constants
 S0002    DC    CL1' '
@@ -868,11 +889,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -904,73 +925,77 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(25)
-         DC    AL2(T0001-COBBEG),AL2(25)
-         DC    AL2(T0002-COBBEG),AL2(26)
-         DC    AL2(T0003-COBBEG),AL2(27)
-         DC    AL2(T0004-COBBEG),AL2(27)
-         DC    AL2(T0005-COBBEG),AL2(28)
-         DC    AL2(T0006-COBBEG),AL2(29)
-         DC    AL2(T0007-COBBEG),AL2(29)
-         DC    AL2(T0008-COBBEG),AL2(30)
-         DC    AL2(T0009-COBBEG),AL2(31)
-         DC    AL2(T0010-COBBEG),AL2(31)
-         DC    AL2(T0011-COBBEG),AL2(32)
-         DC    AL2(T0012-COBBEG),AL2(33)
-         DC    AL2(T0013-COBBEG),AL2(33)
-         DC    AL2(T0014-COBBEG),AL2(34)
-         DC    AL2(T0015-COBBEG),AL2(35)
-         DC    AL2(T0016-COBBEG),AL2(35)
-         DC    AL2(T0017-COBBEG),AL2(36)
-         DC    AL2(T0018-COBBEG),AL2(37)
-         DC    AL2(T0019-COBBEG),AL2(37)
-         DC    AL2(T0020-COBBEG),AL2(38)
-         DC    AL2(T0021-COBBEG),AL2(39)
-         DC    AL2(T0022-COBBEG),AL2(39)
-         DC    AL2(T0023-COBBEG),AL2(40)
-         DC    AL2(T0024-COBBEG),AL2(41)
-         DC    AL2(T0025-COBBEG),AL2(41)
-         DC    AL2(T0026-COBBEG),AL2(42)
-         DC    AL2(T0027-COBBEG),AL2(42)
-         DC    AL2(T0028-COBBEG),AL2(43)
-         DC    AL2(T0029-COBBEG),AL2(44)
-         DC    AL2(T0030-COBBEG),AL2(44)
-         DC    AL2(T0031-COBBEG),AL2(45)
-         DC    AL2(T0032-COBBEG),AL2(45)
-         DC    AL2(T0033-COBBEG),AL2(46)
-         DC    AL2(T0034-COBBEG),AL2(47)
-         DC    AL2(T0035-COBBEG),AL2(48)
-         DC    AL2(T0036-COBBEG),AL2(49)
-         DC    AL2(T0037-COBBEG),AL2(50)
-         DC    AL2(T0038-COBBEG),AL2(51)
-         DC    AL2(T0039-COBBEG),AL2(52)
-         DC    AL2(T0040-COBBEG),AL2(53)
-         DC    AL2(T0041-COBBEG),AL2(54)
-         DC    AL2(T0042-COBBEG),AL2(55)
-         DC    AL2(T0043-COBBEG),AL2(56)
-         DC    AL2(T0044-COBBEG),AL2(57)
-         DC    AL2(T0045-COBBEG),AL2(58)
-         DC    AL2(T0046-COBBEG),AL2(58)
-         DC    AL2(T0047-COBBEG),AL2(59)
-         DC    AL2(T0048-COBBEG),AL2(59)
-         DC    AL2(T0049-COBBEG),AL2(60)
-         DC    AL2(T0050-COBBEG),AL2(61)
-         DC    AL2(T0051-COBBEG),AL2(61)
-         DC    AL2(T0052-COBBEG),AL2(62)
-         DC    AL2(T0053-COBBEG),AL2(63)
-         DC    AL2(T0054-COBBEG),AL2(63)
-         DC    AL2(T0055-COBBEG),AL2(64)
-         DC    AL2(T0056-COBBEG),AL2(64)
-         DC    AL2(T0057-COBBEG),AL2(65)
-         DC    AL2(T0058-COBBEG),AL2(65)
-         DC    AL2(T0059-COBBEG),AL2(66)
-         DC    AL2(T0060-COBBEG),AL2(66)
-         DC    AL2(T0061-COBBEG),AL2(67)
-         DC    AL2(T0062-COBBEG),AL2(68)
-         DC    AL2(T0063-COBBEG),AL2(68)
-         DC    AL2(T0064-COBBEG),AL2(69)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(25,0)
+         DC    A(T0001-COBBEG),AL2(25,0)
+         DC    A(T0002-COBBEG),AL2(26,0)
+         DC    A(T0003-COBBEG),AL2(27,0)
+         DC    A(T0004-COBBEG),AL2(27,0)
+         DC    A(T0005-COBBEG),AL2(28,0)
+         DC    A(T0006-COBBEG),AL2(29,0)
+         DC    A(T0007-COBBEG),AL2(29,0)
+         DC    A(T0008-COBBEG),AL2(30,0)
+         DC    A(T0009-COBBEG),AL2(31,0)
+         DC    A(T0010-COBBEG),AL2(31,0)
+         DC    A(T0011-COBBEG),AL2(32,0)
+         DC    A(T0012-COBBEG),AL2(33,0)
+         DC    A(T0013-COBBEG),AL2(33,0)
+         DC    A(T0014-COBBEG),AL2(34,0)
+         DC    A(T0015-COBBEG),AL2(35,0)
+         DC    A(T0016-COBBEG),AL2(35,0)
+         DC    A(T0017-COBBEG),AL2(36,0)
+         DC    A(T0018-COBBEG),AL2(37,0)
+         DC    A(T0019-COBBEG),AL2(37,0)
+         DC    A(T0020-COBBEG),AL2(38,0)
+         DC    A(T0021-COBBEG),AL2(39,0)
+         DC    A(T0022-COBBEG),AL2(39,0)
+         DC    A(T0023-COBBEG),AL2(40,0)
+         DC    A(T0024-COBBEG),AL2(41,0)
+         DC    A(T0025-COBBEG),AL2(41,0)
+         DC    A(T0026-COBBEG),AL2(42,0)
+         DC    A(T0027-COBBEG),AL2(42,0)
+         DC    A(T0028-COBBEG),AL2(43,0)
+         DC    A(T0029-COBBEG),AL2(44,0)
+         DC    A(T0030-COBBEG),AL2(44,0)
+         DC    A(T0031-COBBEG),AL2(45,0)
+         DC    A(T0032-COBBEG),AL2(45,0)
+         DC    A(T0033-COBBEG),AL2(46,0)
+         DC    A(T0034-COBBEG),AL2(47,0)
+         DC    A(T0035-COBBEG),AL2(48,0)
+         DC    A(T0036-COBBEG),AL2(49,0)
+         DC    A(T0037-COBBEG),AL2(50,0)
+         DC    A(T0038-COBBEG),AL2(51,0)
+         DC    A(T0039-COBBEG),AL2(52,0)
+         DC    A(T0040-COBBEG),AL2(53,0)
+         DC    A(T0041-COBBEG),AL2(54,0)
+         DC    A(T0042-COBBEG),AL2(55,0)
+         DC    A(T0043-COBBEG),AL2(56,0)
+         DC    A(T0044-COBBEG),AL2(57,0)
+         DC    A(T0045-COBBEG),AL2(58,0)
+         DC    A(T0046-COBBEG),AL2(58,0)
+         DC    A(T0047-COBBEG),AL2(59,0)
+         DC    A(T0048-COBBEG),AL2(59,0)
+         DC    A(T0049-COBBEG),AL2(60,0)
+         DC    A(T0050-COBBEG),AL2(61,0)
+         DC    A(T0051-COBBEG),AL2(61,0)
+         DC    A(T0052-COBBEG),AL2(62,0)
+         DC    A(T0053-COBBEG),AL2(63,0)
+         DC    A(T0054-COBBEG),AL2(63,0)
+         DC    A(T0055-COBBEG),AL2(64,0)
+         DC    A(T0056-COBBEG),AL2(64,0)
+         DC    A(T0057-COBBEG),AL2(65,0)
+         DC    A(T0058-COBBEG),AL2(65,0)
+         DC    A(T0059-COBBEG),AL2(66,0)
+         DC    A(T0060-COBBEG),AL2(66,0)
+         DC    A(T0061-COBBEG),AL2(67,0)
+         DC    A(T0062-COBBEG),AL2(68,0)
+         DC    A(T0063-COBBEG),AL2(68,0)
+         DC    A(T0064-COBBEG),AL2(69,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

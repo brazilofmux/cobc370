@@ -7,13 +7,15 @@ SEQUPD   CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -105,6 +107,9 @@ T0016    DS    0H
          DROP  8
 * UPD-LOOP.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0017    DS    0H
 * READ UPD-FILE
          LA    1,L0013             this READ's AT END
@@ -132,7 +137,8 @@ T0019    DS    0H
          BNE   L0015
 T0020    DS    0H
 * GO TO UPD-DONE
-         B     P0003
+         L     15,PA0003
+         BR    15
          DROP  8
 L0015    DS    0H
 T0021    DS    0H
@@ -140,7 +146,7 @@ T0021    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0009(2)   zoned -> packed
-         ZAP   PWK2(16),K0001(16)  literal
+         ZAP   PWK2(16),K0001+15(1)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0009(2),PWK1(16)   packed -> zoned
          OI    D0009+1,X'F0'       unsigned: force an F zone
@@ -152,7 +158,8 @@ T0022    DS    0H
          BNE   L0016
 T0023    DS    0H
 * GO TO UPD-CHANGE
-         B     P0001
+         L     15,PA0001
+         BR    15
          DROP  8
 L0016    DS    0H
 T0024    DS    0H
@@ -165,7 +172,8 @@ T0024    DS    0H
          BNE   L0017
 T0025    DS    0H
 * GO TO UPD-CHANGE
-         B     P0001
+         L     15,PA0001
+         BR    15
          DROP  8
 L0017    DS    0H
 T0026    DS    0H
@@ -178,14 +186,18 @@ T0026    DS    0H
          BNE   L0018
 T0027    DS    0H
 * GO TO UPD-FROM
-         B     P0002
+         L     15,PA0002
+         BR    15
          DROP  8
 L0018    DS    0H
 T0028    DS    0H
 * GO TO UPD-LOOP
-         B     P0000
+         B     B0001
 * UPD-CHANGE.
 P0001    DS    0H
+         BALR  12,0                this paragraph's code base
+B0002    EQU   *
+         USING B0002,12
 T0029    DS    0H
 * MOVE CHANGED    -> U-TAIL
          L     8,BL0000            base locator
@@ -200,9 +212,13 @@ T0030    DS    0H
 L0020    DS    0H
 T0031    DS    0H
 * GO TO UPD-LOOP
-         B     P0000
+         L     15,PA0000
+         BR    15
 * UPD-FROM.
 P0002    DS    0H
+         BALR  12,0                this paragraph's code base
+B0003    EQU   *
+         USING B0003,12
 T0032    DS    0H
 * REWRITE UPD-REC
 *  FROM: fill the record area first
@@ -216,9 +232,13 @@ T0032    DS    0H
 L0022    DS    0H
 T0033    DS    0H
 * GO TO UPD-LOOP
-         B     P0000
+         L     15,PA0000
+         BR    15
 * UPD-DONE.
 P0003    DS    0H
+         BALR  12,0                this paragraph's code base
+B0004    EQU   *
+         USING B0004,12
 T0034    DS    0H
 * CLOSE UPD-FILE
          CLOSE (FD001)
@@ -233,6 +253,9 @@ T0036    DS    0H
          DROP  8
 * IN-LOOP.
 P0004    DS    0H
+         BALR  12,0                this paragraph's code base
+B0005    EQU   *
+         USING B0005,12
 T0037    DS    0H
 * READ IN-FILE
          LA    1,L0023             this READ's AT END
@@ -258,7 +281,8 @@ T0039    DS    0H
          BNE   L0025
 T0040    DS    0H
 * GO TO IN-DONE
-         B     P0005
+         L     15,PA0005
+         BR    15
          DROP  8
 L0025    DS    0H
 T0041    DS    0H
@@ -276,10 +300,13 @@ T0042    DS    0H
          BALR  14,15
 T0043    DS    0H
 * GO TO IN-LOOP
-         B     P0004
+         B     B0005
          DROP  8
 * IN-DONE.
 P0005    DS    0H
+         BALR  12,0                this paragraph's code base
+B0006    EQU   *
+         USING B0006,12
 T0044    DS    0H
 * CLOSE IN-FILE
          CLOSE (FD002)
@@ -291,6 +318,8 @@ T0045    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 PARM0001 DC    A(DSPBUF)
@@ -317,10 +346,14 @@ FD000    DCB   DDNAME=UPDFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
 FD001    DCB   DDNAME=UPDFILE,DSORG=PS,MACRF=(GL,PL)
 FD002    DCB   DDNAME=UPDFILE,DSORG=PS,MACRF=(GM)
 U001     DS    F                   the record the last GET located
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'2'
-K0003    DC    PL16'4'
-K0004    DC    PL16'5'
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'1'
+K0002    EQU   *-15
+         DC    PL1'2'
+K0003    EQU   *-15
+         DC    PL1'4'
+K0004    EQU   *-15
+         DC    PL1'5'
 S0001    DC    CL20'RECORD 01 ORIGINAL  '  nonnumeric constants
 S0002    DC    CL20'RECORD 02 ORIGINAL  '
 S0003    DC    CL20'RECORD 03 ORIGINAL  '
@@ -361,11 +394,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -397,54 +430,68 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
+CB0003   DC    A(B0003)            a code block's base
+CB0004   DC    A(B0004)            a code block's base
+CB0005   DC    A(B0005)            a code block's base
+CB0006   DC    A(B0006)            a code block's base
+PA0000   DC    A(P0000)            UPD-LOOP
+PA0001   DC    A(P0001)            UPD-CHANGE
+PA0002   DC    A(P0002)            UPD-FROM
+PA0003   DC    A(P0003)            UPD-DONE
+PA0005   DC    A(P0005)            IN-DONE
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(40)
-         DC    AL2(T0001-COBBEG),AL2(41)
-         DC    AL2(T0002-COBBEG),AL2(42)
-         DC    AL2(T0003-COBBEG),AL2(43)
-         DC    AL2(T0004-COBBEG),AL2(44)
-         DC    AL2(T0005-COBBEG),AL2(45)
-         DC    AL2(T0006-COBBEG),AL2(46)
-         DC    AL2(T0007-COBBEG),AL2(47)
-         DC    AL2(T0008-COBBEG),AL2(48)
-         DC    AL2(T0009-COBBEG),AL2(49)
-         DC    AL2(T0010-COBBEG),AL2(50)
-         DC    AL2(T0011-COBBEG),AL2(51)
-         DC    AL2(T0012-COBBEG),AL2(52)
-         DC    AL2(T0013-COBBEG),AL2(53)
-         DC    AL2(T0014-COBBEG),AL2(55)
-         DC    AL2(T0015-COBBEG),AL2(56)
-         DC    AL2(T0016-COBBEG),AL2(57)
-         DC    AL2(T0017-COBBEG),AL2(59)
-         DC    AL2(T0018-COBBEG),AL2(59)
-         DC    AL2(T0019-COBBEG),AL2(60)
-         DC    AL2(T0020-COBBEG),AL2(60)
-         DC    AL2(T0021-COBBEG),AL2(61)
-         DC    AL2(T0022-COBBEG),AL2(62)
-         DC    AL2(T0023-COBBEG),AL2(62)
-         DC    AL2(T0024-COBBEG),AL2(63)
-         DC    AL2(T0025-COBBEG),AL2(63)
-         DC    AL2(T0026-COBBEG),AL2(64)
-         DC    AL2(T0027-COBBEG),AL2(64)
-         DC    AL2(T0028-COBBEG),AL2(65)
-         DC    AL2(T0029-COBBEG),AL2(67)
-         DC    AL2(T0030-COBBEG),AL2(68)
-         DC    AL2(T0031-COBBEG),AL2(69)
-         DC    AL2(T0032-COBBEG),AL2(71)
-         DC    AL2(T0033-COBBEG),AL2(72)
-         DC    AL2(T0034-COBBEG),AL2(74)
-         DC    AL2(T0035-COBBEG),AL2(76)
-         DC    AL2(T0036-COBBEG),AL2(77)
-         DC    AL2(T0037-COBBEG),AL2(79)
-         DC    AL2(T0038-COBBEG),AL2(79)
-         DC    AL2(T0039-COBBEG),AL2(80)
-         DC    AL2(T0040-COBBEG),AL2(80)
-         DC    AL2(T0041-COBBEG),AL2(81)
-         DC    AL2(T0042-COBBEG),AL2(82)
-         DC    AL2(T0043-COBBEG),AL2(83)
-         DC    AL2(T0044-COBBEG),AL2(85)
-         DC    AL2(T0045-COBBEG),AL2(86)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(40,0)
+         DC    A(T0001-COBBEG),AL2(41,0)
+         DC    A(T0002-COBBEG),AL2(42,0)
+         DC    A(T0003-COBBEG),AL2(43,0)
+         DC    A(T0004-COBBEG),AL2(44,0)
+         DC    A(T0005-COBBEG),AL2(45,0)
+         DC    A(T0006-COBBEG),AL2(46,0)
+         DC    A(T0007-COBBEG),AL2(47,0)
+         DC    A(T0008-COBBEG),AL2(48,0)
+         DC    A(T0009-COBBEG),AL2(49,0)
+         DC    A(T0010-COBBEG),AL2(50,0)
+         DC    A(T0011-COBBEG),AL2(51,0)
+         DC    A(T0012-COBBEG),AL2(52,0)
+         DC    A(T0013-COBBEG),AL2(53,0)
+         DC    A(T0014-COBBEG),AL2(55,0)
+         DC    A(T0015-COBBEG),AL2(56,0)
+         DC    A(T0016-COBBEG),AL2(57,0)
+         DC    A(T0017-COBBEG),AL2(59,0)
+         DC    A(T0018-COBBEG),AL2(59,0)
+         DC    A(T0019-COBBEG),AL2(60,0)
+         DC    A(T0020-COBBEG),AL2(60,0)
+         DC    A(T0021-COBBEG),AL2(61,0)
+         DC    A(T0022-COBBEG),AL2(62,0)
+         DC    A(T0023-COBBEG),AL2(62,0)
+         DC    A(T0024-COBBEG),AL2(63,0)
+         DC    A(T0025-COBBEG),AL2(63,0)
+         DC    A(T0026-COBBEG),AL2(64,0)
+         DC    A(T0027-COBBEG),AL2(64,0)
+         DC    A(T0028-COBBEG),AL2(65,0)
+         DC    A(T0029-COBBEG),AL2(67,0)
+         DC    A(T0030-COBBEG),AL2(68,0)
+         DC    A(T0031-COBBEG),AL2(69,0)
+         DC    A(T0032-COBBEG),AL2(71,0)
+         DC    A(T0033-COBBEG),AL2(72,0)
+         DC    A(T0034-COBBEG),AL2(74,0)
+         DC    A(T0035-COBBEG),AL2(76,0)
+         DC    A(T0036-COBBEG),AL2(77,0)
+         DC    A(T0037-COBBEG),AL2(79,0)
+         DC    A(T0038-COBBEG),AL2(79,0)
+         DC    A(T0039-COBBEG),AL2(80,0)
+         DC    A(T0040-COBBEG),AL2(80,0)
+         DC    A(T0041-COBBEG),AL2(81,0)
+         DC    A(T0042-COBBEG),AL2(82,0)
+         DC    A(T0043-COBBEG),AL2(83,0)
+         DC    A(T0044-COBBEG),AL2(85,0)
+         DC    A(T0045-COBBEG),AL2(86,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

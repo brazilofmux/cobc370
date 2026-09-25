@@ -7,13 +7,15 @@ ACCDISP  CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * ACCEPT D6 FROM DATE
          LA    1,ADTP1
@@ -325,6 +330,8 @@ T0034    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 VACC     DC    V(COBACC)
@@ -399,10 +406,14 @@ CLSNUM   DC    256X'FF'
          ORG   CLSNUM+X'F0'
          DC    10X'00'             0-9
          ORG   CLSNUM+256
-K0001    DC    PL16'1000'          numeric constants
-K0002    DC    PL16'1000000'
-K0003    DC    PL16'24'
-K0004    DC    PL16'0'
+K0001    EQU   *-13                numeric constants, as long as used
+         DC    PL3'1000'
+K0002    EQU   *-12
+         DC    PL4'1000000'
+K0003    EQU   *-14
+         DC    PL2'24'
+K0004    EQU   *-15
+         DC    PL1'0'
 H0001    DC    H'4'                element sizes
 S0001    DC    CL21'DATE DAY TIME NUMERIC'  nonnumeric constants
 S0002    DC    CL11'YEARS AGREE'
@@ -445,11 +456,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -481,43 +492,47 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(47)
-         DC    AL2(T0001-COBBEG),AL2(48)
-         DC    AL2(T0002-COBBEG),AL2(49)
-         DC    AL2(T0003-COBBEG),AL2(50)
-         DC    AL2(T0004-COBBEG),AL2(51)
-         DC    AL2(T0005-COBBEG),AL2(52)
-         DC    AL2(T0006-COBBEG),AL2(53)
-         DC    AL2(T0007-COBBEG),AL2(54)
-         DC    AL2(T0008-COBBEG),AL2(55)
-         DC    AL2(T0009-COBBEG),AL2(57)
-         DC    AL2(T0010-COBBEG),AL2(57)
-         DC    AL2(T0011-COBBEG),AL2(58)
-         DC    AL2(T0012-COBBEG),AL2(58)
-         DC    AL2(T0013-COBBEG),AL2(59)
-         DC    AL2(T0014-COBBEG),AL2(59)
-         DC    AL2(T0015-COBBEG),AL2(60)
-         DC    AL2(T0016-COBBEG),AL2(60)
-         DC    AL2(T0017-COBBEG),AL2(61)
-         DC    AL2(T0018-COBBEG),AL2(62)
-         DC    AL2(T0019-COBBEG),AL2(63)
-         DC    AL2(T0020-COBBEG),AL2(64)
-         DC    AL2(T0021-COBBEG),AL2(65)
-         DC    AL2(T0022-COBBEG),AL2(65)
-         DC    AL2(T0023-COBBEG),AL2(66)
-         DC    AL2(T0024-COBBEG),AL2(66)
-         DC    AL2(T0025-COBBEG),AL2(67)
-         DC    AL2(T0026-COBBEG),AL2(68)
-         DC    AL2(T0027-COBBEG),AL2(69)
-         DC    AL2(T0028-COBBEG),AL2(69)
-         DC    AL2(T0029-COBBEG),AL2(70)
-         DC    AL2(T0030-COBBEG),AL2(71)
-         DC    AL2(T0031-COBBEG),AL2(72)
-         DC    AL2(T0032-COBBEG),AL2(73)
-         DC    AL2(T0033-COBBEG),AL2(74)
-         DC    AL2(T0034-COBBEG),AL2(75)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(47,0)
+         DC    A(T0001-COBBEG),AL2(48,0)
+         DC    A(T0002-COBBEG),AL2(49,0)
+         DC    A(T0003-COBBEG),AL2(50,0)
+         DC    A(T0004-COBBEG),AL2(51,0)
+         DC    A(T0005-COBBEG),AL2(52,0)
+         DC    A(T0006-COBBEG),AL2(53,0)
+         DC    A(T0007-COBBEG),AL2(54,0)
+         DC    A(T0008-COBBEG),AL2(55,0)
+         DC    A(T0009-COBBEG),AL2(57,0)
+         DC    A(T0010-COBBEG),AL2(57,0)
+         DC    A(T0011-COBBEG),AL2(58,0)
+         DC    A(T0012-COBBEG),AL2(58,0)
+         DC    A(T0013-COBBEG),AL2(59,0)
+         DC    A(T0014-COBBEG),AL2(59,0)
+         DC    A(T0015-COBBEG),AL2(60,0)
+         DC    A(T0016-COBBEG),AL2(60,0)
+         DC    A(T0017-COBBEG),AL2(61,0)
+         DC    A(T0018-COBBEG),AL2(62,0)
+         DC    A(T0019-COBBEG),AL2(63,0)
+         DC    A(T0020-COBBEG),AL2(64,0)
+         DC    A(T0021-COBBEG),AL2(65,0)
+         DC    A(T0022-COBBEG),AL2(65,0)
+         DC    A(T0023-COBBEG),AL2(66,0)
+         DC    A(T0024-COBBEG),AL2(66,0)
+         DC    A(T0025-COBBEG),AL2(67,0)
+         DC    A(T0026-COBBEG),AL2(68,0)
+         DC    A(T0027-COBBEG),AL2(69,0)
+         DC    A(T0028-COBBEG),AL2(69,0)
+         DC    A(T0029-COBBEG),AL2(70,0)
+         DC    A(T0030-COBBEG),AL2(71,0)
+         DC    A(T0031-COBBEG),AL2(72,0)
+         DC    A(T0032-COBBEG),AL2(73,0)
+         DC    A(T0033-COBBEG),AL2(74,0)
+         DC    A(T0034-COBBEG),AL2(75,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

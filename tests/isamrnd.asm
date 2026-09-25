@@ -7,13 +7,15 @@ ISAMRND  CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN-PARA.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * OPEN INPUT GLACCT
          OPEN  (FD000,INPUT)
@@ -36,7 +41,7 @@ T0000    DS    0H
          ST    1,DB000+12          area address into the DECB
 T0001    DS    0H
 * MOVE 10303 -> WS-NOMKEY
-         ZAP   PWK1(16),K0001(16)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
          ZAP   D0009(6),PWK1(16)
@@ -63,7 +68,8 @@ L0001    DS    0H                  INVALID KEY
          DROP  8
 T0003    DS    0H
 * GO TO MISS-ONE
-         B     P0001
+         L     15,PA0001
+         BR    15
 L0002    DS    0H
 T0004    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
@@ -83,10 +89,14 @@ T0005    DS    0H
          BALR  14,15
 T0006    DS    0H
 * GO TO SECOND-PARA
-         B     P0002
+         L     15,PA0002
+         BR    15
          DROP  8
 * MISS-ONE.
 P0001    DS    0H
+         BALR  12,0                this paragraph's code base
+B0002    EQU   *
+         USING B0002,12
 T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0003
@@ -95,9 +105,12 @@ T0007    DS    0H
          BALR  14,15
 * SECOND-PARA.
 P0002    DS    0H
+         BALR  12,0                this paragraph's code base
+B0003    EQU   *
+         USING B0003,12
 T0008    DS    0H
 * MOVE 10301 -> WS-NOMKEY
-         ZAP   PWK1(16),K0002(16)  literal
+         ZAP   PWK1(16),K0002+13(3)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
          ZAP   D0009(6),PWK1(16)
@@ -124,7 +137,8 @@ L0003    DS    0H                  INVALID KEY
          DROP  8
 T0010    DS    0H
 * GO TO MISS-TWO
-         B     P0003
+         L     15,PA0003
+         BR    15
 L0004    DS    0H
 T0011    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
@@ -144,10 +158,14 @@ T0012    DS    0H
          BALR  14,15
 T0013    DS    0H
 * GO TO THIRD-PARA
-         B     P0004
+         L     15,PA0004
+         BR    15
          DROP  8
 * MISS-TWO.
 P0003    DS    0H
+         BALR  12,0                this paragraph's code base
+B0004    EQU   *
+         USING B0004,12
 T0014    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0004
@@ -156,9 +174,12 @@ T0014    DS    0H
          BALR  14,15
 * THIRD-PARA.
 P0004    DS    0H
+         BALR  12,0                this paragraph's code base
+B0005    EQU   *
+         USING B0005,12
 T0015    DS    0H
 * MOVE 9999999 -> WS-NOMKEY
-         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   PWK1(16),K0003+12(4)  literal
          L     8,BL0000            base locator
          USING WSC0000,8
          ZAP   D0009(6),PWK1(16)
@@ -185,7 +206,8 @@ L0005    DS    0H                  INVALID KEY
          DROP  8
 T0017    DS    0H
 * GO TO MISS-THREE
-         B     P0005
+         L     15,PA0005
+         BR    15
 L0006    DS    0H
 T0018    DS    0H
 * MOVE GLAC-KEY -> OUT-KEY
@@ -205,10 +227,14 @@ T0019    DS    0H
          BALR  14,15
 T0020    DS    0H
 * GO TO DONE-PARA
-         B     P0006
+         L     15,PA0006
+         BR    15
          DROP  8
 * MISS-THREE.
 P0005    DS    0H
+         BALR  12,0                this paragraph's code base
+B0006    EQU   *
+         USING B0006,12
 T0021    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0005
@@ -217,6 +243,9 @@ T0021    DS    0H
          BALR  14,15
 * DONE-PARA.
 P0006    DS    0H
+         BALR  12,0                this paragraph's code base
+B0007    EQU   *
+         USING B0007,12
 T0022    DS    0H
 * CLOSE GLACCT
          CLOSE (FD000)
@@ -228,6 +257,8 @@ T0023    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 * BISAM permanent-error exit; a missing record instead
 * shows up as a non-zero exception code in the DECB
 ISYNAD   MVI   ISFLG,X'01'
@@ -279,9 +310,12 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=GLACCT,DSORG=IS,MACRF=(R),SYNAD=ISYNAD
-K0001    DC    PL16'10303'         numeric constants
-K0002    DC    PL16'10301'
-K0003    DC    PL16'9999999'
+K0001    EQU   *-13                numeric constants, as long as used
+         DC    PL3'10303'
+K0002    EQU   *-13
+         DC    PL3'10301'
+K0003    EQU   *-12
+         DC    PL4'9999999'
 S0001    DC    CL4'GOT '           nonnumeric constants
 S0002    DC    CL1' '
 S0003    DC    CL10'MISS 10303'
@@ -315,11 +349,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -351,32 +385,48 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
+CB0003   DC    A(B0003)            a code block's base
+CB0004   DC    A(B0004)            a code block's base
+CB0005   DC    A(B0005)            a code block's base
+CB0006   DC    A(B0006)            a code block's base
+CB0007   DC    A(B0007)            a code block's base
+PA0001   DC    A(P0001)            MISS-ONE
+PA0002   DC    A(P0002)            SECOND-PARA
+PA0003   DC    A(P0003)            MISS-TWO
+PA0004   DC    A(P0004)            THIRD-PARA
+PA0005   DC    A(P0005)            MISS-THREE
+PA0006   DC    A(P0006)            DONE-PARA
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(28)
-         DC    AL2(T0001-COBBEG),AL2(29)
-         DC    AL2(T0002-COBBEG),AL2(30)
-         DC    AL2(T0003-COBBEG),AL2(30)
-         DC    AL2(T0004-COBBEG),AL2(31)
-         DC    AL2(T0005-COBBEG),AL2(32)
-         DC    AL2(T0006-COBBEG),AL2(33)
-         DC    AL2(T0007-COBBEG),AL2(35)
-         DC    AL2(T0008-COBBEG),AL2(37)
-         DC    AL2(T0009-COBBEG),AL2(38)
-         DC    AL2(T0010-COBBEG),AL2(38)
-         DC    AL2(T0011-COBBEG),AL2(39)
-         DC    AL2(T0012-COBBEG),AL2(40)
-         DC    AL2(T0013-COBBEG),AL2(41)
-         DC    AL2(T0014-COBBEG),AL2(43)
-         DC    AL2(T0015-COBBEG),AL2(45)
-         DC    AL2(T0016-COBBEG),AL2(46)
-         DC    AL2(T0017-COBBEG),AL2(46)
-         DC    AL2(T0018-COBBEG),AL2(47)
-         DC    AL2(T0019-COBBEG),AL2(48)
-         DC    AL2(T0020-COBBEG),AL2(49)
-         DC    AL2(T0021-COBBEG),AL2(51)
-         DC    AL2(T0022-COBBEG),AL2(53)
-         DC    AL2(T0023-COBBEG),AL2(54)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(28,0)
+         DC    A(T0001-COBBEG),AL2(29,0)
+         DC    A(T0002-COBBEG),AL2(30,0)
+         DC    A(T0003-COBBEG),AL2(30,0)
+         DC    A(T0004-COBBEG),AL2(31,0)
+         DC    A(T0005-COBBEG),AL2(32,0)
+         DC    A(T0006-COBBEG),AL2(33,0)
+         DC    A(T0007-COBBEG),AL2(35,0)
+         DC    A(T0008-COBBEG),AL2(37,0)
+         DC    A(T0009-COBBEG),AL2(38,0)
+         DC    A(T0010-COBBEG),AL2(38,0)
+         DC    A(T0011-COBBEG),AL2(39,0)
+         DC    A(T0012-COBBEG),AL2(40,0)
+         DC    A(T0013-COBBEG),AL2(41,0)
+         DC    A(T0014-COBBEG),AL2(43,0)
+         DC    A(T0015-COBBEG),AL2(45,0)
+         DC    A(T0016-COBBEG),AL2(46,0)
+         DC    A(T0017-COBBEG),AL2(46,0)
+         DC    A(T0018-COBBEG),AL2(47,0)
+         DC    A(T0019-COBBEG),AL2(48,0)
+         DC    A(T0020-COBBEG),AL2(49,0)
+         DC    A(T0021-COBBEG),AL2(51,0)
+         DC    A(T0022-COBBEG),AL2(53,0)
+         DC    A(T0023-COBBEG),AL2(54,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

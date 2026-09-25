@@ -7,13 +7,15 @@ CORRESP  CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * MOVE NAME -> NAME
          L     8,BL0000            base locator
@@ -212,7 +217,7 @@ T0025    DS    0H
          ZAP   PWK1(16),WK0+13(3)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0001(16)   against 10 ** digits
+         CP    WK1(16),K0001+13(3)  against 10 ** digits
          BL    L0002               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0003
@@ -234,7 +239,7 @@ T0026    DS    0H
          ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0002(16)   against 10 ** digits
+         CP    WK1(16),K0002+12(4)  against 10 ** digits
          BL    L0004               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0005
@@ -256,7 +261,7 @@ T0027    DS    0H
          ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0002(16)   against 10 ** digits
+         CP    WK1(16),K0002+12(4)  against 10 ** digits
          BL    L0006               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0007
@@ -302,6 +307,8 @@ T0031    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 PARM0001 DC    A(DSPBUF)
@@ -344,8 +351,10 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'1000'          numeric constants
-K0002    DC    PL16'100000'
+K0001    EQU   *-13                numeric constants, as long as used
+         DC    PL3'1000'
+K0002    EQU   *-12
+         DC    PL4'100000'
 M0001    DC    XL7'402021204B2020'  ED patterns
 M0002    DC    XL4'40202120'
 S0001    DC    CL1'0'              nonnumeric constants
@@ -385,11 +394,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -421,40 +430,44 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(42)
-         DC    AL2(T0001-COBBEG),AL2(42)
-         DC    AL2(T0002-COBBEG),AL2(42)
-         DC    AL2(T0003-COBBEG),AL2(42)
-         DC    AL2(T0004-COBBEG),AL2(42)
-         DC    AL2(T0005-COBBEG),AL2(42)
-         DC    AL2(T0006-COBBEG),AL2(43)
-         DC    AL2(T0007-COBBEG),AL2(44)
-         DC    AL2(T0008-COBBEG),AL2(46)
-         DC    AL2(T0009-COBBEG),AL2(47)
-         DC    AL2(T0010-COBBEG),AL2(48)
-         DC    AL2(T0011-COBBEG),AL2(49)
-         DC    AL2(T0012-COBBEG),AL2(50)
-         DC    AL2(T0013-COBBEG),AL2(50)
-         DC    AL2(T0014-COBBEG),AL2(50)
-         DC    AL2(T0015-COBBEG),AL2(51)
-         DC    AL2(T0016-COBBEG),AL2(52)
-         DC    AL2(T0017-COBBEG),AL2(53)
-         DC    AL2(T0018-COBBEG),AL2(54)
-         DC    AL2(T0019-COBBEG),AL2(54)
-         DC    AL2(T0020-COBBEG),AL2(54)
-         DC    AL2(T0021-COBBEG),AL2(55)
-         DC    AL2(T0022-COBBEG),AL2(56)
-         DC    AL2(T0023-COBBEG),AL2(57)
-         DC    AL2(T0024-COBBEG),AL2(58)
-         DC    AL2(T0025-COBBEG),AL2(60)
-         DC    AL2(T0026-COBBEG),AL2(60)
-         DC    AL2(T0027-COBBEG),AL2(60)
-         DC    AL2(T0028-COBBEG),AL2(60)
-         DC    AL2(T0029-COBBEG),AL2(61)
-         DC    AL2(T0030-COBBEG),AL2(62)
-         DC    AL2(T0031-COBBEG),AL2(63)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(42,0)
+         DC    A(T0001-COBBEG),AL2(42,0)
+         DC    A(T0002-COBBEG),AL2(42,0)
+         DC    A(T0003-COBBEG),AL2(42,0)
+         DC    A(T0004-COBBEG),AL2(42,0)
+         DC    A(T0005-COBBEG),AL2(42,0)
+         DC    A(T0006-COBBEG),AL2(43,0)
+         DC    A(T0007-COBBEG),AL2(44,0)
+         DC    A(T0008-COBBEG),AL2(46,0)
+         DC    A(T0009-COBBEG),AL2(47,0)
+         DC    A(T0010-COBBEG),AL2(48,0)
+         DC    A(T0011-COBBEG),AL2(49,0)
+         DC    A(T0012-COBBEG),AL2(50,0)
+         DC    A(T0013-COBBEG),AL2(50,0)
+         DC    A(T0014-COBBEG),AL2(50,0)
+         DC    A(T0015-COBBEG),AL2(51,0)
+         DC    A(T0016-COBBEG),AL2(52,0)
+         DC    A(T0017-COBBEG),AL2(53,0)
+         DC    A(T0018-COBBEG),AL2(54,0)
+         DC    A(T0019-COBBEG),AL2(54,0)
+         DC    A(T0020-COBBEG),AL2(54,0)
+         DC    A(T0021-COBBEG),AL2(55,0)
+         DC    A(T0022-COBBEG),AL2(56,0)
+         DC    A(T0023-COBBEG),AL2(57,0)
+         DC    A(T0024-COBBEG),AL2(58,0)
+         DC    A(T0025-COBBEG),AL2(60,0)
+         DC    A(T0026-COBBEG),AL2(60,0)
+         DC    A(T0027-COBBEG),AL2(60,0)
+         DC    A(T0028-COBBEG),AL2(60,0)
+         DC    A(T0029-COBBEG),AL2(61,0)
+         DC    A(T0030-COBBEG),AL2(62,0)
+         DC    A(T0031-COBBEG),AL2(63,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

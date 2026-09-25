@@ -7,13 +7,15 @@ RPTCTL   CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN-PARA.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * MOVE AA01 -> WS-KEY
          LA    6,0                 subscript-1
@@ -117,10 +122,12 @@ L0001    DS    0H
          BH    L0002
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
-         B     P0001
+         L     15,PA0001
+         BR    15
 R0001    DS    0H
+         L     12,CB0001           this block's base again
          DROP  8
-         LA    15,F0001            restore fall-through
+         L     15,FA0001           restore fall-through
          ST    15,X0001
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -144,14 +151,17 @@ T0011    DS    0H
          CLI   RBRK000,3           the break is at least this major?
          BH    L0004               no: this level did not break
          BAL   14,RG004            CONTROL FOOTING
+         L     12,CB0001           this block's base again
 L0004    DS    0H
          CLI   RBRK000,2           the break is at least this major?
          BH    L0005               no: this level did not break
          BAL   14,RG005            CONTROL FOOTING
+         L     12,CB0001           this block's base again
 L0005    DS    0H
          CLI   RBRK000,1           the break is at least this major?
          BH    L0006               no: this level did not break
          BAL   14,RG006            CONTROL FOOTING
+         L     12,CB0001           this block's base again
 L0006    DS    0H
 L0003    DS    0H
 T0012    DS    0H
@@ -186,6 +196,9 @@ T0015    DS    0H
          DROP  8
 * ONE-REC.
 P0001    DS    0H
+         BALR  12,0                this paragraph's code base
+B0002    EQU   *
+         USING B0002,12
 T0016    DS    0H
 * MOVE WS-KEY -> WS-REC
          L     8,BL0000            base locator
@@ -210,6 +223,7 @@ T0018    DS    0H
          BNE   L0007
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
+         L     12,CB0002           this block's base again
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0012(2),D0006      DEPT
@@ -219,10 +233,12 @@ T0018    DS    0H
          CLI   RBRK000,2           the break is at least this major?
          BH    L0009               no: this level did not break
          BAL   14,RG001            CONTROL HEADING
+         L     12,CB0002           this block's base again
 L0009    DS    0H
          CLI   RBRK000,3           the break is at least this major?
          BH    L0010               no: this level did not break
          BAL   14,RG002            CONTROL HEADING
+         L     12,CB0002           this block's base again
 L0010    DS    0H
          B     L0008
 L0007    DS    0H
@@ -249,14 +265,17 @@ L0011    DS    0H
          CLI   RBRK000,3           the break is at least this major?
          BH    L0014               no: this level did not break
          BAL   14,RG004            CONTROL FOOTING
+         L     12,CB0002           this block's base again
 L0014    DS    0H
          CLI   RBRK000,2           the break is at least this major?
          BH    L0015               no: this level did not break
          BAL   14,RG005            CONTROL FOOTING
+         L     12,CB0002           this block's base again
 L0015    DS    0H
          CLI   RBRK000,1           the break is at least this major?
          BH    L0016               no: this level did not break
          BAL   14,RG006            CONTROL FOOTING
+         L     12,CB0002           this block's base again
 L0016    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -266,13 +285,16 @@ L0016    DS    0H
          CLI   RBRK000,2           the break is at least this major?
          BH    L0017               no: this level did not break
          BAL   14,RG001            CONTROL HEADING
+         L     12,CB0002           this block's base again
 L0017    DS    0H
          CLI   RBRK000,3           the break is at least this major?
          BH    L0018               no: this level did not break
          BAL   14,RG002            CONTROL HEADING
+         L     12,CB0002           this block's base again
 L0018    DS    0H
 L0008    DS    0H
          BAL   14,RG003
+         L     12,CB0002           this block's base again
 T0019    DS    0H
 * MOVE LINE-COUNTER -> WS-LC
          L     8,BL0000            base locator
@@ -295,6 +317,8 @@ T0020    DS    0H
          L     15,X0001
          BR    15
 F0001    DS    0H                  fall-through when not performed
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 * report group PAGE-HEAD
 RG000    ST    14,RGS000           save the return
          DROP  8
@@ -830,9 +854,12 @@ WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FBA,             X
                LRECL=133,BLKSIZE=133
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'8'
-K0003    DC    PL16'10'
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'1'
+K0002    EQU   *-15
+         DC    PL1'8'
+K0003    EQU   *-14
+         DC    PL2'10'
 M0001    DC    XL4'40202120'       ED patterns
 H0001    DC    H'4'                element sizes
 FC001    DC    F'1'                binary literals
@@ -881,11 +908,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -917,29 +944,36 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
+PA0001   DC    A(P0001)            ONE-REC
+FA0001   DC    A(F0001)            fall-through, to put back
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(60)
-         DC    AL2(T0001-COBBEG),AL2(61)
-         DC    AL2(T0002-COBBEG),AL2(62)
-         DC    AL2(T0003-COBBEG),AL2(63)
-         DC    AL2(T0004-COBBEG),AL2(64)
-         DC    AL2(T0005-COBBEG),AL2(65)
-         DC    AL2(T0006-COBBEG),AL2(66)
-         DC    AL2(T0007-COBBEG),AL2(67)
-         DC    AL2(T0008-COBBEG),AL2(68)
-         DC    AL2(T0009-COBBEG),AL2(69)
-         DC    AL2(T0010-COBBEG),AL2(70)
-         DC    AL2(T0011-COBBEG),AL2(72)
-         DC    AL2(T0012-COBBEG),AL2(73)
-         DC    AL2(T0013-COBBEG),AL2(74)
-         DC    AL2(T0014-COBBEG),AL2(75)
-         DC    AL2(T0015-COBBEG),AL2(76)
-         DC    AL2(T0016-COBBEG),AL2(78)
-         DC    AL2(T0017-COBBEG),AL2(79)
-         DC    AL2(T0018-COBBEG),AL2(80)
-         DC    AL2(T0019-COBBEG),AL2(81)
-         DC    AL2(T0020-COBBEG),AL2(82)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(60,0)
+         DC    A(T0001-COBBEG),AL2(61,0)
+         DC    A(T0002-COBBEG),AL2(62,0)
+         DC    A(T0003-COBBEG),AL2(63,0)
+         DC    A(T0004-COBBEG),AL2(64,0)
+         DC    A(T0005-COBBEG),AL2(65,0)
+         DC    A(T0006-COBBEG),AL2(66,0)
+         DC    A(T0007-COBBEG),AL2(67,0)
+         DC    A(T0008-COBBEG),AL2(68,0)
+         DC    A(T0009-COBBEG),AL2(69,0)
+         DC    A(T0010-COBBEG),AL2(70,0)
+         DC    A(T0011-COBBEG),AL2(72,0)
+         DC    A(T0012-COBBEG),AL2(73,0)
+         DC    A(T0013-COBBEG),AL2(74,0)
+         DC    A(T0014-COBBEG),AL2(75,0)
+         DC    A(T0015-COBBEG),AL2(76,0)
+         DC    A(T0016-COBBEG),AL2(78,0)
+         DC    A(T0017-COBBEG),AL2(79,0)
+         DC    A(T0018-COBBEG),AL2(80,0)
+         DC    A(T0019-COBBEG),AL2(81,0)
+         DC    A(T0020-COBBEG),AL2(82,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

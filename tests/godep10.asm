@@ -7,13 +7,15 @@ GODEP10  CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN-PARA.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * PERFORM TRY-ONE
          ZAP   WK0+15(1),K0001+15(1)  literal
@@ -45,10 +50,12 @@ L0001    DS    0H
          BH    L0002
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
-         B     P0001
+         L     15,PA0001
+         BR    15
 R0001    DS    0H
+         L     12,CB0001           this block's base again
          DROP  8
-         LA    15,F0001            restore fall-through
+         L     15,FA0001           restore fall-through
          ST    15,X0001
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -63,7 +70,7 @@ L0002    DS    0H
          DROP  8
 T0001    DS    0H
 * MOVE -1 -> SEL
-         ZAP   PWK1(16),K0003(16)  literal
+         ZAP   PWK1(16),K0003+15(1)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
@@ -73,10 +80,12 @@ T0002    DS    0H
 * PERFORM DISPATCH THRU DISPATCH-EXIT
          LA    15,R0002            return here
          ST    15,X0013            into the range's exit cell
-         B     P0002
+         L     15,PA0002
+         BR    15
 R0002    DS    0H
+         L     12,CB0001           this block's base again
          DROP  8
-         LA    15,F0013            restore fall-through
+         L     15,FA0013           restore fall-through
          ST    15,X0013
 T0003    DS    0H
 * STOP RUN
@@ -88,6 +97,9 @@ T0003    DS    0H
          BR    14                  return to caller
 * TRY-ONE.
 P0001    DS    0H
+         BALR  12,0                this paragraph's code base
+B0002    EQU   *
+         USING B0002,12
 T0004    DS    0H
 * MOVE V -> SEL
          L     8,BL0000            base locator
@@ -105,10 +117,12 @@ T0005    DS    0H
 * PERFORM DISPATCH THRU DISPATCH-EXIT
          LA    15,R0003            return here
          ST    15,X0013            into the range's exit cell
-         B     P0002
+         L     15,PA0002
+         BR    15
 R0003    DS    0H
+         L     12,CB0002           this block's base again
          DROP  8
-         LA    15,F0013            restore fall-through
+         L     15,FA0013           restore fall-through
          ST    15,X0013
 * end of a PERFORM range: return through its cell
          L     15,X0001
@@ -116,6 +130,9 @@ R0003    DS    0H
 F0001    DS    0H                  fall-through when not performed
 * DISPATCH.
 P0002    DS    0H
+         BALR  12,0                this paragraph's code base
+B0003    EQU   *
+         USING B0003,12
 T0006    DS    0H
 * GO TO ... DEPENDING ON SEL
          L     8,BL0000            base locator
@@ -130,18 +147,8 @@ T0006    DS    0H
          CLR   2,0                 past the last, or negative -- unsign
          BNL   L0008               out of range: fall through
          SLL   2,2                 four bytes per entry
-         B     L0007(2)            into the table
-L0007    DS    0H
-         B     P0003               P1
-         B     P0004               P2
-         B     P0005               P3
-         B     P0006               P4
-         B     P0007               P5
-         B     P0008               P6
-         B     P0009               P7
-         B     P0010               P8
-         B     P0011               P9
-         B     P0012               P10
+         L     15,GD0009(2)        the target's address
+         BR    15
 L0008    DS    0H
          DROP  8
 T0007    DS    0H
@@ -163,10 +170,14 @@ L0009    DS    0H
          BALR  14,15
 T0008    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
          DROP  8
 * P1.
 P0003    DS    0H
+         BALR  12,0                this paragraph's code base
+B0004    EQU   *
+         USING B0004,12
 T0009    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0002
@@ -175,9 +186,13 @@ T0009    DS    0H
          BALR  14,15
 T0010    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P2.
 P0004    DS    0H
+         BALR  12,0                this paragraph's code base
+B0005    EQU   *
+         USING B0005,12
 T0011    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0003
@@ -186,9 +201,13 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P3.
 P0005    DS    0H
+         BALR  12,0                this paragraph's code base
+B0006    EQU   *
+         USING B0006,12
 T0013    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0004
@@ -197,9 +216,13 @@ T0013    DS    0H
          BALR  14,15
 T0014    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P4.
 P0006    DS    0H
+         BALR  12,0                this paragraph's code base
+B0007    EQU   *
+         USING B0007,12
 T0015    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0005
@@ -208,9 +231,13 @@ T0015    DS    0H
          BALR  14,15
 T0016    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P5.
 P0007    DS    0H
+         BALR  12,0                this paragraph's code base
+B0008    EQU   *
+         USING B0008,12
 T0017    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0006
@@ -219,9 +246,13 @@ T0017    DS    0H
          BALR  14,15
 T0018    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P6.
 P0008    DS    0H
+         BALR  12,0                this paragraph's code base
+B0009    EQU   *
+         USING B0009,12
 T0019    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0007
@@ -230,9 +261,13 @@ T0019    DS    0H
          BALR  14,15
 T0020    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P7.
 P0009    DS    0H
+         BALR  12,0                this paragraph's code base
+B0010    EQU   *
+         USING B0010,12
 T0021    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0008
@@ -241,9 +276,13 @@ T0021    DS    0H
          BALR  14,15
 T0022    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P8.
 P0010    DS    0H
+         BALR  12,0                this paragraph's code base
+B0011    EQU   *
+         USING B0011,12
 T0023    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0009
@@ -252,9 +291,13 @@ T0023    DS    0H
          BALR  14,15
 T0024    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P9.
 P0011    DS    0H
+         BALR  12,0                this paragraph's code base
+B0012    EQU   *
+         USING B0012,12
 T0025    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0010
@@ -263,9 +306,13 @@ T0025    DS    0H
          BALR  14,15
 T0026    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * P10.
 P0012    DS    0H
+         BALR  12,0                this paragraph's code base
+B0013    EQU   *
+         USING B0013,12
 T0027    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(13),S0011
@@ -274,15 +321,21 @@ T0027    DS    0H
          BALR  14,15
 T0028    DS    0H
 * GO TO DISPATCH-EXIT
-         B     P0013
+         L     15,PA0013
+         BR    15
 * DISPATCH-EXIT.
 P0013    DS    0H
+         BALR  12,0                this paragraph's code base
+B0014    EQU   *
+         USING B0014,12
 T0029    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
          L     15,X0013
          BR    15
 F0013    DS    0H                  fall-through when not performed
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 X0001    DC    A(F0001)            TRY-ONE
 X0013    DC    A(F0013)            DISPATCH-EXIT
 VDISP    DC    V(COBDISP)
@@ -322,6 +375,17 @@ PARM0011 DC    A(DSPBUF)
 LEN0011  DC    H'13'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
+         DS    0F
+GD0009   DC    A(P0003)            P1
+         DC    A(P0004)            P2
+         DC    A(P0005)            P3
+         DC    A(P0006)            P4
+         DC    A(P0007)            P5
+         DC    A(P0008)            P6
+         DC    A(P0009)            P7
+         DC    A(P0010)            P8
+         DC    A(P0011)            P9
+         DC    A(P0012)            P10
 PWK1     DS    PL16
 PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
@@ -335,9 +399,12 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'1'             numeric constants
-K0002    DC    PL16'5'
-K0003    DC    PL16'-1'
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'1'
+K0002    EQU   *-15
+         DC    PL1'5'
+K0003    EQU   *-15
+         DC    PL1'-1'
 H0001    DC    H'2'                element sizes
 H0002    DC    H'10'
 S0001    DC    CL13'FELL THROUGH '  nonnumeric constants
@@ -379,11 +446,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -415,38 +482,60 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
+CB0003   DC    A(B0003)            a code block's base
+CB0004   DC    A(B0004)            a code block's base
+CB0005   DC    A(B0005)            a code block's base
+CB0006   DC    A(B0006)            a code block's base
+CB0007   DC    A(B0007)            a code block's base
+CB0008   DC    A(B0008)            a code block's base
+CB0009   DC    A(B0009)            a code block's base
+CB0010   DC    A(B0010)            a code block's base
+CB0011   DC    A(B0011)            a code block's base
+CB0012   DC    A(B0012)            a code block's base
+CB0013   DC    A(B0013)            a code block's base
+CB0014   DC    A(B0014)            a code block's base
+PA0001   DC    A(P0001)            TRY-ONE
+FA0001   DC    A(F0001)            fall-through, to put back
+PA0002   DC    A(P0002)            DISPATCH
+PA0013   DC    A(P0013)            DISPATCH-EXIT
+FA0013   DC    A(F0013)            fall-through, to put back
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(16)
-         DC    AL2(T0001-COBBEG),AL2(17)
-         DC    AL2(T0002-COBBEG),AL2(18)
-         DC    AL2(T0003-COBBEG),AL2(19)
-         DC    AL2(T0004-COBBEG),AL2(21)
-         DC    AL2(T0005-COBBEG),AL2(22)
-         DC    AL2(T0006-COBBEG),AL2(24)
-         DC    AL2(T0007-COBBEG),AL2(26)
-         DC    AL2(T0008-COBBEG),AL2(27)
-         DC    AL2(T0009-COBBEG),AL2(29)
-         DC    AL2(T0010-COBBEG),AL2(30)
-         DC    AL2(T0011-COBBEG),AL2(32)
-         DC    AL2(T0012-COBBEG),AL2(33)
-         DC    AL2(T0013-COBBEG),AL2(35)
-         DC    AL2(T0014-COBBEG),AL2(36)
-         DC    AL2(T0015-COBBEG),AL2(38)
-         DC    AL2(T0016-COBBEG),AL2(39)
-         DC    AL2(T0017-COBBEG),AL2(41)
-         DC    AL2(T0018-COBBEG),AL2(42)
-         DC    AL2(T0019-COBBEG),AL2(44)
-         DC    AL2(T0020-COBBEG),AL2(45)
-         DC    AL2(T0021-COBBEG),AL2(47)
-         DC    AL2(T0022-COBBEG),AL2(48)
-         DC    AL2(T0023-COBBEG),AL2(50)
-         DC    AL2(T0024-COBBEG),AL2(51)
-         DC    AL2(T0025-COBBEG),AL2(53)
-         DC    AL2(T0026-COBBEG),AL2(54)
-         DC    AL2(T0027-COBBEG),AL2(56)
-         DC    AL2(T0028-COBBEG),AL2(57)
-         DC    AL2(T0029-COBBEG),AL2(59)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(16,0)
+         DC    A(T0001-COBBEG),AL2(17,0)
+         DC    A(T0002-COBBEG),AL2(18,0)
+         DC    A(T0003-COBBEG),AL2(19,0)
+         DC    A(T0004-COBBEG),AL2(21,0)
+         DC    A(T0005-COBBEG),AL2(22,0)
+         DC    A(T0006-COBBEG),AL2(24,0)
+         DC    A(T0007-COBBEG),AL2(26,0)
+         DC    A(T0008-COBBEG),AL2(27,0)
+         DC    A(T0009-COBBEG),AL2(29,0)
+         DC    A(T0010-COBBEG),AL2(30,0)
+         DC    A(T0011-COBBEG),AL2(32,0)
+         DC    A(T0012-COBBEG),AL2(33,0)
+         DC    A(T0013-COBBEG),AL2(35,0)
+         DC    A(T0014-COBBEG),AL2(36,0)
+         DC    A(T0015-COBBEG),AL2(38,0)
+         DC    A(T0016-COBBEG),AL2(39,0)
+         DC    A(T0017-COBBEG),AL2(41,0)
+         DC    A(T0018-COBBEG),AL2(42,0)
+         DC    A(T0019-COBBEG),AL2(44,0)
+         DC    A(T0020-COBBEG),AL2(45,0)
+         DC    A(T0021-COBBEG),AL2(47,0)
+         DC    A(T0022-COBBEG),AL2(48,0)
+         DC    A(T0023-COBBEG),AL2(50,0)
+         DC    A(T0024-COBBEG),AL2(51,0)
+         DC    A(T0025-COBBEG),AL2(53,0)
+         DC    A(T0026-COBBEG),AL2(54,0)
+         DC    A(T0027-COBBEG),AL2(56,0)
+         DC    A(T0028-COBBEG),AL2(57,0)
+         DC    A(T0029-COBBEG),AL2(59,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE

@@ -7,13 +7,15 @@ MAINDYN  CSECT
          STM   14,12,12(13)        save caller's registers
          BALR  12,0                first code base
 COBBEG   EQU   *
+B0000    EQU   COBBEG              the first code block
          USING COBBEG,12
-         LA    11,2048(,12)        second code base
-         LA    11,2048(,11)
-         USING COBBEG+4096,11
-         LA    10,2048(,11)        third code base
+         B     PRO001
+PROCON   DC    A(COBCON)
+PRO001   L     11,PROCON           the constants region
+         LA    10,2048(,11)        and its second 4K
          LA    10,2048(,10)
-         USING COBBEG+8192,10
+         USING COBCON,11
+         USING COBCON+4096,10
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -27,6 +29,9 @@ COBBEG   EQU   *
 SPIEARMD DS    0H
 * MAIN-PARA.
 P0000    DS    0H
+         BALR  12,0                this paragraph's code base
+B0001    EQU   *
+         USING B0001,12
 T0000    DS    0H
 * PERFORM CALL-IT
          ZAP   WK0+15(1),K0001+15(1)  literal
@@ -39,9 +44,11 @@ L0001    DS    0H
          BNP   L0002
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
-         B     P0001
+         L     15,PA0001
+         BR    15
 R0001    DS    0H
-         LA    15,F0001            restore fall-through
+         L     12,CB0001           this block's base again
+         L     15,FA0001           restore fall-through
          ST    15,X0001
          LH    2,PT001
          BCTR  2,0
@@ -70,9 +77,11 @@ L0003    DS    0H
          BNP   L0004
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
-         B     P0001
+         L     15,PA0001
+         BR    15
 R0002    DS    0H
-         LA    15,F0001            restore fall-through
+         L     12,CB0001           this block's base again
+         L     15,FA0001           restore fall-through
          ST    15,X0001
          LH    2,PT003
          BCTR  2,0
@@ -90,9 +99,11 @@ T0004    DS    0H
 * PERFORM CALL-IT
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
-         B     P0001
+         L     15,PA0001
+         BR    15
 R0003    DS    0H
-         LA    15,F0001            restore fall-through
+         L     12,CB0001           this block's base again
+         L     15,FA0001           restore fall-through
          ST    15,X0001
 T0005    DS    0H
 * CANCEL
@@ -117,6 +128,9 @@ T0007    DS    0H
          BR    14                  return to caller
 * CALL-IT.
 P0001    DS    0H
+         BALR  12,0                this paragraph's code base
+B0002    EQU   *
+         USING B0002,12
 T0008    DS    0H
 * CALL ''
          L     8,BL0000            base locator
@@ -152,6 +166,8 @@ T0010    DS    0H
          L     15,X0001
          BR    15
 F0001    DS    0H                  fall-through when not performed
+         DROP  12
+COBCON   DS    0D                  constants, work areas, out-of-line c
 PT001    DC    H'0'                PERFORM n TIMES counter
 PT003    DC    H'0'                PERFORM n TIMES counter
 X0001    DC    A(F0001)            CALL-IT
@@ -182,8 +198,10 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    DC    PL16'3'             numeric constants
-K0002    DC    PL16'2'
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'3'
+K0002    EQU   *-15
+         DC    PL1'2'
 S0001    DC    CL6'SUBDYN'         nonnumeric constants
 S0002    DC    CL8'NOTLOADD'
 S0003    DC    CL10'RESULT END'
@@ -218,11 +236,11 @@ COBSPIE  DS    0H
          SR    5,5                 no line yet
 SPIELOOP LTR   4,4
          BZ    SPIEFND
-         LH    6,0(,3)             this statement's offset
+         L     6,0(,3)             this statement's offset
          CR    6,2
          BH    SPIEFND             past it: the previous one is the ans
-         LH    5,2(,3)
-         LA    3,4(,3)
+         LH    5,4(,3)
+         LA    3,8(,3)
          BCTR  4,0
          B     SPIELOOP
 SPIEFND  CVD   5,SPIEDW
@@ -254,19 +272,26 @@ SPIEWTO  WTO   'COBC370: PROGRAM CHECK 0C0 LINE 00000 OFFSET 000000',  X
 SPIECODE EQU   SPIEWTO+29,1        the 0C? digit, patched above
 SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
+         DS    0F
+CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
+PA0001   DC    A(P0001)            CALL-IT
+FA0001   DC    A(F0001)            fall-through, to put back
+         LTORG
 * statement offsets, ascending, paired with source lines
-SPIELTB  DS    0H
-         DC    AL2(T0000-COBBEG),AL2(13)
-         DC    AL2(T0001-COBBEG),AL2(14)
-         DC    AL2(T0002-COBBEG),AL2(15)
-         DC    AL2(T0003-COBBEG),AL2(16)
-         DC    AL2(T0004-COBBEG),AL2(17)
-         DC    AL2(T0005-COBBEG),AL2(18)
-         DC    AL2(T0006-COBBEG),AL2(19)
-         DC    AL2(T0007-COBBEG),AL2(20)
-         DC    AL2(T0008-COBBEG),AL2(22)
-         DC    AL2(T0009-COBBEG),AL2(23)
-         DC    AL2(T0010-COBBEG),AL2(24)
+SPIELTB  DS    0F
+         DC    A(T0000-COBBEG),AL2(13,0)
+         DC    A(T0001-COBBEG),AL2(14,0)
+         DC    A(T0002-COBBEG),AL2(15,0)
+         DC    A(T0003-COBBEG),AL2(16,0)
+         DC    A(T0004-COBBEG),AL2(17,0)
+         DC    A(T0005-COBBEG),AL2(18,0)
+         DC    A(T0006-COBBEG),AL2(19,0)
+         DC    A(T0007-COBBEG),AL2(20,0)
+         DC    A(T0008-COBBEG),AL2(22,0)
+         DC    A(T0009-COBBEG),AL2(23,0)
+         DC    A(T0010-COBBEG),AL2(24,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
