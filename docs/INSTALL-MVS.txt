@@ -6,12 +6,13 @@ runs on the guest.  Nothing here needs a C compiler on MVS.  The module
 was cross-compiled on a host and this file is the finished result.
 
 These instructions do not go stale, but the figures below describe one
-particular build -- the 2026-09-25 evening release.  Check them against
-whatever you actually downloaded rather than against this file.
+particular build -- the 2026-09-25 evening release, rebuilt small.  Check
+them against whatever you actually downloaded rather than against this
+file.
 
-  SHA256   60d1af0f942024e44a8f26c3f8691b3f93ec7bc10532bfd1e1fc056dd2d7592d
-  size     5574640 bytes, FB80 when it lands on the guest
-  built    from cobc370 a22f607 with mvslovers/cc370 2c40eb3
+  SHA256   fed3b3a5cc165f21ea2d07584de6cf63a91a0d12efb88ea64b5e1669b8803f86
+  size     523280 bytes, FB80 when it lands on the guest
+  built    from cobc370 7bb01cc with mvslovers/cc370 2c40eb3
            and mvslovers/libc370 f062522
   tested   all 140 test programs compiled on the guest by this module,
            emitting assembler byte-identical to the host compiler's
@@ -50,7 +51,7 @@ command on one line.  (TK5's RECV370 abends U0200-09 on this file.)
       DATASET('your.COBC370.LOAD') DIR(10) NOPROMPT
     /*
 
-The library wants about 7 cylinders on a 3390.
+The library wants about a cylinder on a 3390.
 
 
 3.  Run it
@@ -102,13 +103,22 @@ and then, from a cobc370 checkout:
     ASMDATE=09/25/26 ASMTIME=18.00 LDDATE=26268 LDTIME=180000 \
     cc370 -DMVS370 -O1 -std=gnu99 -I src \
           src/cobc370.c src/picture.c src/picture_scan.c \
-          src/mvs370-millicode.c -o COBC370 -flinker-output=xmit
+          src/mvs370-millicode.c -Wl,--sparse-text \
+          -o COBC370 -flinker-output=xmit
 
 The four clock variables are what make it bit-reproducible: as370 and
 ld370 each stamp the current date and time into the deck and the module,
 so without pinning them two builds of identical source differ in those
 bytes and the SHA256 above will not reproduce.  Pick any values you like
 -- they only have to match between the builds you want to compare.
+
+  --sparse-text leaves the compiler's zeroed tables out of the module:
+  program fetch hands over storage no text record covers as zeros.
+  That was measured on this system -- docs/PORT-PLAN.md, and
+  docs/fetch-probe/ -- and every test compiles identically with it, but
+  it is how MVS 3.8j behaves rather than something it promises. Drop
+  the option for a module ten times the size that does not depend on
+  it.
 
   -O1 because cc370's backend documents -O2 and above as unsafe on this
   target.  Do not write the output into src/ as COBC370: a
