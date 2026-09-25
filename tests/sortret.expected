@@ -1,0 +1,13 @@
+IN-STOP SET 16
+IN-STOP AFTER SECOND RELEASE
+IN-STOP AFTER THIRD RELEASE
+IER045I End of Sort Phase
+IER049I Skip Merge Phase
+OUT GOT 01 ONE
+OUT GOT 02 TWO
+OUT GOT 03 THREE
+OUT-STOP AT END
+IER055I Records Inserted           3,Records Deleted           3
+IER054I Records In           0,Records Out           0
+IER052I End of Sort
+AFTER THE SORT 000{

@@ -29,7 +29,8 @@ element against the standard's own lists:
 | Indexed I-O | **Level 2, complete** (alternate keys read under `OPEN INPUT`; see below) |
 | Segmentation | Level 1 |
 | Report Writer | **Level 1, complete** (its only level) |
-| Sort-Merge, Debug, Communication | not implemented -- each has a null level, which conforms |
+| Sort-Merge | `SORT`, `RELEASE`, `RETURN` through the system sort, as IKFCBL00 does it; not `MERGE` |
+| Debug, Communication | not implemented -- each has a null level, which conforms |
 
 `docs/COBOL74-CONFORMANCE.md` is the element-by-element map;
 `docs/COBOL74-ROADMAP.md` is the plan that closed it and what was left out, and
@@ -51,7 +52,7 @@ source wherever its 1968-vintage Report Writer reaches.
 | area | supported |
 |---|---|
 | data | `DISPLAY`, `COMP` (to 9 digits), `COMP-3`, `INDEX`; edited pictures; `REDEFINES`, `RENAMES`, `OCCURS` to three levels with `INDEXED BY`, `KEY`, and `DEPENDING ON`; `SIGN`, `SYNCHRONIZED`, `JUSTIFIED`, `BLANK WHEN ZERO`; levels 01-49, 66, 77, 88; `OF`/`IN` qualification; `CURRENCY SIGN`, `DECIMAL-POINT IS COMMA`; up to 18 digits |
-| verbs | `MOVE` (with `CORRESPONDING`), `ADD SUBTRACT MULTIPLY DIVIDE COMPUTE` with `GIVING`, `ROUNDED`, `REMAINDER`, `ON SIZE ERROR`, `**`; `IF` with class, sign, condition-name and abbreviated conditions; `PERFORM` (`TIMES`, `UNTIL`, `VARYING ... AFTER ... AFTER`, `THRU`); `GO TO` (`DEPENDING ON`, `ALTER`); `SEARCH` and `SEARCH ALL`; `SET`; `STRING`, `UNSTRING`, `INSPECT`, and IBM's `EXAMINE` with `TALLY`; `DISPLAY`/`ACCEPT` with `UPON`/`FROM` and `DATE`/`DAY`/`TIME`; `CALL literal` and `CALL identifier` with `USING`, `CANCEL`, `EXIT PROGRAM`, `GOBACK`; `COPY ... REPLACING` (host side, `-I`) |
+| verbs | `MOVE` (with `CORRESPONDING`), `ADD SUBTRACT MULTIPLY DIVIDE COMPUTE` with `GIVING`, `ROUNDED`, `REMAINDER`, `ON SIZE ERROR`, `**`; `IF` with class, sign, condition-name and abbreviated conditions; `PERFORM` (`TIMES`, `UNTIL`, `VARYING ... AFTER ... AFTER`, `THRU`); `GO TO` (`DEPENDING ON`, `ALTER`); `SEARCH` and `SEARCH ALL`; `SET`; `STRING`, `UNSTRING`, `INSPECT`, and IBM's `EXAMINE` with `TALLY`; `SORT` with `RELEASE` and `RETURN`; `DISPLAY`/`ACCEPT` with `UPON`/`FROM` and `DATE`/`DAY`/`TIME`; `CALL literal` and `CALL identifier` with `USING`, `CANCEL`, `EXIT PROGRAM`, `GOBACK`; `COPY ... REPLACING` (host side, `-I`) |
 | QSAM | sequential read, write, rewrite; fixed and variable-length records (`RECORDING MODE`, `RECORD CONTAINS m TO n`), blocked and unblocked, `BLOCK CONTAINS 0`; `OPTIONAL`, `EXTEND`, `WRITE ... ADVANCING` with ASA carriage control, `LINAGE` with `END-OF-PAGE`, `USE` declaratives |
 | ISAM | QISAM load and sequential read, BISAM random read |
 | **VSAM KSDS** | read, load, update in place, read/write/delete by key, `START`, `ACCESS IS DYNAMIC` (with `OPEN I-O` too); `ALTERNATE RECORD KEY ... WITH DUPLICATES` on VSAM alternate indexes and paths -- `READ`/`START ... KEY IS` an alternate, the key of reference for `READ NEXT`, statuses `02`/`22`/`23` |
@@ -68,7 +69,8 @@ What is deliberately not there, each refused with a message that says so:
   INPUT` -- two opens, or two programs. The roadmap records the probes.
 - `COMP` past nine digits -- doubleword binary on a machine with no 64-bit
   arithmetic. Everything else computes in packed decimal to 18 digits.
-- Sort-Merge, Debug, Communication; and every COBOL-85 spelling.
+- `MERGE` (IKFCBL00 has none to check it against); Debug, Communication; and
+  every COBOL-85 spelling.
 
 ## When a program checks
 

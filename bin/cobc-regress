@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest copyent dispcomp examine godep10 iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -133,6 +133,21 @@ for t in $TESTS; do
         case "$t" in rrdsnatl|rrdsnatr|rrdsnatd|rrdsnats|rrdsdisp|usevsam)
             printf '//GO.RRDSF01 DD  DSN=VSTEST.RRDS.CLUSTER,DISP=OLD\n' ;;
         esac
+        case "$t" in sortug|sortproc|sortret|sortsize)
+            # The system sort, LINKed with its statements in the parameter
+            # list: its own modules, and work space it may or may not use.
+            printf '//GO.SORTLIB  DD  DSN=SYS1.SORTLIB,DISP=SHR\n'
+            printf '//GO.SORTWK01 DD  UNIT=SYSDA,SPACE=(CYL,(1,1))\n'
+            printf '//GO.SORTWK02 DD  UNIT=SYSDA,SPACE=(CYL,(1,1))\n'
+            printf '//GO.SORTWK03 DD  UNIT=SYSDA,SPACE=(CYL,(1,1))\n' ;;
+        esac
+        if [ "$t" = sortug ]; then
+            printf '//GO.OUTFILE  DD  UNIT=SYSDA,SPACE=(TRK,(5,5)),DISP=(NEW,DELETE),\n'
+            printf '//            DCB=(RECFM=FB,LRECL=80,BLKSIZE=800)\n'
+            printf '//GO.INFILE   DD  *\n'
+            cat "$TDIR/sortug.data"
+            printf '/*\n'
+        fi
         if [ "$t" = rrdsnatl ] || [ "$t" = esdsnatl ]; then
             printf '//GO.IMAGES  DD  DSN=SVD001.VSAMTEST.DATA,DISP=SHR\n'
         fi

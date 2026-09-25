@@ -50,8 +50,8 @@ Writer Level 2" to aspire to. The whole module is `1 RPW 0,1` or nothing.
 The short version, as of 2026-08-29: **Level 2 of the Nucleus, Table
 Handling, Sequential I-O, Relative I-O, Inter-Program Communication and
 Library and Indexed I-O; Segmentation at Level 1; the Report Writer at its
-one level, complete since 2026-08-30;
-and the null level of Sort-Merge, Debug and Communication.** Each module's
+one level, complete since 2026-08-30; `SORT`, `RELEASE` and `RETURN` from
+Sort-Merge since 2026-09-25; and the null level of Debug and Communication.** Each module's
 section below says what is there and what is not, and the dates.
 
 When this map was first drawn the compiler did not sit at a level at all. It
@@ -111,7 +111,12 @@ right answer for a single-volume implementation with no alphabet-names.
 Level 2 -- `LINAGE` with `LINAGE-COUNTER` and `END-OF-PAGE`, `ADVANCING` by
 identifier and by channel mnemonic, `OPTIONAL`, `EXTEND`, `RESERVE`, `SAME
 RECORD AREA`, `MULTIPLE FILE TAPE`, `REVERSED`, the `CLOSE` options -- was
-added on 2026-08-29. `REVERSED` and `CLOSE REEL`/`NO REWIND` are generated
+added on 2026-08-29. That list was wrong about `SAME RECORD AREA`: the whole
+`I-O-CONTROL` paragraph was being skipped, so the files' records were never
+one area, and no test would have noticed. Vince Coen's COBXREF did -- it
+reads one file and uses the other file's record -- and since 2026-09-25 the
+records of the files named are laid over one another, as a file's own later
+records are over its first (`samerec`). `REVERSED` and `CLOSE REEL`/`NO REWIND` are generated
 and untested, being tape-only.
 
 Variable-length records (`RECFM=V`/`VB`) were added on 2026-08-30: `RECORD
@@ -258,10 +263,48 @@ IKFCBL00 does on MVS 3.8j (checked there, with `LIB`); `tests/copyent`
 records its output. A member that opens with clauses rather than a level
 number is inserted as plain text, as before.
 
+### Sort-Merge — SORT, RELEASE and RETURN
+
+Added on 2026-09-25, because COBXREF sorts. `SD`; `SORT file ON ASCENDING/
+DESCENDING KEY ...` with `INPUT PROCEDURE` or `USING` and `OUTPUT PROCEDURE`
+or `GIVING`; `RELEASE [FROM]`; `RETURN [INTO] AT END`; IBM's `SORT-RETURN`
+and `SORT-FILE-SIZE` registers. Every piece was measured on IKFCBL00 first,
+and the five tests' expected output is its own (`sortug`, `sortproc`,
+`sortret`, `sortsize`, and `samerec` for `SAME RECORD AREA`).
+
+It is done the way IKFCBL00's `ILBOSRT0` does it: a `LINK` to the system
+sort -- OS/360 Sort/Merge 1.05 on TK5 -- with the control statements in the
+parameter list, and the records passing through E15 and E35 exits that live
+in the program. The statements are IBM's to the byte: `SORT FIELDS=(pppp,lll,
+ff,o,...)`, the format from the key's usage (`CH`, `ZD` for DISPLAY numerics,
+`PD` for COMP-3, `FI` for COMP), `SIZE=E` from `SORT-FILE-SIZE` when it is
+positive, and `RECORD TYPE=F,LENGTH=(n)`; `sortsize` checks the sort's own
+echo of them against IKFCBL00's. The exits are coroutines with the program:
+E15 resumes the input procedure and `RELEASE` hands a record back (return
+code 12); E35 resumes the output procedure with a record and `RETURN` asks
+for the next (4); the end of a procedure hands back 8. `PERFORM` returns
+through cells in storage rather than registers, which is what makes it safe
+to leave a procedure in the middle and come back. `USING` and `GIVING` are
+the same machinery with procedures the compiler writes -- `OPEN`, `READ`,
+`RELEASE`, `CLOSE`, or `RETURN`, `WRITE` -- so they read and write whatever
+the compiler already can.
+
+Measured and matched: `SORT-RETURN` is the sort's return code, stored when
+the `SORT` ends, and a value the program moves there is ignored -- 16 set in
+either procedure stops nothing (`sortret`). An output procedure of a sort
+with no records runs, and its first `RETURN` takes `AT END`. The sort
+refuses records too short for its work files (`IER059A`, reason 01, for a
+14-byte record); that is the sort's limit, and a program meets it the same
+way under either compiler.
+
+Not implemented: `MERGE`, which IKFCBL00 does not have -- there is nothing
+on this system to check it against -- and `COLLATING SEQUENCE`. A key with
+`SIGN LEADING` or `SEPARATE` is refused by name.
+
 ### Null — nothing implemented
 
-`Sort-Merge`, `Debug`, `Communication`. All three have a null level, so all
-three are conforming choices.
+`Debug`, `Communication`. Both have a null level, so both are conforming
+choices.
 
 ## The minimum standard
 
@@ -994,10 +1037,31 @@ the tests' expected output is IKFCBL00's own.
 - `GO TO ... DEPENDING ON` with any number of procedure-names (`godep10`).
   Eight was this compiler's own limit, not IBM's or the standard's.
 
+### What COBXREF found
+
+Vince Coen's COBXREF, a cross-referencer he wrote for IBM ANS COBOL on this
+system, is the largest real program yet: 1,622 lines. Besides Sort-Merge and
+`SAME RECORD AREA`, above:
+
+- `TIME-OF-DAY`, IBM's HHMMSS register. Unlike `CURRENT-DATE`, which is
+  filled once at entry, it is refreshed before every statement that names it,
+  as IKFCBL00's is: a program timing itself gets the time it asked for.
+- `VALUE ZERO` on an alphanumeric item, which is the character 0 in every
+  position. It was refused as a numeric VALUE on a `PIC X` item.
+- A quoted literal could be taken for a keyword or operator. `IF C = '-'`
+  followed by a statement read `- MOVE` as a subtraction. A keyword is never
+  quoted, and the test that recognises one now says so.
+- Conditions came from a pool of 256 for the whole program; COBXREF has more
+  `IF X = 'A' OR 'B' ...` than that. The pool is 4,096, like the statements.
+- A `DISPLAY` of more than eight operands printed two lines. Operands have
+  lived in a side table for a long time; the split at eight was left over
+  from the fixed array before it.
+
 ## What this map is not
 
-It is not a plan. Reading it, the honest conclusions are that Sort-Merge,
-Debug and Communication should probably stay at null forever; that Segmentation
+It is not a plan. Reading it, the honest conclusions are that Debug and
+Communication should probably stay at null forever -- Sort-Merge was on that
+list until a real program needed it; that Segmentation
 is nearly free if it is ever wanted (see below); that `COPY` and declaratives
 are the two absences most likely to be *pulled* by a real program; and that
 the eleven-element gap to the minimum standard is worth closing mostly because

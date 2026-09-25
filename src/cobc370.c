@@ -460,7 +460,9 @@ static void scan_token(void)
     tok.text[i] = 0; tok.len = i;
 }
 
-static int is(const char *w) { return strcmp(tok.text, w) == 0; }
+/* A keyword or operator is never quoted: '-' is a literal, not a minus, and
+ * IF C = '-' followed by a statement must not read on as an expression. */
+static int is(const char *w) { return !tok.literal && strcmp(tok.text, w) == 0; }
 
 /* The words that end a list of names inside a data description. */
 static int is_data_clause(void)
@@ -693,6 +695,7 @@ typedef struct {
     char chi[MAXTOK];   /* VALUE ... THRU: the upper bound, when has_hi */
     int  chi_len, has_hi;
     int  c88_next;      /* the next value of a VALUE series: a hidden 88, or -1 */
+    int  value_zero;    /* the VALUE was the figurative ZERO, not a numeric literal */
 } Sym;
 
 #define MAXSYM 1024
@@ -758,13 +761,13 @@ typedef struct Cond {
     int  sw_bit, sw_on; /* C_SWITCH: which UPSI bit, and which way round */
 } Cond;
 
-#define MAXCOND 256
+#define MAXCOND 4096                 /* for the whole program, like MAXSTMT */
 static Cond conds[MAXCOND];
 static int ncond;
 
 static Cond *cnode(int kind)
 {
-    if (ncond >= MAXCOND) die("condition too complex");
+    if (ncond >= MAXCOND) die("too many conditions in the program");
     Cond *c = &conds[ncond++];
     memset(c, 0, sizeof *c);
     c->kind = kind;
@@ -789,11 +792,14 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_LABEL, ST_BRANCH, ST_IFTEST,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP, ST_STRING, ST_UNSTRING, ST_CANCEL, ST_EXITPGM,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_SUPPRESS, ST_CALL, ST_SEARCH,
-       ST_REWRITE, ST_DELETE, ST_START };
+       ST_REWRITE, ST_DELETE, ST_START,
+       ST_SORT, ST_RELEASE, ST_RETURN, ST_SRTEND };
 
-/* DISPLAY operands, CALL arguments and GO TO DEPENDING names -- at most
- * eight per statement, and most statements have none, so they live in a
- * side table the statement points into rather than an array it embeds. */
+/* DISPLAY operands, CALL arguments, GO TO DEPENDING names and SORT keys.
+ * Most statements have none, so they live in a side table the statement
+ * points into rather than an array it embeds; a statement's are contiguous.
+ * DISPLAY once split its operands eight to a statement, and so eight to a
+ * line -- a DISPLAY of nine items printed two lines where IBM prints one. */
 typedef struct { int sym; const char *lit; int litlen; Node *sub; int part_off, part_len; } Dop;
 
 typedef struct {
@@ -844,6 +850,7 @@ typedef struct {
     int  serial;            /* ST_SEARCH: a serial SEARCH rather than SEARCH ALL */
     struct Cond *whens[8]; int when_lab[8]; int nwhen;   /* serial SEARCH: WHEN series */
     int  acc_from;          /* ACCEPT FROM: 0 SYSIN, 1 DATE, 2 DAY, 3 TIME, 4 CONSOLE */
+    int  tod_refresh;       /* the COBOL statement this begins names TIME-OF-DAY */
 } Stmt;
 
 /* Files. One DCB each, emitted into the program CSECT. QSAM move mode: the
@@ -893,6 +900,8 @@ typedef struct {
     int  nalt;
     int  alt_sym[4], alt_dup[4];
     char alt_dd[4][9];
+    int  same_rec;     /* SAME RECORD AREA group, 0 when in none */
+    int  sort;         /* an SD: records go to and from the sort, never a DCB */
 } File;
 
 #define MAXFILE 16
@@ -1150,6 +1159,19 @@ static void make_tally(int *cursor);
  * code. Created on first use, like CURRENT-DATE. */
 static int retcode_sym = -1;
 static int tally_sym = -1;
+/* TIME-OF-DAY, IBM's HHMMSS register. Unlike CURRENT-DATE it is refreshed at
+ * every statement that names it, as IKFCBL00 does: a program timing itself
+ * gets the time it asked for, not the time it started. */
+static int tod_sym = -1;
+static int tod_hit;             /* the statement being parsed named it */
+static void make_tod(int *cursor);
+/* The sort's special registers, IBM's: SORT-RETURN receives the sort's return
+ * code when a SORT ends -- IKFCBL00 ignores a value the program stores there
+ * (measured) -- and SORT-FILE-SIZE, when positive, becomes the SIZE=E
+ * estimate on the SORT control statement. */
+static int sortret_sym = -1, sortsize_sym = -1;
+static void make_sortregs(int *cursor);
+static int use_sort;
 
 static int need_sym(const char *n)
 {
@@ -1212,6 +1234,17 @@ static int resolve_sym_quiet(const char *name, char q[][31], int nq)
         make_tally(&cur);
         return tally_sym;
     }
+    if (found < 0 && !nq && (!strcmp(name, "SORT-RETURN") || !strcmp(name, "SORT-FILE-SIZE"))) {
+        int cur = wslen;
+        make_sortregs(&cur);
+        return !strcmp(name, "SORT-RETURN") ? sortret_sym : sortsize_sym;
+    }
+    if (found < 0 && !nq && !strcmp(name, "TIME-OF-DAY")) {
+        int cur = wslen;
+        make_tod(&cur);
+        tod_hit = 1;
+        return tod_sym;
+    }
     return found;
 }
 
@@ -1244,6 +1277,17 @@ static int resolve_sym(const char *name, char q[][31], int nq)
             int cur = wslen;
             make_tally(&cur);
             return tally_sym;
+        }
+        if (!nq && (!strcmp(name, "SORT-RETURN") || !strcmp(name, "SORT-FILE-SIZE"))) {
+            int cur = wslen;
+            make_sortregs(&cur);
+            return !strcmp(name, "SORT-RETURN") ? sortret_sym : sortsize_sym;
+        }
+        if (!nq && !strcmp(name, "TIME-OF-DAY")) {
+            int cur = wslen;
+            make_tod(&cur);
+            tod_hit = 1;
+            return tod_sym;
         }
         if (nq) snprintf(m, sizeof m, "no '%s' is inside '%s'", name, q[0]);
         else    snprintf(m, sizeof m, "undeclared identifier '%s'", name);
@@ -2150,6 +2194,37 @@ static void make_tally(int *cursor)
     make_binreg(&tally_sym, "TALLY", "9(5)", 0, 4, cursor);
 }
 
+static void make_sortregs(int *cursor)
+{
+    make_binreg(&sortret_sym, "SORT-RETURN", "S9(4)", 1, 2, cursor);
+    make_binreg(&sortsize_sym, "SORT-FILE-SIZE", "S9(8)", 1, 4, cursor);
+}
+
+/* TIME-OF-DAY: six unsigned DISPLAY digits, HHMMSS. */
+static void make_tod(int *cursor)
+{
+    if (tod_sym >= 0) return;
+    if (nsym >= MAXSYM) die("too many data items");
+    Sym *sy = &syms[nsym];
+    memset(sy, 0, sizeof *sy);
+    snprintf(sy->name, sizeof sy->name, "TIME-OF-DAY");
+    snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
+    PicInfo pi;
+    if (pic_analyse("9(6)", &pi) < 0) die(pi.err);
+    sy->digits = pi.digits;
+    sy->usage = U_DISPLAY;
+    sy->bytes = sy->elem = 6;
+    sy->level = 1;
+    sy->gparent = sy->occ_parent = -1;
+    sy->fd_file = -1; sy->index_sym = sy->askey_sym = sy->odo_dep = -1;
+    sy->redef_from = sy->redef_cap = -1;
+    sy->offset = *cursor;
+    *cursor += sy->bytes;
+    if (*cursor > wslen) wslen = *cursor;
+    tod_sym = nsym;
+    nsym++;
+}
+
 /* One literal of a level-88 VALUE, into a condition name's value slots. */
 static void read_88_literal(char *buf, int *len, int *isstr)
 {
@@ -2222,7 +2297,10 @@ static void parse_data_division(void)
             cur_file = -1;
             continue;
         }
-        if (is("FD")) {
+        if (is("FD") || is("SD")) {
+            /* An SD is an FD for the sort: the same record descriptions, one
+             * area they all describe, and no data set of its own. */
+            int is_sd = is("SD");
             next();
             while (sp > 0) {
                 Sym *g = &syms[stack[--sp]];
@@ -2232,7 +2310,9 @@ static void parse_data_division(void)
             }
             if (cursor > wslen) wslen = cursor;
             cur_file = file_index(tok.text);
-            if (cur_file < 0) die("FD names a file that was not named in a SELECT");
+            if (cur_file < 0) die(is_sd ? "SD names a file that was not named in a SELECT"
+                                        : "FD names a file that was not named in a SELECT");
+            files[cur_file].sort = is_sd;
             next();
             /* The FD clauses describe what the DD statement and the label
              * already carry, so accept and ignore them -- except REPORT IS,
@@ -2525,6 +2605,19 @@ static void parse_data_division(void)
             if (level == 1 && cur_file >= 0 && files[cur_file].rec_sym >= 0) {
                 fd_from = cursor;
                 cursor = syms[files[cur_file].rec_sym].offset;
+            } else if (level == 1 && cur_file >= 0 && files[cur_file].same_rec) {
+                /* SAME RECORD AREA: the first record of a file whose partner
+                 * already has one goes on top of the partner's, the way a
+                 * file's later records go on top of its first. */
+                for (int k = 0; k < nfile; k++)
+                    if (k != cur_file && files[k].same_rec == files[cur_file].same_rec
+                        && files[k].rec_sym >= 0) {
+                        if (files[k].varrec || files[cur_file].varrec)
+                            die("SAME RECORD AREA for variable-length files is not implemented yet");
+                        fd_from = cursor;
+                        cursor = syms[files[k].rec_sym].offset;
+                        break;
+                    }
             }
         }
 
@@ -2745,7 +2838,7 @@ static void parse_data_division(void)
             else if (is("DISPLAY")) { sy->usage = U_DISPLAY; saw_usage = 1; next(); }
             else if (is("VALUE")) {
                 next(); if (is("IS")) next();
-                if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(sy->value, "0"); sy->has_value = 1; next(); }
+                if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(sy->value, "0"); sy->has_value = 1; sy->value_zero = 1; next(); }
                 else if (is("SPACE") || is("SPACES")) { sy->has_value = 2; next(); }
                 else if (is("LOW-VALUE")  || is("LOW-VALUES"))  { sy->has_value = 4; next(); }
                 else if (is("HIGH-VALUE") || is("HIGH-VALUES")) { sy->has_value = 5; next(); }
@@ -2851,6 +2944,10 @@ static void parse_data_division(void)
             sy->need_lead_start = pi.need_lead_start;
             memcpy(sy->mask, pi.mask, sizeof sy->mask);
             if (pi.is_alpha) {
+                /* The figurative ZERO is the character 0 in every position of
+                 * an alphanumeric item, which is ALL '0'. A numeric literal
+                 * there is still refused. */
+                if (sy->has_value == 1 && sy->value_zero) { sy->has_value = 7; strcpy(sy->value, "0"); }
                 if (sy->has_value == 1)
                     die("a numeric VALUE on a PIC X item is not implemented yet");
                 sy->bytes = pi.bytes;
@@ -3072,7 +3169,7 @@ static void parse_data_division(void)
          * of different lengths say so unless RECORDING MODE F. */
         if (files[i].recmode == 'U' || files[i].recmode == 'S')
             die("RECORDING MODE U and S are not implemented -- undefined-length and spanned records");
-        if (files[i].vsam || files[i].isam) files[i].varrec = 0;   /* their records carry no RDW */
+        if (files[i].vsam || files[i].isam || files[i].sort) files[i].varrec = 0;   /* their records carry no RDW */
         else if (files[i].recmode == 'V') files[i].varrec = 1;
         else if (files[i].recmode == 'F') files[i].varrec = 0;
         else if (files[i].rec_max > files[i].rec_min || minrec != files[i].reclen) files[i].varrec = 1;
@@ -3300,6 +3397,36 @@ static void parse_environment(void)
             }
             continue;
         }
+        if (is("I-O-CONTROL")) {
+            /* SAME RECORD AREA FOR f1 f2 ... is the one I-O-CONTROL entry with
+             * a meaning here: the files' records are one area, so a record
+             * read through one is there to be seen through the other. SAME
+             * AREA (buffers) and RERUN are accepted and change nothing; with
+             * one volume and QSAM's own buffers there is nothing to share. */
+            next(); expect(".");
+            int ngroup = 0;
+            while (!tok.eof && !is("DATA") && !is("PROCEDURE")) {
+                if (!is("SAME")) { next(); continue; }
+                next();
+                int rec = 0;
+                if (is("RECORD")) { rec = 1; next(); }
+                else if (is("SORT") || is("SORT-MERGE")) next();
+                if (is("AREA")) next();
+                if (is("FOR")) next();
+                ngroup++;
+                while (!tok.eof && !is(".") && !is("SAME") && !is("RERUN") && !is("MULTIPLE")) {
+                    int fi = file_index(tok.text);
+                    if (fi < 0) die("SAME AREA names something that is not a file");
+                    if (rec) {
+                        if (files[fi].same_rec) die("a file may be in only one SAME RECORD AREA");
+                        files[fi].same_rec = ngroup;
+                    }
+                    next();
+                }
+                if (is(".")) next();
+            }
+            continue;
+        }
         next();
     }
 }
@@ -3506,6 +3633,7 @@ static int starts_statement(void)
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
         "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT", "EXAMINE",
+        "SORT", "RELEASE", "RETURN",
         "STRING", "UNSTRING", "CANCEL", "SUPPRESS", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
@@ -3941,7 +4069,171 @@ static Node *opt_subscript(void)
     return head;
 }
 
+static void parse_one_statement_body(void);
+static void parse_stmt_list(int allow_else);
+static void eat_period(void);
+
+/* ---- SORT -----------------------------------------------------------------
+ * SORT is a LINK to the system sort with the control statements in the
+ * parameter list, the way IKFCBL00's ILBOSRT0 does it, and records passing
+ * through E15 and E35 exits that live in this program. The exits are
+ * coroutines with the program: E15 resumes the input procedure, and RELEASE
+ * hands a record back with return code 12 (insert); E35 resumes the output
+ * procedure with a record, and RETURN hands back 4 (taken) to ask for the
+ * next. A procedure's end hands back 8 (no more). USING and GIVING are the
+ * same machinery with a procedure compiled here: OPEN, READ and RELEASE, or
+ * RETURN and WRITE, and CLOSE -- so every file organisation and record format
+ * the compiler reads or writes works for them too.
+ *
+ * The statement becomes: ST_SORT (the LINK, then a branch past the rest);
+ * the input part at lab1 ending in ST_SRTEND 15; the output part at lab2
+ * ending in ST_SRTEND 35; and lab3, where the program continues. */
+static void sort_perform(void)
+{
+    /* INPUT/OUTPUT PROCEDURE IS section [THRU section]: a PERFORM of it. */
+    if (is("IS")) next();
+    Stmt *p = new_stmt(ST_PERFORM);
+    p->para = pool_str(tok.text, tok.len);
+    next();
+    if (is("THRU") || is("THROUGH")) { next(); p->thru = pool_str(tok.text, tok.len); next(); }
+    else p->thru = p->para;
+    p->vary2_sym = p->vary3_sym = -1;
+}
+
+static void sort_using(int sd, int f)
+{
+    File *uf = &files[f];
+    if (uf->sort) die("SORT ... USING names a sort file");
+    if (uf->rec_sym < 0) die("SORT ... USING: the file has no record description");
+    uf->opened_input = 1;
+    Stmt *o = new_stmt(ST_OPEN); o->dst = f; o->src = 1;
+    int ltop = ++nlabel, ldone = ++nlabel;
+    new_stmt(ST_LABEL)->dst = ltop;
+    Stmt *r = new_stmt(ST_READ);
+    r->dst = f; r->lab1 = ++nlabel; r->lab2 = ++nlabel; r->had_atend = 1;
+    new_stmt(ST_BRANCH)->dst = ldone;
+    new_stmt(ST_LABEL)->dst = r->lab2;
+    Stmt *m = new_stmt(ST_MOVE); m->dst = files[sd].rec_sym; m->src = uf->rec_sym;
+    new_stmt(ST_RELEASE)->dst = sd;
+    new_stmt(ST_BRANCH)->dst = ltop;
+    new_stmt(ST_LABEL)->dst = ldone;
+    new_stmt(ST_CLOSE)->dst = f;
+}
+
+static void sort_giving(int sd, int f)
+{
+    File *gf = &files[f];
+    if (gf->sort) die("SORT ... GIVING names a sort file");
+    if (gf->rec_sym < 0) die("SORT ... GIVING: the file has no record description");
+    gf->opened_output = 1; gf->has_write = 1;
+    Stmt *o = new_stmt(ST_OPEN); o->dst = f; o->src = 2;
+    int ltop = ++nlabel, ldone = ++nlabel;
+    new_stmt(ST_LABEL)->dst = ltop;
+    Stmt *r = new_stmt(ST_RETURN);
+    r->dst = sd; r->lab1 = ++nlabel; r->lab2 = ++nlabel; r->had_atend = 1;
+    new_stmt(ST_BRANCH)->dst = ldone;
+    new_stmt(ST_LABEL)->dst = r->lab2;
+    Stmt *m = new_stmt(ST_MOVE); m->dst = gf->rec_sym; m->src = files[sd].rec_sym;
+    Stmt *w = new_stmt(ST_WRITE); w->dst = f; w->rec = gf->rec_sym; w->adv_sym = -1;
+    new_stmt(ST_BRANCH)->dst = ltop;
+    new_stmt(ST_LABEL)->dst = ldone;
+    new_stmt(ST_CLOSE)->dst = f;
+}
+
+/* The 01 an item sits in. */
+static int record_of(int k)
+{
+    while (syms[k].gparent >= 0) k = syms[k].gparent;
+    return k;
+}
+
+static void parse_sort(void)
+{
+    next();
+    int sd = file_index(tok.text);
+    if (sd < 0 || !files[sd].sort) die("SORT names something that is not an SD file");
+    next();
+    use_sort = 1;
+    { int cur = wslen; make_sortregs(&cur); }
+    Stmt *st = new_stmt(ST_SORT);
+    st->dst = sd;
+    int sti = (int)(st - stmts);
+    while (is("ON") || is("ASCENDING") || is("DESCENDING")) {
+        if (is("ON")) next();
+        int desc = is("DESCENDING");
+        if (!desc && !is("ASCENDING")) die("SORT wants ASCENDING or DESCENDING KEY");
+        next();
+        if (is("KEY")) next();
+        while (!tok.eof && !is(".") && !is("ON") && !is("ASCENDING") && !is("DESCENDING")
+               && !is("INPUT") && !is("USING") && !is("OUTPUT") && !is("GIVING")
+               && !is("COLLATING") && !is("WITH") && !is("DUPLICATES")) {
+            int k = consume_sym();
+            const Sym *ks = &syms[k];
+            if (ks->fd_file != sd && syms[record_of(k)].fd_file != sd)
+                die("a SORT key must be an item in the sort file's record");
+            if (ks->occ_depth) die("a SORT key may not be in a table -- it has one position");
+            if (ks->is_88) die("a SORT key is a data item, not a condition-name");
+            if (ks->is_index) die("a SORT key may not be an index item");
+            if (ks->usage == U_DISPLAY && !ks->is_alpha && !ks->is_group && !ks->edited
+                && (ks->sgn_lead || ks->sgn_sep))
+                die("a SORT key with SIGN LEADING or SEPARATE is not implemented yet");
+            Stmt *s2 = &stmts[sti];
+            dop_add(s2);
+            s2->dop[s2->ndop].sym = k;
+            s2->dop[s2->ndop].litlen = desc;
+            s2->dop[s2->ndop].lit = "";
+            s2->ndop++;
+        }
+    }
+    if (!stmts[sti].ndop) die("SORT needs at least one KEY");
+    if (is("WITH") || is("DUPLICATES")) die("WITH DUPLICATES IN ORDER is COBOL-85, not COBOL-74");
+    if (is("COLLATING")) die("SORT ... COLLATING SEQUENCE is not implemented yet");
+    int lin = ++nlabel, lout = ++nlabel, lend = ++nlabel;
+    stmts[sti].lab1 = lin; stmts[sti].lab2 = lout; stmts[sti].lab3 = lend;
+    new_stmt(ST_LABEL)->dst = lin;
+    if (is("INPUT")) { next(); expect("PROCEDURE"); sort_perform(); }
+    else if (is("USING")) {
+        next();
+        int any = 0;
+        while (!tok.eof && !is(".") && !is("OUTPUT") && !is("GIVING")) {
+            int f = file_index(tok.text);
+            if (f < 0) die("SORT ... USING names something that is not a file");
+            next();
+            sort_using(sd, f);
+            any = 1;
+        }
+        if (!any) die("SORT ... USING needs a file");
+    } else die("SORT wants INPUT PROCEDURE or USING");
+    Stmt *e = new_stmt(ST_SRTEND); e->src = 15; e->dst = lout;
+    new_stmt(ST_LABEL)->dst = lout;
+    if (is("OUTPUT")) { next(); expect("PROCEDURE"); sort_perform(); }
+    else if (is("GIVING")) {
+        next();
+        int f = file_index(tok.text);
+        if (f < 0) die("SORT ... GIVING names something that is not a file");
+        next();
+        sort_giving(sd, f);
+        if (!is(".") && !starts_statement() && file_index(tok.text) >= 0)
+            die("SORT ... GIVING takes one file in COBOL-74");
+    } else die("SORT wants OUTPUT PROCEDURE or GIVING");
+    new_stmt(ST_SRTEND)->src = 35;
+    new_stmt(ST_LABEL)->dst = lend;
+    eat_period();
+}
+
+/* A statement that names TIME-OF-DAY gets the register refreshed just before
+ * its code: the flag goes on the first generated statement of the COBOL one.
+ * Statements nested inside it (an IF's branches) mark themselves. */
 static void parse_one_statement(void)
+{
+    int start = nstmt, saved = tod_hit;
+    tod_hit = 0;
+    parse_one_statement_body();
+    if (tod_hit && start < nstmt) stmts[start].tod_refresh = 1;
+    tod_hit = saved;
+}
+
+static void parse_one_statement_body(void)
 {
     if (is("DISPLAY")) {
         next();
@@ -3974,7 +4266,7 @@ static void parse_one_statement(void)
                 } else n = sub ? syms[sym].elem : syms[sym].bytes;
             }
             for (int off = 0; off < n; ) {
-                if (line >= 120 || st->ndop >= 8) { st = new_stmt(ST_DISPLAY_LIT); line = 0; }
+                if (line >= 120) { st = new_stmt(ST_DISPLAY_LIT); line = 0; }
                 int take = n - off < 120 - line ? n - off : 120 - line;
                 dop_add(st);
                 if (islit) {
@@ -5296,6 +5588,51 @@ static void parse_one_statement(void)
         }
         st->ins_n = ninsop - st->ins_first;
         eat_period();
+        return;
+    }
+
+    if (is("SORT")) {
+        parse_sort();
+        return;
+    }
+
+    if (is("RELEASE")) {
+        /* RELEASE record [FROM identifier]: FROM is a MOVE first, as WRITE
+         * FROM is. The record goes to the sort from the SD's area. */
+        next();
+        int r = consume_sym();
+        int fi = syms[r].fd_file;
+        if (fi < 0 || !files[fi].sort) die("RELEASE names something that is not a sort file's record");
+        if (is("FROM")) {
+            next();
+            Stmt *m = new_stmt(ST_MOVE);
+            m->src = consume_sym(); m->ssub = opt_subscript();
+            m->dst = r;
+        }
+        new_stmt(ST_RELEASE)->dst = fi;
+        eat_period();
+        return;
+    }
+
+    if (is("RETURN")) {
+        /* RETURN sort-file [RECORD] [INTO identifier] AT END ..., the READ
+         * of the sort's output. Same shape as READ: the AT END statements
+         * follow, and the label after them is where a record continues. */
+        next();
+        int fi = file_index(tok.text);
+        if (fi < 0 || !files[fi].sort) die("RETURN names something that is not a sort file");
+        next();
+        if (is("RECORD")) next();
+        Stmt *st = new_stmt(ST_RETURN);
+        st->dst = fi;
+        if (is("INTO")) { next(); st->src = consume_sym(); st->ssub = opt_subscript(); }
+        st->lab1 = ++nlabel;
+        st->lab2 = ++nlabel;
+        if (is("AT")) next();
+        expect("END");
+        st->had_atend = 1;
+        parse_stmt_list(1);
+        new_stmt(ST_LABEL)->dst = st->lab2;
         return;
     }
 
@@ -9513,8 +9850,8 @@ static void generate(void)
     int has_display = 0;
     resolve_file_use();
     for (int i = 0; i < nstmt; i++)
-        if (stmts[i].op == ST_DISPLAY_LIT || stmts[i].op == ST_DISPLAY_ID)
-            has_display = 1;
+        if (stmts[i].op == ST_DISPLAY_LIT || stmts[i].op == ST_DISPLAY_ID || stmts[i].tod_refresh)
+            has_display = 1;            /* TIME-OF-DAY needs the runtime's COBADT */
 
     asm_comment("---------------------------------------------------------------");
     {
@@ -9664,6 +10001,21 @@ static void generate(void)
             snprintf(b, sizeof b, "15,%s", x);  asm_line("", "L", b, "");
             asm_line("", "BR", "15", "");
             asm_line(f, "DS", "0H", "fall-through when not performed");
+            reset_bases();
+        }
+        if (st->tod_refresh) {
+            /* COBADT's TIME is HHMMSSth into ZWK; the register is the first six. */
+            const Sym *td = &syms[tod_sym];
+            char fr[64];
+            use_adt = 1;
+            asm_comment(" TIME-OF-DAY, from the clock");
+            asm_line("", "LA", "1,ADTP3", "");
+            asm_line("", "L", "15,VADT", "");
+            asm_line("", "BALR", "14,15", "");
+            need_sym_base(td);
+            field_ref_m(td, NULL, FR_SS_NOLEN, 6, 6, fr, sizeof fr);
+            snprintf(b, sizeof b, "%s(6),ZWK", fr);
+            asm_line("", "MVC", b, "HHMMSS");
             reset_bases();
         }
         switch (st->op) {
@@ -10376,6 +10728,177 @@ static void generate(void)
             reset_bases();
             break;
         }
+        case ST_SORT: {
+            /* The control statements, IKFCBL00's format exactly:
+             *   SORT FIELDS=(pppp,lll,ff,o,...)[,SIZE=Ennnnnnn]
+             *   RECORD TYPE=F,LENGTH=(nnnnn)
+             * pos and length per key, and the format from the key's usage:
+             * CH for alphanumerics, groups and edited items, ZD for DISPLAY
+             * numerics, PD for COMP-3 and FI (signed binary) for COMP. */
+            const File *sf = &files[st->dst];
+            const Sym *rec = &syms[sf->rec_sym];
+            char fl[512]; int fn = 0;
+            fn += snprintf(fl + fn, sizeof fl - fn, " SORT FIELDS=(");
+            for (int k = 0; k < st->ndop; k++) {
+                const Sym *ks = &syms[st->dop[k].sym];
+                const char *fmt = (ks->is_alpha || ks->is_group || ks->edited) ? "CH"
+                                : ks->usage == U_COMP3 ? "PD" : ks->usage == U_COMP ? "FI" : "ZD";
+                fn += snprintf(fl + fn, sizeof fl - fn, "%s%04d,%03d,%s,%c", k ? "," : "",
+                               ks->offset - rec->offset + 1, ks->bytes, fmt,
+                               st->dop[k].litlen ? 'D' : 'A');
+            }
+            fn += snprintf(fl + fn, sizeof fl - fn, ")");
+            char sl[16], lb[16];
+            snprintf(sl, sizeof sl, "SRT%04d", i);
+            snprintf(b, sizeof b, " SORT %s", sf->name);
+            asm_comment(b);
+            /* The statement text, in pieces a card can hold. */
+            for (int off = 0; off < fn; off += 40) {
+                char piece[64], opd[80];
+                int n = fn - off < 40 ? fn - off : 40;
+                memcpy(piece, fl + off, (size_t)n); piece[n] = 0;
+                snprintf(opd, sizeof opd, "C'%s'", piece);
+                if (off == 0) snprintf(lb, sizeof lb, "%sS", sl); else lb[0] = 0;
+                pend(lb, "DC", opd, off == 0 ? "SORT statement" : "");
+            }
+            snprintf(lb, sizeof lb, "%sF", sl);
+            pend(lb, "EQU", "*-1", "its end without SIZE");
+            pend("", "DC", "C',SIZE=E'", "");
+            snprintf(lb, sizeof lb, "%sZ", sl);
+            pend(lb, "DC", "C'0000000'", "SORT-FILE-SIZE, when positive");
+            snprintf(lb, sizeof lb, "%sG", sl);
+            pend(lb, "EQU", "*-1", "its end with SIZE");
+            snprintf(b, sizeof b, "C' RECORD TYPE=F,LENGTH=(%05d)'", sf->reclen);
+            snprintf(lb, sizeof lb, "%sR", sl);
+            pend(lb, "DC", b, "RECORD statement");
+            snprintf(lb, sizeof lb, "%sQ", sl);
+            pend(lb, "EQU", "*-1", "");
+            /* The parameter list starts on a halfword that is not a fullword,
+             * so the addresses after its length are aligned. */
+            pend("", "DS", "0F", "");
+            pend("", "DC", "H'0'", "");
+            snprintf(lb, sizeof lb, "%sL", sl);
+            pend(lb, "DC", "AL2(24)", "sort parameter list: its length");
+            snprintf(b, sizeof b, "A(%sS,%sF,%sR,%sQ)", sl, sl, sl, sl);
+            snprintf(lb, sizeof lb, "%sE", sl);
+            pend(lb, "DC", b, "SORT and RECORD, first and last byte");
+            pend("", "DC", "A(SRTE15,SRTE35)", "the exits");
+            snprintf(b, sizeof b, "X'80',AL3(%sL)", sl);
+            snprintf(lb, sizeof lb, "%sP", sl);
+            pend(lb, "DC", b, "R1 -> this");
+
+            asm_line("", "STM", "2,12,SRTBAS", "the registers the exits resume with");
+            snprintf(b, sizeof b, "15,L%04d", st->lab1);
+            asm_line("", "LA", b, "");
+            asm_line("", "ST", "15,SRTRES", "E15 starts the input part");
+            asm_line("", "MVI", "SRTHAVE,0", "");
+            if (sortsize_sym >= 0) {
+                /* SIZE=E from SORT-FILE-SIZE, or no SIZE when it is not
+                 * positive. The end address in the list says which. */
+                const Sym *zs = &syms[sortsize_sym];
+                char fr[64], lno[16], lset[16];
+                snprintf(lno, sizeof lno, "L%04d", ++genlabel);
+                snprintf(lset, sizeof lset, "L%04d", ++genlabel);
+                need_sym_base(zs);
+                field_ref_m(zs, NULL, FR_RX, 4, 6, fr, sizeof fr);
+                snprintf(b, sizeof b, "15,%s", fr); asm_line("", "L", b, "SORT-FILE-SIZE");
+                asm_line("", "LTR", "15,15", "");
+                asm_line("", "BNP", lno, "");
+                asm_line("", "CVD", "15,DWK", "");
+                snprintf(b, sizeof b, "%sZ(7),DWK+4(4)", sl); asm_line("", "UNPK", b, "");
+                snprintf(b, sizeof b, "%sZ+6,X'F0'", sl); asm_line("", "OI", b, "");
+                snprintf(b, sizeof b, "15,%sG", sl); asm_line("", "LA", b, "");
+                asm_line("", "B", lset, "");
+                asm_line(lno, "DS", "0H", "");
+                snprintf(b, sizeof b, "15,%sF", sl); asm_line("", "LA", b, "");
+                asm_line(lset, "DS", "0H", "");
+                snprintf(b, sizeof b, "15,%sE+4", sl); asm_line("", "ST", b, "the SORT statement's last byte");
+                reset_bases();
+            }
+            asm_line("", "LA", "1,SRTSAVE", "a save area of its own, so the");
+            asm_line("", "ST", "13,4(,1)", "procedures can use SAVEAREA while");
+            asm_line("", "LR", "13,1", "the sort is running");
+            snprintf(b, sizeof b, "1,%sP", sl);
+            asm_line("", "LA", b, "");
+            asm_line("", "LINK", "EP=SORT", "");
+            asm_line("", "L", "13,4(,13)", "");
+            reset_bases();
+            {
+                const Sym *rs = &syms[sortret_sym];
+                char fr[64];
+                need_sym_base(rs);
+                field_ref_m(rs, NULL, FR_RX, 2, 6, fr, sizeof fr);
+                snprintf(b, sizeof b, "15,%s", fr); asm_line("", "STH", b, "SORT-RETURN");
+            }
+            snprintf(b, sizeof b, "L%04d", st->lab3);
+            asm_line("", "B", b, "past the input and output parts");
+            reset_bases();
+            break;
+        }
+        case ST_RELEASE: {
+            const Sym *rec = &syms[files[st->dst].rec_sym];
+            char fr[64], lr[16];
+            snprintf(lr, sizeof lr, "L%04d", ++genlabel);
+            asm_comment(" RELEASE: the record to the sort, and back here for the next");
+            snprintf(b, sizeof b, "14,%s", lr); asm_line("", "LA", b, "");
+            asm_line("", "ST", "14,SRTRES", "");
+            need_sym_base(rec);
+            field_ref_m(rec, NULL, FR_RX, rec->bytes, 6, fr, sizeof fr);
+            snprintf(b, sizeof b, "1,%s", fr); asm_line("", "LA", b, "the record");
+            asm_line("", "LA", "15,12", "E15: insert it");
+            asm_line("", "B", "SRTYLD", "");
+            asm_line(lr, "DS", "0H", "");
+            reset_bases();
+            break;
+        }
+        case ST_RETURN: {
+            const Sym *rec = &syms[files[st->dst].rec_sym];
+            char le[16], lc[16], lr[16], lt[16], fr[64];
+            snprintf(le, sizeof le, "L%04d", st->lab1);
+            snprintf(lc, sizeof lc, "L%04d", st->lab2);
+            snprintf(lr, sizeof lr, "L%04d", ++genlabel);
+            snprintf(lt, sizeof lt, "L%04d", ++genlabel);
+            snprintf(b, sizeof b, " RETURN %s", files[st->dst].name);
+            asm_comment(b);
+            asm_line("", "CLI", "SRTHAVE,1", "a record the sort handed over?");
+            asm_line("", "BE", lt, "");
+            snprintf(b, sizeof b, "14,%s", lr); asm_line("", "LA", b, "");
+            asm_line("", "ST", "14,SRTRES", "");
+            asm_line("", "LA", "15,4", "E35: taken; the next one, please");
+            asm_line("", "B", "SRTYLD", "");
+            asm_line(lr, "DS", "0H", "");
+            asm_line(lt, "DS", "0H", "");
+            reset_bases();
+            asm_line("", "MVI", "SRTHAVE,0", "");
+            asm_line("", "L", "1,SRTREC", "");
+            asm_line("", "LTR", "1,1", "zero: the sort has no more");
+            asm_line("", "BZ", le, "");
+            need_sym_base(rec);
+            for (int off = 0; off < rec->bytes; off += 256) {
+                int n = rec->bytes - off < 256 ? rec->bytes - off : 256;
+                field_ref_m(rec, NULL, FR_SS_NOLEN, rec->bytes, 6, fr, sizeof fr);
+                snprintf(b, sizeof b, "%s+%d(%d),%d(1)", fr, off, n, off);
+                asm_line("", "MVC", b, off ? "" : "into the SD's record");
+            }
+            if (st->src >= 0) {
+                asm_comment("  INTO: only reached when a record was returned");
+                emit_move(&syms[st->src], st->ssub, rec, NULL);
+            }
+            asm_line("", "B", lc, "");
+            asm_line(le, "DS", "0H", "AT END");
+            reset_bases();
+            break;
+        }
+        case ST_SRTEND:
+            if (st->src == 15) {
+                asm_comment(" end of the SORT's input: E15 says no more");
+                snprintf(b, sizeof b, "15,L%04d", st->dst); asm_line("", "LA", b, "");
+                asm_line("", "ST", "15,SRTRES", "E35 starts the output part");
+            } else asm_comment(" end of the SORT's output: E35 says no more");
+            asm_line("", "LA", "15,8", "");
+            asm_line("", "B", "SRTYLD", "");
+            reset_bases();
+            break;
         case ST_ACCEPT: {
             const Sym *d = &syms[st->dst];
             int n = st->dsub ? d->elem : d->bytes;
@@ -11568,6 +12091,36 @@ static void generate(void)
         asm_line(f, "DS", "0H", "fall-through when not performed");
     }
 
+    if (use_sort) {
+        /* The sort's exits. Entered from the sort with its registers and its
+         * save area; they keep both, take up the program's registers as they
+         * were at the SORT (base registers above all), and resume the
+         * procedure where it last handed control back. SRTYLD is the way
+         * back: the sort's registers again, a return code in R15 and, for an
+         * insert, the record's address in R1. */
+        asm_comment(" SORT exits: E15 resumes the input part, E35 the output");
+        asm_line("SRTE15", "STM", "14,12,12(13)", "");
+        asm_line("", "LM", "2,12,SRTBAS-SRTE15(15)", "the program's registers");
+        asm_line("", "ST", "13,SRTR13", "the sort's save area");
+        asm_line("", "LA", "13,SAVEAREA", "");
+        asm_line("", "L", "14,SRTRES", "");
+        asm_line("", "BR", "14", "resume the input part");
+        asm_line("SRTE35", "STM", "14,12,12(13)", "");
+        asm_line("", "LM", "2,12,SRTBAS-SRTE35(15)", "");
+        asm_line("", "ST", "13,SRTR13", "");
+        asm_line("", "L", "0,0(,1)", "the record leaving the sort; 0 at the end");
+        asm_line("", "ST", "0,SRTREC", "");
+        asm_line("", "MVI", "SRTHAVE,1", "");
+        asm_line("", "LA", "13,SAVEAREA", "");
+        asm_line("", "L", "14,SRTRES", "");
+        asm_line("", "BR", "14", "resume the output part");
+        asm_line("SRTYLD", "L", "13,SRTR13", "back to the sort: R15 and R1 are set");
+        asm_line("", "L", "14,12(,13)", "");
+        asm_line("", "LM", "2,12,28(13)", "");
+        asm_line("", "BR", "14", "");
+        asm_line("SRTBAS", "DS", "11F", "R2-R12 at the SORT");
+    }
+
     {
         int any_isam = 0;
         for (int i = 0; i < nfile; i++)
@@ -11728,6 +12281,13 @@ static void generate(void)
         if (use_str) asm_line("VSTR", "DC", "V(COBSTR)", "");
         if (use_uns) asm_line("VUNS", "DC", "V(COBUNS)", "");
         if (use_insprop) asm_line("INSPROP", "MVC", "1(0,3),0(3)", "executed: INSPECT CHARACTERS propagation");
+        if (use_sort) {
+            asm_line("SRTSAVE", "DS", "18F", "the save area the sort is called with");
+            asm_line("SRTR13", "DS", "F", "the sort's save area, inside an exit");
+            asm_line("SRTRES", "DS", "F", "where the procedure resumes");
+            asm_line("SRTREC", "DS", "F", "E35: the record, or 0 at the end");
+            asm_line("SRTHAVE", "DS", "X", "E35 handed a record not yet returned");
+        }
         if (use_wto) {
             asm_line("VWTO", "DC", "V(COBWTO)", "");
             asm_line("WTOPARM", "DC", "A(DSPBUF),X'80',AL3(WTOLEN)", "DISPLAY UPON CONSOLE");
@@ -11772,6 +12332,7 @@ static void generate(void)
         File *f = &files[i];
         char first[96];
         if (i == 0) asm_comment(" file control blocks");
+        if (f->sort) continue;           /* the sort is the SD's access method */
         if (f->vsam) {
             /* VSAM wants an ACB, an RPL and an exit list where QSAM wants a
              * DCB. VSAMIOS builds these with MODCB because it serves any file
