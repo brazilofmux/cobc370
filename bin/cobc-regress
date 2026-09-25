@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec bigpara iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec bigpara cobxref iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -141,6 +141,25 @@ for t in $TESTS; do
             printf '//GO.SORTWK02 DD  UNIT=SYSDA,SPACE=(CYL,(1,1))\n'
             printf '//GO.SORTWK03 DD  UNIT=SYSDA,SPACE=(CYL,(1,1))\n' ;;
         esac
+        if [ "$t" = cobxref ]; then
+            # Vince Coen's cross-referencer, run on its own source: two work
+            # files it sorts between, the listing on PRINT. It calls NCZ93205
+            # (CBT file 152) only for COPY, which its source has none of, so
+            # the link leaves that unresolved under either compiler.
+            printf '//GO.SOURCE   DD  *\n'
+            cat "$TDIR/cobxref.cbl"
+            printf '/*\n'
+            printf '//GO.SYSPART1 DD  UNIT=SYSDA,SPACE=(CYL,(5,5)),DISP=(NEW,PASS),\n'
+            printf '//            DCB=(RECFM=FB,LRECL=40,BLKSIZE=4000)\n'
+            printf '//GO.SYSPART2 DD  UNIT=SYSDA,SPACE=(CYL,(5,5)),DISP=(NEW,PASS),\n'
+            printf '//            DCB=(RECFM=FB,LRECL=40,BLKSIZE=4000)\n'
+            printf '//GO.PRINT    DD  SYSOUT=Z\n'
+            printf '//GO.NEWSRC   DD  DUMMY\n'
+            printf '//GO.SORTLIB  DD  DSN=SYS1.SORTLIB,DISP=SHR\n'
+            printf '//GO.SORTWK01 DD  UNIT=SYSDA,SPACE=(CYL,(5,1))\n'
+            printf '//GO.SORTWK02 DD  UNIT=SYSDA,SPACE=(CYL,(5,1))\n'
+            printf '//GO.SORTWK03 DD  UNIT=SYSDA,SPACE=(CYL,(5,1))\n'
+        fi
         if [ "$t" = sortug ]; then
             printf '//GO.OUTFILE  DD  UNIT=SYSDA,SPACE=(TRK,(5,5)),DISP=(NEW,DELETE),\n'
             printf '//            DCB=(RECFM=FB,LRECL=80,BLKSIZE=800)\n'

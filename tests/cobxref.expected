@@ -1,0 +1,40 @@
+Data Names                        Defn     Reference
+BEGINLASTPASS                    013480P  014120
+BEGINRUN                         004550P
+BREAKWORD                        010930P  011100 011990 013100
+BUILDANALYZER                    009660P  009740 010300 010820 010960 011160 011380 011520 011720
+                                          011860 012020 012110 012190 012260 012330
+CHECK-Q                          014780P  014980 015060
+CHECKMORE                        006720P  007200
+CHECKMORE2                       006780P  006800 006830
+CHECKTHEWORD                     009260P  010160
+CHECK1                           002830W
+CHECK10                          010250P  012040
+CHECK10UNKNOWN                   012100P
+CHECK11                          010260P  012130
+CHECK11UNKNOWN                   012180P
+CHECK12                          010270P  012210
+CHECK12UNKNOWN                   012250P
+CHECK13                          010280P  012280
+CHECK13UNKNOWN                   012320P
+CHECK2                           010170P  010500
+CHECK2UNKNOWN                    010810P
+CHECK3                           010180P  010840
+CHECK3UNKNOWN                    010950P
+CHECK4                           010190P  010980
+CHECK4UNKNOWN                    011150P
+CHECK5                           010200P  011180
+CHECK5UNKNOWN                    011370P
+CHECK6                           010210P  011400
+CHECK6UNKNOWN                    011510P
+CHECK7                           010220P  011540
+CHECK7UNKNOWN                    011710P
+CHECK8                           010230P  011740
+CHECK8UNKNOWN                    011850P
+CHECK9                           010240P  011880
+CHECK9UNKNOWN                    012010P
+CLEARWSWORDS                     007030P
+COBOLCONT                        002730W  005180 005320 007100 007210 008170 008270 008290 008310
+                                          008330 009360
+COBOLFORMA                       002740W  006850 007290 007340 009350
+COBOLFORMB                       002770W
