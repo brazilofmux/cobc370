@@ -965,6 +965,35 @@ What is confirmed is the shape — NTIS catalogues sibling items such as
 If it is ever wanted, the realistic routes are the vintage mainframe
 preservation community and a direct NTIS media request, not a download.
 
+### IBM spellings of the era
+
+The charter is COBOL-74 plus the IBM spellings programs of that era used.
+Each of these came from real programs Ed Liss ran through the compiler, and
+each was measured against IBM ANS COBOL (IKFCBL00) on TK5 before it went in;
+the tests' expected output is IKFCBL00's own.
+
+- `ID DIVISION` for `IDENTIFICATION DIVISION`; `EJECT`, `SKIP1`, `SKIP2` and
+  `SKIP3` as listing control, consumed wherever they stand (`iddiv`,
+  `listctl`).
+- `RETURN-CODE`, a halfword special register whose value becomes the step's
+  condition code at `STOP RUN` or `GOBACK` (`retcode`).
+- `01 NAME COPY MEMBER.`, under Library above (`copyent`).
+- `EXAMINE`, the verb `INSPECT` replaced, with the `TALLY` register it counts
+  into (`examine`). `TALLYING ALL`, `LEADING` and `UNTIL FIRST`, with or
+  without `REPLACING BY`; `REPLACING ALL`, `LEADING`, `FIRST` and
+  `UNTIL FIRST`. It is lowered onto `INSPECT`'s operations: `UNTIL FIRST x`
+  is `CHARACTERS BEFORE INITIAL x`, and `TALLY` is reset first because
+  `INSPECT` only adds. Matching is on bytes, as IKFCBL00's is: the last digit
+  of a signed item carries its sign and matches no digit. `TALLY` is an
+  ordinary `9(5) COMP` item otherwise -- moved, added to, displayed.
+- `DISPLAY` of a `COMP` or `COMP-3` item (`dispcomp`). IKFCBL00 converts it:
+  one digit per PICTURE position, no decimal point, a negative sign
+  overpunched on the last digit, and a positive value shown as plain digits
+  -- not with the C zone a signed `DISPLAY` item prints as. The earlier
+  refusal asked for a MOVE first; real programs do not.
+- `GO TO ... DEPENDING ON` with any number of procedure-names (`godep10`).
+  Eight was this compiler's own limit, not IBM's or the standard's.
+
 ## What this map is not
 
 It is not a plan. Reading it, the honest conclusions are that Sort-Merge,

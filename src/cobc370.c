@@ -697,6 +697,7 @@ typedef struct {
 
 #define MAXSYM 1024
 static Sym syms[MAXSYM];
+static int display_converts(const Sym *sy);
 static int nsym, wslen;
 
 /* The innermost REDEFINES still open on the group stack, or -1. A redefinition
@@ -1143,10 +1144,12 @@ static void make_curdate(int *cursor);
 static int uses_curdate;
 static int curdate_sym = -1;
 static void make_retcode(int *cursor);
+static void make_tally(int *cursor);
 /* RETURN-CODE is IBM's other special register: a halfword the program moves
  * to, which the epilogue hands back in R15 so it becomes the step's condition
  * code. Created on first use, like CURRENT-DATE. */
 static int retcode_sym = -1;
+static int tally_sym = -1;
 
 static int need_sym(const char *n)
 {
@@ -1204,6 +1207,11 @@ static int resolve_sym_quiet(const char *name, char q[][31], int nq)
         make_retcode(&cur);
         return retcode_sym;
     }
+    if (found < 0 && !nq && !strcmp(name, "TALLY")) {
+        int cur = wslen;
+        make_tally(&cur);
+        return tally_sym;
+    }
     return found;
 }
 
@@ -1231,6 +1239,11 @@ static int resolve_sym(const char *name, char q[][31], int nq)
             int cur = wslen;
             make_retcode(&cur);
             return retcode_sym;
+        }
+        if (!nq && !strcmp(name, "TALLY")) {
+            int cur = wslen;
+            make_tally(&cur);
+            return tally_sym;
         }
         if (nq) snprintf(m, sizeof m, "no '%s' is inside '%s'", name, q[0]);
         else    snprintf(m, sizeof m, "undeclared identifier '%s'", name);
@@ -2094,33 +2107,47 @@ static void make_curdate(int *cursor)
     nsym++;
 }
 
-/* RETURN-CODE, PIC S9(4) COMP -- a halfword, which is what IBM's register is
- * and what R15 can carry. Declared as an ordinary symbol for the same reason
- * CURRENT-DATE is: MOVE, arithmetic and comparison all reach it by the
- * existing paths. Reported missing by Ed Liss on H390-MVS. */
-static void make_retcode(int *cursor)
+/* A binary special register, declared as an ordinary symbol for the same
+ * reason CURRENT-DATE is: MOVE, arithmetic, comparison and DISPLAY all reach
+ * it by the existing paths. */
+static void make_binreg(int *symvar, const char *name, const char *pic, int is_signed,
+                        int bytes, int *cursor)
 {
-    if (retcode_sym >= 0) return;
+    if (*symvar >= 0) return;
     if (nsym >= MAXSYM) die("too many data items");
     Sym *sy = &syms[nsym];
     memset(sy, 0, sizeof *sy);
-    snprintf(sy->name, sizeof sy->name, "RETURN-CODE");
+    snprintf(sy->name, sizeof sy->name, "%s", name);
     snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
     PicInfo pi;
-    if (pic_analyse("S9(4)", &pi) < 0) die(pi.err);
+    if (pic_analyse(pic, &pi) < 0) die(pi.err);
     sy->digits = pi.digits;
     sy->scale = pi.scale;
-    sy->is_signed = 1;
+    sy->is_signed = is_signed;
     sy->usage = U_COMP;
-    sy->bytes = 2;
+    sy->bytes = bytes;
     sy->elem = sy->bytes;
     sy->level = 1;
-    if (*cursor & 1) (*cursor)++;          /* a halfword wants alignment */
+    while (*cursor % bytes) (*cursor)++;   /* on its halfword or fullword */
     sy->offset = *cursor;
     *cursor += sy->bytes;
     if (*cursor > wslen) wslen = *cursor;
-    retcode_sym = nsym;
+    *symvar = nsym;
     nsym++;
+}
+
+/* RETURN-CODE, PIC S9(4) COMP -- a halfword, which is what IBM's register is
+ * and what R15 can carry. Reported missing by Ed Liss on H390-MVS. */
+static void make_retcode(int *cursor)
+{
+    make_binreg(&retcode_sym, "RETURN-CODE", "S9(4)", 1, 2, cursor);
+}
+
+/* TALLY, the counter EXAMINE leaves its count in: IBM's five-digit binary
+ * register, which a program may also move to and from, add to and display. */
+static void make_tally(int *cursor)
+{
+    make_binreg(&tally_sym, "TALLY", "9(5)", 0, 4, cursor);
 }
 
 /* One literal of a level-88 VALUE, into a condition name's value slots. */
@@ -3478,7 +3505,7 @@ static int starts_statement(void)
         "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
-        "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT",
+        "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT", "EXAMINE",
         "STRING", "UNSTRING", "CANCEL", "SUPPRESS", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
@@ -3585,6 +3612,20 @@ static void ins_operand(int *sym, char *lab, int *len)
     if (!(syms[i].is_alpha || syms[i].is_group) && syms[i].usage != U_DISPLAY)
         die("an INSPECT operand must be a DISPLAY item");
     *sym = i; *len = syms[i].bytes;
+}
+
+/* An EXAMINE operand: one character -- a nonnumeric literal, a figurative
+ * constant, or a one-digit numeric literal, which stands for that digit. */
+static void examine_operand(int *sym, char *lab, int *len)
+{
+    if (!tok.literal && is_numeric_literal(tok.text) && strlen(tok.text) == 1) {
+        *sym = -1;
+        snprintf(lab, 12, "%s", intern_str(tok.text, 1, 1));
+        *len = 1; next();
+        return;
+    }
+    ins_operand(sym, lab, len);
+    if (*len != 1) die("an EXAMINE operand is a single character");
 }
 
 static void giving_target(Stmt *st)
@@ -3922,13 +3963,15 @@ static void parse_one_statement(void)
                  * as DISPLAY is concerned. A signed item shows its last digit
                  * overpunched -- 12345 in a PIC S9(5) prints as 1234E -- which
                  * is what IKFCBL00 does and what the oracle confirms. COMP and
-                 * COMP-3 are still refused: their bytes are not characters. */
-                if (!syms[sym].is_alpha && !syms[sym].is_group && !syms[sym].edited &&
-                    syms[sym].usage != U_DISPLAY)
-                    die("DISPLAY of a COMP or COMP-3 item needs a MOVE to a "
-                        "DISPLAY item first");
+                 * COMP-3 are converted: one digit per PICTURE position, no
+                 * decimal point, a negative sign overpunched on the last digit
+                 * and a positive one shown as a plain digit -- IKFCBL00 again. */
                 sub = opt_subscript();
-                n = sub ? syms[sym].elem : syms[sym].bytes;
+                if (display_converts(&syms[sym])) {
+                    if (syms[sym].is_index) die("DISPLAY of an index item is not implemented yet");
+                    if (syms[sym].occ_depth && !sub) die("DISPLAY of a COMP table item needs its subscripts");
+                    n = syms[sym].digits;
+                } else n = sub ? syms[sym].elem : syms[sym].bytes;
             }
             for (int off = 0; off < n; ) {
                 if (line >= 120 || st->ndop >= 8) { st = new_stmt(ST_DISPLAY_LIT); line = 0; }
@@ -4498,7 +4541,6 @@ static void parse_one_statement(void)
             st->dop[st->ndop++].lit = pool_str(st->para, (int)strlen(st->para));
             while (!is("DEPENDING")) {
                 if (tok.eof || is(".")) die("GO TO names several procedures but has no DEPENDING ON");
-                if (st->ndop >= 8) die("GO TO ... DEPENDING ON takes at most eight procedure-names here");
                 dop_add(st);
                 st->dop[st->ndop++].lit = pool_str(tok.text, tok.len);
                 next();
@@ -5174,6 +5216,84 @@ static void parse_one_statement(void)
             }
         }
         if (!any) die("INSPECT needs a TALLYING or REPLACING phrase");
+        st->ins_n = ninsop - st->ins_first;
+        eat_period();
+        return;
+    }
+
+    if (is("EXAMINE")) {
+        /* EXAMINE, IBM's verb from before INSPECT, lowered onto INSPECT's
+         * operations. What each form does was measured on IKFCBL00:
+         *   TALLYING ALL|LEADING x          counts into TALLY, reset first
+         *   TALLYING UNTIL FIRST x          counts every character before x,
+         *                                   all of them when there is no x
+         *   ... REPLACING BY y              replaces exactly what was counted
+         *   REPLACING ALL|LEADING|FIRST x BY y
+         *   REPLACING UNTIL FIRST x BY y    every character before x
+         * Operands are single characters, and matching is on bytes: the last
+         * digit of a signed item carries its sign and matches no digit. */
+        next();
+        int target = consume_sym();
+        Node *tsub = opt_subscript();
+        if (syms[target].usage != U_DISPLAY)
+            die("EXAMINE needs a USAGE DISPLAY item");
+        int tallying = is("TALLYING");
+        if (!tallying && !is("REPLACING")) die("EXAMINE wants TALLYING or REPLACING");
+        next();
+        if (tallying) {
+            /* TALLY starts from zero; INSPECT only ever adds to its counter. */
+            int cur = wslen;
+            make_tally(&cur);
+            Stmt *z = new_stmt(ST_MOVE);
+            z->dst = tally_sym;
+            z->imm = 1; z->immscale = 0; z->immdigits = pool_scaled("0", 0);
+        }
+        Stmt *st = new_stmt(ST_INSPECT);
+        st->dst = target;
+        st->dsub = tsub;
+        st->ins_first = ninsop;
+        int kind;                           /* 0 ALL, 1 LEADING, 2 FIRST, 3 UNTIL FIRST */
+        if (is("ALL")) kind = 0;
+        else if (is("LEADING")) kind = 1;
+        else if (is("FIRST") && !tallying) kind = 2;
+        else if (is("UNTIL")) { next(); if (!is("FIRST")) die("EXAMINE wants UNTIL FIRST"); kind = 3; }
+        else die(tallying ? "EXAMINE TALLYING wants ALL, LEADING or UNTIL FIRST"
+                          : "EXAMINE REPLACING wants ALL, LEADING, FIRST or UNTIL FIRST");
+        next();
+        char xlab[12], ylab[12] = ""; int xlen, ylen = 0, xs, ys = -1;
+        examine_operand(&xs, xlab, &xlen);
+        int repl = !tallying;
+        if (tallying && is("REPLACING")) { next(); expect("BY"); examine_operand(&ys, ylab, &ylen); repl = 1; }
+        else if (!tallying) { expect("BY"); examine_operand(&ys, ylab, &ylen); }
+        if (tallying) {
+            if (ninsop >= MAXINSOP) die("too many INSPECT clauses");
+            InsOp *o = &insops[ninsop++];
+            memset(o, 0, sizeof *o);
+            o->c_sym = o->by_sym = o->bf_sym = -1;
+            o->tally = tally_sym;
+            if (kind == 3) {
+                o->kind = INS_T_CHARS;
+                o->bf_sym = xs; snprintf(o->bf_lab, sizeof o->bf_lab, "%s", xlab); o->bf_len = xlen;
+            } else {
+                o->kind = kind ? INS_T_LEAD : INS_T_ALL;
+                o->c_sym = xs; snprintf(o->c_lab, sizeof o->c_lab, "%s", xlab); o->c_len = xlen;
+            }
+        }
+        if (repl) {
+            if (ninsop >= MAXINSOP) die("too many INSPECT clauses");
+            InsOp *o = &insops[ninsop++];
+            memset(o, 0, sizeof *o);
+            o->c_sym = o->by_sym = o->bf_sym = -1;
+            o->tally = -1;
+            o->by_sym = ys; snprintf(o->by_lab, sizeof o->by_lab, "%s", ylab); o->by_len = ylen;
+            if (kind == 3) {
+                o->kind = INS_R_CHARS;
+                o->bf_sym = xs; snprintf(o->bf_lab, sizeof o->bf_lab, "%s", xlab); o->bf_len = xlen;
+            } else {
+                o->kind = kind == 0 ? INS_R_ALL : kind == 1 ? INS_R_LEAD : INS_R_FIRST;
+                o->c_sym = xs; snprintf(o->c_lab, sizeof o->c_lab, "%s", xlab); o->c_len = xlen;
+            }
+        }
         st->ins_n = ninsop - st->ins_first;
         eat_period();
         return;
@@ -6014,6 +6134,42 @@ static void gen_load(const Sym *sy, Node *sub, const char *wk)
         asm_line("", "ZAP", b, "");
         break;
     }
+}
+
+/* DISPLAY shows a COMP or COMP-3 item converted, as IKFCBL00 does. */
+static int display_converts(const Sym *sy)
+{
+    return !sy->is_alpha && !sy->is_group && !sy->edited && sy->usage != U_DISPLAY;
+}
+
+/* Its digits, zoned, into ZWK: one per PICTURE position, the low-order ones
+ * of the value. A negative sign stays overpunched on the last; anything
+ * else gets an F zone, so a positive value prints as plain digits. UNPK
+ * writes at most 16 bytes, so an 18-digit COMP-3 takes a second one for the
+ * high-order digits, shifted a nibble right by MVO to sit before a sign. */
+static void gen_display_digits(const Sym *sy, Node *sub)
+{
+    char b[96], lk[16];
+    int d = sy->digits;
+    gen_load(sy, sub, "PWK1");
+    if (d <= 15) {
+        snprintf(b, sizeof b, "ZWK(%d),PWK1(16)", d);
+        asm_line("", "UNPK", b, "DISPLAY: the digits, zoned");
+    } else {
+        snprintf(b, sizeof b, "ZWK+%d(15),PWK1+8(8)", d - 15);
+        asm_line("", "UNPK", b, "DISPLAY: the low fifteen digits, zoned");
+        asm_line("", "MVI", "PWK2+8,X'0F'", "a sign for the high digits");
+        asm_line("", "MVO", "PWK2(9),PWK1(8)", "the high digits, a nibble right");
+        snprintf(b, sizeof b, "ZWK(%d),PWK2(9)", d - 15);
+        asm_line("", "UNPK", b, "and zoned in front");
+    }
+    snprintf(lk, sizeof lk, "L%04d", ++genlabel);
+    snprintf(b, sizeof b, "ZWK+%d,X'10'", d - 1);
+    asm_line("", "TM", b, "a D (or B) zone is negative");
+    asm_line("", "BO", lk, "keep it overpunched");
+    snprintf(b, sizeof b, "ZWK+%d,X'F0'", d - 1);
+    asm_line("", "OI", b, "otherwise a plain digit");
+    asm_line(lk, "DS", "0H", "");
 }
 
 static void gen_load_imm(const char *label, const char *wk)
@@ -11033,6 +11189,14 @@ static void generate(void)
                     snprintf(b, sizeof b, "DSPBUF+%d(%d),%s", off, st->dop[k].litlen, sl);
                     asm_line("", "MVC", b, "");
                     off += st->dop[k].litlen;
+                } else if (display_converts(&syms[st->dop[k].sym])) {
+                    const Sym *sy = &syms[st->dop[k].sym];
+                    int n = st->dop[k].part_len;
+                    need_sym_base(sy);
+                    gen_display_digits(sy, st->dop[k].sub);
+                    snprintf(b, sizeof b, "DSPBUF+%d(%d),ZWK+%d", off, n, st->dop[k].part_off);
+                    asm_line("", "MVC", b, "");
+                    off += n;
                 } else {
                     const Sym *sy = &syms[st->dop[k].sym];
                     int n = st->dop[k].part_len;
