@@ -865,45 +865,52 @@ at the top of code generation, where the OPEN modes are known.
 ### WRITE ... AFTER ADVANCING
 
 `BEFORE/AFTER integer LINES` and `BEFORE/AFTER PAGE` are Sequential I-O level
-1. The DEFTLY corpus carries its vertical spacing as an ASA character inside
-the record and never used the clause; the CCVS corpus uses it 380 times.
+1, and IBM's mnemonic-name for a channel rides with them. Since 2026-09-25
+they are written exactly as IKFCBL00 writes them, measured byte for byte on
+TK5 by dumping what it put in a data set:
 
-On S/370 the clause *is* ASA carriage control: a byte in front of the record
-saying what to do **before** the line prints -- which is exactly what AFTER
-means. `' '` is one line, `'0'` two, `'-'` three, `'+'` none, `'1'` a new page;
-more than three lines is written as blank lines first, three at a time. A file
-that any `WRITE ... ADVANCING` names becomes `RECFM=FBA` with `LRECL` one
-greater than the record, and the line goes out through a per-file buffer whose
-first byte is the control character. A plain `WRITE` on such a file gets one
-line, which is what general rule 9 on IV-35 requires.
+- The carriage control is the record's **own first byte**. The program
+  reserves it -- `03 FILLER PIC X` at the head of a print record is what
+  programs of this system all do -- and the byte is overwritten on every
+  WRITE. The file is `RECFM=FM` (`FBM`, `VM`, `VBM` as it is blocked or
+  variable) with `LRECL` the record itself.
+- The codes are **machine codes**, not ASA. `AFTER n` is immediate spacing
+  records -- X'1B' for three lines at a time, then X'13' or X'0B' -- followed
+  by the line written with X'01', write without spacing. `AFTER 0` puts the
+  no-op X'03' first. `BEFORE n` is the line written with X'09', X'11' or
+  X'19', write and space, and immediate spacing for anything past three.
+  A channel is X'8B' (skip to channel 1, immediate) before the line for
+  `AFTER`, X'89' (write, then skip) for `BEFORE`; channels 2-12 follow the
+  same pattern. `BEFORE 0` is the line with X'01' alone.
+- A `WRITE` with no `ADVANCING` on such a file is `BEFORE 1`, X'09'. IKFCBL00
+  warns about it (IKF4093I) and writes that.
 
-`BEFORE` is level 1 too -- the element list says `BEFORE/AFTER integer LINES`
-and `BEFORE/AFTER PAGE` -- and it works now. It costs a runtime routine rather
-than a few inline instructions, because the deferral is real state: the line
-goes out with whatever the last `BEFORE` left owing, and its own count becomes
-what the next line owes. Once the two can add up, the total is not known until
-run time.
+So nothing is held over from one `WRITE` to the next: write-and-space does
+in one record what an ASA byte could only promise for the following one.
 
-`COBADV` takes the request as a line count, 999 for `PAGE`, negated when the
-phrase was `BEFORE`. It applies what is owed, writes the line, and stores what
-the statement defers. `BEFORE 0` and `AFTER 0` encode the same way because they
-*are* the same thing: apply what is owed and owe nothing.
+`tests/advance.cbl` writes every case, reads the file back through a second
+FD with the control byte as data, and shows each code as a number; its
+expected output is IKFCBL00's own run of the same program. COBXREF's
+37-page listing is byte-identical to IBM's.
 
-Three things that had to be decided rather than looked up, since the standard
-fixes none of them: a `BEFORE` with nothing owed prints on the next line rather
-than overprinting, an owed page skip stays a page skip however many lines the
-next statement asks for, and the blank lines an advance of more than three
-needs come from the runtime's own constant -- the caller's buffer already holds
-the record to print, which the first version of this cheerfully blanked.
+**Before this**, the clause followed the ANS text alone: an ASA byte the
+compiler put *in front of* the record, and `BEFORE` held over to the next line
+because ASA can only say what to do before a line prints. Programs written
+for this system reserve the first byte themselves, so under that scheme they
+printed one column to the right with a stray last character -- which is how
+COBXREF found it -- and a `BEFORE` with nothing owed moved to the next line
+where IBM's overprints.
 
-`ADVANCING` by an identifier or a mnemonic-name is level 2 and is refused as
-such.
+**LINAGE** has no IKFCBL00 to be measured against. A `LINAGE` file keeps the
+page accounting it had -- `LINAGE-COUNTER`, the body, `FOOTING` and
+`END-OF-PAGE`, with `BEFORE` held over as the standard's counting has it --
+and writes the lines it arrives at with the same record layout and codes:
+the spacing or skip, immediate, then the line with X'01'. `seqlvl2` checks
+the codes against that model.
 
-**GnuCOBOL cannot be the oracle for this one** -- it writes a text file with
-newlines rather than control bytes. `tests/advance.cbl` is therefore its own:
-it writes the file, closes it, reads it back through a second FD with the
-control byte as ordinary data, and displays what it finds. The expected values
-come from the standard and IBM's ASA encoding, not from a second compiler.
+`ADVANCING` by an identifier or a mnemonic-name is level 2, and both are
+implemented: the count, or the channel, is read at run time and handled the
+same way.
 
 ### Several record descriptions per FD
 

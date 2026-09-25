@@ -213,20 +213,27 @@ COBD020  PUT   RTDCB,RTLINE
          BR    14
 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
 *
-* COBADV -- write one line with ASA carriage control.
+* COBADV -- write one line of a print file, IBM's way.
 *
-*   R1 -> A(dcb), A(print buffer), A(halfword record length),
-*         A(halfword owed), A(halfword request)
+*   R1 -> A(dcb), A(what PUT is given: the record, or its RDW),
+*         A(the record), A(halfword owed), A(halfword request),
+*         A(LINAGE cells) or 0, A(LINAGE-COUNTER) or 0
 *
-* ASA says what to do BEFORE a line prints, which is exactly
-* what AFTER ADVANCING means. BEFORE has to be held over: the
-* line goes out with whatever was owed from the last BEFORE,
-* and its own count becomes what the next line owes. Once the
-* two can add up the total is not known until run time, which
-* is why this is a routine and not a few instructions inline.
+* The control character is the record's own first byte, a
+* machine code, exactly as IKFCBL00 writes it (RECFM=FM):
+* AFTER n is immediate spacing records -- 3 lines at a time,
+* X'1B', then X'13' or X'0B' -- and the line with X'01',
+* write without spacing; AFTER 0 is the no-op X'03' first.
+* BEFORE n is the line with write-and-space, X'09' X'11'
+* X'19', and immediate spacing for any more than three.
+* A channel is skip-immediate (X'8B' for 1) after, or
+* write-and-skip (X'89') before. Measured on TK5.
 *
-* The request is the line count, or -1 for PAGE, negated when
-* the phrase was BEFORE.
+* The request is the line count, 999 for PAGE, 1001-1012 a
+* channel, 1013 CSP, negated when the phrase was BEFORE.
+* A LINAGE file keeps its own accounting, in which BEFORE's
+* count is held over to the next line; the lines it arrives
+* at are written the same way, AFTER-fashion.
 COBADV   STM   14,12,12(13)
          BALR  12,0
          USING *,12
@@ -235,98 +242,150 @@ COBADV   STM   14,12,12(13)
          ST    11,8(13)
          LR    13,11
          L     2,0(0,1)            A(dcb)
-         L     3,4(0,1)            A(buffer)
-         L     4,8(0,1)            A(length)
+         L     3,4(0,1)            A(what PUT writes)
+         L     4,8(0,1)            A(the record): its first byte is the
          L     5,12(0,1)           A(owed)
          L     6,16(0,1)           A(request)
          L     10,20(0,1)          A(LINAGE cells), or 0
          L     11,24(0,1)          A(LINAGE-COUNTER), or 0
-         LH    7,0(0,4)            the record length
-         LTR   7,7
          LH    8,0(0,6)            the request
-         LH    9,0(0,5)            what the last BEFORE left owing
-         LTR   8,8                 BEFORE is the negative side
-         BM    ADV100
-         CH    8,ADVPAGE           AFTER PAGE, or a channel?
-         BNL   ADV020
-         CH    9,ADVPAGE           was a skip already owed?
-         BNL   ADV030              then it stays one, whatever this ask
-         AR    9,8                 owed plus this one
-         B     ADV030
-ADV020   LR    9,8                 a skip swallows what was owed
-ADV030   XC    0(2,5),0(5)         nothing owed after an AFTER
-         B     ADV150
-ADV100   LCR   8,8                 back to a positive request
-ADV110   STH   8,0(0,5)            this is what the next line owes
-         LTR   9,9                 nothing owed?
-         BNZ   ADV150
-         LH    9,ADVONE            then this line simply takes the next
-ADV150   SR    8,8                 no END-OF-PAGE yet
          LTR   10,10               a LINAGE file?
-         BZ    ADV200
+         BNZ   ADV400
+         SR    7,7                 R7: END-OF-PAGE, never, without LINA
+         LTR   8,8
+         BM    ADV100              BEFORE
+         CH    8,ADVCSP
+         BE    ADV020              CSP: no spacing
+         CH    8,ADVPAGE
+         BL    ADV010
+         BAL   14,ADVSKIPI         AFTER a channel: skip first
+         B     ADV030
+ADV010   LTR   9,8                 AFTER n lines
+         BZ    ADV020
+         BAL   14,ADVSPI           the spacing, immediate
+         B     ADV030
+ADV020   MVI   0(4),X'03'          AFTER 0: a no-op first
+         PUT   (2),(3)
+ADV030   MVI   0(4),X'01'          then write, no spacing
+         PUT   (2),(3)             the line itself
+         B     ADV900
+ADV100   LCR   8,8                 BEFORE: a positive request
+         CH    8,ADVCSP
+         BE    ADV120              CSP: write without spacing
+         CH    8,ADVPAGE
+         BL    ADV110
+         LA    9,ADVSKIPW          BEFORE a channel: write and skip
+         BAL   14,ADVCHAN
+         PUT   (2),(3)
+         B     ADV900
+ADV110   LTR   9,8
+         BNZ   ADV130
+ADV120   MVI   0(4),X'01'          BEFORE 0: write, no spacing
+         PUT   (2),(3)
+         B     ADV900
+ADV130   CH    9,ADVTHREE          the line carries up to three
+         BNH   ADV140
+         LH    9,ADVTHREE
+ADV140   IC    0,ADVWSP(9)         write and space 1, 2 or 3
+         STC   0,0(0,4)
+         PUT   (2),(3)             the line itself
+         SR    8,9                 what is left beyond three
+         LTR   9,8
+         BZ    ADV900
+         BAL   14,ADVSPI           the rest, immediate
+         B     ADV900
+ADV400   LH    9,0(0,5)            what the last BEFORE left owing
+         LTR   8,8                 BEFORE is the negative side
+         BM    ADV500
+         CH    8,ADVPAGE           AFTER PAGE, or a channel?
+         BNL   ADV420
+         CH    9,ADVPAGE           was a skip already owed?
+         BNL   ADV430              then it stays one, whatever this ask
+         AR    9,8                 owed plus this one
+         B     ADV430
+ADV420   LR    9,8                 a skip swallows what was owed
+ADV430   XC    0(2,5),0(5)         nothing owed after an AFTER
+         B     ADV550
+ADV500   LCR   8,8                 back to a positive request
+         STH   8,0(0,5)            this is what the next line owes
+         LTR   9,9                 nothing owed?
+         BNZ   ADV550
+         LH    9,ADVONE            then this line simply takes the next
+ADV550   SR    7,7                 no END-OF-PAGE yet
          CH    9,ADVPAGE           a skip?
-         BNL   ADV160
+         BNL   ADV560
          LH    14,0(0,11)          LINAGE-COUNTER
          AR    14,9
          CH    14,0(0,10)          past the body?
-         BH    ADV160
+         BH    ADV560
          STH   14,0(0,11)
          LH    0,2(0,10)           FOOTING
          LTR   0,0
-         BZ    ADV200              no FOOTING: no END-OF-PAGE short of
+         BZ    ADV600              no FOOTING: no END-OF-PAGE short of
          CR    14,0
-         BL    ADV200
-         LA    8,1                 END-OF-PAGE
-         B     ADV200
-ADV160   LH    14,ADVONE
+         BL    ADV600
+         LA    7,1                 END-OF-PAGE
+         B     ADV600
+ADV560   LH    14,ADVONE
          STH   14,0(0,11)          counter back to 1
-         LA    8,1                 a new page is END-OF-PAGE without FO
+         LA    7,1                 a new page is END-OF-PAGE without FO
          LH    0,2(0,10)
          LTR   0,0
-         BZ    ADV170
-         SR    8,8                 with FOOTING, only the footing is
-ADV170   LH    9,4(0,10)           LINES AT TOP
-         LTR   9,9
-         BNZ   ADV175
-         LH    9,ADVPAGE           no top margin: the line itself carri
-         B     ADV200
-ADV175   PUT   (2),ADVB1           eject on a blank line; R9 survives i
-ADV200   CH    9,ADVPAGE           a page skip?
-         BL    ADV210
-         BH    ADV205              a channel
-         MVI   0(3),C'1'           skip to a new page
-         B     ADV300
-ADV205   LA    10,ADVCHAN
-         AR    10,9
-         SH    10,ADVCHOF          request 1001 is the first code
-         MVC   0(1,3),0(10)        the channel's ASA code
-         B     ADV300
-ADV210   LTR   9,9
-         BNM   ADV220
-         SR    9,9                 never negative here
-ADV220   CH    9,ADVTHREE          more than one code can carry?
-         BNH   ADV240
-         PUT   (2),ADVB3           three blank lines at a time
-         SH    9,ADVTHREE
-         B     ADV220
-ADV240   LA    10,ADVCODE
-         AR    10,9
-         MVC   0(1,3),0(10)        '+', ' ', '0' or '-'
-ADV300   PUT   (2),(3)             the line itself
-         L     13,4(13)
-         ST    8,16(13)            END-OF-PAGE, into R15's slot for the
+         BZ    ADV570
+         SR    7,7                 with FOOTING, only the footing is
+ADV570   LH    8,ADVPAGE           a new page
+         BAL   14,ADVSKIPI         skip to it now
+         LH    9,4(0,10)           then LINES AT TOP
+ADV600   CH    9,ADVPAGE
+         BL    ADV610
+         LR    8,9
+         BAL   14,ADVSKIPI         a page or a channel, immediate
+         B     ADV620
+ADV610   LTR   9,9
+         BNP   ADV620
+         BAL   14,ADVSPI           the spacing, immediate
+ADV620   MVI   0(4),X'01'          the line: write, no spacing
+         PUT   (2),(3)
+ADV900   L     13,4(13)
+         ST    7,16(13)            END-OF-PAGE, into R15's slot for the
          LM    14,12,12(13)
          BR    14
-ADVB3    DC    C'-'                a blank line that advances three
-         DC    CL132' '
-ADVB1    DC    C'1'                a blank line that ejects
-         DC    CL132' '
-ADVCHAN  DC    C'123456789ABC+'    channels 1-12, CSP
+ADVSPI   ST    14,ADVR14
+ADVSP1   CH    9,ADVTHREE
+         BNH   ADVSP2
+         MVI   0(4),X'1B'          space 3 lines, immediate
+         PUT   (2),(3)
+         SH    9,ADVTHREE
+         B     ADVSP1
+ADVSP2   IC    0,ADVISP(9)         space 1, 2 or 3, immediate
+         STC   0,0(0,4)
+         PUT   (2),(3)
+         L     14,ADVR14
+         BR    14
+ADVSKIPI ST    14,ADVR14
+         LA    9,ADVSKIP
+         BAL   14,ADVCHAN
+         PUT   (2),(3)
+         L     14,ADVR14
+         BR    14
+ADVCHAN  LR    0,8
+         CH    0,ADVPAGE
+         BNE   ADVCH1
+         LH    0,ADVCHOF           PAGE is channel 1
+ADVCH1   SH    0,ADVCHOF           0 for channel 1
+         AR    9,0
+         MVC   0(1,4),0(9)
+         BR    14
+ADVSKIP  DC    X'8B939BA3ABB3BBC3CBD3DBE3'  skip to channel 1-12, immed
+ADVSKIPW DC    X'899199A1A9B1B9C1C9D1D9E1'  write, then skip to channel
+ADVWSP   DC    X'01091119'         write, then space 0-3
+ADVISP   DC    X'030B131B'         space 0-3, immediate
 ADVCHOF  DC    H'1001'
-ADVCODE  DC    C'+ 0-'             0, 1, 2 or 3 lines
+ADVCSP   DC    H'1013'
 ADVONE   DC    H'1'
 ADVPAGE  DC    H'999'              the page-skip request
 ADVTHREE DC    H'3'
+ADVR14   DS    F
 RTSAVE7  DS    18F
 *
 * COBUPSI -- set the eight switches from the EXEC PARM.

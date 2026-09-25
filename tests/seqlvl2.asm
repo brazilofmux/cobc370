@@ -36,13 +36,12 @@ T0000    DS    0H
 * OPEN OUTPUT PRT-FILE
          OPEN  (FD000,OUTPUT)
 T0001    DS    0H
-* MOVE LINE ONE   -> PRT-REC
+* MOVE LINE ONE   -> P-TEXT
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0001     literal move, space padded
+         MVC   D0003(10),S0001     literal move, space padded
 T0002    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -59,13 +58,12 @@ T0003    DS    0H
          BALR  14,15
 L0001    DS    0H
 T0004    DS    0H
-* MOVE LINE TWO   -> PRT-REC
+* MOVE LINE TWO   -> P-TEXT
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0003     literal move, space padded
+         MVC   D0003(10),S0003     literal move, space padded
 T0005    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -82,13 +80,12 @@ T0006    DS    0H
          BALR  14,15
 L0002    DS    0H
 T0007    DS    0H
-* MOVE LINE THREE -> PRT-REC
+* MOVE LINE THREE -> P-TEXT
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0005     literal move, space padded
+         MVC   D0003(10),S0005     literal move, space padded
 T0008    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -109,13 +106,12 @@ R0001    DS    0H
          ST    15,X0005
 L0003    DS    0H
 T0010    DS    0H
-* MOVE LINE FOUR  -> PRT-REC
+* MOVE LINE FOUR  -> P-TEXT
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0006     literal move, space padded
+         MVC   D0003(10),S0006     literal move, space padded
 T0011    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -136,13 +132,12 @@ R0002    DS    0H
          ST    15,X0005
 L0004    DS    0H
 T0013    DS    0H
-* MOVE LINE FIVE  -> PRT-REC
+* MOVE LINE FIVE  -> P-TEXT
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0001(10),S0007     literal move, space padded
+         MVC   D0003(10),S0007     literal move, space padded
 T0014    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1                 AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -162,25 +157,24 @@ T0016    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0019
+         LH    2,D0026
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0016(1),PWK1(16)   packed -> zoned
-         OI    D0016+0,X'F0'       unsigned: force an F zone
+         UNPK  D0018(1),PWK1(16)   packed -> zoned
+         OI    D0018+0,X'F0'       unsigned: force an F zone
 T0017    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(14),S0009
-         MVC   DSPBUF+14(1),D0016+0
+         MVC   DSPBUF+14(1),D0018+0
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
 T0018    DS    0H
-* MOVE LINE SIX   -> PRT-REC
-         MVC   D0001(10),S0010     literal move, space padded
+* MOVE LINE SIX   -> P-TEXT
+         MVC   D0003(10),S0010     literal move, space padded
 T0019    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0001   the record, behind its control byte
-         PACK  PWK1(16),D0015(1)   zoned -> packed
+         PACK  PWK1(16),D0017(1)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
          CVB   1,DWK               ADVANCING identifier LINES
          STH   1,FP000Q            this line's request
@@ -193,24 +187,23 @@ T0020    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0019
+         LH    2,D0026
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0016(1),PWK1(16)   packed -> zoned
-         OI    D0016+0,X'F0'       unsigned: force an F zone
+         UNPK  D0018(1),PWK1(16)   packed -> zoned
+         OI    D0018+0,X'F0'       unsigned: force an F zone
 T0021    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(11),S0011
-         MVC   DSPBUF+11(1),D0016+0
+         MVC   DSPBUF+11(1),D0018+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
 T0022    DS    0H
-* MOVE LINE SEVEN -> PRT-REC
-         MVC   D0001(10),S0012     literal move, space padded
+* MOVE LINE SEVEN -> P-TEXT
+         MVC   D0003(10),S0012     literal move, space padded
 T0023    DS    0H
 * WRITE PRT-REC
-         MVC   FP000+1(10),D0001   the record, behind its control byte
          LA    1,1001              AFTER
          STH   1,FP000Q            this line's request
          LA    1,FP000P
@@ -222,15 +215,15 @@ T0024    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0019
+         LH    2,D0026
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0016(1),PWK1(16)   packed -> zoned
-         OI    D0016+0,X'F0'       unsigned: force an F zone
+         UNPK  D0018(1),PWK1(16)   packed -> zoned
+         OI    D0018+0,X'F0'       unsigned: force an F zone
 T0025    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(13),S0013
-         MVC   DSPBUF+13(1),D0016+0
+         MVC   DSPBUF+13(1),D0018+0
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
@@ -252,7 +245,7 @@ T0028    DS    0H
          STCM  1,7,FD001+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD001,D0003         QSAM move mode
+         GET   FD001,D0005         QSAM move mode
          B     L0011
 L0010    DS    0H                  AT END
          DROP  8
@@ -262,155 +255,187 @@ T0029    DS    0H
          BR    15
 L0011    DS    0H
 T0030    DS    0H
-* DISPLAY
-         MVC   DSPBUF+0(1),S0014
+* MOVE R-CTL -> CODE-LO
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+1(1),D0004+0
-         MVC   DSPBUF+2(2),S0015
-         MVC   DSPBUF+4(10),D0005+0
+         MVC   D0023(1),D0006      alphanumeric move
+T0031    DS    0H
+* MOVE CODE-N -> CODE-D
+         LH    2,D0024
+         CVD   2,DWK               binary -> packed
+         ZAP   PWK1(16),DWK(8)
+         ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
+         MVC   EDWK(4),M0001       load the ED pattern
+         ED    EDWK(4),EDSRC
+         MVC   D0025(3),EDWK+1     the edited result
+T0032    DS    0H
+* IF
+         LH    2,D0024
+         CVD   2,DWK               binary -> packed
+         ZAP   WK0+13(3),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+13(3),WK1+15(1)  numeric compare
+         BNE   L0012
+T0033    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(3),D0025+0
+         MVC   DSPBUF+3(1),S0014
+         MVC   DSPBUF+4(10),D0007+0
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
-T0031    DS    0H
+T0034    DS    0H
+         B     L0013
+         DROP  8
+L0012    DS    0H
+T0035    DS    0H
+* DISPLAY
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   DSPBUF+0(3),D0025+0
+         LA    1,PARM0008
+         L     15,VDISP
+         BALR  14,15
+         DROP  8
+L0013    DS    0H
+T0036    DS    0H
 * GO TO RAW-LOOP
          B     B0002
-         DROP  8
 * RAW-DONE.
 P0002    DS    0H
          BALR  12,0                this paragraph's code base
 B0003    EQU   *
          USING B0003,12
-T0032    DS    0H
+T0037    DS    0H
 * CLOSE RAW-FILE
          CLOSE (FD001)
-T0033    DS    0H
+T0038    DS    0H
 * OPEN INPUT OPT-FILE
          DEVTYPE FD002N,DVAREA     is the DD there?
          LTR   15,15
          MVI   FD002A,X'00'        present
          BZ    *+12
          MVI   FD002A,X'01'        absent: the file is empty
-         B     L0028
+         B     L0030
          OPEN  (FD002,INPUT)
-L0028    DS    0H
-T0034    DS    0H
+L0030    DS    0H
+T0039    DS    0H
 * READ OPT-FILE
          CLI   FD002A,X'01'        absent OPTIONAL file?
-         BE    L0012               then it is at end
-         LA    1,L0012             this READ's AT END
+         BE    L0014               then it is at end
+         LA    1,L0014             this READ's AT END
          STCM  1,7,FD002+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD002,D0007         QSAM move mode
-         B     L0013
-L0012    DS    0H                  AT END
+         GET   FD002,D0009         QSAM move mode
+         B     L0015
+L0014    DS    0H                  AT END
          DROP  8
-T0035    DS    0H
+T0040    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0016
-         LA    1,PARM0008
+         MVC   DSPBUF+0(10),S0015
+         LA    1,PARM0009
          L     15,VDISP
          BALR  14,15
-L0013    DS    0H
-T0036    DS    0H
+L0015    DS    0H
+T0041    DS    0H
 * CLOSE OPT-FILE
          CLI   FD002A,X'01'        absent?
-         BE    L0029               nothing to close
+         BE    L0031               nothing to close
          CLOSE (FD002)
-L0029    DS    0H
-T0037    DS    0H
+L0031    DS    0H
+T0042    DS    0H
 * OPEN INPUT OPT2-FILE
          DEVTYPE FD003N,DVAREA     is the DD there?
          LTR   15,15
          MVI   FD003A,X'00'        present
          BZ    *+12
          MVI   FD003A,X'01'        absent: the file is empty
-         B     L0030
+         B     L0032
          OPEN  (FD003,INPUT)
-L0030    DS    0H
-T0038    DS    0H
+L0032    DS    0H
+T0043    DS    0H
 * READ OPT2-FILE
          CLI   FD003A,X'01'        absent OPTIONAL file?
-         BE    L0014               then it is at end
-         LA    1,L0014             this READ's AT END
+         BE    L0016               then it is at end
+         LA    1,L0016             this READ's AT END
          STCM  1,7,FD003+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD003,D0009         QSAM move mode
-         B     L0015
-L0014    DS    0H                  AT END
+         GET   FD003,D0011         QSAM move mode
+         B     L0017
+L0016    DS    0H                  AT END
          DROP  8
-T0039    DS    0H
+T0044    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0017
-         LA    1,PARM0009
-         L     15,VDISP
-         BALR  14,15
-L0015    DS    0H
-T0040    DS    0H
-* MOVE OPT2-REC -> CARD-SHOW
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         MVC   D0018(12),D0009     alphanumeric move
-T0041    DS    0H
-* DISPLAY
-         MVC   DSPBUF+0(6),S0018
-         MVC   DSPBUF+6(12),D0018+0
-         MVC   DSPBUF+18(1),S0019
+         MVC   DSPBUF+0(10),S0016
          LA    1,PARM0010
          L     15,VDISP
          BALR  14,15
-T0042    DS    0H
+L0017    DS    0H
+T0045    DS    0H
+* MOVE OPT2-REC -> CARD-SHOW
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0020(12),D0011     alphanumeric move
+T0046    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(6),S0017
+         MVC   DSPBUF+6(12),D0020+0
+         MVC   DSPBUF+18(1),S0018
+         LA    1,PARM0011
+         L     15,VDISP
+         BALR  14,15
+T0047    DS    0H
 * CLOSE OPT2-FILE
          CLI   FD003A,X'01'        absent?
-         BE    L0031               nothing to close
+         BE    L0033               nothing to close
          CLOSE (FD003)
-L0031    DS    0H
+L0033    DS    0H
          DROP  8
-T0043    DS    0H
+T0048    DS    0H
 * OPEN OUTPUT EXT-FILE
          OPEN  (FD004,OUTPUT)
-T0044    DS    0H
+T0049    DS    0H
 * MOVE E1 -> EXT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0011(10),S0020     literal move, space padded
-T0045    DS    0H
+         MVC   D0013(10),S0019     literal move, space padded
+T0050    DS    0H
 * WRITE EXT-REC
-         PUT   FD004,D0011
+         PUT   FD004,D0013
          DROP  8
-L0017    DS    0H
-T0046    DS    0H
+L0019    DS    0H
+T0051    DS    0H
 * MOVE E2 -> EXT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0011(10),S0021     literal move, space padded
-T0047    DS    0H
+         MVC   D0013(10),S0020     literal move, space padded
+T0052    DS    0H
 * WRITE EXT-REC
-         PUT   FD004,D0011
+         PUT   FD004,D0013
          DROP  8
-L0019    DS    0H
-T0048    DS    0H
+L0021    DS    0H
+T0053    DS    0H
 * CLOSE EXT-FILE
          CLOSE (FD004)
-T0049    DS    0H
+T0054    DS    0H
 * OPEN EXTEND EXT-FILE
          OPEN  (FD004,EXTEND)      append
-T0050    DS    0H
+T0055    DS    0H
 * MOVE E3 -> EXT-REC
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   D0011(10),S0022     literal move, space padded
-T0051    DS    0H
+         MVC   D0013(10),S0021     literal move, space padded
+T0056    DS    0H
 * WRITE EXT-REC
-         PUT   FD004,D0011
+         PUT   FD004,D0013
          DROP  8
-L0021    DS    0H
-T0052    DS    0H
+L0023    DS    0H
+T0057    DS    0H
 * CLOSE EXT-FILE
          CLOSE (FD004)
-T0053    DS    0H
+T0058    DS    0H
 * OPEN INPUT EXT-IN
          OPEN  (FD005,INPUT)
 * EXT-LOOP.
@@ -418,31 +443,31 @@ P0003    DS    0H
          BALR  12,0                this paragraph's code base
 B0004    EQU   *
          USING B0004,12
-T0054    DS    0H
+T0059    DS    0H
 * READ EXT-IN
-         LA    1,L0022             this READ's AT END
+         LA    1,L0024             this READ's AT END
          STCM  1,7,FD005+33        into DCBEODAD
          L     8,BL0000            base locator
          USING WSC0000,8
-         GET   FD005,D0013         QSAM move mode
-         B     L0023
-L0022    DS    0H                  AT END
+         GET   FD005,D0015         QSAM move mode
+         B     L0025
+L0024    DS    0H                  AT END
          DROP  8
-T0055    DS    0H
+T0060    DS    0H
 * GO TO EXT-DONE
          L     15,PA0004
          BR    15
-L0023    DS    0H
-T0056    DS    0H
+L0025    DS    0H
+T0061    DS    0H
 * ADD 1 -> CNT
          L     8,BL0000            base locator
          USING WSC0000,8
-         PACK  PWK1(16),D0017(1)   zoned -> packed
+         PACK  PWK1(16),D0019(1)   zoned -> packed
          ZAP   PWK2(16),K0001+15(1)  literal
          AP    PWK1(16),PWK2(16)
-         UNPK  D0017(1),PWK1(16)   packed -> zoned
-         OI    D0017+0,X'F0'       unsigned: force an F zone
-T0057    DS    0H
+         UNPK  D0019(1),PWK1(16)   packed -> zoned
+         OI    D0019+0,X'F0'       unsigned: force an F zone
+T0062    DS    0H
 * GO TO EXT-LOOP
          B     B0004
          DROP  8
@@ -451,19 +476,19 @@ P0004    DS    0H
          BALR  12,0                this paragraph's code base
 B0005    EQU   *
          USING B0005,12
-T0058    DS    0H
+T0063    DS    0H
 * CLOSE EXT-IN
          CLOSE (FD005)
-T0059    DS    0H
+T0064    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0023
+         MVC   DSPBUF+0(10),S0022
          L     8,BL0000            base locator
          USING WSC0000,8
-         MVC   DSPBUF+10(1),D0017+0
-         LA    1,PARM0011
+         MVC   DSPBUF+10(1),D0019+0
+         LA    1,PARM0012
          L     15,VDISP
          BALR  14,15
-T0060    DS    0H
+T0065    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -477,20 +502,20 @@ P0005    DS    0H
          BALR  12,0                this paragraph's code base
 B0006    EQU   *
          USING B0006,12
-T0061    DS    0H
+T0066    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
-         LH    2,D0019
+         LH    2,D0026
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  D0016(1),PWK1(16)   packed -> zoned
-         OI    D0016+0,X'F0'       unsigned: force an F zone
-T0062    DS    0H
+         UNPK  D0018(1),PWK1(16)   packed -> zoned
+         OI    D0018+0,X'F0'       unsigned: force an F zone
+T0067    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(10),S0024
-         MVC   DSPBUF+10(1),D0016+0
-         LA    1,PARM0012
+         MVC   DSPBUF+0(10),S0023
+         MVC   DSPBUF+10(1),D0018+0
+         LA    1,PARM0013
          L     15,VDISP
          BALR  14,15
 * end of a PERFORM range: return through its cell
@@ -526,19 +551,22 @@ PARM0007 DC    A(DSPBUF)
 LEN0007  DC    H'14'
 PARM0008 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0008)  last parameter
-LEN0008  DC    H'10'
+LEN0008  DC    H'3'
 PARM0009 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0009)  last parameter
 LEN0009  DC    H'10'
 PARM0010 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0010)  last parameter
-LEN0010  DC    H'19'
+LEN0010  DC    H'10'
 PARM0011 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0011)  last parameter
-LEN0011  DC    H'11'
+LEN0011  DC    H'19'
 PARM0012 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0012)  last parameter
 LEN0012  DC    H'11'
+PARM0013 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0013)  last parameter
+LEN0013  DC    H'11'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL16
@@ -555,7 +583,7 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
-FD000    DCB   DDNAME=LINFILE,DSORG=PS,MACRF=(PM),RECFM=FBA,           X
+FD000    DCB   DDNAME=LINFILE,DSORG=PS,MACRF=(PM),RECFM=FM,            X
                LRECL=11,BLKSIZE=11,BUFNO=2
 FD001    DCB   DDNAME=LINFILE,DSORG=PS,MACRF=(GM)
 FD002    DCB   DDNAME=OPTFILE,DSORG=PS,MACRF=(GM)
@@ -563,15 +591,14 @@ FD003    DCB   DDNAME=OPTFILE2,DSORG=PS,MACRF=(GM)
 FD004    DCB   DDNAME=EXTFILE,DSORG=PS,MACRF=(PM),RECFM=FB,            X
                LRECL=10,BLKSIZE=10
 FD005    DCB   DDNAME=EXTFILE,DSORG=PS,MACRF=(GM)
-FP000    DS    CL11                ASA byte + the record
 FP000P   DC    A(FD000)            COBADV parameter list
-         DC    A(FP000)
-         DC    A(FP000L)
+         DC    A(D0001)            what PUT writes
+         DC    A(D0001)            the record: its first byte is the co
          DC    A(FP000O)
          DC    A(FP000Q)
          DC    A(FP000G)           LINAGE cells
-         DC    X'80',AL3(D0019)    LINAGE-COUNTER
-FP000L   DC    H'10'               the record length
+         DC    X'80',AL3(D0026)    LINAGE-COUNTER
+FP000L   DC    H'11'               the record length
 FP000O   DC    H'0'                lines a BEFORE left owing
 FP000Q   DS    H                   this line's request
 FP000G   DC    H'5',H'4',H'1',H'0'  LINAGE, FOOTING, TOP, BOTTOM
@@ -582,6 +609,7 @@ FD003A   DC    X'00'               1 when the OPTIONAL file is absent
 DVAREA   DS    6F                  DEVTYPE's answer
 K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
+M0001    DC    XL4'40202120'       ED patterns
 S0001    DC    CL10'LINE ONE  '    nonnumeric constants
 S0002    DC    CL11'EOP WRONG 1'
 S0003    DC    CL10'LINE TWO  '
@@ -595,17 +623,16 @@ S0010    DC    CL10'LINE SIX  '
 S0011    DC    CL11'AFTER N LC='
 S0012    DC    CL10'LINE SEVEN'
 S0013    DC    CL13'AFTER C01 LC='
-S0014    DC    CL1'['
-S0015    DC    CL2'] '
-S0016    DC    CL10'OPT ABSENT'
-S0017    DC    CL10'OPT2 WRONG'
-S0018    DC    CL6'OPT2 ['
-S0019    DC    CL1']'
-S0020    DC    CL10'E1        '
-S0021    DC    CL10'E2        '
-S0022    DC    CL10'E3        '
-S0023    DC    CL10'EXT COUNT '
-S0024    DC    CL10'EOP AT LC='
+S0014    DC    CL1' '
+S0015    DC    CL10'OPT ABSENT'
+S0016    DC    CL10'OPT2 WRONG'
+S0017    DC    CL6'OPT2 ['
+S0018    DC    CL1']'
+S0019    DC    CL10'E1        '
+S0020    DC    CL10'E2        '
+S0021    DC    CL10'E3        '
+S0022    DC    CL10'EXT COUNT '
+S0023    DC    CL10'EOP AT LC='
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line
@@ -661,7 +688,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'63'               statements in the table
+SPIENUM  DC    H'68'               statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -685,104 +712,118 @@ FA0005   DC    A(F0005)            fall-through, to put back
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F
-         DC    A(T0000-COBBEG),AL2(52,0)
-         DC    A(T0001-COBBEG),AL2(53,0)
-         DC    A(T0002-COBBEG),AL2(54,0)
-         DC    A(T0003-COBBEG),AL2(55,0)
-         DC    A(T0004-COBBEG),AL2(56,0)
-         DC    A(T0005-COBBEG),AL2(57,0)
-         DC    A(T0006-COBBEG),AL2(58,0)
-         DC    A(T0007-COBBEG),AL2(59,0)
-         DC    A(T0008-COBBEG),AL2(60,0)
-         DC    A(T0009-COBBEG),AL2(61,0)
-         DC    A(T0010-COBBEG),AL2(62,0)
-         DC    A(T0011-COBBEG),AL2(63,0)
-         DC    A(T0012-COBBEG),AL2(64,0)
-         DC    A(T0013-COBBEG),AL2(65,0)
-         DC    A(T0014-COBBEG),AL2(66,0)
-         DC    A(T0015-COBBEG),AL2(67,0)
-         DC    A(T0016-COBBEG),AL2(68,0)
-         DC    A(T0017-COBBEG),AL2(69,0)
-         DC    A(T0018-COBBEG),AL2(70,0)
-         DC    A(T0019-COBBEG),AL2(71,0)
-         DC    A(T0020-COBBEG),AL2(72,0)
-         DC    A(T0021-COBBEG),AL2(73,0)
-         DC    A(T0022-COBBEG),AL2(74,0)
-         DC    A(T0023-COBBEG),AL2(75,0)
-         DC    A(T0024-COBBEG),AL2(76,0)
-         DC    A(T0025-COBBEG),AL2(77,0)
-         DC    A(T0026-COBBEG),AL2(78,0)
-         DC    A(T0027-COBBEG),AL2(79,0)
-         DC    A(T0028-COBBEG),AL2(81,0)
-         DC    A(T0029-COBBEG),AL2(81,0)
-         DC    A(T0030-COBBEG),AL2(82,0)
-         DC    A(T0031-COBBEG),AL2(83,0)
-         DC    A(T0032-COBBEG),AL2(85,0)
-         DC    A(T0033-COBBEG),AL2(86,0)
-         DC    A(T0034-COBBEG),AL2(87,0)
-         DC    A(T0035-COBBEG),AL2(87,0)
-         DC    A(T0036-COBBEG),AL2(88,0)
-         DC    A(T0037-COBBEG),AL2(89,0)
-         DC    A(T0038-COBBEG),AL2(90,0)
-         DC    A(T0039-COBBEG),AL2(90,0)
-         DC    A(T0040-COBBEG),AL2(91,0)
-         DC    A(T0041-COBBEG),AL2(92,0)
-         DC    A(T0042-COBBEG),AL2(93,0)
-         DC    A(T0043-COBBEG),AL2(94,0)
-         DC    A(T0044-COBBEG),AL2(95,0)
-         DC    A(T0045-COBBEG),AL2(95,0)
-         DC    A(T0046-COBBEG),AL2(96,0)
-         DC    A(T0047-COBBEG),AL2(96,0)
-         DC    A(T0048-COBBEG),AL2(97,0)
-         DC    A(T0049-COBBEG),AL2(98,0)
-         DC    A(T0050-COBBEG),AL2(99,0)
-         DC    A(T0051-COBBEG),AL2(99,0)
-         DC    A(T0052-COBBEG),AL2(100,0)
-         DC    A(T0053-COBBEG),AL2(101,0)
-         DC    A(T0054-COBBEG),AL2(103,0)
-         DC    A(T0055-COBBEG),AL2(103,0)
-         DC    A(T0056-COBBEG),AL2(104,0)
-         DC    A(T0057-COBBEG),AL2(105,0)
-         DC    A(T0058-COBBEG),AL2(107,0)
-         DC    A(T0059-COBBEG),AL2(108,0)
-         DC    A(T0060-COBBEG),AL2(109,0)
-         DC    A(T0061-COBBEG),AL2(111,0)
-         DC    A(T0062-COBBEG),AL2(112,0)
+         DC    A(T0000-COBBEG),AL2(60,0)
+         DC    A(T0001-COBBEG),AL2(61,0)
+         DC    A(T0002-COBBEG),AL2(62,0)
+         DC    A(T0003-COBBEG),AL2(63,0)
+         DC    A(T0004-COBBEG),AL2(64,0)
+         DC    A(T0005-COBBEG),AL2(65,0)
+         DC    A(T0006-COBBEG),AL2(66,0)
+         DC    A(T0007-COBBEG),AL2(67,0)
+         DC    A(T0008-COBBEG),AL2(68,0)
+         DC    A(T0009-COBBEG),AL2(69,0)
+         DC    A(T0010-COBBEG),AL2(70,0)
+         DC    A(T0011-COBBEG),AL2(71,0)
+         DC    A(T0012-COBBEG),AL2(72,0)
+         DC    A(T0013-COBBEG),AL2(73,0)
+         DC    A(T0014-COBBEG),AL2(74,0)
+         DC    A(T0015-COBBEG),AL2(75,0)
+         DC    A(T0016-COBBEG),AL2(76,0)
+         DC    A(T0017-COBBEG),AL2(77,0)
+         DC    A(T0018-COBBEG),AL2(78,0)
+         DC    A(T0019-COBBEG),AL2(79,0)
+         DC    A(T0020-COBBEG),AL2(80,0)
+         DC    A(T0021-COBBEG),AL2(81,0)
+         DC    A(T0022-COBBEG),AL2(82,0)
+         DC    A(T0023-COBBEG),AL2(83,0)
+         DC    A(T0024-COBBEG),AL2(84,0)
+         DC    A(T0025-COBBEG),AL2(85,0)
+         DC    A(T0026-COBBEG),AL2(86,0)
+         DC    A(T0027-COBBEG),AL2(87,0)
+         DC    A(T0028-COBBEG),AL2(89,0)
+         DC    A(T0029-COBBEG),AL2(89,0)
+         DC    A(T0030-COBBEG),AL2(90,0)
+         DC    A(T0031-COBBEG),AL2(90,0)
+         DC    A(T0032-COBBEG),AL2(91,0)
+         DC    A(T0033-COBBEG),AL2(91,0)
+         DC    A(T0034-COBBEG),AL2(92,0)
+         DC    A(T0035-COBBEG),AL2(92,0)
+         DC    A(T0036-COBBEG),AL2(93,0)
+         DC    A(T0037-COBBEG),AL2(95,0)
+         DC    A(T0038-COBBEG),AL2(96,0)
+         DC    A(T0039-COBBEG),AL2(97,0)
+         DC    A(T0040-COBBEG),AL2(97,0)
+         DC    A(T0041-COBBEG),AL2(98,0)
+         DC    A(T0042-COBBEG),AL2(99,0)
+         DC    A(T0043-COBBEG),AL2(100,0)
+         DC    A(T0044-COBBEG),AL2(100,0)
+         DC    A(T0045-COBBEG),AL2(101,0)
+         DC    A(T0046-COBBEG),AL2(102,0)
+         DC    A(T0047-COBBEG),AL2(103,0)
+         DC    A(T0048-COBBEG),AL2(104,0)
+         DC    A(T0049-COBBEG),AL2(105,0)
+         DC    A(T0050-COBBEG),AL2(105,0)
+         DC    A(T0051-COBBEG),AL2(106,0)
+         DC    A(T0052-COBBEG),AL2(106,0)
+         DC    A(T0053-COBBEG),AL2(107,0)
+         DC    A(T0054-COBBEG),AL2(108,0)
+         DC    A(T0055-COBBEG),AL2(109,0)
+         DC    A(T0056-COBBEG),AL2(109,0)
+         DC    A(T0057-COBBEG),AL2(110,0)
+         DC    A(T0058-COBBEG),AL2(111,0)
+         DC    A(T0059-COBBEG),AL2(113,0)
+         DC    A(T0060-COBBEG),AL2(113,0)
+         DC    A(T0061-COBBEG),AL2(114,0)
+         DC    A(T0062-COBBEG),AL2(115,0)
+         DC    A(T0063-COBBEG),AL2(117,0)
+         DC    A(T0064-COBBEG),AL2(118,0)
+         DC    A(T0065-COBBEG),AL2(119,0)
+         DC    A(T0066-COBBEG),AL2(121,0)
+         DC    A(T0067-COBBEG),AL2(122,0)
 COBWS    CSECT
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
          DS    XL4                 reserve the rest of a table
 D0000    DC    CL4' '              *RDW PIC X(4)
-D0001    DC    CL10' '             PRT-REC PIC X(10)
-         DS    XL2                 reserve the rest of a table
-D0002    DC    CL4' '              *RDW PIC X(4)
-D0003    DS    0CL11               RAW-REC (01 group)
-D0004    DC    CL1' '              R-CTL PIC X(1)
-D0005    DC    CL10' '             R-TEXT PIC X(10)
+D0001    DS    0CL11               PRT-REC (01 group)
+D0002    DC    CL1' '              P-CTL PIC X(1)
+D0003    DC    CL10' '             P-TEXT PIC X(10)
          DS    XL1                 reserve the rest of a table
-D0006    DC    CL4' '              *RDW PIC X(4)
-D0007    DC    CL80' '             OPT-REC PIC X(80)
-         DS    XL4                 reserve the rest of a table
+D0004    DC    CL4' '              *RDW PIC X(4)
+D0005    DS    0CL11               RAW-REC (01 group)
+D0006    DC    CL1' '              R-CTL PIC X(1)
+D0007    DC    CL10' '             R-TEXT PIC X(10)
+         DS    XL1                 reserve the rest of a table
 D0008    DC    CL4' '              *RDW PIC X(4)
-D0009    DC    CL80' '             OPT2-REC PIC X(80)
+D0009    DC    CL80' '             OPT-REC PIC X(80)
          DS    XL4                 reserve the rest of a table
 D0010    DC    CL4' '              *RDW PIC X(4)
-D0011    DC    CL10' '             EXT-REC PIC X(10)
-         DS    XL2                 reserve the rest of a table
-D0012    DC    CL4' '              *RDW PIC X(4)
-D0013    DC    CL10' '             EXT-IN-REC PIC X(10)
-         DS    XL6                 reserve the rest of a table
-D0014    DC    CL1'N'              EOF-FLAG PIC X(1)
-         DS    XL7                 reserve the rest of a table
-D0015    DC    CL1'2'              N PIC 9(1)v0 DISP
-         DS    XL7                 reserve the rest of a table
-D0016    DC    CL1'0'              LC-SHOW PIC 9(1)v0 DISP
-         DS    XL7                 reserve the rest of a table
-D0017    DC    CL1'0'              CNT PIC 9(1)v0 DISP
-         DS    XL7                 reserve the rest of a table
-D0018    DC    CL12' '             CARD-SHOW PIC X(12)
+D0011    DC    CL80' '             OPT2-REC PIC X(80)
          DS    XL4                 reserve the rest of a table
-D0019    DC    HL2'1'              LINAGE-COUNTER PIC 9(4)v0 COMP
+D0012    DC    CL4' '              *RDW PIC X(4)
+D0013    DC    CL10' '             EXT-REC PIC X(10)
+         DS    XL2                 reserve the rest of a table
+D0014    DC    CL4' '              *RDW PIC X(4)
+D0015    DC    CL10' '             EXT-IN-REC PIC X(10)
+         DS    XL6                 reserve the rest of a table
+D0016    DC    CL1'N'              EOF-FLAG PIC X(1)
+         DS    XL7                 reserve the rest of a table
+D0017    DC    CL1'2'              N PIC 9(1)v0 DISP
+         DS    XL7                 reserve the rest of a table
+D0018    DC    CL1'0'              LC-SHOW PIC 9(1)v0 DISP
+         DS    XL7                 reserve the rest of a table
+D0019    DC    CL1'0'              CNT PIC 9(1)v0 DISP
+         DS    XL7                 reserve the rest of a table
+D0020    DC    CL12' '             CARD-SHOW PIC X(12)
+         DS    XL4                 reserve the rest of a table
+D0021    DS    0CL2                CODE-W (01 group)
+D0022    DC    1X'00'              FILL0022 PIC X(1)
+D0023    DC    CL1' '              CODE-LO PIC X(1)
+D0024    EQU   COBWS+296           CODE-N REDEFINES
+         DS    XL6                 reserve the rest of a table
+D0025    DC    CL3' '              CODE-D edited, 3 chars
+         DS    XL5                 reserve the rest of a table
+D0026    DC    HL2'1'              LINAGE-COUNTER PIC 9(4)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the
@@ -827,20 +868,27 @@ COBD020  PUT   RTDCB,RTLINE
          BR    14
 COBDMVC  MVC   RTLINE+1(0),0(2)    executed, never fallen into
 *
-* COBADV -- write one line with ASA carriage control.
+* COBADV -- write one line of a print file, IBM's way.
 *
-*   R1 -> A(dcb), A(print buffer), A(halfword record length),
-*         A(halfword owed), A(halfword request)
+*   R1 -> A(dcb), A(what PUT is given: the record, or its RDW),
+*         A(the record), A(halfword owed), A(halfword request),
+*         A(LINAGE cells) or 0, A(LINAGE-COUNTER) or 0
 *
-* ASA says what to do BEFORE a line prints, which is exactly
-* what AFTER ADVANCING means. BEFORE has to be held over: the
-* line goes out with whatever was owed from the last BEFORE,
-* and its own count becomes what the next line owes. Once the
-* two can add up the total is not known until run time, which
-* is why this is a routine and not a few instructions inline.
+* The control character is the record's own first byte, a
+* machine code, exactly as IKFCBL00 writes it (RECFM=FM):
+* AFTER n is immediate spacing records -- 3 lines at a time,
+* X'1B', then X'13' or X'0B' -- and the line with X'01',
+* write without spacing; AFTER 0 is the no-op X'03' first.
+* BEFORE n is the line with write-and-space, X'09' X'11'
+* X'19', and immediate spacing for any more than three.
+* A channel is skip-immediate (X'8B' for 1) after, or
+* write-and-skip (X'89') before. Measured on TK5.
 *
-* The request is the line count, or -1 for PAGE, negated when
-* the phrase was BEFORE.
+* The request is the line count, 999 for PAGE, 1001-1012 a
+* channel, 1013 CSP, negated when the phrase was BEFORE.
+* A LINAGE file keeps its own accounting, in which BEFORE's
+* count is held over to the next line; the lines it arrives
+* at are written the same way, AFTER-fashion.
 COBADV   STM   14,12,12(13)
          BALR  12,0
          USING *,12
@@ -849,98 +897,150 @@ COBADV   STM   14,12,12(13)
          ST    11,8(13)
          LR    13,11
          L     2,0(0,1)            A(dcb)
-         L     3,4(0,1)            A(buffer)
-         L     4,8(0,1)            A(length)
+         L     3,4(0,1)            A(what PUT writes)
+         L     4,8(0,1)            A(the record): its first byte is the
          L     5,12(0,1)           A(owed)
          L     6,16(0,1)           A(request)
          L     10,20(0,1)          A(LINAGE cells), or 0
          L     11,24(0,1)          A(LINAGE-COUNTER), or 0
-         LH    7,0(0,4)            the record length
-         LTR   7,7
          LH    8,0(0,6)            the request
-         LH    9,0(0,5)            what the last BEFORE left owing
-         LTR   8,8                 BEFORE is the negative side
-         BM    ADV100
-         CH    8,ADVPAGE           AFTER PAGE, or a channel?
-         BNL   ADV020
-         CH    9,ADVPAGE           was a skip already owed?
-         BNL   ADV030              then it stays one, whatever this ask
-         AR    9,8                 owed plus this one
-         B     ADV030
-ADV020   LR    9,8                 a skip swallows what was owed
-ADV030   XC    0(2,5),0(5)         nothing owed after an AFTER
-         B     ADV150
-ADV100   LCR   8,8                 back to a positive request
-ADV110   STH   8,0(0,5)            this is what the next line owes
-         LTR   9,9                 nothing owed?
-         BNZ   ADV150
-         LH    9,ADVONE            then this line simply takes the next
-ADV150   SR    8,8                 no END-OF-PAGE yet
          LTR   10,10               a LINAGE file?
-         BZ    ADV200
+         BNZ   ADV400
+         SR    7,7                 R7: END-OF-PAGE, never, without LINA
+         LTR   8,8
+         BM    ADV100              BEFORE
+         CH    8,ADVCSP
+         BE    ADV020              CSP: no spacing
+         CH    8,ADVPAGE
+         BL    ADV010
+         BAL   14,ADVSKIPI         AFTER a channel: skip first
+         B     ADV030
+ADV010   LTR   9,8                 AFTER n lines
+         BZ    ADV020
+         BAL   14,ADVSPI           the spacing, immediate
+         B     ADV030
+ADV020   MVI   0(4),X'03'          AFTER 0: a no-op first
+         PUT   (2),(3)
+ADV030   MVI   0(4),X'01'          then write, no spacing
+         PUT   (2),(3)             the line itself
+         B     ADV900
+ADV100   LCR   8,8                 BEFORE: a positive request
+         CH    8,ADVCSP
+         BE    ADV120              CSP: write without spacing
+         CH    8,ADVPAGE
+         BL    ADV110
+         LA    9,ADVSKIPW          BEFORE a channel: write and skip
+         BAL   14,ADVCHAN
+         PUT   (2),(3)
+         B     ADV900
+ADV110   LTR   9,8
+         BNZ   ADV130
+ADV120   MVI   0(4),X'01'          BEFORE 0: write, no spacing
+         PUT   (2),(3)
+         B     ADV900
+ADV130   CH    9,ADVTHREE          the line carries up to three
+         BNH   ADV140
+         LH    9,ADVTHREE
+ADV140   IC    0,ADVWSP(9)         write and space 1, 2 or 3
+         STC   0,0(0,4)
+         PUT   (2),(3)             the line itself
+         SR    8,9                 what is left beyond three
+         LTR   9,8
+         BZ    ADV900
+         BAL   14,ADVSPI           the rest, immediate
+         B     ADV900
+ADV400   LH    9,0(0,5)            what the last BEFORE left owing
+         LTR   8,8                 BEFORE is the negative side
+         BM    ADV500
+         CH    8,ADVPAGE           AFTER PAGE, or a channel?
+         BNL   ADV420
+         CH    9,ADVPAGE           was a skip already owed?
+         BNL   ADV430              then it stays one, whatever this ask
+         AR    9,8                 owed plus this one
+         B     ADV430
+ADV420   LR    9,8                 a skip swallows what was owed
+ADV430   XC    0(2,5),0(5)         nothing owed after an AFTER
+         B     ADV550
+ADV500   LCR   8,8                 back to a positive request
+         STH   8,0(0,5)            this is what the next line owes
+         LTR   9,9                 nothing owed?
+         BNZ   ADV550
+         LH    9,ADVONE            then this line simply takes the next
+ADV550   SR    7,7                 no END-OF-PAGE yet
          CH    9,ADVPAGE           a skip?
-         BNL   ADV160
+         BNL   ADV560
          LH    14,0(0,11)          LINAGE-COUNTER
          AR    14,9
          CH    14,0(0,10)          past the body?
-         BH    ADV160
+         BH    ADV560
          STH   14,0(0,11)
          LH    0,2(0,10)           FOOTING
          LTR   0,0
-         BZ    ADV200              no FOOTING: no END-OF-PAGE short of
+         BZ    ADV600              no FOOTING: no END-OF-PAGE short of
          CR    14,0
-         BL    ADV200
-         LA    8,1                 END-OF-PAGE
-         B     ADV200
-ADV160   LH    14,ADVONE
+         BL    ADV600
+         LA    7,1                 END-OF-PAGE
+         B     ADV600
+ADV560   LH    14,ADVONE
          STH   14,0(0,11)          counter back to 1
-         LA    8,1                 a new page is END-OF-PAGE without FO
+         LA    7,1                 a new page is END-OF-PAGE without FO
          LH    0,2(0,10)
          LTR   0,0
-         BZ    ADV170
-         SR    8,8                 with FOOTING, only the footing is
-ADV170   LH    9,4(0,10)           LINES AT TOP
-         LTR   9,9
-         BNZ   ADV175
-         LH    9,ADVPAGE           no top margin: the line itself carri
-         B     ADV200
-ADV175   PUT   (2),ADVB1           eject on a blank line; R9 survives i
-ADV200   CH    9,ADVPAGE           a page skip?
-         BL    ADV210
-         BH    ADV205              a channel
-         MVI   0(3),C'1'           skip to a new page
-         B     ADV300
-ADV205   LA    10,ADVCHAN
-         AR    10,9
-         SH    10,ADVCHOF          request 1001 is the first code
-         MVC   0(1,3),0(10)        the channel's ASA code
-         B     ADV300
-ADV210   LTR   9,9
-         BNM   ADV220
-         SR    9,9                 never negative here
-ADV220   CH    9,ADVTHREE          more than one code can carry?
-         BNH   ADV240
-         PUT   (2),ADVB3           three blank lines at a time
-         SH    9,ADVTHREE
-         B     ADV220
-ADV240   LA    10,ADVCODE
-         AR    10,9
-         MVC   0(1,3),0(10)        '+', ' ', '0' or '-'
-ADV300   PUT   (2),(3)             the line itself
-         L     13,4(13)
-         ST    8,16(13)            END-OF-PAGE, into R15's slot for the
+         BZ    ADV570
+         SR    7,7                 with FOOTING, only the footing is
+ADV570   LH    8,ADVPAGE           a new page
+         BAL   14,ADVSKIPI         skip to it now
+         LH    9,4(0,10)           then LINES AT TOP
+ADV600   CH    9,ADVPAGE
+         BL    ADV610
+         LR    8,9
+         BAL   14,ADVSKIPI         a page or a channel, immediate
+         B     ADV620
+ADV610   LTR   9,9
+         BNP   ADV620
+         BAL   14,ADVSPI           the spacing, immediate
+ADV620   MVI   0(4),X'01'          the line: write, no spacing
+         PUT   (2),(3)
+ADV900   L     13,4(13)
+         ST    7,16(13)            END-OF-PAGE, into R15's slot for the
          LM    14,12,12(13)
          BR    14
-ADVB3    DC    C'-'                a blank line that advances three
-         DC    CL132' '
-ADVB1    DC    C'1'                a blank line that ejects
-         DC    CL132' '
-ADVCHAN  DC    C'123456789ABC+'    channels 1-12, CSP
+ADVSPI   ST    14,ADVR14
+ADVSP1   CH    9,ADVTHREE
+         BNH   ADVSP2
+         MVI   0(4),X'1B'          space 3 lines, immediate
+         PUT   (2),(3)
+         SH    9,ADVTHREE
+         B     ADVSP1
+ADVSP2   IC    0,ADVISP(9)         space 1, 2 or 3, immediate
+         STC   0,0(0,4)
+         PUT   (2),(3)
+         L     14,ADVR14
+         BR    14
+ADVSKIPI ST    14,ADVR14
+         LA    9,ADVSKIP
+         BAL   14,ADVCHAN
+         PUT   (2),(3)
+         L     14,ADVR14
+         BR    14
+ADVCHAN  LR    0,8
+         CH    0,ADVPAGE
+         BNE   ADVCH1
+         LH    0,ADVCHOF           PAGE is channel 1
+ADVCH1   SH    0,ADVCHOF           0 for channel 1
+         AR    9,0
+         MVC   0(1,4),0(9)
+         BR    14
+ADVSKIP  DC    X'8B939BA3ABB3BBC3CBD3DBE3'  skip to channel 1-12, immed
+ADVSKIPW DC    X'899199A1A9B1B9C1C9D1D9E1'  write, then skip to channel
+ADVWSP   DC    X'01091119'         write, then space 0-3
+ADVISP   DC    X'030B131B'         space 0-3, immediate
 ADVCHOF  DC    H'1001'
-ADVCODE  DC    C'+ 0-'             0, 1, 2 or 3 lines
+ADVCSP   DC    H'1013'
 ADVONE   DC    H'1'
 ADVPAGE  DC    H'999'              the page-skip request
 ADVTHREE DC    H'3'
+ADVR14   DS    F
 RTSAVE7  DS    18F
 *
 * COBUPSI -- set the eight switches from the EXEC PARM.

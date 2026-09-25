@@ -3221,8 +3221,6 @@ static void parse_data_division(void)
         if (files[i].varrec && files[i].rec_max > files[i].reclen) files[i].reclen = files[i].rec_max;
         if (files[i].recmode == 'V' && (files[i].vsam || files[i].isam))
             die("RECORDING MODE V is for sequential (QSAM) files; VSAM and ISAM records carry no RDW");
-        if (files[i].varrec && files[i].print)
-            die("a print file with variable-length records is not implemented");
         if (keyname[i][0]) files[i].key_sym = need_sym(keyname[i]);
         for (int k = 0; k < files[i].nalt; k++) {
             files[i].alt_sym[k] = need_sym(altname[i][k]);
@@ -8181,20 +8179,27 @@ static void emit_runtime(void)
     asm_line("", "BR", "14", "");
     asm_line("COBDMVC", "MVC", "RTLINE+1(0),0(2)", "executed, never fallen into");
     asm_comment("");
-    asm_comment(" COBADV -- write one line with ASA carriage control.");
+    asm_comment(" COBADV -- write one line of a print file, IBM's way.");
     asm_comment("");
-    asm_comment("   R1 -> A(dcb), A(print buffer), A(halfword record length),");
-    asm_comment("         A(halfword owed), A(halfword request)");
+    asm_comment("   R1 -> A(dcb), A(what PUT is given: the record, or its RDW),");
+    asm_comment("         A(the record), A(halfword owed), A(halfword request),");
+    asm_comment("         A(LINAGE cells) or 0, A(LINAGE-COUNTER) or 0");
     asm_comment("");
-    asm_comment(" ASA says what to do BEFORE a line prints, which is exactly");
-    asm_comment(" what AFTER ADVANCING means. BEFORE has to be held over: the");
-    asm_comment(" line goes out with whatever was owed from the last BEFORE,");
-    asm_comment(" and its own count becomes what the next line owes. Once the");
-    asm_comment(" two can add up the total is not known until run time, which");
-    asm_comment(" is why this is a routine and not a few instructions inline.");
+    asm_comment(" The control character is the record's own first byte, a");
+    asm_comment(" machine code, exactly as IKFCBL00 writes it (RECFM=FM):");
+    asm_comment(" AFTER n is immediate spacing records -- 3 lines at a time,");
+    asm_comment(" X'1B', then X'13' or X'0B' -- and the line with X'01',");
+    asm_comment(" write without spacing; AFTER 0 is the no-op X'03' first.");
+    asm_comment(" BEFORE n is the line with write-and-space, X'09' X'11'");
+    asm_comment(" X'19', and immediate spacing for any more than three.");
+    asm_comment(" A channel is skip-immediate (X'8B' for 1) after, or");
+    asm_comment(" write-and-skip (X'89') before. Measured on TK5.");
     asm_comment("");
-    asm_comment(" The request is the line count, or -1 for PAGE, negated when");
-    asm_comment(" the phrase was BEFORE.");
+    asm_comment(" The request is the line count, 999 for PAGE, 1001-1012 a");
+    asm_comment(" channel, 1013 CSP, negated when the phrase was BEFORE.");
+    asm_comment(" A LINAGE file keeps its own accounting, in which BEFORE's");
+    asm_comment(" count is held over to the next line; the lines it arrives");
+    asm_comment(" at are written the same way, AFTER-fashion.");
     asm_line("COBADV", "STM", "14,12,12(13)", "");
     asm_line("", "BALR", "12,0", "");
     asm_line("", "USING", "*,12", "");
@@ -8203,113 +8208,169 @@ static void emit_runtime(void)
     asm_line("", "ST", "11,8(13)", "");
     asm_line("", "LR", "13,11", "");
     asm_line("", "L", "2,0(0,1)", "A(dcb)");
-    asm_line("", "L", "3,4(0,1)", "A(buffer)");
-    asm_line("", "L", "4,8(0,1)", "A(length)");
+    asm_line("", "L", "3,4(0,1)", "A(what PUT writes)");
+    asm_line("", "L", "4,8(0,1)", "A(the record): its first byte is the code");
     asm_line("", "L", "5,12(0,1)", "A(owed)");
     asm_line("", "L", "6,16(0,1)", "A(request)");
     asm_line("", "L", "10,20(0,1)", "A(LINAGE cells), or 0");
     asm_line("", "L", "11,24(0,1)", "A(LINAGE-COUNTER), or 0");
-    asm_line("", "LH", "7,0(0,4)", "the record length");
-    asm_line("", "LTR", "7,7", "");
     asm_line("", "LH", "8,0(0,6)", "the request");
-    asm_line("", "LH", "9,0(0,5)", "what the last BEFORE left owing");
+    asm_line("", "LTR", "10,10", "a LINAGE file?");
+    asm_line("", "BNZ", "ADV400", "");
+    /* No LINAGE: IBM's codes, straight from the request. */
+    asm_line("", "SR", "7,7", "R7: END-OF-PAGE, never, without LINAGE");
+    asm_line("", "LTR", "8,8", "");
+    asm_line("", "BM", "ADV100", "BEFORE");
+    asm_line("", "CH", "8,ADVCSP", "");
+    asm_line("", "BE", "ADV020", "CSP: no spacing");
+    asm_line("", "CH", "8,ADVPAGE", "");
+    asm_line("", "BL", "ADV010", "");
+    asm_line("", "BAL", "14,ADVSKIPI", "AFTER a channel: skip first");
+    asm_line("", "B", "ADV030", "");
+    asm_line("ADV010", "LTR", "9,8", "AFTER n lines");
+    asm_line("", "BZ", "ADV020", "");
+    asm_line("", "BAL", "14,ADVSPI", "the spacing, immediate");
+    asm_line("", "B", "ADV030", "");
+    asm_line("ADV020", "MVI", "0(4),X'03'", "AFTER 0: a no-op first");
+    asm_line("", "PUT", "(2),(3)", "");
+    asm_line("ADV030", "MVI", "0(4),X'01'", "then write, no spacing");
+    asm_line("", "PUT", "(2),(3)", "the line itself");
+    asm_line("", "B", "ADV900", "");
+    asm_line("ADV100", "LCR", "8,8", "BEFORE: a positive request");
+    asm_line("", "CH", "8,ADVCSP", "");
+    asm_line("", "BE", "ADV120", "CSP: write without spacing");
+    asm_line("", "CH", "8,ADVPAGE", "");
+    asm_line("", "BL", "ADV110", "");
+    asm_line("", "LA", "9,ADVSKIPW", "BEFORE a channel: write and skip");
+    asm_line("", "BAL", "14,ADVCHAN", "");
+    asm_line("", "PUT", "(2),(3)", "");
+    asm_line("", "B", "ADV900", "");
+    asm_line("ADV110", "LTR", "9,8", "");
+    asm_line("", "BNZ", "ADV130", "");
+    asm_line("ADV120", "MVI", "0(4),X'01'", "BEFORE 0: write, no spacing");
+    asm_line("", "PUT", "(2),(3)", "");
+    asm_line("", "B", "ADV900", "");
+    asm_line("ADV130", "CH", "9,ADVTHREE", "the line carries up to three");
+    asm_line("", "BNH", "ADV140", "");
+    asm_line("", "LH", "9,ADVTHREE", "");
+    asm_line("ADV140", "IC", "0,ADVWSP(9)", "write and space 1, 2 or 3");
+    asm_line("", "STC", "0,0(0,4)", "");
+    asm_line("", "PUT", "(2),(3)", "the line itself");
+    asm_line("", "SR", "8,9", "what is left beyond three");
+    asm_line("", "LTR", "9,8", "");
+    asm_line("", "BZ", "ADV900", "");
+    asm_line("", "BAL", "14,ADVSPI", "the rest, immediate");
+    asm_line("", "B", "ADV900", "");
+    /* LINAGE: the accounting as it was -- R9 comes out as the advance to
+     * make before the line, a count, 999 for a page or a channel request --
+     * and then the line goes out AFTER-fashion. */
+    asm_line("ADV400", "LH", "9,0(0,5)", "what the last BEFORE left owing");
     asm_line("", "LTR", "8,8", "BEFORE is the negative side");
-    asm_line("", "BM", "ADV100", "");
+    asm_line("", "BM", "ADV500", "");
     /* AFTER: this line's own count adds to what was owed, and nothing is left.
      * A page skip or a channel skip -- anything 999 or more -- swallows what
      * was owed, and one already owed stays whatever this asks. */
     asm_line("", "CH", "8,ADVPAGE", "AFTER PAGE, or a channel?");
-    asm_line("", "BNL", "ADV020", "");
+    asm_line("", "BNL", "ADV420", "");
     asm_line("", "CH", "9,ADVPAGE", "was a skip already owed?");
-    asm_line("", "BNL", "ADV030", "then it stays one, whatever this asks");
+    asm_line("", "BNL", "ADV430", "then it stays one, whatever this asks");
     asm_line("", "AR", "9,8", "owed plus this one");
-    asm_line("", "B", "ADV030", "");
-    asm_line("ADV020", "LR", "9,8", "a skip swallows what was owed");
-    asm_line("ADV030", "XC", "0(2,5),0(5)", "nothing owed after an AFTER");
-    asm_line("", "B", "ADV150", "");
+    asm_line("", "B", "ADV430", "");
+    asm_line("ADV420", "LR", "9,8", "a skip swallows what was owed");
+    asm_line("ADV430", "XC", "0(2,5),0(5)", "nothing owed after an AFTER");
+    asm_line("", "B", "ADV550", "");
     /* BEFORE: the line goes out on what was owed, and owes its own count. */
-    asm_line("ADV100", "LCR", "8,8", "back to a positive request");
-    asm_line("ADV110", "STH", "8,0(0,5)", "this is what the next line owes");
+    asm_line("ADV500", "LCR", "8,8", "back to a positive request");
+    asm_line("", "STH", "8,0(0,5)", "this is what the next line owes");
     asm_line("", "LTR", "9,9", "nothing owed?");
-    asm_line("", "BNZ", "ADV150", "");
+    asm_line("", "BNZ", "ADV550", "");
     asm_line("", "LH", "9,ADVONE", "then this line simply takes the next one");
-    /* R9 now holds the advance to apply before printing.
-     *
-     * LINAGE: the logical page. A skip of any kind goes to the first line of
-     * the next page's body; a count that would run past the body does the
-     * same; otherwise the counter advances by the count. END-OF-PAGE is the
-     * counter reaching FOOTING, or, with no FOOTING, a new page. */
-    /* R8 carries the END-OF-PAGE answer from here: the PUTs below clobber
-     * R15 (and R0, R1, R14), so it is moved into R15 only at the end. */
-    asm_line("ADV150", "SR", "8,8", "no END-OF-PAGE yet");
-    asm_line("", "LTR", "10,10", "a LINAGE file?");
-    asm_line("", "BZ", "ADV200", "");
+    /* The logical page. A skip of any kind goes to the first line of the
+     * next page's body; a count that would run past the body does the same;
+     * otherwise the counter advances by the count. END-OF-PAGE is the counter
+     * reaching FOOTING, or, with no FOOTING, a new page. R7 carries it: the
+     * PUTs clobber R15, so it moves there only at the end. */
+    asm_line("ADV550", "SR", "7,7", "no END-OF-PAGE yet");
     asm_line("", "CH", "9,ADVPAGE", "a skip?");
-    asm_line("", "BNL", "ADV160", "");
+    asm_line("", "BNL", "ADV560", "");
     asm_line("", "LH", "14,0(0,11)", "LINAGE-COUNTER");
     asm_line("", "AR", "14,9", "");
     asm_line("", "CH", "14,0(0,10)", "past the body?");
-    asm_line("", "BH", "ADV160", "");
+    asm_line("", "BH", "ADV560", "");
     asm_line("", "STH", "14,0(0,11)", "");
     asm_line("", "LH", "0,2(0,10)", "FOOTING");
     asm_line("", "LTR", "0,0", "");
-    asm_line("", "BZ", "ADV200", "no FOOTING: no END-OF-PAGE short of the page");
+    asm_line("", "BZ", "ADV600", "no FOOTING: no END-OF-PAGE short of the page");
     asm_line("", "CR", "14,0", "");
-    asm_line("", "BL", "ADV200", "");
-    asm_line("", "LA", "8,1", "END-OF-PAGE");
-    asm_line("", "B", "ADV200", "");
-    asm_line("ADV160", "LH", "14,ADVONE", "");
+    asm_line("", "BL", "ADV600", "");
+    asm_line("", "LA", "7,1", "END-OF-PAGE");
+    asm_line("", "B", "ADV600", "");
+    asm_line("ADV560", "LH", "14,ADVONE", "");
     asm_line("", "STH", "14,0(0,11)", "counter back to 1");
-    asm_line("", "LA", "8,1", "a new page is END-OF-PAGE without FOOTING");
+    asm_line("", "LA", "7,1", "a new page is END-OF-PAGE without FOOTING");
     asm_line("", "LH", "0,2(0,10)", "");
     asm_line("", "LTR", "0,0", "");
-    asm_line("", "BZ", "ADV170", "");
-    asm_line("", "SR", "8,8", "with FOOTING, only the footing is");
-    asm_line("ADV170", "LH", "9,4(0,10)", "LINES AT TOP");
-    asm_line("", "LTR", "9,9", "");
-    asm_line("", "BNZ", "ADV175", "");
-    asm_line("", "LH", "9,ADVPAGE", "no top margin: the line itself carries the eject");
-    asm_line("", "B", "ADV200", "");
-    asm_line("ADV175", "PUT", "(2),ADVB1", "eject on a blank line; R9 survives it");
-    asm_line("ADV200", "CH", "9,ADVPAGE", "a page skip?");
-    asm_line("", "BL", "ADV210", "");
-    asm_line("", "BH", "ADV205", "a channel");
-    asm_line("", "MVI", "0(3),C'1'", "skip to a new page");
-    asm_line("", "B", "ADV300", "");
-    asm_line("ADV205", "LA", "10,ADVCHAN", "");
-    asm_line("", "AR", "10,9", "");
-    asm_line("", "SH", "10,ADVCHOF", "request 1001 is the first code");
-    asm_line("", "MVC", "0(1,3),0(10)", "the channel's ASA code");
-    asm_line("", "B", "ADV300", "");
-    asm_line("ADV210", "LTR", "9,9", "");
-    asm_line("", "BNM", "ADV220", "");
-    asm_line("", "SR", "9,9", "never negative here");
-    /* More than three lines is blank lines first, three at a time. They come
-     * from the runtime's own constant rather than from the caller's buffer:
-     * the record to print is already sitting in that. */
-    asm_line("ADV220", "CH", "9,ADVTHREE", "more than one code can carry?");
-    asm_line("", "BNH", "ADV240", "");
-    asm_line("", "PUT", "(2),ADVB3", "three blank lines at a time");
-    asm_line("", "SH", "9,ADVTHREE", "");
-    asm_line("", "B", "ADV220", "");
-    asm_line("ADV240", "LA", "10,ADVCODE", "");
-    asm_line("", "AR", "10,9", "");
-    asm_line("", "MVC", "0(1,3),0(10)", "'+', ' ', '0' or '-'");
-    asm_line("ADV300", "PUT", "(2),(3)", "the line itself");
-    asm_line("", "L", "13,4(13)", "");
-    asm_line("", "ST", "8,16(13)", "END-OF-PAGE, into R15's slot for the LM");
+    asm_line("", "BZ", "ADV570", "");
+    asm_line("", "SR", "7,7", "with FOOTING, only the footing is");
+    asm_line("ADV570", "LH", "8,ADVPAGE", "a new page");
+    asm_line("", "BAL", "14,ADVSKIPI", "skip to it now");
+    asm_line("", "LH", "9,4(0,10)", "then LINES AT TOP");
+    /* R9: lines to space before the line, or a skip. */
+    asm_line("ADV600", "CH", "9,ADVPAGE", "");
+    asm_line("", "BL", "ADV610", "");
+    asm_line("", "LR", "8,9", "");
+    asm_line("", "BAL", "14,ADVSKIPI", "a page or a channel, immediate");
+    asm_line("", "B", "ADV620", "");
+    asm_line("ADV610", "LTR", "9,9", "");
+    asm_line("", "BNP", "ADV620", "");
+    asm_line("", "BAL", "14,ADVSPI", "the spacing, immediate");
+    asm_line("ADV620", "MVI", "0(4),X'01'", "the line: write, no spacing");
+    asm_line("", "PUT", "(2),(3)", "");
+    asm_line("ADV900", "L", "13,4(13)", "");
+    asm_line("", "ST", "7,16(13)", "END-OF-PAGE, into R15's slot for the LM");
     asm_line("", "LM", "14,12,12(13)", "");
     asm_line("", "BR", "14", "");
-    asm_line("ADVB3", "DC", "C'-'", "a blank line that advances three");
-    asm_line("", "DC", "CL132' '", "");
-    asm_line("ADVB1", "DC", "C'1'", "a blank line that ejects");
-    asm_line("", "DC", "CL132' '", "");
-    asm_line("ADVCHAN", "DC", "C'123456789ABC+'", "channels 1-12, CSP");
+    /* Immediate spacing: R9 lines, three at a time and then the rest. R14
+     * is the return; PUT is free to use R14 itself, so it is kept in ADVR14. */
+    asm_line("ADVSPI", "ST", "14,ADVR14", "");
+    asm_line("ADVSP1", "CH", "9,ADVTHREE", "");
+    asm_line("", "BNH", "ADVSP2", "");
+    asm_line("", "MVI", "0(4),X'1B'", "space 3 lines, immediate");
+    asm_line("", "PUT", "(2),(3)", "");
+    asm_line("", "SH", "9,ADVTHREE", "");
+    asm_line("", "B", "ADVSP1", "");
+    asm_line("ADVSP2", "IC", "0,ADVISP(9)", "space 1, 2 or 3, immediate");
+    asm_line("", "STC", "0,0(0,4)", "");
+    asm_line("", "PUT", "(2),(3)", "");
+    asm_line("", "L", "14,ADVR14", "");
+    asm_line("", "BR", "14", "");
+    /* Skip immediate: R8 is 999 for a page, 1001-1012 for a channel. */
+    asm_line("ADVSKIPI", "ST", "14,ADVR14", "");
+    asm_line("", "LA", "9,ADVSKIP", "");
+    asm_line("", "BAL", "14,ADVCHAN", "");
+    asm_line("", "PUT", "(2),(3)", "");
+    asm_line("", "L", "14,ADVR14", "");
+    asm_line("", "BR", "14", "");
+    /* The channel's code from the table at R9 into the record's first byte:
+     * 999 is channel 1. */
+    asm_line("ADVCHAN", "LR", "0,8", "");
+    asm_line("", "CH", "0,ADVPAGE", "");
+    asm_line("", "BNE", "ADVCH1", "");
+    asm_line("", "LH", "0,ADVCHOF", "PAGE is channel 1");
+    asm_line("ADVCH1", "SH", "0,ADVCHOF", "0 for channel 1");
+    asm_line("", "AR", "9,0", "");
+    asm_line("", "MVC", "0(1,4),0(9)", "");
+    asm_line("", "BR", "14", "");
+    asm_line("ADVSKIP", "DC", "X'8B939BA3ABB3BBC3CBD3DBE3'", "skip to channel 1-12, immediate");
+    asm_line("ADVSKIPW", "DC", "X'899199A1A9B1B9C1C9D1D9E1'", "write, then skip to channel 1-12");
+    asm_line("ADVWSP", "DC", "X'01091119'", "write, then space 0-3");
+    asm_line("ADVISP", "DC", "X'030B131B'", "space 0-3, immediate");
     asm_line("ADVCHOF", "DC", "H'1001'", "");
-    asm_line("ADVCODE", "DC", "C'+ 0-'", "0, 1, 2 or 3 lines");
+    asm_line("ADVCSP", "DC", "H'1013'", "");
     asm_line("ADVONE", "DC", "H'1'", "");
     asm_line("ADVPAGE", "DC", "H'999'", "the page-skip request");
     asm_line("ADVTHREE", "DC", "H'3'", "");
+    asm_line("ADVR14", "DS", "F", "");
     asm_line("RTSAVE7", "DS", "18F", "");
     asm_comment("");
     asm_comment(" COBUPSI -- set the eight switches from the EXEC PARM.");
@@ -11178,28 +11239,42 @@ static void generate(void)
                 break;
             }
             if (f->print) {
-                /* The line goes out through the runtime, which owns the
-                 * carriage control: AFTER applies its count now, BEFORE holds
-                 * it over to the next line, and only the runtime can add the
-                 * two together because only it knows what was owed. */
-                if (f->reclen > 256)
-                    die("a print record wider than 256 bytes needs a split MVC, "
-                        "which is not implemented");
-                /* The request is the line count, 999 for PAGE, negated when
-                 * the phrase was BEFORE. BEFORE 0 and AFTER 0 are the same
-                 * thing -- apply what is owed and owe nothing -- so the zero
-                 * that cannot be negated needs no special case. */
-                int adv = st->adv == -2 ? 1 : st->adv == -1 ? 999 : st->adv;
-                if (st->adv_before) adv = -adv;
-                need_sym_base(wrec);
-                snprintf(b, sizeof b, "%s+1(%d),%s", f->pbuf, f->reclen, wrec->label);
-                asm_line("", "MVC", b, "the record, behind its control byte");
+                /* The line goes out through the runtime, which writes the
+                 * carriage control into the record's own first byte, IBM's
+                 * way -- the program reserves it, as programs of this system
+                 * do. The request is the line count, 999 for PAGE, a channel
+                 * as 1000+n, negated when the phrase was BEFORE. A WRITE with
+                 * no ADVANCING is BEFORE 1, which is what IKFCBL00 writes for
+                 * it (X'09'); on a LINAGE file it is one line, AFTER-fashion,
+                 * as general rule 9 on IV-35 has it. */
+                int adv = st->adv == -2 ? (f->linage ? 1 : -1)
+                        : st->adv == -1 ? 999 : st->adv;
+                if (st->adv_before && st->adv != -2) adv = -adv;
+                /* BEFORE 0 is not AFTER 0: IKFCBL00 writes the line with X'01'
+                 * and no no-op ahead of it. Zero has no negative, so it goes
+                 * as BEFORE CSP, which is exactly that. */
+                if (st->adv_before && st->adv == 0 && st->adv_sym < 0) adv = -1013;
+                if (f->varrec) {
+                    const Sym *rw = &syms[f->rdw_sym];
+                    need_sym_base(rw);
+                    snprintf(b, sizeof b, "%s(2),%s", rw->label, intern_half(wrec->bytes + 4));
+                    asm_line("", "MVC", b, "RDW: the length of this record");
+                    snprintf(b, sizeof b, "%s+2(2),%s+2", rw->label, rw->label);
+                    asm_line("", "XC", b, "");
+                }
                 if (st->adv_sym >= 0) {
                     need_sym_base(&syms[st->adv_sym]);
                     gen_load(&syms[st->adv_sym], st->adv_sub, "PWK1");
                     asm_line("", "ZAP", "DWK(8),PWK1(16)", "");
                     asm_line("", "CVB", "1,DWK", "ADVANCING identifier LINES");
-                    if (st->adv_before) asm_line("", "LCR", "1,1", "negative marks a BEFORE");
+                    if (st->adv_before) {
+                        char lz[16];
+                        snprintf(lz, sizeof lz, "L%04d", ++genlabel);
+                        asm_line("", "LCR", "1,1", "negative marks a BEFORE");
+                        asm_line("", "BNZ", lz, "");
+                        asm_line("", "LH", "1,=H'-1013'", "BEFORE 0: write, no spacing");
+                        asm_line(lz, "DS", "0H", "");
+                    }
                 } else {
                     snprintf(b, sizeof b, "1,%d", adv < 0 ? -adv : adv);
                     asm_line("", "LA", b, adv < 0 ? "BEFORE" : "AFTER");
@@ -12732,10 +12807,15 @@ static void generate(void)
              * holds BLOCK CONTAINS records of the longest kind plus its BDW
              * -- or V unblocked, LRECL plus the BDW. BLOCK CONTAINS 0 leaves
              * BLKSIZE to the DD or the label. */
-            const char *recfm = (f->report >= 0 || f->print) ? "FBA"
-                              : f->varrec ? ((f->blk_records > 1 || f->blk_chars > 0 || f->blk_zero) ? "VB" : "V")
+            /* A print file carries machine carriage control in its record's
+             * first byte, as IKFCBL00's do: RECFM=FM, unblocked unless BLOCK
+             * CONTAINS says otherwise, LRECL the record itself (measured). */
+            int blocked = f->blk_records > 1 || f->blk_chars > 0 || f->blk_zero;
+            const char *recfm = f->report >= 0 ? "FBA"
+                              : f->print ? (f->varrec ? (blocked ? "VBM" : "VM") : (blocked ? "FBM" : "FM"))
+                              : f->varrec ? (blocked ? "VB" : "V")
                               : "FB";
-            int lrecl = f->reclen + (f->print ? 1 : 0) + (f->varrec ? 4 : 0);
+            int lrecl = f->reclen + (f->report >= 0 ? 1 : 0) + (f->varrec ? 4 : 0);
             int blk = f->blk_chars > 0 ? f->blk_chars
                     : f->varrec ? (f->blk_records > 1 ? lrecl * f->blk_records + 4 : lrecl + 4)
                     : lrecl * (f->blk_records > 0 ? f->blk_records : 1);
@@ -12765,14 +12845,14 @@ static void generate(void)
     for (int i = 0; i < nfile; i++) {
         if (!files[i].print) continue;
         char pb[16]; snprintf(pb, sizeof pb, "%s", files[i].pbuf);
-        snprintf(b, sizeof b, "CL%d", files[i].reclen + 1);
-        asm_line(pb, "DS", b, "ASA byte + the record");
         char lab[20];
         snprintf(lab, sizeof lab, "%sP", pb);
         snprintf(b, sizeof b, "A(%s)", files[i].label);
         asm_line(lab, "DC", b, "COBADV parameter list");
-        snprintf(b, sizeof b, "A(%s)", pb);          asm_line("", "DC", b, "");
-        snprintf(b, sizeof b, "A(%sL)", pb);         asm_line("", "DC", b, "");
+        snprintf(b, sizeof b, "A(%s)", syms[files[i].varrec ? files[i].rdw_sym : files[i].rec_sym].label);
+        asm_line("", "DC", b, files[i].varrec ? "what PUT writes: the RDW" : "what PUT writes");
+        snprintf(b, sizeof b, "A(%s)", syms[files[i].rec_sym].label);
+        asm_line("", "DC", b, "the record: its first byte is the code");
         snprintf(b, sizeof b, "A(%sO)", pb);         asm_line("", "DC", b, "");
         snprintf(b, sizeof b, "A(%sQ)", pb);         asm_line("", "DC", b, "");
         if (files[i].linage) {
