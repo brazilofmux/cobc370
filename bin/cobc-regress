@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec bigpara cobxref iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptraw rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec bigpara cobxref iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -69,6 +69,13 @@ for t in $TESTS; do
         printf '//%-8s JOB (5161A020,1A11),%s,\n' "$jn" "'REGRESSION'"
         printf '//             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),\n'
         printf '//             USER=HERC01,PASSWORD=@HERC01PW@\n'
+        if [ "$t" = rptraw ]; then
+            # rptraw's report goes to a catalogued data set, so LISTDS can
+            # say what the DCB made it: a clear start, and a step after GO.
+            printf '//DEL      EXEC PGM=IEFBR14\n'
+            printf '//D1       DD  DSN=HERC01.RPTRAW,DISP=(MOD,DELETE),\n'
+            printf '//             UNIT=SYSDA,SPACE=(TRK,1)\n'
+        fi
         if [ "$t" = aixnatl ]; then
             # The alternate-key trio runs on a base cluster that cannot be
             # REUSE (an alternate index forbids it), so the loader's job
@@ -185,7 +192,11 @@ for t in $TESTS; do
             cat "$TDIR/data/ksds-actions.txt"
             printf '/*\n'
         fi
-        case "$t" in rpt*) printf '//GO.PROUT   DD  SYSOUT=Z\n' ;; esac
+        case "$t" in
+        rptraw) printf '//GO.PROUT   DD  DSN=HERC01.RPTRAW,DISP=(NEW,CATLG),\n'
+                printf '//             UNIT=SYSDA,SPACE=(TRK,(1,1))\n' ;;
+        rpt*)   printf '//GO.PROUT   DD  SYSOUT=Z\n' ;;
+        esac
         case "$t" in aixnatl|aixnat|aixnatu|aixnatr)
             # The base and the two paths: the path ddnames are the base's
             # first five characters and 01, 02 -- IBM's convention.
@@ -262,6 +273,15 @@ for t in $TESTS; do
                 printf '%-72s\n' "$r"
             done
             printf '/*\n'
+        fi
+        if [ "$t" = rptraw ]; then
+            # The record length is what a read-back cannot see -- QSAM reads a
+            # 134-byte record through a 133-byte FD without a word -- so the
+            # expected output is what LISTDS says the data set is.
+            printf '//LIST     EXEC PGM=IKJEFT01,COND=EVEN\n//SYSTSPRT DD  SYSOUT=Z\n'
+            printf "//SYSTSIN  DD  *\nLISTDS 'HERC01.RPTRAW'\n/*\n"
+            printf '//DEL2     EXEC PGM=IEFBR14,COND=EVEN\n'
+            printf '//D1       DD  DSN=HERC01.RPTRAW,DISP=(OLD,DELETE)\n'
         fi
     } > "$WORK/$t.jcl.new" && mv "$WORK/$t.jcl.new" "$WORK/$t.jcl"
 

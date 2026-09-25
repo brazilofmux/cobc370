@@ -523,8 +523,8 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
-FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FBA,             X
-               LRECL=134,BLKSIZE=134
+FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FA,              X
+               LRECL=133,BLKSIZE=133
 M0001    DC    XL4'40202120'       ED patterns
 FC001    DC    F'1'                binary literals
 FC002    DC    F'9'

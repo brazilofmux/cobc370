@@ -1215,8 +1215,8 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
-FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FBA,             X
-               LRECL=134,BLKSIZE=134
+FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FA,              X
+               LRECL=133,BLKSIZE=133
 K0001    EQU   *-13                numeric constants, as long as used
          DC    PL3'1050'
 K0002    EQU   *-14

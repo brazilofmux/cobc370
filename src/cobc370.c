@@ -12811,11 +12811,13 @@ static void generate(void)
              * first byte, as IKFCBL00's do: RECFM=FM, unblocked unless BLOCK
              * CONTAINS says otherwise, LRECL the record itself (measured). */
             int blocked = f->blk_records > 1 || f->blk_chars > 0 || f->blk_zero;
-            const char *recfm = f->report >= 0 ? "FBA"
+            /* A report file's record already counts its ASA byte (and CODE):
+             * 133 bytes for 132 columns, RECFM=FA, as IKFCBL00's (measured). */
+            const char *recfm = f->report >= 0 ? (blocked ? "FBA" : "FA")
                               : f->print ? (f->varrec ? (blocked ? "VBM" : "VM") : (blocked ? "FBM" : "FM"))
                               : f->varrec ? (blocked ? "VB" : "V")
                               : "FB";
-            int lrecl = f->reclen + (f->report >= 0 ? 1 : 0) + (f->varrec ? 4 : 0);
+            int lrecl = f->reclen + (f->varrec ? 4 : 0);
             int blk = f->blk_chars > 0 ? f->blk_chars
                     : f->varrec ? (f->blk_records > 1 ? lrecl * f->blk_records + 4 : lrecl + 4)
                     : lrecl * (f->blk_records > 0 ? f->blk_records : 1);

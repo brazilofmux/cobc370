@@ -233,6 +233,28 @@ Nothing in the module is refused. The oracles for the later slices are
 the 1974 text itself, IKFCBL00 corroborating where its 1968 Report Writer
 reaches.
 
+**Measured against IKFCBL00's own report files, 2026-09-25** (issue #23),
+by writing six of the `rpt*` programs to a data set under both compilers
+and dumping the records:
+
+- The file is `RECFM=FA`, 133 bytes -- the ASA byte and 132 columns --
+  under both. cobc370 had briefly made it 134, the last byte a stray X'00'
+  read from past the line buffer; `rptraw` now asks `LISTDS` what the file
+  is, because a read-back through a shorter FD cannot tell.
+- Four of the six print **the same pages**. The records differ only in
+  IKFCBL00's habits: it ejects on a blank record (`1`) and prints the first
+  line with `+`, and it spaces with the line's own `0` where cobc370 writes
+  a blank line first. Same paper, different records.
+- Two print differently, and there the 1974 text is followed rather than
+  IKFCBL00's 1968 Report Writer: a summary report's `SUM` counters
+  accumulate on `GENERATE report-name` as though a detail existed
+  (2.21.4(11); IKFCBL00's print 0), and `NEXT GROUP` and a report heading
+  sharing the first page are placed by the tables of 2.5.5.
+- IKFCBL00 does not compile `rptnext`, `rptuse` or `rptcode` at all.
+
+So the record layout matches IBM's; the encoding style does not, and is not
+copied onto a Report Writer whose rules differ where they matter.
+
 ### Inter-Program Communication — Level 2, complete
 
 `LINKAGE SECTION`, `PROCEDURE DIVISION USING`, `CALL 'literal' USING` all
