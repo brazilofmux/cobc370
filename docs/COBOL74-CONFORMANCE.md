@@ -266,6 +266,25 @@ comment that once said ANS COBOL has no `CALL identifier` was true of IBM's
 compiler and false of the standard -- `2 IPC 0,2` lists it -- and that is the
 kind of thing the standard-shaped map exists to catch.
 
+Two things found on 2026-09-25 by running Jay Moseley's install check of
+NCZ93205 -- the CBT PDS-reading routine Vince Coen's COBXREF calls -- under
+both compilers:
+
+- **Each CALL leaves the callee's R15 in `RETURN-CODE`**, as IKFCBL00's does,
+  so a program that calls has the register whether or not it names it. A
+  program that never mentions it still ends with its last callee's return
+  code as the step's condition code (measured: a CALL returning 4, then
+  `STOP RUN`, is `COND CODE 0004`). The check reads a member with
+  `PERFORM ... UNTIL RETURN-CODE NOT = 0`; without this, it never stopped.
+- **Each program's WORKING-STORAGE is its own.** It was a CSECT named
+  `COBWS` in every program, and the linkage editor keeps only the first of
+  two CSECTs with one name: a caller and a separately compiled subprogram,
+  linked together, shared the caller's storage, and each wrote over the
+  other's items. It is private code now, which is never merged. The call
+  round trip had passed because its caller moved its input again before
+  every CALL; it now checks that the caller's items survive, and that the
+  return code comes back.
+
 ### Segmentation — Level 1
 
 Segment-numbers on sections are accepted, and `ALTER` respects them. Level 2

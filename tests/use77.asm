@@ -123,7 +123,8 @@ CB0000   DC    A(B0000)            a code block's base
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F
          DC    A(T0000-COBBEG),AL2(9,0)
-COBWS    CSECT
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    CL1'A'              WS PIC X(1)

@@ -122,10 +122,14 @@ T0007    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         LH    15,D0004            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
-         LM    14,12,12(13)        restore caller's registers
-         SR    15,15               return code 0
+         L     14,12(13)           caller's return address
+         LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
          BR    14                  return to caller
+         DROP  8
 * CALL-IT.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
@@ -146,10 +150,11 @@ T0008    DS    0H
          L     15,VDCAL
          BALR  14,15               CALL identifier: load by name and ca
          DROP  8
-T0009    DS    0H
-* MOVE OUT-CALLS -> SHOW
          L     8,BL0000            base locator
          USING WSC0000,8
+         STH   15,D0004            the callee's return code -> RETURN-C
+T0009    DS    0H
+* MOVE OUT-CALLS -> SHOW
          LH    2,D0002
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
@@ -292,7 +297,8 @@ SPIELTB  DS    0F
          DC    A(T0008-COBBEG),AL2(22,0)
          DC    A(T0009-COBBEG),AL2(23,0)
          DC    A(T0010-COBBEG),AL2(24,0)
-COBWS    CSECT
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    CL8'SUBDYN'         PGM-NAME PIC X(8)
@@ -300,6 +306,7 @@ D0001    DS    0CL2                MB-OUT (01 group)
 D0002    DC    HL2'0'              OUT-CALLS PIC S9(4)v0 COMP
          DS    XL6                 reserve the rest of a table
 D0003    DC    CL4'0000'           SHOW PIC 9(4)v0 DISP
+D0004    DC    HL2'0'              RETURN-CODE PIC S9(4)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

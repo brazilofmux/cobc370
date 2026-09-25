@@ -6059,6 +6059,7 @@ T0799    DS    0H
          LA    1,PL1138            R1 -> parameter list
          L     15,VC1138
          BALR  14,15               static call, resolved by the linkage
+         STH   15,D0260            the callee's return code -> RETURN-C
 * end of a PERFORM range: return through its cell
          L     15,X0119
          BR    15
@@ -7639,7 +7640,8 @@ SPIELTB  DS    0F
          DC    A(T0797-COBBEG),AL2(1606,0)
          DC    A(T0798-COBBEG),AL2(1607,0)
          DC    A(T0799-COBBEG),AL2(1611,0)
-COBWS    CSECT
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
          DS    XL4                 reserve the rest of a table

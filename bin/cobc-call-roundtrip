@@ -45,6 +45,9 @@ EOF
 
 run_deck "$WORK/calltest.jcl" "$WORK/calltest.out"
 grep -a "^RESULT" "$WORK/calltest.out" > "$WORK/got.txt"
+# The caller never sets RETURN-CODE; its CALLs leave the callee's R15 there,
+# so the step ends with the last callee's return code, as IKFCBL00's does.
+grep -a "IEF142I CALLTEST GO S2" "$WORK/calltest.out" | sed 's/.*COND CODE/COND CODE/' >> "$WORK/got.txt"
 
 exp="$TDIR/callroundtrip.expected"
 if [ ! -r "$exp" ]; then cp "$WORK/got.txt" "$exp"; say "recorded oracle -> $exp"; exit 0; fi

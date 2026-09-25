@@ -878,7 +878,8 @@ SPIELTB  DS    0F
          DC    A(T0038-COBBEG),AL2(53,0)
          DC    A(T0039-COBBEG),AL2(54,0)
          DC    A(T0040-COBBEG),AL2(55,0)
-COBWS    CSECT
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    CL24'ABABXXABCABXYZABAB    '  S PIC X(24)

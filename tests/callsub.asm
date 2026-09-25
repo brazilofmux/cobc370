@@ -39,11 +39,13 @@ T0000    DS    0H
          LA    1,PL000             R1 -> parameter list
          L     15,VC000
          BALR  14,15               static call, resolved by the linkage
+         STH   15,D0001            the callee's return code -> RETURN-C
 T0001    DS    0H
 * STOP RUN
+         LH    15,D0001            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
-         LM    14,12,12(13)        restore caller's registers
-         SR    15,15               return code 0
+         L     14,12(13)           caller's return address
+         LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
          BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
@@ -136,8 +138,10 @@ CB0000   DC    A(B0000)            a code block's base
 SPIELTB  DS    0F
          DC    A(T0000-COBBEG),AL2(7,0)
          DC    A(T0001-COBBEG),AL2(8,0)
-COBWS    CSECT
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    3CL4'ABCD'          T PIC X(4) table
+D0001    DC    HL2'0'              RETURN-CODE PIC S9(4)v0 COMP
          END

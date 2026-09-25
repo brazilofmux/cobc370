@@ -5389,7 +5389,15 @@ static void parse_one_statement_body(void)
          * -- there is no CALL identifier and so nothing to decide at compile
          * time. Dynamic loading is what the corpus's DYNALOAD routine provides
          * at run time, and DYNALOAD is itself reached by an ordinary static
-         * call like any other subroutine. */
+         * call like any other subroutine.
+         *
+         * Every CALL leaves the callee's R15 in RETURN-CODE, as IKFCBL00's
+         * do, so the register exists in any program that calls: a program
+         * that never names it still ends with its last callee's return code
+         * as the step's condition code (measured: a CALL returning 4, then
+         * STOP RUN, is COND CODE 0004). A loop PERFORMed UNTIL RETURN-CODE
+         * NOT = 0 around a CALL depends on it, and ran forever without. */
+        { int cur = wslen; make_retcode(&cur); }
         next();
         Stmt *st = new_stmt(ST_CALL);
         st->src = -1;
@@ -8951,6 +8959,17 @@ static void branch_para(int p, const char *cmt)
     asm_line("", "BR", "15", "");
 }
 
+/* After a CALL: the callee's R15 into RETURN-CODE. */
+static void gen_call_retcode(void)
+{
+    char fr[96], b[128];
+    const Sym *rc = &syms[retcode_sym];
+    need_sym_base(rc);
+    field_ref_m(rc, NULL, FR_RX, 2, 6, fr, sizeof fr);
+    snprintf(b, sizeof b, "15,%s", fr);
+    asm_line("", "STH", b, "the callee's return code -> RETURN-CODE");
+}
+
 static void gen_call_range(int a, int b, int *nret)
 {
     char x[16], r[16], t[64];
@@ -11837,6 +11856,7 @@ static void generate(void)
                 asm_line("", "L", "15,VDCAL", "");
                 asm_line("", "BALR", "14,15", "CALL identifier: load by name and call");
                 reset_bases();
+                gen_call_retcode();
                 break;
             }
             snprintf(b, sizeof b, "1,%s", pl);
@@ -11844,6 +11864,7 @@ static void generate(void)
             snprintf(b, sizeof b, "15,%s", vc);
             asm_line("", "L", b, "");
             asm_line("", "BALR", "14,15", "static call, resolved by the linkage editor");
+            gen_call_retcode();
             break;
         }
         case ST_CANCEL: {
@@ -13130,7 +13151,16 @@ static void generate(void)
     {
         int nchunk = (wslen + CHUNK - 1) / CHUNK;
         if (nchunk < 1) nchunk = 1;
-        asm_line("COBWS", "CSECT", "", "");
+        /* Private code, not a named CSECT. Every program's WORKING-STORAGE
+         * was once called COBWS, and the linkage editor keeps only the first
+         * of two CSECTs with one name: a caller and a separately compiled
+         * subprogram, linked together, shared the caller's storage, and each
+         * wrote over the other's items. Unnamed sections are never merged. */
+        asm_line("", "CSECT", "", "WORKING-STORAGE: private code, one per program");
+        asm_line("COBWS", "DS", "0D", "");
+        /* An empty private section cannot be the target of an address
+         * constant (IEW0622), as a named one could; give it a doubleword. */
+        if (wslen == 0) asm_line("", "DS", "D", "no WORKING-STORAGE: something to point at");
         for (int i = 0; i < nchunk; i++) {
             char lab[16];
             snprintf(lab, sizeof lab, "WSC%04d", i);

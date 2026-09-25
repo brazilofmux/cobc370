@@ -60,10 +60,47 @@ T0003    DS    0H
 * MOVE DONE -> OUT-TAG
          MVC   D0005(4),S0001      literal move, space padded
 T0004    DS    0H
+* IF
+         DROP  9
+         L     9,PBL0000           parameter address
+         USING LS0000,9
+         L     2,D0002
+         CVD   2,DWK               binary -> packed
+         ZAP   WK0+10(6),DWK(8)
+         ZAP   WK1+15(1),K0001+15(1)  literal
+         CP    WK0+10(6),WK1+15(1)  numeric compare
+         BNE   L0001
+T0005    DS    0H
+* MOVE 3 -> RETURN-CODE
+         ZAP   PWK1(16),K0002+15(1)  literal
+         ZAP   DWK(8),PWK1(16)
+         CVB   2,DWK               packed -> binary
+         DROP  8
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         STH   2,D0006
+T0006    DS    0H
+         B     L0002
+         DROP  8,9
+L0001    DS    0H
+T0007    DS    0H
+* MOVE 0 -> RETURN-CODE
+         ZAP   PWK1(16),K0003+15(1)  literal
+         ZAP   DWK(8),PWK1(16)
+         CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         STH   2,D0006
+         DROP  8
+L0002    DS    0H
+T0008    DS    0H
 * GOBACK to the caller
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         LH    15,D0006            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
-         LM    14,12,12(13)        restore caller's registers
-         SR    15,15               return code 0
+         L     14,12(13)           caller's return address
+         LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
          BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
@@ -82,6 +119,12 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'7'
+K0002    EQU   *-15
+         DC    PL1'3'
+K0003    EQU   *-15
+         DC    PL1'0'
 H0001    DC    H'1000'             element sizes
 S0001    DC    CL4'DONE'           nonnumeric constants
 * base locator cells, one per 4096 bytes of COBWS
@@ -141,7 +184,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'5'                statements in the table
+SPIENUM  DC    H'9'                statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -160,12 +203,18 @@ SPIELTB  DS    0F
          DC    A(T0001-COBBEG),AL2(16,0)
          DC    A(T0002-COBBEG),AL2(17,0)
          DC    A(T0003-COBBEG),AL2(18,0)
-         DC    A(T0004-COBBEG),AL2(19,0)
-COBWS    CSECT
+         DC    A(T0004-COBBEG),AL2(21,0)
+         DC    A(T0005-COBBEG),AL2(21,0)
+         DC    A(T0006-COBBEG),AL2(22,0)
+         DC    A(T0007-COBBEG),AL2(22,0)
+         DC    A(T0008-COBBEG),AL2(23,0)
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    FL4'0'              WS-T PIC S9(8)v0 COMP
-         DS    XL4                 reserve the rest of the last table
+         DS    XL4                 reserve the rest of a table
+D0006    DC    HL2'0'              RETURN-CODE PIC S9(4)v0 COMP
 LS0000   DSECT                     LS-IN (caller's storage)
 D0001    DS    0CL4                LS-IN (01 group)
 D0002    DS    CL4                 IN-VAL

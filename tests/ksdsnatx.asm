@@ -680,7 +680,8 @@ SPIELTB  DS    0F
          DC    A(T0031-COBBEG),AL2(71,0)
          DC    A(T0032-COBBEG),AL2(72,0)
          DC    A(T0033-COBBEG),AL2(74,0)
-COBWS    CSECT
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
          DS    XL4                 reserve the rest of a table

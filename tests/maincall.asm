@@ -50,6 +50,7 @@ T0001    DS    0H
          LA    1,PL002             R1 -> parameter list
          L     15,VC002
          BALR  14,15               static call, resolved by the linkage
+         STH   15,D0006            the callee's return code -> RETURN-C
 T0002    DS    0H
 * MOVE OUT-VAL -> SHOW-VAL
          L     2,D0003
@@ -68,45 +69,92 @@ T0003    DS    0H
          L     15,VDISP
          BALR  14,15
 T0004    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(10),S0004
+         LH    2,D0006
+         CVD   2,DWK               binary -> packed
+         ZAP   PWK1(16),DWK(8)
+         UNPK  ZWK(4),PWK1(16)     DISPLAY: the digits, zoned
+         TM    ZWK+3,X'10'         a D (or B) zone is negative
+         BO    L0001               keep it overpunched
+         OI    ZWK+3,X'F0'         otherwise a plain digit
+L0001    DS    0H
+         MVC   DSPBUF+10(4),ZWK+0
+         LA    1,PARM0002
+         L     15,VDISP
+         BALR  14,15
+T0005    DS    0H
 * MOVE 7 -> IN-VAL
          ZAP   PWK1(16),K0002+15(1)  literal
          ZAP   DWK(8),PWK1(16)
          CVB   2,DWK               packed -> binary
          ST    2,D0001
-T0005    DS    0H
+T0006    DS    0H
 * CALL 'SUBADD'
          LA    0,D0000             MB-IN
-         ST    0,PL006+0
+         ST    0,PL007+0
          LA    0,D0002             MB-OUT
-         ST    0,PL006+4
-         OI    PL006+4,X'80'       high bit marks the last argument
-         LA    1,PL006             R1 -> parameter list
-         L     15,VC006
+         ST    0,PL007+4
+         OI    PL007+4,X'80'       high bit marks the last argument
+         LA    1,PL007             R1 -> parameter list
+         L     15,VC007
          BALR  14,15               static call, resolved by the linkage
-T0006    DS    0H
+         STH   15,D0006            the callee's return code -> RETURN-C
+T0007    DS    0H
 * MOVE OUT-VAL -> SHOW-VAL
          L     2,D0003
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          UNPK  D0005(8),PWK1(16)   packed -> zoned
          OI    D0005+7,X'F0'       unsigned: force an F zone
-T0007    DS    0H
+T0008    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0001
          MVC   DSPBUF+7(8),D0005+0
          MVC   DSPBUF+15(6),S0002
          MVC   DSPBUF+21(4),D0004+0
          MVC   DSPBUF+25(1),S0003
-         LA    1,PARM0002
+         LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
-T0008    DS    0H
+T0009    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(10),S0004
+         LH    2,D0006
+         CVD   2,DWK               binary -> packed
+         ZAP   PWK1(16),DWK(8)
+         UNPK  ZWK(4),PWK1(16)     DISPLAY: the digits, zoned
+         TM    ZWK+3,X'10'         a D (or B) zone is negative
+         BO    L0002               keep it overpunched
+         OI    ZWK+3,X'F0'         otherwise a plain digit
+L0002    DS    0H
+         MVC   DSPBUF+10(4),ZWK+0
+         LA    1,PARM0004
+         L     15,VDISP
+         BALR  14,15
+T0010    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(17),S0005
+         L     2,D0001
+         CVD   2,DWK               binary -> packed
+         ZAP   PWK1(16),DWK(8)
+         UNPK  ZWK(8),PWK1(16)     DISPLAY: the digits, zoned
+         TM    ZWK+7,X'10'         a D (or B) zone is negative
+         BO    L0003               keep it overpunched
+         OI    ZWK+7,X'F0'         otherwise a plain digit
+L0003    DS    0H
+         MVC   DSPBUF+17(8),ZWK+0
+         LA    1,PARM0005
+         L     15,VDISP
+         BALR  14,15
+T0011    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
+         LH    15,D0006            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
-         LM    14,12,12(13)        restore caller's registers
-         SR    15,15               return code 0
+         L     14,12(13)           caller's return address
+         LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
          BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
@@ -117,7 +165,16 @@ PARM0001 DC    A(DSPBUF)
 LEN0001  DC    H'26'
 PARM0002 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0002)  last parameter
-LEN0002  DC    H'26'
+LEN0002  DC    H'14'
+PARM0003 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0003)  last parameter
+LEN0003  DC    H'26'
+PARM0004 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0004)  last parameter
+LEN0004  DC    H'14'
+PARM0005 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0005)  last parameter
+LEN0005  DC    H'25'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL16
@@ -140,13 +197,15 @@ K0002    EQU   *-15
 S0001    DC    CL7'RESULT '        nonnumeric constants
 S0002    DC    CL6' TAG ['
 S0003    DC    CL1']'
+S0004    DC    CL10'RESULT RC '
+S0005    DC    CL17'RESULT CALLER IN '
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 * CALL parameter lists and entry points
 PL002    DS    2F
 VC002    DC    V(SUBADD)
-PL006    DS    2F
-VC006    DC    V(SUBADD)
+PL007    DS    2F
+VC007    DC    V(SUBADD)
 DSPBUF   DS    CL121               DISPLAY line
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
@@ -200,7 +259,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'9'                statements in the table
+SPIENUM  DC    H'12'               statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -224,7 +283,11 @@ SPIELTB  DS    0F
          DC    A(T0006-COBBEG),AL2(19,0)
          DC    A(T0007-COBBEG),AL2(20,0)
          DC    A(T0008-COBBEG),AL2(21,0)
-COBWS    CSECT
+         DC    A(T0009-COBBEG),AL2(22,0)
+         DC    A(T0010-COBBEG),AL2(25,0)
+         DC    A(T0011-COBBEG),AL2(28,0)
+         CSECT                     WORKING-STORAGE: private code, one p
+COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DS    0CL4                MB-IN (01 group)
@@ -234,6 +297,7 @@ D0002    DS    0CL8                MB-OUT (01 group)
 D0003    DC    FL4'0'              OUT-VAL PIC S9(8)v0 COMP
 D0004    DC    CL4' '              OUT-TAG PIC X(4)
 D0005    DC    CL8'00000000'       SHOW-VAL PIC 9(8)v0 DISP
+D0006    DC    HL2'0'              RETURN-CODE PIC S9(4)v0 COMP
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.
 * DISPLAY reaches SYSOUT through QSAM directly, which is the

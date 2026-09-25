@@ -16,4 +16,8 @@
 001600     ADD 1000 TO WS-T.
 001700     MOVE WS-T TO OUT-VAL.
 001800     MOVE 'DONE' TO OUT-TAG.
+001810* The return code goes back in R15, and the caller's CALL leaves
+001820* it in RETURN-CODE: 3 for an input of 7, 0 otherwise.
+001830     IF IN-VAL = 7 MOVE 3 TO RETURN-CODE
+001840     ELSE MOVE 0 TO RETURN-CODE.
 001900     GOBACK.
