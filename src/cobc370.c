@@ -363,6 +363,49 @@ static int sep_punct(const char *p)
     return p[1] == 0 || isspace((unsigned char)p[1]);
 }
 
+/* IBM's floating-point literal, mantissa E exponent -- 1.5E+00, -2.5E-03 --
+ * which IKFCBL00 requires for a non-integer VALUE on COMP-1/COMP-2 and takes
+ * in expressions. It is rewritten here as the plain decimal it denotes, so
+ * nothing downstream has to know: 1.0E+03 is 1000, 5.0E-01 is 0.5. */
+static void float_lit_normalize(char *t, int *len)
+{
+    const char *p = t; int neg = 0;
+    if (*p == '+' || *p == '-') { neg = (*p == '-'); p++; }
+    const char *e = strchr(p, 'E');
+    if (!e || e == p) return;
+    for (const char *q = p; q < e; q++) if (!isdigit((unsigned char)*q) && *q != '.') return;
+    const char *x = e + 1; int eneg = 0;
+    if (*x == '+' || *x == '-') { eneg = (*x == '-'); x++; }
+    if (!*x) return;
+    for (const char *q = x; *q; q++) if (!isdigit((unsigned char)*q)) return;
+    int ex = atoi(x); if (eneg) ex = -ex;
+    char digs[MAXTOK]; int nd = 0, scale = 0, seen_dot = 0;
+    for (const char *q = p; q < e; q++) {
+        if (*q == '.') { seen_dot = 1; continue; }
+        digs[nd++] = *q; if (seen_dot) scale++;
+    }
+    digs[nd] = 0;
+    if (nd == 0) return;
+    scale -= ex;                                   /* the point moves ex places right */
+    char out[MAXTOK * 2]; int o = 0;
+    if (neg) out[o++] = '-';
+    if (scale <= 0) {
+        memcpy(out + o, digs, (size_t)nd); o += nd;
+        for (int k = 0; k < -scale; k++) out[o++] = '0';
+    } else if (scale >= nd) {
+        out[o++] = '0'; out[o++] = '.';
+        for (int k = 0; k < scale - nd; k++) out[o++] = '0';
+        memcpy(out + o, digs, (size_t)nd); o += nd;
+    } else {
+        memcpy(out + o, digs, (size_t)(nd - scale)); o += nd - scale;
+        out[o++] = '.';
+        memcpy(out + o, digs + nd - scale, (size_t)scale); o += scale;
+    }
+    out[o] = 0;
+    if (o >= MAXTOK) die("a floating-point literal too long once written out");
+    memcpy(t, out, (size_t)o + 1); *len = o;
+}
+
 static void scan_token(void);
 static void copy_statement(void);
 
@@ -499,6 +542,7 @@ static void scan_token(void)
         src.p++;
     }
     tok.text[i] = 0; tok.len = i;
+    float_lit_normalize(tok.text, &tok.len);
 }
 
 /* A keyword or operator is never quoted: '-' is a literal, not a minus, and
@@ -591,7 +635,9 @@ static int op_len(const char *op, const char *operand)
 {
     static const char *rr[] = { "BALR", "BCR", "BR", "LR", "LTR", "SR", "AR", "CR", "BCTR",
         "MR", "DR", "SPM", "SVC", "NR", "OR", "XR", "LCR", "LPR", "LNR", "SLR", "ALR",
-        "CLR", "MVCL", "CLCL", "BASR", "NOPR", 0 };
+        "CLR", "MVCL", "CLCL", "BASR", "NOPR",
+        "LDR", "LER", "ADR", "SDR", "MDR", "DDR", "CDR", "LTDR", "LCDR", "LPDR", "LNDR",
+        "AWR", "SWR", "AER", "SER", "MER", "DER", "CER", "LTER", "LCER", "HDR", 0 };
     static const char *ss[] = { "MVC", "CLC", "ZAP", "AP", "SP", "MP", "DP", "CP", "PACK",
         "UNPK", "ED", "EDMK", "TR", "TRT", "MVO", "NC", "OC", "XC", "MVN", "MVZ", "SRP", 0 };
     static const char *rx[] = { "L", "LA", "ST", "STH", "LH", "A", "S", "M", "D", "C", "CH",
@@ -599,7 +645,9 @@ static int op_len(const char *op, const char *operand)
         "BL", "BNH", "BNL", "BZ", "BNZ", "BM", "BNM", "BO", "BNO", "BP", "BNP", "BAL", "BAS",
         "BC", "BCT", "EX", "CL", "CLI", "MVI", "TM", "NI", "OI", "XI", "SLL", "SRL", "SLA",
         "SRA", "SLDL", "SRDL", "SLDA", "SRDA", "CVB", "CVD", "STCM", "ICM", "CLM", "AL",
-        "SL", "NOP", "BXH", "BXLE", 0 };
+        "SL", "NOP", "BXH", "BXLE",
+        "LD", "LE", "STD", "STE", "AD", "SD", "MD", "DD", "CD", "AW", "SW", "AE", "SE",
+        "ME", "DE", "CE", "AU", "SU", 0 };
     for (int i = 0; rr[i]; i++) if (!strcmp(op, rr[i])) return 2;
     for (int i = 0; ss[i]; i++) if (!strcmp(op, ss[i])) return 6;
     for (int i = 0; rx[i]; i++) if (!strcmp(op, rx[i])) return 4;
@@ -722,6 +770,32 @@ static void asm_line(const char *name, const char *op, const char *operand,
 
 static void asm_comment(const char *text) { fprintf(out, "*%s\n", text); }
 
+/* A line written as assembler source: label, opcode, operand, comment, split
+ * on blanks (the operand carries no blanks). A line beginning with * is a
+ * comment. For code kept as text, such as the floating-point runtime. */
+static void asm_raw(const char *line)
+{
+    if (line[0] == '*') {
+        char c[80]; snprintf(c, sizeof c, "%.70s", line + 1);   /* column 72 must stay blank */
+        asm_comment(c); return;
+    }
+    char label[16] = "", op[16] = "", operand[96] = "";
+    const char *p = line;
+    int i = 0;
+    while (*p && *p != ' ' && i < 15) label[i++] = *p++;
+    label[i] = 0;
+    while (*p == ' ') p++;
+    i = 0; while (*p && *p != ' ' && i < 15) op[i++] = *p++;
+    op[i] = 0;
+    while (*p == ' ') p++;
+    int q = 0;
+    i = 0;
+    while (*p && (q || *p != ' ') && i < 95) { if (*p == '\'') q = !q; operand[i++] = *p++; }
+    operand[i] = 0;
+    while (*p == ' ') p++;
+    asm_line(label, op, operand, p);
+}
+
 /* A quote or an ampersand has to be doubled inside an assembler character
  * constant, so how much room a literal needs is not its length. */
 static int escaped_len(const char *v)
@@ -780,7 +854,8 @@ static int uses_switches;   /* a SPECIAL-NAMES switch condition is tested */
  * displacement. That is exactly the limit ANS COBOL solves with BL cells, and
  * it is the next structural thing this compiler will need. */
 
-enum { U_DISPLAY, U_COMP, U_COMP3 };
+enum { U_DISPLAY, U_COMP, U_COMP3, U_COMP1, U_COMP2 };
+#define IS_FLOAT(sy) ((sy)->usage == U_COMP1 || (sy)->usage == U_COMP2)
 
 typedef struct {
     char name[31];
@@ -3005,6 +3080,8 @@ static void parse_data_division(void)
             } else if (is("USAGE")) { next(); if (is("IS")) next(); saw_usage = 1; }
             else if (is("COMP") || is("COMPUTATIONAL")) { sy->usage = U_COMP; saw_usage = 1; next(); }
             else if (is("COMP-3") || is("COMPUTATIONAL-3")) { sy->usage = U_COMP3; saw_usage = 1; next(); }
+            else if (is("COMP-1") || is("COMPUTATIONAL-1")) { sy->usage = U_COMP1; saw_usage = 1; next(); }
+            else if (is("COMP-2") || is("COMPUTATIONAL-2")) { sy->usage = U_COMP2; saw_usage = 1; next(); }
             else if (is("INDEX")) {
                 /* An index data item holds a value corresponding to an
                  * occurrence number, in a form the implementor chooses. This
@@ -3082,9 +3159,10 @@ static void parse_data_division(void)
             nsym++;
             continue;
         }
-        if (!pic[0]) {
+        if (!pic[0] && !IS_FLOAT(sy)) {
             /* No PICTURE: this is a group, and the items that follow are its
-             * subordinates. Its size is filled in when it closes. */
+             * subordinates. Its size is filled in when it closes. A COMP-1 or
+             * COMP-2 item has no PICTURE either and is elementary. */
             sy->is_group = 1;
             /* A group that itself carries OCCURS is the innermost table of a
              * reference to it, so it goes on the end of its own chain. Its
@@ -3108,7 +3186,23 @@ static void parse_data_division(void)
             continue;
         }
 
-        {
+        if (IS_FLOAT(sy)) {
+            /* IBM's hexadecimal floating point (#40): COMP-1 is the short
+             * form, 4 bytes, about 7 digits; COMP-2 the long, 8 bytes, about
+             * 17. No PICTURE, as IKFCBL00 has it; VALUE is a numeric literal,
+             * the floating form (1.5E+00) included. The digit counts are what
+             * DISPLAY shows and what IBM's does. */
+            if (pic[0]) die("a COMP-1 or COMP-2 item takes no PICTURE");
+            if (sy->sgn_lead || sy->sgn_sep || sy->just || sy->bwz)
+                die("SIGN, JUSTIFIED and BLANK WHEN ZERO do not apply to a floating-point item");
+            if (sy->has_value && sy->has_value != 1)
+                die("VALUE on a floating-point item must be a numeric literal");
+            if (sy->has_value && (sy->occurs > 0 || sy->occ_parent >= 0))
+                die("VALUE is not allowed on an item with OCCURS, or on one under it (the VALUE clause's syntax rules; IKFCBL00's IKF2149I) -- set the table in the Procedure Division");
+            sy->digits = sy->usage == U_COMP2 ? 17 : 8;
+            sy->scale = 0; sy->is_signed = 1;
+            sy->bytes = sy->usage == U_COMP2 ? 8 : 4;
+        } else {
             /* COBOL-74's VALUE clause may not appear in an entry with OCCURS
              * or in one subordinate to it (only COBOL-85 allows that), and
              * IKFCBL00 refuses both (IKF2149I). This compiler once laid the
@@ -4528,7 +4622,7 @@ static void parse_one_statement_body(void)
                 if (display_converts(&syms[sym])) {
                     if (syms[sym].is_index) die("DISPLAY of an index item is not implemented yet");
                     if (syms[sym].occ_depth && !sub) die("DISPLAY of a COMP table item needs its subscripts");
-                    n = syms[sym].digits;
+                    n = syms[sym].digits + (IS_FLOAT(&syms[sym]) ? 6 : 0);   /* sign . digits E sign dd */
                 } else n = sub ? syms[sym].elem : syms[sym].bytes;
             }
             for (int off = 0; off < n; ) {
@@ -4638,8 +4732,10 @@ static void parse_one_statement_body(void)
                 m->litlen = savelen;
                 m->immscale = savelen;
             } else if (is_numeric_literal(save)) {
-                m->imm = 1; m->immscale = syms[m->dst].scale;
-                m->immdigits = pool_scaled(save, syms[m->dst].scale);
+                int ls = syms[m->dst].scale;
+                if (IS_FLOAT(&syms[m->dst])) { const char *dot = strchr(save, '.'); ls = dot ? (int)strlen(dot + 1) : 0; }
+                m->imm = 1; m->immscale = ls;
+                m->immdigits = pool_scaled(save, ls);
             } else {
                 int fg = fig_code(save);
                 const Sym *d = &syms[m->dst];
@@ -6745,6 +6841,7 @@ static void gen_comp_store_r(const Sym *sy, Node *sub, int reg)
 static void gen_load(const Sym *sy, Node *sub, const char *wk)
 {
     char b[128], f[64];
+    if (IS_FLOAT(sy)) die("a floating-point item cannot be used here (as a subscript, a count, a key, or in a statement that has no floating-point form)");
     switch (sy->usage) {
     case U_DISPLAY:
         if (sy->digits > 16) { gen_wide_load(sy, sub, wk); break; }
@@ -6778,10 +6875,22 @@ static int display_converts(const Sym *sy)
  * else gets an F zone, so a positive value prints as plain digits. UNPK
  * writes at most 16 bytes, so an 18-digit COMP-3 takes a second one for the
  * high-order digits, shifted a nibble right by MVO to sit before a sign. */
+static void gen_fload_sym(const Sym *sy, Node *sub);
+static int use_float;
 static void gen_display_digits(const Sym *sy, Node *sub)
 {
     char b[96], lk[16];
     int d = sy->digits;
+    if (IS_FLOAT(sy)) {
+        /* As IKFCBL00 shows it: a sign or a blank, the point, 17 digits
+         * (8 for COMP-1), E, the exponent's sign or a blank, two digits. */
+        gen_fload_sym(sy, sub);
+        asm_line("", "LA", "1,ZWK", "");
+        snprintf(b, sizeof b, "0,%d", d); asm_line("", "LA", b, "the digits");
+        asm_line("", "L", "15,VFDS", "");
+        asm_line("", "BALR", "14,15", "floating point as DISPLAY shows it");
+        return;
+    }
     gen_load(sy, sub, "PWK1");
     if (d <= 15) {
         snprintf(b, sizeof b, "ZWK(%d),PWK1(16)", d);
@@ -7318,6 +7427,7 @@ static void gen_blank_when_zero(const Sym *sy, Node *sub, const char *op)
 static void gen_store_op(const Sym *sy, Node *sub, const char *op)
 {
     char b[128], f[64];
+    if (IS_FLOAT(sy)) die("internal: a floating-point receiver reached the packed store");
     if (sy->edited || (sy->usage == U_DISPLAY && (sy->digits > 16 || sy->sgn_lead || sy->sgn_sep))) {
         if (strcmp(op, "PWK1(16)")) {
             snprintf(b, sizeof b, "PWK1(16),%s", op);
@@ -8000,6 +8110,168 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
     return 0;
 }
 
+/* ---- hexadecimal floating point (#40) --------------------------------------
+ * COMP-1 and COMP-2 are IBM's, not the standard's. An expression with a
+ * floating-point operand, or a floating-point receiver, is evaluated in
+ * floating point throughout -- the rule IBM's later compilers state, and the
+ * one that makes a calculator's 15 / 10 come out 1.5; IKFCBL00 does the
+ * fixed-point part in fixed point at the receiver's zero decimals and gets 1.
+ * FPR0 carries the result; intermediate values wait in FSTK, one doubleword
+ * per nesting level. Conversion between packed and floating, the power, and
+ * DISPLAY's text are runtime routines: COBPKF, COBFPK, COBFPW, COBFDS. */
+static int expr_has_float(const Node *n)
+{
+    if (!n) return 0;
+    if (n->kind == N_SYM) return IS_FLOAT(&syms[n->sym]);
+    return expr_has_float(n->l) || expr_has_float(n->r);
+}
+
+/* A literal's scaled digits as the assembler's D-constant text: 15 at scale 1
+ * is 1.5, -225 at scale 2 is -2.25, 5 at scale 1 is 0.5. */
+static void float_lit_text(const char *lit, int scale, char *out, size_t on)
+{
+    const char *d = lit; int neg = 0;
+    if (*d == '-') { neg = 1; d++; } else if (*d == '+') d++;
+    int nd = (int)strlen(d);
+    char buf[64]; int o = 0;
+    if (neg) buf[o++] = '-';
+    if (scale <= 0) { memcpy(buf + o, d, (size_t)nd); o += nd; }
+    else if (scale >= nd) {
+        buf[o++] = '0'; buf[o++] = '.';
+        for (int k = 0; k < scale - nd; k++) buf[o++] = '0';
+        memcpy(buf + o, d, (size_t)nd); o += nd;
+    } else {
+        memcpy(buf + o, d, (size_t)(nd - scale)); o += nd - scale;
+        buf[o++] = '.';
+        memcpy(buf + o, d + nd - scale, (size_t)scale); o += scale;
+    }
+    buf[o] = 0;
+    snprintf(out, on, "%s", buf);
+}
+
+/* FPR0 <- a floating-point item. A short one is loaded into the high half
+ * and the low half cleared first, so the long arithmetic sees its value. */
+static void gen_fload_sym(const Sym *sy, Node *sub)
+{
+    char b[128], f[64];
+    use_float = 1;
+    need_sym_base(sy);
+    field_ref_m(sy, sub, FR_RX, sy->elem, 6, f, sizeof f);
+    if (sy->usage == U_COMP2) { snprintf(b, sizeof b, "0,%s", f); asm_line("", "LD", b, sy->name); }
+    else { asm_line("", "SDR", "0,0", ""); snprintf(b, sizeof b, "0,%s", f); asm_line("", "LE", b, sy->name); }
+}
+
+/* item <- FPR0. */
+static void gen_fstore_sym(const Sym *sy, Node *sub)
+{
+    char b[128], f[64];
+    use_float = 1;
+    need_sym_base(sy);
+    field_ref_m(sy, sub, FR_RX, sy->elem, 6, f, sizeof f);
+    snprintf(b, sizeof b, "0,%s", f);
+    asm_line("", sy->usage == U_COMP2 ? "STD" : "STE", b, sy->name);
+}
+
+/* FPR0 <- the packed value in wk, at scale. */
+static void gen_pkf(const char *wk, int scale)
+{
+    char b[64];
+    use_float = 1;
+    snprintf(b, sizeof b, "1,%s", wk); asm_line("", "LA", b, "");
+    snprintf(b, sizeof b, "0,%d", scale); asm_line("", "LA", b, "its scale");
+    asm_line("", "L", "15,VPKF", "");
+    asm_line("", "BALR", "14,15", "packed -> floating");
+}
+
+/* wk (16 bytes packed, at scale) <- FPR0: nearest, an exact half toward
+ * zero, as IKFCBL00's conversion does (measured: 2.5 gives 2, 2.50001
+ * gives 3, 0.995 gives 0.99). R15 is 4 when the scaled magnitude has more
+ * than 18 digits; that is a size error where one is being watched for. */
+static void gen_fpk(const char *wk, int scale)
+{
+    char b[64];
+    use_float = 1;
+    snprintf(b, sizeof b, "1,%s", wk); asm_line("", "LA", b, "");
+    snprintf(b, sizeof b, "0,%d", scale); asm_line("", "LA", b, "the receiver's scale");
+    asm_line("", "L", "15,VFPK", "");
+    asm_line("", "BALR", "14,15", "floating -> packed");
+    if (gen_size_skip[0]) {
+        asm_line("", "LTR", "15,15", "too big for eighteen digits?");
+        asm_line("", "BZ", "*+12", "");
+        asm_line("", "MVI", "SZFLG,X'01'", "size error");
+        asm_line("", "B", gen_size_skip, "");
+    }
+}
+
+static void gen_fexpr(Node *n, int d)
+{
+    char b[128], t[48];
+    if (d >= 7) die("expression nests too deeply for the floating-point work-area stack");
+    use_float = 1;
+    switch (n->kind) {
+    case N_SYM: {
+        const Sym *sy = &syms[n->sym];
+        if (IS_FLOAT(sy)) { gen_fload_sym(sy, n->sub); return; }
+        if (sy->is_alpha || sy->is_group || sy->edited) die("an arithmetic operand must be numeric");
+        gen_load(sy, n->sub, "PWK1");
+        gen_pkf("PWK1", sy->scale);
+        return;
+    }
+    case N_LIT:
+        float_lit_text(n->lit, n->litscale, t, sizeof t);
+        snprintf(b, sizeof b, "0,=D'%s'", t);
+        asm_line("", "LD", b, "literal");
+        return;
+    case N_NEG:
+        gen_fexpr(n->l, d);
+        asm_line("", "LCDR", "0,0", "");
+        return;
+    case N_ADD: case N_SUB: case N_MUL: case N_DIV: case N_POW:
+        gen_fexpr(n->l, d);
+        snprintf(b, sizeof b, "0,FSTK+%d", 8 * d); asm_line("", "STD", b, "the left operand waits");
+        gen_fexpr(n->r, d + 1);
+        asm_line("", "LDR", "2,0", "");
+        snprintf(b, sizeof b, "0,FSTK+%d", 8 * d); asm_line("", "LD", b, "");
+        if (n->kind == N_ADD) asm_line("", "ADR", "0,2", "");
+        else if (n->kind == N_SUB) asm_line("", "SDR", "0,2", "");
+        else if (n->kind == N_MUL) asm_line("", "MDR", "0,2", "");
+        else if (n->kind == N_DIV) {
+            if (gen_size_skip[0]) {
+                asm_line("", "LTDR", "2,2", "division by zero?");
+                asm_line("", "BNZ", "*+12", "");
+                asm_line("", "MVI", "SZFLG,X'01'", "size error");
+                asm_line("", "B", gen_size_skip, "");
+            }
+            asm_line("", "DDR", "0,2", "");
+        } else {
+            asm_line("", "L", "15,VFPW", "");
+            asm_line("", "BALR", "14,15", "x ** y");
+            if (gen_size_skip[0]) {
+                asm_line("", "LTR", "15,15", "a negative base to a fraction, or zero to a negative?");
+                asm_line("", "BZ", "*+12", "");
+                asm_line("", "MVI", "SZFLG,X'01'", "size error");
+                asm_line("", "B", gen_size_skip, "");
+            }
+        }
+        return;
+    case N_TRUNC:
+        die("DIVIDE ... REMAINDER has no floating-point form");
+    default:
+        die("internal: bad floating-point expression node");
+    }
+}
+
+/* MOVE with a floating-point item on either side. */
+static void gen_move_float(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
+{
+    if (sv->is_alpha || sv->is_group || sv->edited || d->is_alpha || d->is_group)
+        die("a floating-point item moves only to or from a numeric item");
+    if (IS_FLOAT(sv)) gen_fload_sym(sv, ssub);
+    else { gen_load(sv, ssub, "PWK1"); gen_pkf("PWK1", sv->scale); }
+    if (IS_FLOAT(d)) gen_fstore_sym(d, dsub);
+    else { gen_fpk("PWK1", d->scale); gen_store(d, dsub, "PWK1"); }
+}
+
 /* An item whose length is only known at run time: a group containing an
  * OCCURS DEPENDING ON table, or that table itself. */
 static int var_len(const Sym *y) { return y->odo_tab > 0 || (y->occurs > 0 && y->odo_dep >= 0); }
@@ -8479,6 +8751,503 @@ static void emit_string_runtime(void)
     asm_line("RTSAVE9", "DS", "18F", "");
 }
 
+
+/* ---- the floating-point runtime (#40) -------------------------------------
+ * Four routines with the runtime's calling convention, and two internal ones
+ * (FLN, FEX) they share. Every constant is a labeled DC after the code rather
+ * than a literal: the CSECT's literal pool is past 4K from here. FPR0-6 and
+ * R0-R11 are used freely; the callers keep nothing in them. */
+static void emit_float_runtime(void)
+{
+    static const char *const R[] = {
+    "* COBPKF -- packed decimal -> long hexadecimal float.",
+    "*   R1 -> 16-byte packed value (to 18 digits), R0 = its scale. FPR0 = it.",
+    "*   Split at nine digits so each half fits CVB, each half through the",
+    "*   unnormalized-add conversion, joined, and divided by 10**scale.",
+    "COBPKF   STM   14,12,12(13)",
+    "         BALR  12,0",
+    "         USING *,12",
+    "         ST    13,RTSAVE20+4",
+    "         LA    11,RTSAVE20",
+    "         ST    11,8(13)",
+    "         LR    13,11",
+    "         LR    3,1                  the packed value",
+    "         LR    4,0                  the scale",
+    "         ZAP   FPKA(16),0(16,3)",
+    "         SRP   FPKA(16),55,0        the high nine digits (shift right 9)",
+    "         CVB   5,FPKA+8",
+    "         ZAP   FPKB(16),FPKA(16)",
+    "         SRP   FPKB(16),9,0         those times 10**9",
+    "         ZAP   FPKA(16),0(16,3)",
+    "         SP    FPKA(16),FPKB(16)    the low nine digits",
+    "         CVB   6,FPKA+8",
+    "         X     5,FPKSGN             the high half as a float",
+    "         ST    5,FPKD+4",
+    "         MVC   FPKD(4),FPKMAG",
+    "         LD    0,FPKD",
+    "         SD    0,FPKBIAS",
+    "         MD    0,FPTEN+72           times 10**9",
+    "         X     6,FPKSGN             the low half",
+    "         ST    6,FPKD+4",
+    "         MVC   FPKD(4),FPKMAG",
+    "         LD    2,FPKD",
+    "         SD    2,FPKBIAS",
+    "         ADR   0,2",
+    "         SLL   4,3",
+    "         DD    0,FPTEN(4)           over 10**scale",
+    "         L     13,4(13)",
+    "         LM    14,12,12(13)",
+    "         SR    15,15",
+    "         BR    14",
+    "* COBFPK -- long hexadecimal float -> packed decimal at a scale.",
+    "*   FPR0 = value, R1 -> 16-byte result, R0 = scale. Nearest, an exact",
+    "*   half toward zero, as IKFCBL00 converts. R15 = 4 (result zero) when",
+    "*   the scaled magnitude has more than eighteen digits.",
+    "COBFPK   STM   14,12,12(13)",
+    "         BALR  12,0",
+    "         USING *,12",
+    "         ST    13,RTSAVE21+4",
+    "         LA    11,RTSAVE21",
+    "         ST    11,8(13)",
+    "         LR    13,11",
+    "         LR    3,1                  the result",
+    "         LR    4,0                  the scale",
+    "         SR    7,7                  the sign",
+    "         LTDR  0,0",
+    "         BNM   FPK10",
+    "         LCDR  0,0",
+    "         LA    7,1                  negative",
+    "FPK10    SLL   4,3",
+    "         MD    0,FPTEN(4)           times 10**scale",
+    "         AD    0,FPKHALF            plus a half less one unit: half rounds toward zero",
+    "         CD    0,FPTEN+144          10**18 or more?",
+    "         BNL   FPKOVF",
+    "         LDR   2,0",
+    "         DD    2,FPTEN+72           over 10**9",
+    "         AW    2,FPKINT             the integer part, unnormalized",
+    "         STD   2,FPKD",
+    "         L     5,FPKD+4             q = the high nine digits",
+    "         ST    5,FPKD+4",
+    "         MVC   FPKD(4),FPKMAG",
+    "         LD    2,FPKD",
+    "         SD    2,FPKINT             q as a float",
+    "         MD    2,FPTEN+72",
+    "         SDR   0,2                  r = value - q * 10**9",
+    "         LTDR  0,0",
+    "         BNM   FPK20",
+    "         AD    0,FPTEN+72           r was negative: q one less",
+    "         BCTR  5,0",
+    "FPK20    CD    0,FPTEN+72",
+    "         BL    FPK30",
+    "         SD    0,FPTEN+72           r reached 10**9: q one more",
+    "         LA    5,1(5)",
+    "FPK30    AW    0,FPKINT",
+    "         STD   0,FPKD",
+    "         L     6,FPKD+4             r, the low nine digits",
+    "         CVD   5,FPKD",
+    "         ZAP   FPKA(16),FPKD(8)",
+    "         SRP   FPKA(16),9,0         q * 10**9",
+    "         CVD   6,FPKD",
+    "         AP    FPKA(16),FPKD(8)     plus r",
+    "         LTR   7,7",
+    "         BZ    FPK40",
+    "         MP    FPKA(16),FPKNEG      the sign back",
+    "FPK40    MVC   0(16,3),FPKA",
+    "         SR    15,15",
+    "         B     FPKRET",
+    "FPKOVF   ZAP   0(16,3),FPKZERO",
+    "         LA    15,4",
+    "FPKRET   L     13,4(13)",
+    "         L     14,12(13)",
+    "         LM    0,12,20(13)          R15 keeps the code",
+    "         BR    14",
+    "* COBFPW -- FPR0 = x, FPR2 = y: FPR0 = x ** y. An integral y multiplies",
+    "*   so a negative x is right and 2 ** 10 is 1024 (IKFCBL00 gave 24);",
+    "*   otherwise exp(y * ln x). R15 = 4 (result zero): a negative x to a",
+    "*   fraction, zero to a negative y, or a result past the format. 0 ** 0",
+    "*   is 1, as IKFCBL00 has it.",
+    "COBFPW   STM   14,12,12(13)",
+    "         BALR  12,0",
+    "         USING *,12",
+    "         ST    13,RTSAVE22+4",
+    "         LA    11,RTSAVE22",
+    "         ST    11,8(13)",
+    "         LR    13,11",
+    "         LTDR  2,2",
+    "         BZ    FPWONE               y = 0: 1",
+    "         LDR   4,2",
+    "         SR    7,7",
+    "         LTDR  4,4",
+    "         BNM   FPW10",
+    "         LCDR  4,4",
+    "         LA    7,1                  a negative exponent",
+    "FPW10    CD    4,FPWBIG             an integer the machine holds?",
+    "         BH    FPWREAL",
+    "         LDR   6,4",
+    "         AW    6,FPKINT",
+    "         STD   6,FPWW",
+    "         L     5,FPWW+4             n = the integer part of |y|",
+    "         ST    5,FPWW+4",
+    "         MVC   FPWW(4),FPKMAG",
+    "         LD    6,FPWW",
+    "         SD    6,FPKINT             n as a float",
+    "         CDR   6,4",
+    "         BNE   FPWREAL              y has a fraction",
+    "         LD    4,FPTEN               result = 1",
+    "         LDR   6,0                  the running square",
+    "FPW20    LTR   5,5",
+    "         BZ    FPW40",
+    "         LR    8,5",
+    "         N     8,FPWONEW",
+    "         BZ    FPW30",
+    "         MDR   4,6",
+    "FPW30    MDR   6,6",
+    "         SRL   5,1",
+    "         B     FPW20",
+    "FPW40    LDR   0,4",
+    "         LTR   7,7",
+    "         BZ    FPWOK",
+    "         LTDR  0,0",
+    "         BZ    FPWERR               zero to a negative power",
+    "         LD    2,FPTEN",
+    "         DDR   2,0",
+    "         LDR   0,2                  1 / x ** n",
+    "         B     FPWOK",
+    "FPWREAL  LTDR  0,0",
+    "         BM    FPWERR               a negative base to a fraction",
+    "         BZ    FPWZ",
+    "         STD   2,FPWY",
+    "         BAL   10,FLN               ln x",
+    "         MD    0,FPWY               y * ln x",
+    "         BAL   10,FEX",
+    "         LTR   15,15",
+    "         BNZ   FPWERR",
+    "         B     FPWOK",
+    "FPWZ     LTR   7,7",
+    "         BNZ   FPWERR               zero to a negative power",
+    "         SDR   0,0",
+    "         B     FPWOK",
+    "FPWONE   LD    0,FPTEN",
+    "FPWOK    SR    15,15",
+    "         B     FPWRET",
+    "FPWERR   SDR   0,0",
+    "         LA    15,4",
+    "FPWRET   L     13,4(13)",
+    "         L     14,12(13)",
+    "         LM    0,12,20(13)",
+    "         BR    14",
+    "* COBFDS -- FPR0 as DISPLAY shows it. R1 -> the text, R0 = digits, 17/8.",
+    "*   A sign or a blank, the point, the digits, E, the exponent's sign or",
+    "*   a blank, two digits: .15000000000000000E 01 is 1.5. Zero gives E 00.",
+    "COBFDS   STM   14,12,12(13)",
+    "         BALR  12,0",
+    "         USING *,12",
+    "         ST    13,RTSAVE23+4",
+    "         LA    11,RTSAVE23",
+    "         ST    11,8(13)",
+    "         LR    13,11",
+    "         LR    3,1                  the text",
+    "         LR    4,0                  the digits",
+    "         MVI   0(3),C' '",
+    "         MVI   1(3),C'.'",
+    "         LTDR  0,0",
+    "         BZ    FDSZERO",
+    "         BNM   FDS10",
+    "         MVI   0(3),C'-'",
+    "         LCDR  0,0",
+    "FDS10    STD   0,FDSV",
+    "         BAL   10,FLN               ln v",
+    "         DD    0,FLNL10             log10 v",
+    "         SR    7,7",
+    "         LTDR  0,0",
+    "         BNM   FDS20",
+    "         LCDR  0,0",
+    "         LA    7,1",
+    "FDS20    AW    0,FPKINT",
+    "         STD   0,FDSW",
+    "         L     5,FDSW+4             the integer part of |log10 v|",
+    "         LTR   7,7",
+    "         BZ    FDS30",
+    "         LCR   5,5",
+    "         BCTR  5,0                  floor for a negative",
+    "FDS30    A     5,FPWONEW            d: v = .ddd * 10**d, give or take one",
+    "         LR    6,4",
+    "         SR    6,5                  k = digits - d: the power of ten to scale by",
+    "         BAL   10,FP10              FPR4 = 10**k",
+    "         LD    0,FDSV",
+    "         MDR   0,4                  m = v * 10**k, wanted in [10**(digits-1), 10**digits)",
+    "         LR    8,4",
+    "         SLL   8,3",
+    "FDS40    CD    0,FPTEN(8)           m >= 10**digits?",
+    "         BL    FDS50",
+    "         DD    0,FPTEN+8",
+    "         A     5,FPWONEW            (not LA: d may be negative)",
+    "         B     FDS40",
+    "FDS50    CD    0,FPTEN-8(8)         m < 10**(digits-1)?",
+    "         BNL   FDS60",
+    "         MD    0,FPTEN+8",
+    "         BCTR  5,0",
+    "         B     FDS50",
+    "FDS60    LA    1,FDSP",
+    "         SR    0,0",
+    "         L     15,FDSAFPK",
+    "         BALR  14,15               the digits as an integer, rounded",
+    "         LR    8,4",
+    "         SLL   8,4",
+    "         LA    9,FPKPOW(8)          10**digits, packed",
+    "         CP    FDSP(16),0(16,9)     rounded up to it?",
+    "         BL    FDS70",
+    "         LA    9,FPKPOW-16(8)       10**(digits-1)",
+    "         ZAP   FDSP(16),0(16,9)     then that, one power higher",
+    "         LA    5,1(5)",
+    "FDS70    C     4,FDS17",
+    "         BNE   FDS80",
+    "         UNPK  4(15,3),FDSP+8(8)     the low fifteen digits",
+    "         OI    18(3),X'F0'",
+    "         ZAP   FDSQ(16),FDSP(16)",
+    "         SRP   FDSQ(16),49,0         right fifteen: the top two remain",
+    "         UNPK  2(2,3),FDSQ+14(2)",
+    "         OI    3(3),X'F0'",
+    "         B     FDS90",
+    "FDS80    UNPK  2(8,3),FDSP+11(5)",
+    "         OI    9(3),X'F0'",
+    "FDS90    LA    8,2(4,3)             where E goes",
+    "         MVI   0(8),C'E'",
+    "         MVI   1(8),C' '",
+    "         LTR   5,5",
+    "         BNM   FDS95",
+    "         MVI   1(8),C'-'",
+    "         LCR   5,5",
+    "FDS95    CVD   5,FDSW",
+    "         UNPK  2(2,8),FDSW+6(2)",
+    "         OI    3(8),X'F0'",
+    "         B     FDSRET",
+    "FDSZERO  LR    8,4",
+    "         BCTR  8,0",
+    "         EX    8,FDSZMVC            the digits all zero",
+    "         LA    8,2(4,3)",
+    "         MVC   0(4,8),FDSE00",
+    "FDSRET   L     13,4(13)",
+    "         LM    14,12,12(13)",
+    "         SR    15,15",
+    "         BR    14",
+    "FDSZMVC  MVC   2(0,3),FDSZS         executed",
+    "* FLN -- FPR0 = x > 0: FPR0 = ln x. x = m * 2**k, m in [1/sqrt2, sqrt2),",
+    "*   ln m = 2 atanh((m-1)/(m+1)) by its series, plus k ln 2. Back by R10.",
+    "FLN      BALR  11,0",
+    "         DROP  12                   the caller's base: not for the code below",
+    "         USING *,11",
+    "         STD   0,FLNW",
+    "         SR    5,5",
+    "         IC    5,FLNW               the characteristic",
+    "         N     5,FLN7F",
+    "         S     5,FLN64              e: x = m * 16**e",
+    "         MVI   FLNW,X'40'",
+    "         LD    0,FLNW               m in [1/16, 1)",
+    "         SLL   5,2                  k = 4e",
+    "FLN10    CD    0,FLNHALF",
+    "         BNL   FLN20",
+    "         ADR   0,0",
+    "         BCTR  5,0",
+    "         B     FLN10",
+    "FLN20    CD    0,FLNRT2              below 1/sqrt 2: double once more",
+    "         BNL   FLN30",
+    "         ADR   0,0",
+    "         BCTR  5,0",
+    "FLN30    LDR   2,0",
+    "         SD    2,FPTEN              m - 1",
+    "         AD    0,FPTEN              m + 1",
+    "         DDR   2,0                  t",
+    "         LDR   4,2",
+    "         MDR   4,4                  t squared",
+    "         LDR   0,2                  the sum",
+    "         LDR   6,2                  the term",
+    "         LA    6,3",
+    "FLN40    MDR   6,4",
+    "         ST    6,FLND+4",
+    "         MVC   FLND(4),FPKMAG",
+    "         LD    2,FLND",
+    "         SD    2,FPKINT             i as a float",
+    "         STD   2,FLNI",
+    "         LDR   2,6",
+    "         DD    2,FLNI               t**i / i",
+    "         ADR   0,2",
+    "         LA    6,2(6)",
+    "         C     6,FLN27",
+    "         BL    FLN40",
+    "         ADR   0,0                  2 * sum = ln m",
+    "         X     5,FPKSGN             k as a float",
+    "         ST    5,FLND+4",
+    "         MVC   FLND(4),FPKMAG",
+    "         LD    2,FLND",
+    "         SD    2,FPKBIAS",
+    "         MD    2,FLNLN2",
+    "         ADR   0,2                  plus k ln 2",
+    "         BR    10",
+    "         DROP  11",
+    "* FEX -- FPR0 = y: FPR0 = e**y. y = n ln2 + r, e**r by its series, by",
+    "*   2**n built directly. R15 = 4 past the format's range. Back by R10.",
+    "FEX      BALR  11,0",
+    "         USING *,11",
+    "         CD    0,FEXMAX",
+    "         BH    FEXOVF",
+    "         CD    0,FEXMIN",
+    "         BL    FEXZERO",
+    "         LDR   2,0",
+    "         DD    2,FLNLN2             q = y / ln 2",
+    "         SR    7,7",
+    "         LTDR  2,2",
+    "         BNM   FEX10",
+    "         LCDR  2,2",
+    "         LA    7,1",
+    "FEX10    AD    2,FLNHALF",
+    "         AW    2,FPKINT",
+    "         STD   2,FEXW",
+    "         L     5,FEXW+4             n = |q| rounded",
+    "         LTR   7,7",
+    "         BZ    FEX20",
+    "         LCR   5,5",
+    "FEX20    LR    6,5",
+    "         X     6,FPKSGN",
+    "         ST    6,FEXW+4",
+    "         MVC   FEXW(4),FPKMAG",
+    "         LD    2,FEXW",
+    "         SD    2,FPKBIAS            n as a float",
+    "         MD    2,FLNLN2",
+    "         SDR   0,2                  r = y - n ln 2, |r| <= ln2 / 2",
+    "         LDR   4,0",
+    "         LD    0,FPTEN              the sum, 1",
+    "         LD    6,FPTEN              the term, 1",
+    "         LA    6,1",
+    "FEX30    MDR   6,4",
+    "         ST    6,FEXW+4",
+    "         MVC   FEXW(4),FPKMAG",
+    "         LD    2,FEXW",
+    "         SD    2,FPKINT             i as a float",
+    "         STD   2,FEXI",
+    "         DD    6,FEXI               r**i / i!",
+    "         ADR   0,6",
+    "         LA    6,1(6)",
+    "         C     6,FEX20C",
+    "         BL    FEX30",
+    "         LR    6,5",
+    "         SRA   6,2                  q: n = 4q + rr",
+    "         LR    8,6",
+    "         SLL   8,2",
+    "         LR    9,5",
+    "         SR    9,8                  rr",
+    "         LA    8,65(6)              the characteristic: 16**(q+1)",
+    "         SLL   8,24",
+    "         LA    1,1",
+    "         SLL   1,0(9)               2**rr",
+    "         SLL   1,20                 as the first hexadecimal digit",
+    "         OR    8,1",
+    "         ST    8,FEXW",
+    "         XC    FEXW+4(4),FEXW+4",
+    "         LD    2,FEXW               2**n",
+    "         MDR   0,2",
+    "         SR    15,15",
+    "         BR    10",
+    "FEXOVF   LA    15,4",
+    "         SDR   0,0",
+    "         BR    10",
+    "FEXZERO  SR    15,15",
+    "         SDR   0,0",
+    "         BR    10",
+    "         DROP  11",
+    "* FP10 -- R6 = k: FPR4 = 10**k, from the table in steps of eighteen.",
+    "FP10     BALR  11,0",
+    "         USING *,11",
+    "         LD    4,FPTEN",
+    "FP1010   C     6,FP18",
+    "         BL    FP1020",
+    "         MD    4,FPTEN+144",
+    "         S     6,FP18",
+    "         B     FP1010",
+    "FP1020   C     6,FP18M",
+    "         BH    FP1030",
+    "         DD    4,FPTEN+144",
+    "         A     6,FP18",
+    "         B     FP1020",
+    "FP1030   LTR   6,6",
+    "         BZ    FP1050",
+    "         BM    FP1040",
+    "         SLL   6,3",
+    "         MD    4,FPTEN(6)",
+    "         B     FP1050",
+    "FP1040   LCR   6,6",
+    "         SLL   6,3",
+    "         DD    4,FPTEN(6)",
+    "FP1050   BR    10",
+    "         DROP  11",
+    "         DS    0D",
+    "FPTEN    DC    D'1',D'1E1',D'1E2',D'1E3'   powers of ten, 10**0 to 10**18",
+    "         DC    D'1E4',D'1E5',D'1E6',D'1E7'",
+    "         DC    D'1E8',D'1E9',D'1E10',D'1E11'",
+    "         DC    D'1E12',D'1E13',D'1E14',D'1E15'",
+    "         DC    D'1E16',D'1E17',D'1E18'",
+    "FPKMAG   DC    X'4E000000'          the unnormalized characteristic",
+    "FPKSGN   DC    X'80000000'",
+    "         DS    0D",
+    "FPKINT   DC    X'4E00000000000000'",
+    "FPKBIAS  DC    X'4E00000080000000'",
+    "FPKHALF  DC    X'407FFFFFFFFFFFFF'  a half less one unit",
+    "FPKNEG   DC    P'-1'",
+    "FPKZERO  DC    P'0'",
+    "FPWBIG   DC    D'2147483647'",
+    "FPWONEW  DC    F'1'",
+    "FLNHALF  DC    D'0.5'",
+    "FLNRT2   DC    D'0.70710678118654752'",
+    "FLNLN2   DC    D'0.69314718055994531'",
+    "FLNL10   DC    D'2.3025850929940457'",
+    "FLN7F    DC    F'127'",
+    "FLN64    DC    F'64'",
+    "FLN27    DC    F'27'",
+    "FEXMAX   DC    D'174.6'",
+    "FEXMIN   DC    D'-180.2'",
+    "FEX20C   DC    F'20'",
+    "FP18     DC    F'18'",
+    "FP18M    DC    F'-18'",
+    "FDS17    DC    F'17'",
+    "FDSAFPK  DC    A(COBFPK)",
+    "FDSE00   DC    C'E 00'",
+    "FDSZS    DC    17C'0'",
+    "         DS    0D",
+    "FPKPOW   DC    PL16'1',PL16'10',PL16'100'     10**0 to 10**17, packed",
+    "         DC    PL16'1000',PL16'10000',PL16'100000'",
+    "         DC    PL16'1000000',PL16'10000000'",
+    "         DC    PL16'100000000',PL16'1000000000'",
+    "         DC    PL16'10000000000',PL16'100000000000'",
+    "         DC    PL16'1000000000000',PL16'10000000000000'",
+    "         DC    PL16'100000000000000'",
+    "         DC    PL16'1000000000000000'",
+    "         DC    PL16'10000000000000000'",
+    "         DC    PL16'100000000000000000'",
+    "FPKA     DS    2D",
+    "FPKB     DS    2D",
+    "FPKD     DS    D",
+    "FPWW     DS    D",
+    "FPWY     DS    D",
+    "FDSV     DS    D",
+    "FDSW     DS    D",
+    "FDSP     DS    2D",
+    "FDSQ     DS    2D",
+    "FLNW     DS    D",
+    "FLND     DS    D",
+    "FLNI     DS    D",
+    "FEXW     DS    D",
+    "FEXI     DS    D",
+    "RTSAVE20 DS    18F",
+    "RTSAVE21 DS    18F",
+    "RTSAVE22 DS    18F",
+    "RTSAVE23 DS    18F",
+    };
+    asm_comment("");
+    asm_comment(" the floating-point routines: packed <-> long hex float, x ** y,");
+    asm_comment(" and DISPLAY's text (#40)");
+    for (size_t i = 0; i < sizeof R / sizeof R[0]; i++) asm_raw(R[i]);
+}
+
 static void emit_runtime(void)
 {
     asm_comment("---------------------------------------------------------------");
@@ -8491,6 +9260,7 @@ static void emit_runtime(void)
     asm_line("", "ENTRY", "COBDISP,COBTERM,COBWRL,COBDATE,COBACC,COBUPSI", "");
     asm_line("", "ENTRY", "COBADV,COBSTR,COBUNS,COBWTO,COBWTOR,COBADT,COBMVL", "");
     asm_line("", "ENTRY", "COBDCAL,COBCANC", "");
+    if (use_float) asm_line("", "ENTRY", "COBPKF,COBFPK,COBFPW,COBFDS", "");
     asm_comment("");
     asm_comment(" COBDISP -- write one line to SYSOUT.");
     asm_comment("   R1 -> A(text), A(halfword length).  Opens SYSOUT on demand.");
@@ -8988,6 +9758,7 @@ static void emit_runtime(void)
      * reach of the routines that were here first, which is what happened
      * once the CSECT passed 4K. */
     emit_string_runtime();
+    if (use_float) emit_float_runtime();
     asm_comment("");
     asm_comment(" COBWTO -- DISPLAY UPON CONSOLE. R1 -> A(text), A(halfword length).");
     asm_comment(" The text goes into a WTO list whose length halfword is set");
@@ -9451,8 +10222,8 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
         snprintf(l, sizeof l, "L%04d", label);
         need_class_table(c->cls_alpha ? CLS_ALPHA : CLS_DIGIT);
         if (c->cls_alpha) {
-            field_ref_m(sy, c->cls_sub, FR_SS_NOLEN, n, 6, f, sizeof f);
-            snprintf(b, sizeof b, "%s(%d),CLSALF", f, n);
+            field_ref_m(sy, c->cls_sub, FR_SS_LEN, n, 6, f, sizeof f);
+            snprintf(b, sizeof b, "%s,CLSALF", f);
             asm_line("", "TRT", b, "every byte A-Z or space?");
             asm_line("", want ? "BZ" : "BNZ", l, "");
             asm_line(lf, "DS", "0H", "");
@@ -9465,28 +10236,30 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
         int sep = sy->sgn_sep, lead = sy->sgn_lead;
         int digits_off = (sep && lead) ? 1 : 0;
         int nd = sep ? n - 1 : n;
+        /* The item's address in R6, so a subscripted item takes the same
+         * offsets as a plain one -- "0(6)+1(3)" is not an operand. */
+        field_ref_m(sy, c->cls_sub, FR_RX, n, 6, f, sizeof f);
+        snprintf(b, sizeof b, "6,%s", f); asm_line("", "LA", b, "the item");
         if (sy->is_signed && sep) {
             int sgn_off = lead ? 0 : n - 1;
-            field_ref_m(sy, c->cls_sub, FR_SS_NOLEN, n, 6, f, sizeof f);
             int ok = ++genlabel; char lo[16];
             snprintf(lo, sizeof lo, "L%04d", ok);
-            snprintf(b, sizeof b, "%s+%d,C'+'", f, sgn_off);
+            snprintf(b, sizeof b, "%d(6),C'+'", sgn_off);
             asm_line("", "CLI", b, "a separate sign is + or -");
             asm_line("", "BE", lo, "");
-            snprintf(b, sizeof b, "%s+%d,C'-'", f, sgn_off);
+            snprintf(b, sizeof b, "%d(6),C'-'", sgn_off);
             asm_line("", "CLI", b, "");
             asm_line("", "BNE", want ? lf : l, "");
             asm_line(lo, "DS", "0H", "");
-            snprintf(b, sizeof b, "%s+%d(%d),CLSNUM", f, digits_off, nd);
+            snprintf(b, sizeof b, "%d(%d,6),CLSNUM", digits_off, nd);
             asm_line("", "TRT", b, "every other byte a digit?");
             asm_line("", want ? "BZ" : "BNZ", l, "");
             asm_line(lf, "DS", "0H", "");
             reset_bases();
             return;
         }
-        field_ref_m(sy, c->cls_sub, FR_SS_NOLEN, n, 6, f, sizeof f);
         if (!sy->is_signed) {
-            snprintf(b, sizeof b, "%s(%d),CLSNUM", f, n);
+            snprintf(b, sizeof b, "0(%d,6),CLSNUM", n);
             asm_line("", "TRT", b, "every byte a digit?");
             asm_line("", want ? "BZ" : "BNZ", l, "");
             asm_line(lf, "DS", "0H", "");
@@ -9498,11 +10271,11 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
         need_class_table(CLS_SIGN);
         int sgn_off = lead ? 0 : n - 1;
         int rest_off = lead ? 1 : 0;
-        snprintf(b, sizeof b, "%s+%d(1),CLSSGN", f, sgn_off);
+        snprintf(b, sizeof b, "%d(1,6),CLSSGN", sgn_off);
         asm_line("", "TRT", b, "a signed digit where the sign lives?");
         asm_line("", "BNZ", want ? lf : l, "");
         if (n > 1) {
-            snprintf(b, sizeof b, "%s+%d(%d),CLSNUM", f, rest_off, n - 1);
+            snprintf(b, sizeof b, "%d(%d,6),CLSNUM", rest_off, n - 1);
             asm_line("", "TRT", b, "and digits everywhere else?");
             asm_line("", want ? "BZ" : "BNZ", l, "");
         } else if (want) asm_line("", "B", l, "");
@@ -9514,6 +10287,19 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
         /* The relation the branch at the end tests: c->op, unless the
          * alphanumeric path below turned the operands round. */
         int rop = c->op;
+        if (expr_has_float(c->l) || expr_has_float(c->r)) {
+            if (node_alpha(c->l) || node_alpha(c->r))
+                die("a floating-point item compares only with a numeric item or literal");
+            gen_fexpr(c->l, 0);
+            asm_line("", "STD", "0,FSTK+56", "");
+            gen_fexpr(c->r, 0);
+            asm_line("", "LDR", "2,0", "");
+            asm_line("", "LD", "0,FSTK+56", "");
+            asm_line("", "CDR", "0,2", "floating-point compare");
+            snprintf(l, sizeof l, "L%04d", label);
+            asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
+            return;
+        }
         if (node_alpha(c->l) || node_alpha(c->r)) {
             /* Alphanumeric: compare over the longer operand, the shorter one
                space padded, which is what COBOL specifies. */
@@ -9680,6 +10466,7 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
         gen_move_alpha(d, dsub, sv, ssub);
         return;
     }
+    if (IS_FLOAT(d) || IS_FLOAT(sv)) { gen_move_float(d, dsub, sv, ssub); return; }
     if (sv->edited && !sv->is_alpha) {
         /* A numeric-edited sender is alphanumeric for a MOVE (II-74: its
          * category as a sending item), so it moves as characters, sign
@@ -10401,6 +11188,18 @@ static void emit_set_from_expr(const Sym *d, Node *e, int add)
 {
     char b[64], top[32];
     int rs, rp;
+    if (IS_FLOAT(d) || expr_has_float(e)) {
+        gen_fexpr(e, 0);
+        if (add) {
+            asm_line("", "STD", "0,FSTK+56", "");
+            if (IS_FLOAT(d)) gen_fload_sym(d, NULL);
+            else { gen_load(d, NULL, "PWK1"); gen_pkf("PWK1", d->scale); }
+            asm_line("", "AD", "0,FSTK+56", "");
+        }
+        if (IS_FLOAT(d)) gen_fstore_sym(d, NULL);
+        else { gen_fpk("PWK1", d->scale); gen_store(d, NULL, "PWK1"); }
+        return;
+    }
     expr_shape(e, d->scale, &rs, &rp);
     int L = gen_expr(e, 0, d->scale, d->scale > rs ? pk_bytes(rp + d->scale - rs) : 1);
     gen_rescale_t("WK0", L, rs, d->scale, 0);
@@ -12603,11 +13402,32 @@ static void generate(void)
                 snprintf(gen_size_skip, sizeof gen_size_skip, "%s", lskip);
                 if (st->size_first) asm_line("", "MVI", "SZFLG,X'00'", "no size error yet");
             }
-            int rs, rp;
-            expr_shape(st->expr, d->scale, &rs, &rp);
-            int L = gen_expr(st->expr, 0, d->scale, d->scale > rs ? pk_bytes(rp + d->scale - rs) : 1);
-            gen_rescale_t("WK0", L, rs, d->scale, st->rounded);
-            char top[32]; tail_op("WK0", L, top, sizeof top);
+            char top[32];
+            if (IS_FLOAT(d) || expr_has_float(st->expr)) {
+                gen_fexpr(st->expr, 0);
+                if (IS_FLOAT(d)) {
+                    gen_fstore_sym(d, st->dsub);
+                    if (st->size_err) {
+                        asm_line(lskip, "DS", "0H", "");
+                        reset_bases();
+                        gen_size_skip[0] = 0;
+                        if (st->size_last) {
+                            snprintf(b, sizeof b, "L%04d", st->lab2);
+                            asm_line("", "CLI", "SZFLG,X'00'", "any size error in the series?");
+                            asm_line("", "BE", b, "none: past the imperative statements");
+                        }
+                    }
+                    break;
+                }
+                gen_fpk("PWK1", d->scale);          /* ROUNDED is what the conversion does anyway */
+                snprintf(top, sizeof top, "PWK1(16)");
+            } else {
+                int rs, rp;
+                expr_shape(st->expr, d->scale, &rs, &rp);
+                int L = gen_expr(st->expr, 0, d->scale, d->scale > rs ? pk_bytes(rp + d->scale - rs) : 1);
+                gen_rescale_t("WK0", L, rs, d->scale, st->rounded);
+                tail_op("WK0", L, top, sizeof top);
+            }
             if (st->size_err) {
                 snprintf(b, sizeof b, "PWK1(16),%s", top);
                 asm_line("", "ZAP", b, "");
@@ -12653,6 +13473,35 @@ static void generate(void)
             else if (st->imm) snprintf(b, sizeof b, " %s %s -> %s", verb, st->immdigits, d->name);
             else              snprintf(b, sizeof b, " %s %s -> %s", verb, syms[st->src].name, d->name);
             asm_comment(b);
+            if (st->op != ST_MOVE && (IS_FLOAT(d) || (!st->imm && IS_FLOAT(&syms[st->src])))) {
+                /* ADD x TO f, SUBTRACT f FROM y: as COMPUTE, in floating point. */
+                Node dn, sn, opn;
+                memset(&dn, 0, sizeof dn); memset(&sn, 0, sizeof sn); memset(&opn, 0, sizeof opn);
+                dn.kind = N_SYM; dn.sym = st->dst; dn.sub = st->dsub;
+                if (st->imm) { sn.kind = N_LIT; snprintf(sn.lit, sizeof sn.lit, "%s", st->immdigits); sn.litscale = st->immscale; }
+                else { sn.kind = N_SYM; sn.sym = st->src; sn.sub = st->ssub; }
+                opn.kind = st->op == ST_ADD ? N_ADD : N_SUB; opn.l = &dn; opn.r = &sn;
+                if (st->size_err) die("ON SIZE ERROR with a floating-point ADD or SUBTRACT is not implemented; use COMPUTE");
+                gen_fexpr(&opn, 0);
+                if (IS_FLOAT(d)) gen_fstore_sym(d, st->dsub);
+                else { gen_fpk("PWK1", d->scale); gen_store(d, st->dsub, "PWK1"); }
+                break;
+            }
+            if (st->op == ST_MOVE && IS_FLOAT(d)) {
+                if (st->fig == FIG_ZERO || (st->imm == 1)) {
+                    char t[48], fd[64];
+                    if (st->fig) { asm_line("", "SDR", "0,0", "ZERO"); }
+                    else {
+                        float_lit_text(st->immdigits, st->immscale, t, sizeof t);
+                        snprintf(b, sizeof b, "0,=D'%s'", t);
+                        asm_line("", "LD", b, "literal");
+                    }
+                    (void)fd;
+                    gen_fstore_sym(d, st->dsub);
+                    break;
+                }
+                if (st->fig || st->imm == 2) die("only a numeric literal or ZERO moves to a floating-point item");
+            }
             if (st->op == ST_MOVE) {
                 if (st->fig) {
                     /* Set the first byte and let MVC propagate it across the
@@ -13146,6 +13995,14 @@ static void generate(void)
         if (use_szflg) asm_line("SZFLG", "DS", "X", "ON SIZE ERROR: set by any receiver of a series");
         if (use_str) asm_line("VSTR", "DC", "V(COBSTR)", "");
         if (use_uns) asm_line("VUNS", "DC", "V(COBUNS)", "");
+        if (use_float) {
+            asm_line("", "DS", "0D", "");
+            asm_line("FSTK", "DS", "8D", "floating-point operands waiting, one per nesting level");
+            asm_line("VPKF", "DC", "V(COBPKF)", "packed -> floating");
+            asm_line("VFPK", "DC", "V(COBFPK)", "floating -> packed");
+            asm_line("VFPW", "DC", "V(COBFPW)", "x ** y");
+            asm_line("VFDS", "DC", "V(COBFDS)", "floating point as DISPLAY shows it");
+        }
         if (use_inspect) {
             /* Sized to the widest phrase in the program: the constants region
              * is 8K, and COBXREF's was within 400 bytes of it. */
@@ -13848,6 +14705,16 @@ static void generate(void)
             }
             char dup[12] = "";
             if (sy->occurs > 1) snprintf(dup, sizeof dup, "%d", sy->occurs);
+            if (IS_FLOAT(sy)) {
+                /* The assembler converts the decimal; the length modifier
+                 * keeps it from aligning, as with H and F. */
+                snprintf(b, sizeof b, "%s%s'%s'", dup, sy->usage == U_COMP2 ? "DL8" : "EL4",
+                         sy->has_value == 1 ? sy->value : "0");
+                snprintf(cmt, sizeof cmt, "%s %s", sy->name, sy->usage == U_COMP2 ? "COMP-2, long hex float" : "COMP-1, short hex float");
+                asm_line(sy->label, "DC", b, cmt);
+                at = sy->offset + sy->bytes;
+                continue;
+            }
             if (sy->is_alpha && sy->has_value == 7) {
                 /* VALUE ALL literal: the unit repeated to the item's width and
                  * laid down as a run of DCs, which is what a long plain
@@ -14040,7 +14907,7 @@ static void generate(void)
        identifier, the clock. It was once emitted only for DISPLAY and
        reports, and a program that printed without displaying anything
        linked with COBADV unresolved and branched to zero. */
-    int need_rt = has_display || nreport || curdate_sym >= 0 || use_str || use_uns
+    int need_rt = has_display || nreport || curdate_sym >= 0 || use_str || use_uns || use_float
                   || use_wto || use_wtor || use_dcal || use_mvl || use_adt
                   || (uses_switches && !is_subprogram);
     for (int i = 0; i < nfile; i++) if (files[i].print) need_rt = 1;

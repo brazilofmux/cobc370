@@ -109,19 +109,22 @@ T0008    DS    0H
          OI    D0009+1,X'F0'       unsigned: force an F zone
 T0009    DS    0H
 * IF
-         TRT   D0000(6),CLSNUM     every byte a digit?
+         LA    6,D0000             the item
+         TRT   0(6,6),CLSNUM       every byte a digit?
          BNZ   L0001
 L0005    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         TRT   D0001(5),CLSNUM     every byte a digit?
+         LA    6,D0001             the item
+         TRT   0(5,6),CLSNUM       every byte a digit?
          BNZ   L0001
 L0006    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         TRT   D0002(8),CLSNUM     every byte a digit?
+         LA    6,D0002             the item
+         TRT   0(8,6),CLSNUM       every byte a digit?
          BNZ   L0001
 L0007    DS    0H
          DROP  8

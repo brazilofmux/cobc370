@@ -34,7 +34,8 @@ T0000    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         TRT   D0000(5),CLSNUM     every byte a digit?
+         LA    6,D0000             the item
+         TRT   0(5,6),CLSNUM       every byte a digit?
          BNZ   L0001
 L0023    DS    0H
          DROP  8
@@ -65,9 +66,10 @@ T0004    DS    0H
          BALR  14,15
 T0005    DS    0H
 * IF
-         TRT   D0001+4(1),CLSSGN   a signed digit where the sign lives?
+         LA    6,D0001             the item
+         TRT   4(1,6),CLSSGN       a signed digit where the sign lives?
          BNZ   L0003
-         TRT   D0001+0(4),CLSNUM   and digits everywhere else?
+         TRT   0(4,6),CLSNUM       and digits everywhere else?
          BNZ   L0003
 L0024    DS    0H
          DROP  8
@@ -111,12 +113,13 @@ L0026    DS    0H
          MVC   D0002(6),ZWK        the item, sign and all
 T0011    DS    0H
 * IF
-         CLI   D0002+5,C'+'        a separate sign is + or -
+         LA    6,D0002             the item
+         CLI   5(6),C'+'           a separate sign is + or -
          BE    L0028
-         CLI   D0002+5,C'-'
+         CLI   5(6),C'-'
          BNE   L0005
 L0028    DS    0H
-         TRT   D0002+0(5),CLSNUM   every other byte a digit?
+         TRT   0(5,6),CLSNUM       every other byte a digit?
          BNZ   L0005
 L0027    DS    0H
          DROP  8
@@ -147,7 +150,8 @@ T0015    DS    0H
          BALR  14,15
 T0016    DS    0H
 * IF
-         TRT   D0006(5),CLSNUM     every byte a digit?
+         LA    6,D0006             the item
+         TRT   0(5,6),CLSNUM       every byte a digit?
          BNZ   L0007
 L0029    DS    0H
          DROP  8
@@ -178,7 +182,8 @@ T0020    DS    0H
          BALR  14,15
 T0021    DS    0H
 * IF
-         TRT   D0005(5),CLSNUM     every byte a digit?
+         LA    6,D0005             the item
+         TRT   0(5,6),CLSNUM       every byte a digit?
          BNZ   L0009
 L0030    DS    0H
          DROP  8
@@ -209,7 +214,8 @@ T0025    DS    0H
          BALR  14,15
 T0026    DS    0H
 * IF
-         TRT   D0004(5),CLSNUM     every byte a digit?
+         LA    6,D0004             the item
+         TRT   0(5,6),CLSNUM       every byte a digit?
          BNZ   L0011
 L0031    DS    0H
          DROP  8
@@ -333,7 +339,8 @@ T0045    DS    0H
          BALR  14,15
 T0046    DS    0H
 * IF
-         TRT   D0005(5),CLSNUM     every byte a digit?
+         LA    6,D0005             the item
+         TRT   0(5,6),CLSNUM       every byte a digit?
          BZ    L0019
 L0035    DS    0H
          DROP  8

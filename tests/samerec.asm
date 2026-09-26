@@ -59,19 +59,22 @@ T0001    DS    0H
          MVC   D0011+7(1),D0011+6
 T0002    DS    0H
 * IF
-         TRT   D0013(2),CLSNUM     every byte a digit?
+         LA    6,D0013             the item
+         TRT   0(2,6),CLSNUM       every byte a digit?
          BNZ   L0001
 L0004    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         TRT   D0014(2),CLSNUM     every byte a digit?
+         LA    6,D0014             the item
+         TRT   0(2,6),CLSNUM       every byte a digit?
          BNZ   L0001
 L0005    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         TRT   D0015(2),CLSNUM     every byte a digit?
+         LA    6,D0015             the item
+         TRT   0(2,6),CLSNUM       every byte a digit?
          BNZ   L0001
 L0006    DS    0H
          DROP  8
@@ -126,7 +129,8 @@ T0007    DS    0H
          MVC   D0017(6),D0018      zoned to zoned, same picture
 T0008    DS    0H
 * IF
-         TRT   D0017(6),CLSNUM     every byte a digit?
+         LA    6,D0017             the item
+         TRT   0(6,6),CLSNUM       every byte a digit?
          BNZ   L0003
 L0007    DS    0H
          DROP  8

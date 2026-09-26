@@ -2656,7 +2656,8 @@ T0344    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         TRT   D0156(1),CLSNUM     every byte a digit?
+         LA    6,D0156             the item
+         TRT   0(1,6),CLSNUM       every byte a digit?
          BZ    L0087
 L0348    DS    0H
          DROP  8
@@ -4553,7 +4554,8 @@ T0588    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
-         TRT   D0081(1),CLSNUM     every byte a digit?
+         LA    6,D0081             the item
+         TRT   0(1,6),CLSNUM       every byte a digit?
          BZ    L0393
 L0394    DS    0H
          DROP  8

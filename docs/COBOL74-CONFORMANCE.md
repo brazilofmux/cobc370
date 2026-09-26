@@ -592,6 +592,60 @@ operand, and asking `field_ref` for a source operand *with* a length produced
 `MVC ZWK(5),D0001(5)` -- two lengths, which IFOX00 reports as a relocatable
 displacement rather than as the obvious thing.
 
+### COMP-1 and COMP-2: IBM's floating point
+
+Not in the 1974 standard at all; IBM's, in every compiler of the line,
+and what a scientific program of the era uses. John Pratt's report of
+COBCAL74 (manyone/cobcal74) brought it here (#40): a calculator whose value
+stack is COMP-2 and whose square root is `x ** 0.5`.
+
+Implemented since 2026-09-26: COMP-1 (4 bytes, short) and COMP-2 (8 bytes,
+long) hexadecimal float, with VALUE (the floating literal `1.5E+00`, which
+IKFCBL00 requires for a non-integer, and plain decimals too); MOVE to and
+from any numeric item; COMPUTE, ADD, SUBTRACT, MULTIPLY, DIVIDE with
+floating operands or receivers; `**` with any exponent; comparisons; DISPLAY
+in IKFCBL00's layout (a sign or a blank, the point, 17 digits for COMP-2
+and 8 for COMP-1, E, the exponent's sign or a blank, two digits). The
+conversions, the power and the DISPLAY text are four runtime routines;
+`ln` and `exp` are computed in the runtime, in hexadecimal float, to about
+sixteen digits.
+
+Measured against IKFCBL00 first, in three probes of over a hundred cases,
+and matched wherever IBM's answer was a rule:
+
+- Floating to fixed converts to the nearest value, an exact half going
+  toward zero: 2.5 gives 2, 2.50001 gives 3, 6.6 gives 7, 0.995 gives 0.99.
+  ROUNDED changes nothing. A value too wide for the receiver truncates on
+  the left as any MOVE does, where IBM prints digits that mean nothing.
+- COMP-1 keeps 24 bits: 0.1 is 0.099999964237, as IBM's is.
+- `0 ** 0` is 1.
+
+And departed from, each measured, where IBM's answer was not one:
+
+- An expression with a floating operand, or a floating receiver, is
+  evaluated in floating point throughout -- the rule IBM's later compilers
+  state. IKFCBL00 does a fixed-point subexpression in fixed point at the
+  receiver's decimals, zero for a float, so `COMPUTE F = 15 / 10` gives 1
+  and its own compile of COBCAL74 answers `1.5+1` with 2.00000 and `2^0.5`
+  with 1.00000. Under cobc370 they are 2.50000 and 1.41421.
+- `**` with an integral exponent multiplies, so `(-8) ** 3` is -512, and
+  `2 ** 10` is 1024; IKFCBL00 gave +512 through logarithms of |x| for a
+  floating exponent, and 24 and 0 for `2 ** 10` and `10 ** 3` into a
+  COMP-2, its integer power truncated somewhere.
+- A negative base to a fractional exponent, zero to a negative one, and
+  division by zero are SIZE ERRORs, and leave the receiver alone, where
+  IBM used |x| or gave nothing.
+- Zero displays with exponent 00; IBM prints E 81 for a long zero and E 72
+  for a short one. The digits of an inexact value come from one scaling
+  multiply and a rounded conversion, so 0.001 shows as .10000000000000000E-02
+  where IBM's shows .99999999999999920E-03; neither is the stored value's
+  own 17 digits, and IBM's last two are wrong.
+
+`DIVIDE ... REMAINDER` has no floating form, a floating item is not a
+subscript, a count or a key, and ON SIZE ERROR on a floating ADD or
+SUBTRACT says to use COMPUTE. Tests: `float1`, `float2`, `float3`, and
+COBCAL74 itself over a batch of expressions (`cobcal74`).
+
 ### BLOCK CONTAINS n CHARACTERS
 
 General rule 3 on IV-11: `CHARACTERS` states the physical record size
