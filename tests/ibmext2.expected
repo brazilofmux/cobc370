@@ -1,0 +1,19 @@
+U8 02
+U5 03
+U5 04
+U4 04
+U8 05
+NOW B CHANGES ONLY
+<
+A 1
+>
+A = A B = 1
+<
+  2
+>
+B = 2
+<
+  3
+>
+B = 3
+END

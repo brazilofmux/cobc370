@@ -199,11 +199,14 @@ static void copy_replace(Src *s)
     }
 }
 
+static int card_no;              /* lines read from any file: IBM's card numbers */
+
 static int src_fill(Src *s)
 {
     for (;;) {
         if (!fgets(s->buf, sizeof s->buf, s->fp)) return 0;
         s->line++;
+        card_no++;
         size_t n = strlen(s->buf);
         while (n && (s->buf[n-1] == '\n' || s->buf[n-1] == '\r')) s->buf[--n] = 0;
         if (n < 7) continue;                       /* blank or short: skip */
@@ -249,6 +252,8 @@ typedef struct {
     int  len;           /* significant for literals */
     int  literal;       /* nonzero if this token was a quoted literal */
     int  line;
+    int  col;           /* 1-based column of its first character */
+    int  card;          /* IBM's card number: every line read, copybooks too */
     int  eof;
 } Tok;
 
@@ -480,6 +485,8 @@ static void scan_token(void)
         if (*src.p) break;
     }
     tok.line = src.line;
+    tok.col = (int)(src.p - src.buf) + 1;
+    tok.card = card_no;
     tok.literal = 0;
     /* A period immediately followed by a digit begins a numeric literal:
      * "the decimal point must not be the rightmost character" is the only
@@ -1044,7 +1051,8 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP, ST_STRING, ST_UNSTRING, ST_CANCEL, ST_EXITPGM,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_SUPPRESS, ST_CALL, ST_SEARCH,
        ST_REWRITE, ST_DELETE, ST_START,
-       ST_SORT, ST_RELEASE, ST_RETURN, ST_SRTEND, ST_MERGE };
+       ST_SORT, ST_RELEASE, ST_RETURN, ST_SRTEND, ST_MERGE,
+       ST_EXHIBIT, ST_TRANSFORM, ST_ONTEST, ST_TRACE };
 
 /* DISPLAY operands, CALL arguments, GO TO DEPENDING names and SORT keys.
  * Most statements have none, so they live in a side table the statement
@@ -1304,6 +1312,7 @@ typedef struct {
     int altered;        /* an ALTER names it, so its GO TO is compiled indirect */
     int alter_to;       /* the target that GO TO had when the program was written */
     int segno;          /* the segment-number of its section, 0 when none */
+    int card;           /* the card its name is on, for READY TRACE */
 } Para;
 
 /* A declarative section and what calls it. General rule 1 on IV-32: the
@@ -1455,6 +1464,10 @@ static int nmerge, use_merge;
  * from elsewhere first puts that segment's altered GO TOs back as written.
  * Measured on IKFCBL00 with a real overlay link (seglimit). */
 static int cur_segno, use_segs, gen_segno;
+
+/* IBM's debugging and extension statements from ANS COBOL (IKFCBL00), each
+ * measured there: EXHIBIT, TRANSFORM, ON, READY/RESET TRACE and NOTE. */
+static int use_exhibit, use_trace, use_transform;
 
 static int need_sym(const char *n)
 {
@@ -4069,11 +4082,12 @@ static int starts_statement(void)
 {
     static const char *verbs[] = {
         "MOVE", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "COMPUTE", "IF",
-        "ELSE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
+        "ELSE", "OTHERWISE", "DISPLAY", "PERFORM", "EXIT", "STOP", "GO", "GOBACK",
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
         "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT", "EXAMINE",
         "SORT", "RELEASE", "RETURN", "MERGE",
+        "NOTE", "EXHIBIT", "TRANSFORM", "READY", "RESET",
         "STRING", "UNSTRING", "CANCEL", "SUPPRESS", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
@@ -4789,6 +4803,196 @@ static void parse_one_statement(void)
     tod_hit = saved;
 }
 
+
+/* ---- IBM extensions: NOTE, EXHIBIT, TRANSFORM, ON, READY/RESET TRACE ----
+ * All five are IBM ANS COBOL (IKFCBL00) statements, not COBOL-74; each was
+ * measured on TK5 before it was written, and tests/ibmext holds IBM's output. */
+
+/* NOTE is commentary read from the raw text, not the tokenizer: a comment
+ * may hold an apostrophe that would start a literal. As the first sentence
+ * of a paragraph it makes the whole paragraph commentary, up to the next
+ * procedure-name in area A (IKFCBL00 compiles nothing of it); anywhere else
+ * it runs to the end of its sentence. The paragraph's own name stays, so
+ * READY TRACE still reports it, as IBM's does. */
+static void note_skip(int whole_paragraph)
+{
+    if (whole_paragraph) {
+        if (src.p) src.p += strlen(src.p);
+        for (;;) {
+            if (!src_fill(&src)) break;
+            size_t n = strlen(src.buf);
+            int a = 0;
+            for (size_t i = 7; i < 11 && i < n; i++)
+                if (!isspace((unsigned char)src.buf[i])) a = 1;
+            if (a) break;
+            src.p += strlen(src.p);
+        }
+    } else {
+        for (;;) {
+            if (!src.p || !*src.p) { if (!src_fill(&src)) break; continue; }
+            char c = *src.p++;
+            if (c == '.' && (*src.p == 0 || isspace((unsigned char)*src.p))) break;
+        }
+    }
+    next();
+    at_period = 1;
+}
+
+/* The text EXHIBIT NAMED prints for an operand: its name, a qualifier as
+ * /name (IBM prints V OF G as V/G), and its subscripts in parentheses. */
+static void exhibit_name(const char *name, char q[][31], int nq, Node *sub, char *out, size_t on)
+{
+    int k = snprintf(out, on, "%s", name);
+    for (int i = 0; i < nq; i++) k += snprintf(out + k, on - k, "/%s", q[i]);
+    if (sub) {
+        k += snprintf(out + k, on - k, "(");
+        for (Node *n = sub; n; n = n->next) {
+            if (n->kind == N_SYM) k += snprintf(out + k, on - k, "%s", syms[n->sym].name);
+            else if (n->kind == N_LIT) k += snprintf(out + k, on - k, "%s", n->lit);
+            else die("EXHIBIT NAMED of a subscript that is not a name or an integer is not implemented");
+            if (n->next) k += snprintf(out + k, on - k, ",");
+        }
+        snprintf(out + k, on - k, ")");
+    }
+}
+
+static int exhibit_width(int sym, Node *sub)
+{
+    const Sym *sy = &syms[sym];
+    if (display_converts(sy)) return sy->digits + (IS_FLOAT(sy) ? 6 : 0);
+    return sub ? sy->elem : sy->bytes;
+}
+
+static void parse_exhibit(void)
+{
+    next();
+    int mode = 0;                        /* 1 NAMED, 2 CHANGED */
+    if (is("CHANGED")) { mode |= 2; next(); }
+    if (is("NAMED")) { mode |= 1; next(); }
+    /* Neither: IKFCBL00 warns (IKF4061I-W) and prints the values, all of
+     * them, every time -- measured. */
+    Stmt *st = new_stmt(ST_EXHIBIT);
+    st->src = mode;
+    int width = 0;
+    while (!tok.eof && !is(".") && !(st->ndop > 0 && starts_statement())) {
+        dop_add(st);
+        Dop *d = &st->dop[st->ndop];
+        if (tok.literal) {
+            d->sym = -1; d->lit = pool_str(tok.text, tok.len); d->litlen = tok.len;
+            width += tok.len + 1;
+            next();
+        } else {
+            char name[31], q[MAXQUAL][31], txt[120];
+            if (strlen(tok.text) > 30) die("data name too long");
+            strcpy(name, tok.text);
+            next();
+            int nq = consume_quals(q);
+            d->sym = resolve_sym(name, q, nq);
+            d->sub = opt_subscript();
+            const Sym *sy = &syms[d->sym];
+            if (sy->is_88) die("EXHIBIT of a condition name is meaningless");
+            if (sy->is_index) die("EXHIBIT of an index item is not implemented");
+            if (display_converts(sy) && sy->occ_depth && !d->sub) die("EXHIBIT of a COMP table item needs its subscripts");
+            exhibit_name(name, q, nq, d->sub, txt, sizeof txt);
+            d->lit = pool_str(txt, (int)strlen(txt));
+            d->litlen = (int)strlen(txt);
+            d->part_off = 0;
+            d->part_len = exhibit_width(d->sym, d->sub);
+            width += d->part_len + 1 + ((mode & 1) ? d->litlen + 3 : 0);
+        }
+        st->ndop++;
+    }
+    if (!st->ndop) die("EXHIBIT with no operands");
+    if (width > 121) die("EXHIBIT of more than 120 characters on one line is not implemented");
+    use_exhibit = 1;
+    eat_period();
+}
+
+/* TRANSFORM identifier FROM x TO y: every character of the item that appears
+ * in x becomes the character in the same place in y, or y's one character
+ * when it has only one. A character named twice in x takes the later
+ * mapping (measured: 'ABA' TO 'XYZ' maps A to Z). */
+static void transform_operand(Dop *d)
+{
+    int fg = tok.literal ? FIG_NONE : fig_code(tok.text);
+    d->sub = NULL;
+    if (tok.literal) {
+        d->sym = -1; d->lit = pool_str(tok.text, tok.len); d->litlen = tok.len; d->part_off = 0;
+        next();
+    } else if (fg != FIG_NONE && fg != FIG_ALL) {
+        d->sym = -1; d->lit = ""; d->litlen = 1; d->part_off = fg;
+        next();
+    } else {
+        d->sym = consume_sym();
+        d->sub = opt_subscript();
+        const Sym *sy = &syms[d->sym];
+        if (sy->usage != U_DISPLAY) die("TRANSFORM operands must be DISPLAY items or literals");
+        d->litlen = d->sub ? sy->elem : sy->bytes;
+        d->part_off = 0;
+    }
+}
+
+static void parse_transform(void)
+{
+    next();
+    Stmt *st = new_stmt(ST_TRANSFORM);
+    st->dst = consume_sym();
+    st->dsub = opt_subscript();
+    const Sym *t = &syms[st->dst];
+    if (t->usage != U_DISPLAY || t->is_88) die("TRANSFORM needs a DISPLAY item");
+    if (is("CHARACTERS")) next();
+    expect("FROM");
+    dop_add(st); transform_operand(&st->dop[0]); st->ndop = 1;
+    expect("TO");
+    dop_add(st); transform_operand(&st->dop[1]); st->ndop = 2;
+    int nf = st->dop[0].litlen, nt = st->dop[1].litlen;
+    if (nf < 1 || nf > 256) die("TRANSFORM: FROM must be 1 to 256 characters");
+    if (nt != nf && nt != 1)
+        die("TRANSFORM: TO must be as long as FROM, or a single character");
+    use_transform = 1;
+    eat_period();
+}
+
+/* ON integer-1 [AND EVERY integer-2] [UNTIL integer-3] statements
+ * [ELSE|OTHERWISE statements]. A count per statement; measured rule: the
+ * first time is integer-1 whatever UNTIL says, then every integer-2 while the
+ * count is below integer-3; UNTIL without EVERY means every time; neither
+ * means once. The integers are literals (IKF4064I-E for an identifier). */
+static int on_integer(void)
+{
+    if (tok.literal || !is_numeric_literal(tok.text)) die("ON needs a positive integer literal");
+    int v = 0;
+    for (int k = 0; k < tok.len; k++) {
+        if (!isdigit((unsigned char)tok.text[k])) die("ON needs a positive integer literal");
+        v = v * 10 + (tok.text[k] - '0');
+        if (v > 99999999) die("ON: the integer is too large");
+    }
+    if (v < 1) die("ON needs a positive integer literal");
+    next();
+    return v;
+}
+
+static void parse_on(void)
+{
+    next();
+    Stmt *t = new_stmt(ST_ONTEST);
+    int ti = (int)(t - stmts);
+    int i1 = on_integer(), ev = 0, un = 0;
+    if (is("AND")) { next(); expect("EVERY"); ev = on_integer(); }
+    if (is("UNTIL")) { next(); un = on_integer(); if (!ev) ev = 1; }
+    int lelse = ++nlabel;
+    stmts[ti].lab1 = i1; stmts[ti].lab2 = ev; stmts[ti].lab3 = un; stmts[ti].dst = lelse;
+    parse_stmt_list(1);
+    if (is("ELSE") || is("OTHERWISE")) {
+        next();
+        int lend = ++nlabel;
+        new_stmt(ST_BRANCH)->dst = lend;
+        new_stmt(ST_LABEL)->dst = lelse;
+        parse_stmt_list(1);
+        new_stmt(ST_LABEL)->dst = lend;
+    } else new_stmt(ST_LABEL)->dst = lelse;
+}
+
 static void parse_one_statement_body(void)
 {
     if (is("DISPLAY")) {
@@ -4853,6 +5057,22 @@ static void parse_one_statement_body(void)
         return;
     }
 
+    if (is("NOTE")) {
+        note_skip(nstmt > 0 && stmts[nstmt - 1].op == ST_PARA);
+        return;
+    }
+    if (is("EXHIBIT")) { parse_exhibit(); return; }
+    if (is("TRANSFORM")) { parse_transform(); return; }
+    if (is("ON")) { parse_on(); return; }
+    if (is("READY") || is("RESET")) {
+        int on = is("READY");
+        next();
+        expect("TRACE");
+        new_stmt(ST_TRACE)->src = on;
+        use_trace = 1;
+        eat_period();
+        return;
+    }
     if (is("IF")) {
         next();
         Cond *c = parse_cond();
@@ -6268,6 +6488,7 @@ static void parse_one_statement_body(void)
 
     if (tok.text[0] && !tok.literal) {
         char nm[31];
+        int nmcard = tok.card;
         snprintf(nm, sizeof nm, "%s", tok.text);
         next();
         int a_section = 0;
@@ -6301,6 +6522,7 @@ static void parse_one_statement_body(void)
             paras[npara].is_range_end = 0;
             paras[npara].is_section = a_section;
             paras[npara].segno = cur_segno;
+            paras[npara].card = nmcard;
             Stmt *st = new_stmt(ST_PARA);
             st->para = pool_str(nm, (int)strlen(nm));
             st->dst = npara++;
@@ -6333,7 +6555,7 @@ static void parse_sentence(void)
 static void parse_stmt_list(int allow_else)
 {
     while (!tok.eof && !at_period) {
-        if (allow_else && is("ELSE")) return;
+        if (allow_else && (is("ELSE") || is("OTHERWISE"))) return;
         /* WHEN ends a SEARCH's AT END clause. Nothing else begins with it, so
          * stopping here unconditionally is safe. */
         if (is("WHEN")) return;
@@ -11537,7 +11759,8 @@ static void generate(void)
     int has_display = 0;
     resolve_file_use();
     for (int i = 0; i < nstmt; i++)
-        if (stmts[i].op == ST_DISPLAY_LIT || stmts[i].op == ST_DISPLAY_ID || stmts[i].tod_refresh)
+        if (stmts[i].op == ST_DISPLAY_LIT || stmts[i].op == ST_DISPLAY_ID || stmts[i].tod_refresh
+            || stmts[i].op == ST_EXHIBIT || stmts[i].op == ST_TRACE)
             has_display = 1;            /* TIME-OF-DAY needs the runtime's COBADT */
 
     asm_comment("---------------------------------------------------------------");
@@ -11762,6 +11985,23 @@ static void generate(void)
                     asm_line(sk, "DS", "0H", "");
                 }
                 snprintf(b, sizeof b, "SEGCUR,%d", sg); asm_line("", "MVI", b, "the segment control is in");
+            }
+            if (use_trace) {
+                /* READY TRACE: each procedure-name reached prints its card
+                 * number, alone on a line, as IKFCBL00's does. */
+                char sk[16], num[16];
+                snprintf(sk, sizeof sk, "L%04d", ++genlabel);
+                int n = snprintf(num, sizeof num, "%d", paras[st->dst].card);
+                asm_line("", "CLI", "TRCFLG,1", "READY TRACE in effect?");
+                asm_line("", "BNE", sk, "");
+                snprintf(b, sizeof b, "DSPBUF(%d),%s", n, intern_str(num, n, n));
+                asm_line("", "MVC", b, "the card number");
+                snprintf(b, sizeof b, "1,%d", n); asm_line("", "LA", b, "");
+                asm_line("", "STH", "1,EXLEN", "");
+                asm_line("", "LA", "1,EXPARM", "");
+                asm_line("", "L", "15,VDISP", "");
+                asm_line("", "BALR", "14,15", "");
+                asm_line(sk, "DS", "0H", "");
             }
             break;
         }
@@ -13850,6 +14090,226 @@ static void generate(void)
         }
         case ST_DISPLAY_ID:
             break;
+        case ST_TRACE:
+            asm_comment(st->src ? " READY TRACE" : " RESET TRACE");
+            asm_line("", "MVI", st->src ? "TRCFLG,1" : "TRCFLG,0", "");
+            break;
+        case ST_ONTEST: {
+            /* ON: this statement's count, then the measured schedule. */
+            char c[16], k[16], fire[16], els[16];
+            snprintf(c, sizeof c, "ONC%04d", i);
+            snprintf(k, sizeof k, "ONK%04d", i);
+            snprintf(fire, sizeof fire, "L%04d", ++genlabel);
+            snprintf(els, sizeof els, "L%04d", st->dst);
+            if (st->lab3) snprintf(b, sizeof b, " ON %d AND EVERY %d UNTIL %d", st->lab1, st->lab2, st->lab3);
+            else if (st->lab2) snprintf(b, sizeof b, " ON %d AND EVERY %d", st->lab1, st->lab2);
+            else snprintf(b, sizeof b, " ON %d", st->lab1);
+            asm_comment(b);
+            snprintf(b, sizeof b, "15,%s", c); asm_line("", "L", b, "");
+            asm_line("", "LA", "15,1(,15)", "");
+            snprintf(b, sizeof b, "15,%s", c); asm_line("", "ST", b, "counted");
+            snprintf(b, sizeof b, "15,%s", k); asm_line("", "C", b, "the first time");
+            asm_line("", "BE", fire, "");
+            if (!st->lab2) { asm_line("", "B", els, "only once"); }
+            else {
+                asm_line("", "BL", els, "not yet");
+                if (st->lab3) {
+                    snprintf(b, sizeof b, "15,%s+8", k); asm_line("", "C", b, "UNTIL");
+                    asm_line("", "BNL", els, "");
+                }
+                if (st->lab2 > 1) {
+                    asm_line("", "LR", "1,15", "");
+                    snprintf(b, sizeof b, "1,%s", k); asm_line("", "S", b, "since the first");
+                    asm_line("", "SR", "0,0", "");
+                    snprintf(b, sizeof b, "0,%s+4", k); asm_line("", "D", b, "EVERY");
+                    asm_line("", "LTR", "0,0", "");
+                    asm_line("", "BNZ", els, "");
+                }
+            }
+            asm_line(fire, "DS", "0H", "");
+            reset_bases();
+            break;
+        }
+        case ST_TRANSFORM: {
+            /* A translate table built here each time from the identity:
+             * FROM's characters indexed, TO's stored, then TR. */
+            const Sym *t = &syms[st->dst];
+            char lp[16], fr[64];
+            snprintf(b, sizeof b, " TRANSFORM %s", t->name);
+            asm_comment(b);
+            asm_line("", "MVC", "TRWK(256),TRID", "the identity");
+            for (int k = 0; k < 2; k++) {
+                const Dop *d = &st->dop[k];
+                int reg = k ? 7 : 6;
+                if (d->sym >= 0) {
+                    need_sym_base(&syms[d->sym]);
+                    field_ref_m(&syms[d->sym], d->sub, FR_RX, d->litlen, reg, fr, sizeof fr);
+                    snprintf(b, sizeof b, "%d,%s", reg, fr);
+                } else if (d->lit[0] || !d->part_off) {
+                    snprintf(b, sizeof b, "%d,%s", reg, intern_str(d->lit, d->litlen, d->litlen));
+                } else {
+                    snprintf(b, sizeof b, "%d,TF%04d%c", reg, i, k ? 'T' : 'F');
+                }
+                asm_line("", "LA", b, k ? "TO" : "FROM");
+            }
+            snprintf(b, sizeof b, "15,%d", st->dop[0].litlen); asm_line("", "LA", b, "");
+            snprintf(lp, sizeof lp, "L%04d", ++genlabel);
+            asm_line(lp, "SR", "1,1", "");
+            asm_line("", "IC", "1,0(,6)", "a FROM character");
+            asm_line("", "LA", "1,TRWK(1)", "its place in the table");
+            asm_line("", "MVC", "0(1,1),0(7)", "gets the TO character");
+            asm_line("", "LA", "6,1(,6)", "");
+            if (st->dop[1].litlen > 1) asm_line("", "LA", "7,1(,7)", "");
+            snprintf(b, sizeof b, "15,%s", lp); asm_line("", "BCT", b, "");
+            int n = st->dsub ? t->elem : t->bytes;
+            need_sym_base(t);
+            if (st->dsub) {
+                field_ref_m(t, st->dsub, FR_RX, t->elem, 6, fr, sizeof fr);
+                snprintf(b, sizeof b, "6,%s", fr); asm_line("", "LA", b, "the element");
+            }
+            for (int off = 0; off < n; off += 256) {
+                int m = n - off < 256 ? n - off : 256;
+                if (st->dsub) snprintf(b, sizeof b, "%d(%d,6),TRWK", off, m);
+                else snprintf(b, sizeof b, "%s+%d(%d),TRWK", t->label, off, m);
+                asm_line("", "TR", b, "");
+            }
+            break;
+        }
+        case ST_EXHIBIT: {
+            /* EXHIBIT: a line built with a cursor, EXCUR, since CHANGED
+             * leaves pieces out at run time; then the DISPLAY runtime.
+             * Measured forms: NAMED prints NAME = value; CHANGED prints the
+             * changed values and blanks in place of the others; CHANGED
+             * NAMED prints only the changed ones; literals always print;
+             * pieces are one space apart; the first execution counts as a
+             * change for everything; each statement keeps its own copy. */
+            int named = st->src & 1, changed = (st->src & 2) != 0;
+            char ef[16], done[16], fr[64];
+            snprintf(ef, sizeof ef, "EF%04d", i);
+            asm_comment(changed ? (named ? " EXHIBIT CHANGED NAMED" : " EXHIBIT CHANGED")
+                                : (named ? " EXHIBIT NAMED" : " EXHIBIT"));
+            asm_line("", "LA", "1,DSPBUF", "");
+            asm_line("", "ST", "1,EXCUR", "the line so far");
+            for (int k = 0; k < st->ndop; k++) {
+                const Dop *d = &st->dop[k];
+                int dyn_sep = changed && named;
+                /* the separator: static except for CHANGED NAMED, where it
+                 * depends on whether anything is on the line yet */
+                if (dyn_sep) {
+                    char nosep[16];
+                    snprintf(nosep, sizeof nosep, "L%04d", ++genlabel);
+                    asm_line("", "L", "1,EXCUR", "");
+                    asm_line("", "LA", "15,DSPBUF", "");
+                    asm_line("", "CR", "1,15", "anything yet?");
+                    asm_line("", "BE", nosep, "");
+                    asm_line("", "MVI", "0(1),C' '", "");
+                    asm_line("", "LA", "1,1(,1)", "");
+                    asm_line("", "ST", "1,EXCUR", "");
+                    asm_line(nosep, "DS", "0H", "");
+                    reset_bases();
+                } else if (k) {
+                    asm_line("", "L", "1,EXCUR", "");
+                    asm_line("", "MVI", "0(1),C' '", "");
+                    asm_line("", "LA", "1,1(,1)", "");
+                    asm_line("", "ST", "1,EXCUR", "");
+                }
+                if (d->sym < 0) {
+                    asm_line("", "L", "1,EXCUR", "");
+                    snprintf(b, sizeof b, "0(%d,1),%s", d->litlen, intern_str(d->lit, d->litlen, d->litlen));
+                    asm_line("", "MVC", b, "a literal");
+                    snprintf(b, sizeof b, "1,%d(,1)", d->litlen); asm_line("", "LA", b, "");
+                    asm_line("", "ST", "1,EXCUR", "");
+                    continue;
+                }
+                const Sym *sy = &syms[d->sym];
+                int raw = d->sub ? sy->elem : sy->bytes;
+                char save[16], chg[16], nxt[16];
+                snprintf(save, sizeof save, "E%04dK%d", i, k);
+                snprintf(chg, sizeof chg, "L%04d", ++genlabel);
+                snprintf(nxt, sizeof nxt, "L%04d", ++genlabel);
+                if (changed) {
+                    if (raw > 256) die("EXHIBIT CHANGED of an item over 256 bytes is not implemented");
+                    snprintf(b, sizeof b, "%s,0", ef); asm_line("", "CLI", b, "the first time?");
+                    asm_line("", "BE", chg, "");
+                    need_sym_base(sy);
+                    if (d->sub) {
+                        field_ref_m(sy, d->sub, FR_RX, sy->elem, 6, fr, sizeof fr);
+                        snprintf(b, sizeof b, "6,%s", fr); asm_line("", "LA", b, "");
+                        snprintf(b, sizeof b, "%s(%d),0(6)", save, raw);
+                    } else snprintf(b, sizeof b, "%s(%d),%s", save, raw, sy->label);
+                    asm_line("", "CLC", b, "changed since this EXHIBIT last ran?");
+                    asm_line("", "BNE", chg, "");
+                    if (!named) {
+                        asm_line("", "L", "1,EXCUR", "");
+                        snprintf(b, sizeof b, "0(%d,1),%s", d->part_len, intern_str("", 0, d->part_len));
+                        asm_line("", "MVC", b, "unchanged: blanks in its place");
+                        snprintf(b, sizeof b, "1,%d(,1)", d->part_len); asm_line("", "LA", b, "");
+                        asm_line("", "ST", "1,EXCUR", "");
+                    } else {
+                        /* unchanged under NAMED: nothing, and take back the
+                         * separator just written */
+                        char keep[16];
+                        snprintf(keep, sizeof keep, "L%04d", ++genlabel);
+                        asm_line("", "L", "1,EXCUR", "");
+                        asm_line("", "LA", "15,DSPBUF", "");
+                        asm_line("", "CR", "1,15", "");
+                        asm_line("", "BE", keep, "");
+                        asm_line("", "BCTR", "1,0", "");
+                        asm_line("", "ST", "1,EXCUR", "");
+                        asm_line(keep, "DS", "0H", "");
+                    }
+                    asm_line("", "B", nxt, "");
+                    asm_line(chg, "DS", "0H", "");
+                    reset_bases();
+                    need_sym_base(sy);
+                    if (d->sub) {
+                        field_ref_m(sy, d->sub, FR_RX, sy->elem, 6, fr, sizeof fr);
+                        snprintf(b, sizeof b, "6,%s", fr); asm_line("", "LA", b, "");
+                        snprintf(b, sizeof b, "%s(%d),0(6)", save, raw);
+                    } else snprintf(b, sizeof b, "%s(%d),%s", save, raw, sy->label);
+                    asm_line("", "MVC", b, "remembered for next time");
+                }
+                if (named) {
+                    char nm[140];
+                    int nl = snprintf(nm, sizeof nm, "%s = ", d->lit);
+                    asm_line("", "L", "1,EXCUR", "");
+                    snprintf(b, sizeof b, "0(%d,1),%s", nl, intern_str(nm, nl, nl));
+                    asm_line("", "MVC", b, "the name");
+                    snprintf(b, sizeof b, "1,%d(,1)", nl); asm_line("", "LA", b, "");
+                    asm_line("", "ST", "1,EXCUR", "");
+                }
+                need_sym_base(sy);
+                if (display_converts(sy)) {
+                    gen_display_digits(sy, d->sub);
+                    asm_line("", "L", "1,EXCUR", "");
+                    snprintf(b, sizeof b, "0(%d,1),ZWK", d->part_len);
+                } else {
+                    asm_line("", "L", "1,EXCUR", "");
+                    if (d->sub) {
+                        field_ref_m(sy, d->sub, FR_RX, sy->elem, 6, fr, sizeof fr);
+                        snprintf(b, sizeof b, "6,%s", fr); asm_line("", "LA", b, "the element");
+                        snprintf(b, sizeof b, "0(%d,1),0(6)", d->part_len);
+                    } else snprintf(b, sizeof b, "0(%d,1),%s", d->part_len, sy->label);
+                }
+                asm_line("", "MVC", b, "the value");
+                snprintf(b, sizeof b, "1,%d(,1)", d->part_len); asm_line("", "LA", b, "");
+                asm_line("", "ST", "1,EXCUR", "");
+                asm_line(nxt, "DS", "0H", "");
+                reset_bases();
+            }
+            if (changed) { snprintf(b, sizeof b, "%s,1", ef); asm_line("", "MVI", b, "not the first time again"); }
+            snprintf(done, sizeof done, "L%04d", ++genlabel);
+            asm_line("", "L", "1,EXCUR", "");
+            asm_line("", "LA", "15,DSPBUF", "");
+            asm_line("", "SR", "1,15", "the line's length");
+            asm_line("", "STH", "1,EXLEN", "");
+            asm_line("", "LA", "1,EXPARM", "");
+            asm_line("", "L", "15,VDISP", "");
+            asm_line("", "BALR", "14,15", "");
+            (void)done;
+            break;
+        }
+
         case ST_COMPUTE: {
             const Sym *d = &syms[st->dst];
             snprintf(b, sizeof b, " COMPUTE %s%s = ...%s", d->name,
@@ -14449,6 +14909,50 @@ static void generate(void)
             asm_line(plab, "DC", "A(DSPBUF)", "");
             snprintf(b, sizeof b, "X'80',AL3(%s)", llab); asm_line("", "DC", b, "last parameter");
             snprintf(b, sizeof b, "H'%d'", st->litlen); asm_line(llab, "DC", b, "");
+        }
+    }
+    if (use_exhibit || use_trace) {
+        asm_line("EXPARM", "DC", "A(DSPBUF)", "EXHIBIT and TRACE lines");
+        asm_line("", "DC", "X'80',AL3(EXLEN)", "");
+        asm_line("EXLEN", "DS", "H", "");
+        asm_line("EXCUR", "DS", "A", "the EXHIBIT line's cursor");
+    }
+    if (use_trace) asm_line("TRCFLG", "DC", "X'00'", "READY TRACE in effect");
+    for (int i = 0; i < nstmt; i++) {
+        Stmt *st = &stmts[i];
+        char lb[16];
+        if (st->op == ST_EXHIBIT && (st->src & 2)) {
+            snprintf(lb, sizeof lb, "EF%04d", i); asm_line(lb, "DC", "X'00'", "EXHIBIT CHANGED: run before");
+            for (int k = 0; k < st->ndop; k++) {
+                if (st->dop[k].sym < 0) continue;
+                const Sym *sy = &syms[st->dop[k].sym];
+                snprintf(lb, sizeof lb, "E%04dK%d", i, k);
+                snprintf(b, sizeof b, "XL%d", st->dop[k].sub ? sy->elem : sy->bytes);
+                asm_line(lb, "DS", b, "its value last time");
+            }
+        }
+        if (st->op == ST_ONTEST) {
+            snprintf(lb, sizeof lb, "ONC%04d", i); asm_line(lb, "DC", "F'0'", "ON: times reached");
+            snprintf(lb, sizeof lb, "ONK%04d", i);
+            snprintf(b, sizeof b, "F'%d',F'%d',F'%d'", st->lab1, st->lab2, st->lab3);
+            asm_line(lb, "DC", b, "first, EVERY, UNTIL");
+        }
+        if (st->op == ST_TRANSFORM) {
+            for (int k = 0; k < 2; k++) {
+                const Dop *d = &st->dop[k];
+                if (d->sym >= 0 || d->lit[0] || !d->part_off) continue;
+                snprintf(lb, sizeof lb, "TF%04d%c", i, k ? 'T' : 'F');
+                asm_line(lb, "DC", fig_byte(d->part_off), "a figurative constant");
+            }
+        }
+    }
+    if (use_transform) {
+        asm_line("TRWK", "DS", "XL256", "TRANSFORM's table");
+        for (int r = 0; r < 16; r++) {
+            char hx[40]; int q = 0;
+            for (int c = 0; c < 16; c++) q += snprintf(hx + q, sizeof hx - q, "%02X", r * 16 + c);
+            snprintf(b, sizeof b, "XL16'%s'", hx);
+            asm_line(r ? "" : "TRID", "DC", b, r ? "" : "the identity, for TRANSFORM");
         }
     }
 

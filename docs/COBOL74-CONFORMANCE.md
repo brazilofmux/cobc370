@@ -1209,6 +1209,39 @@ the tests' expected output is IKFCBL00's own.
   refusal asked for a MOVE first; real programs do not.
 - `GO TO ... DEPENDING ON` with any number of procedure-names (`godep10`).
   Eight was this compiler's own limit, not IBM's or the standard's.
+- IKFCBL00's own statements, added 2026-09-26 under the rule that what IBM
+  ANS COBOL compiles, cobc370 should (`ibmext1`, `ibmext2`, `ibmext3`, each
+  run under IKFCBL00 first). Their manuals leave the edges vague, so every
+  rule below is measured, and several would have been guessed wrong:
+  - `NOTE` as the first sentence of a paragraph makes the whole paragraph
+    commentary, up to the next procedure-name in area A; anywhere else it
+    runs to the end of its sentence. It is read as raw text, so commentary
+    may hold an apostrophe. The paragraph's name stays, and `TRACE` reports
+    it.
+  - `EXHIBIT NAMED` prints `NAME = value` pieces one space apart, a literal
+    as itself; a subscripted name as `T(I)` and a qualified one with IBM's
+    slash, `V/G` for `V OF G`. Values print as `DISPLAY` prints them.
+    `EXHIBIT CHANGED` prints changed values and blanks in place of the
+    others; `CHANGED NAMED` prints only the changed ones. Literals always
+    print, the line prints even when nothing changed, the first execution
+    counts as a change, and each statement keeps its own copy of the last
+    values. With neither word IKFCBL00 warns (IKF4061I-W) and prints every
+    value every time, which is what cobc370 does.
+  - `TRANSFORM id FROM x TO y` maps each character of x to the one in the
+    same place in y, or to y's one character; a character named twice takes
+    the later mapping. Literals, figurative constants and identifiers all
+    work; a TO of another length is refused.
+  - `ON n [AND EVERY m] [UNTIL u] ... [ELSE|OTHERWISE ...]` keeps a count
+    per statement. The first time is n whatever UNTIL says; after that
+    every m while the count is below u; UNTIL alone means every time;
+    neither means once. The integers are literals (IKF4064I-E for an
+    identifier; refused here too).
+  - `READY TRACE` and `RESET TRACE`: while tracing, each procedure-name
+    reached prints its card number alone on a line. Card numbers are IBM's:
+    every line read counts, comment and blank lines and copybook lines
+    included.
+  Not IKFCBL00, so refused: `WHEN-COMPILED` (IKF3001I-E, it came with
+  OS/VS COBOL) and `COMP-4` (IKF1037I-E).
 
 ### What COBXREF found
 

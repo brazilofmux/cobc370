@@ -1,0 +1,19 @@
+<1
+A 00
+<2
+A LIT 00
+<3
+A = A LIT I = 00
+<4
+<1
+A 00
+<2
+  LIT
+<3
+LIT
+<4
+T(I) = P2 V/G = 7 V/H = 8
+T5 QQQQCC
+T6 ZZYYCC
+34
+END
