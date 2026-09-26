@@ -1186,12 +1186,15 @@ the tests that hold it:
   left owing start over at every OPEN, IV-15 (`linreopn`). `MOVE SPACES` to
   an item longer than 256 bytes was refused; it propagates in further `MVC`s.
 
-Found by the port sweep after all that: the module cc370 builds gets
-negative 64-bit arithmetic wrong -- on TK5 the compiler refused `-1 ** 1`
-as "over eighteen digits" while the host folded it. The literal fold now
-works on magnitudes and puts the sign back at the end, so nothing in the
-compiler depends on a signed `long long` being negative; that is the only
-64-bit arithmetic in it.
+Found by the port sweep after all that: on TK5 the compiler refused
+`-1 ** 1` as "over eighteen digits" while the host folded it. A C probe
+run on the guest put it on cc370 emitting `SLDA`, the sign-preserving
+arithmetic shift, for a 64-bit shift left (mvslovers/cc370#468): the
+compiler's own 64-bit millicode recombined a product's halves with such a
+shift and lost bit 63 of every negative product. The millicode now joins
+the halves through a union, and the literal fold works in decimal digits
+with no 64-bit arithmetic at all; cc370's runtime has no 64-bit divide
+either, so none is used.
 
 Not done: single-pass multi-operand `INSPECT` (#32), `VALUE` in an `OCCURS`
 (#34), and the notes in #39. `OCCURS DEPENDING ON` in a file record is still
