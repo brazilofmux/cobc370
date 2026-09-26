@@ -6073,7 +6073,7 @@ static void parse_one_statement_body(void)
 
     if (is("GOBACK")) {                 /* what the corpus uses, not STOP RUN */
         next();
-        new_stmt(ST_STOP);
+        Stmt *st = new_stmt(ST_STOP); st->src = 1;   /* back to the caller */
         eat_period();
         return;
     }
@@ -6082,7 +6082,7 @@ static void parse_one_statement_body(void)
         next();
         if (!is("RUN")) die("STOP literal is not implemented yet");
         next();
-        new_stmt(ST_STOP);
+        Stmt *st = new_stmt(ST_STOP); st->src = 0;   /* the run unit ends */
         eat_period();
         return;
     }
@@ -11300,12 +11300,16 @@ static void resolve_file_use(void)
 /* STOP RUN, or GOBACK for a subprogram: the epilogue. Also what falling
  * off the end of the last paragraph does (#39): before, control ran on into
  * the constants region. */
-static void gen_stop_run(int has_display)
+/* goback: GOBACK or EXIT PROGRAM in a program that may be called again,
+ * which leaves the runtime's SYSOUT open for the caller. STOP RUN closes
+ * it whatever the program is: one compiled with PROCEDURE DIVISION USING
+ * may be the job step itself, taking the EXEC PARM that way, and its
+ * output must be complete when it returns to MVS. A caller that carries on
+ * after a subprogram's STOP RUN reopens SYSOUT on its next DISPLAY. */
+static void gen_stop_run(int has_display, int goback)
 {
-    asm_comment(is_subprogram ? " GOBACK to the caller" : " STOP RUN");
-    /* A subprogram must not close the runtime's SYSOUT: the caller may
-     * still be using it, and control is coming back here again. */
-    if (has_display && !is_subprogram) {
+    asm_comment(is_subprogram && goback ? " GOBACK to the caller" : " STOP RUN");
+    if (has_display && !(is_subprogram && goback)) {
         asm_line("", "L", "15,VTERM", "close anything the runtime opened");
         asm_line("", "BALR", "14,15", "");
     }
@@ -13376,7 +13380,7 @@ static void generate(void)
             asm_line("", "BR", "14", "return to caller");
             break;
         case ST_STOP:
-            gen_stop_run(has_display);
+            gen_stop_run(has_display, st->src == 1);
             break;
         case ST_DISPLAY_LIT: {
             int off = 0;
@@ -13836,7 +13840,7 @@ static void generate(void)
         asm_line(f, "DS", "0H", "fall-through when not performed");
     }
     asm_comment(" end of the Procedure Division: an implicit STOP RUN");
-    gen_stop_run(has_display);
+    gen_stop_run(has_display, is_subprogram);
 
     /* ---- the constants region: everything from here on is based on R11
      * and R10, set once in the prologue. Code here -- the sort exits, the
