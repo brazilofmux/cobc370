@@ -71,6 +71,11 @@ test: cobc370
 	     echo "  $$t ACCEPTED -- it should have been rejected"; exit 1; \
 	   else echo "  $$t rejected"; fi; \
 	 done
+	@echo "--- every error is reported, not only the first ---"
+	@n=$$(./cobc370 $(T)/bad-multi.cbl -o /dev/null 2>&1 | grep -c ':[0-9][0-9]*: '); \
+	 if [ "$$n" -ne 3 ]; then echo "  bad-multi: expected 3 messages, got $$n"; \
+	   ./cobc370 $(T)/bad-multi.cbl -o /dev/null; exit 1; \
+	 else echo "  bad-multi: 3 messages, then a stop"; fi
 
 # GnuCOBOL is not authoritative everywhere. DISPLAY of a signed DISPLAY item is
 # one place it diverges: -std=mvs renders PIC S9(5) VALUE 12345 as "12345+",

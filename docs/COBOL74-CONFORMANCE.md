@@ -592,6 +592,19 @@ operand, and asking `field_ref` for a source operand *with* a length produced
 `MVC ZWK(5),D0001(5)` -- two lengths, which IFOX00 reports as a relocatable
 displacement rather than as the obvious thing.
 
+### Every error, not the first
+
+Since 2026-09-26 an error inside a sentence, or inside a data entry, is
+reported and the compile goes on at the next period, so a program with
+several mistakes gets them all in one listing, the way FCOBOL's has them
+(John Pratt asked for this). The sentence or entry that failed is dropped
+and nothing is generated once anything failed; what follows may complain
+about a name the dropped entry would have declared, which every compiler's
+recovery pays for. After thirty errors it stops. Elsewhere -- the other
+divisions, resolution, code generation -- an error is still the end.
+`bad-multi` in the host test target has three mistakes and expects three
+messages.
+
 ### COMP-1 and COMP-2: IBM's floating point
 
 Not in the 1974 standard at all; IBM's, in every compiler of the line,

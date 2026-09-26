@@ -22,6 +22,7 @@
  *   cc -O2 -o cobc370 cobc370.c
  *   ./cobc370 prog.cbl -o prog.asm
  */
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -347,10 +348,37 @@ static int word_continue(Src *s)
     return 1;
 }
 
+/* An error while a sentence or a data entry is being parsed is reported and
+ * parsing goes on at the next period, so a program with several mistakes
+ * gets them all in one compile, the way FCOBOL's listing has them (John
+ * Pratt asked). The statement or entry that failed is dropped; what
+ * follows may complain about a name it would have declared, which is the
+ * price every compiler pays. Nothing is generated once anything failed.
+ * Outside those two loops -- the other divisions, resolution, code
+ * generation -- an error is still the end. */
+static jmp_buf recover_jb;
+static int recovering, nerrors;
+#define MAXERRORS 30
+
 static void die(const char *msg)
 {
     fprintf(stderr, "%s:%d: %s\n", src.name, tok.line ? tok.line : src.line, msg);
+    if (recovering) {
+        nerrors++;
+        if (nerrors < MAXERRORS) longjmp(recover_jb, 1);
+        fprintf(stderr, "%s: too many errors\n", src.name);
+    }
     exit(1);
+}
+
+static int is(const char *w);
+static void next(void);
+
+/* After an error: past the rest of the sentence or entry. */
+static void skip_to_period(void)
+{
+    while (!tok.eof && !is(".")) next();
+    if (is(".")) next();
 }
 
 /* COBOL lets a comma or semicolon stand in for a space between operands --
@@ -2493,6 +2521,16 @@ static void parse_data_division(void)
     /* CURRENT-DATE is created on first use, so a mention only in COPY text
      * still finds it, and a comment does not pay for the register. */
     while (!tok.eof && !is("PROCEDURE")) {
+        if (setjmp(recover_jb)) {
+            /* An entry's checks run once its period has gone by, with the
+             * next entry's level number in hand: then there is nothing to
+             * skip. */
+            if (!(isdigit((unsigned char)tok.text[0]) || is("FD") || is("SD") || is("WORKING-STORAGE")
+                  || is("LINKAGE") || is("FILE") || is("REPORT") || is("RD")))
+                skip_to_period();
+            continue;
+        }
+        recovering = 1;
         if (is("LINKAGE")) {
             next(); expect("SECTION"); expect(".");
             while (sp > 0) {
@@ -3341,6 +3379,7 @@ static void parse_data_division(void)
         }
     }
 
+    recovering = 0;                 /* past the entries: an error here is the end */
     /* DEPENDING ON: find the count item, and mark every group that contains
      * the table so its size is known to be a run-time quantity. Rule 5 on
      * III-2 puts the table last in its record, so nothing after it moves. */
@@ -6100,9 +6139,7 @@ static void parse_one_statement_body(void)
             return;
         }
         char m[160];
-        snprintf(m, sizeof m,
-                 "not implemented yet: '%s'. This slice supports MOVE, ADD, "
-                 "SUBTRACT, COMPUTE, IF, DISPLAY, PERFORM, EXIT and STOP RUN.", nm);
+        snprintf(m, sizeof m, "'%s' is not a verb this compiler knows, and a sentence must begin with one", nm);
         die(m);
     }
     die("unexpected token in PROCEDURE DIVISION");
@@ -6113,9 +6150,16 @@ static void parse_one_statement_body(void)
 static void parse_sentence(void)
 {
     int s0 = nstmt;
-    at_period = 0;
-    parse_stmt_list(0);
-    if (s0 < nstmt) stmts[s0].new_sentence = 1;
+    if (setjmp(recover_jb) == 0) {
+        recovering = 1;
+        at_period = 0;
+        parse_stmt_list(0);
+        if (s0 < nstmt) stmts[s0].new_sentence = 1;
+    } else {
+        nstmt = s0;                 /* the sentence that failed is dropped */
+        if (!at_period) skip_to_period();   /* unless the error came after its period */
+    }
+    recovering = 0;
 }
 
 static void parse_stmt_list(int allow_else)
@@ -14954,6 +14998,10 @@ int main(int argc, char **argv)
     parse_environment();
     parse_data_division();
     parse_procedure();
+    if (nerrors) {
+        fprintf(stderr, "%s: %d error%s; nothing generated\n", src.name, nerrors, nerrors == 1 ? "" : "s");
+        return 1;
+    }
     generate();
 
     if (out != stdout) fclose(out);
