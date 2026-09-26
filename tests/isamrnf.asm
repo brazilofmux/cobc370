@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,6 +38,14 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN INPUT DESCIDX
          OPEN  (FD000,INPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0007
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0006(2),=C'30'     FILE STATUS
+         B     L0008
+L0007    DS    0H
+         DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0006(2),=C'00'     FILE STATUS
@@ -42,8 +53,12 @@ T0000    DS    0H
          AH    0,=H'16'            ISAM's working prefix
          GETMAIN R,LV=(0)
          ST    1,DB000+12          area address into the DECB
+L0008    DS    0H
+         DROP  8
 T0001    DS    0H
 * MOVE 200 -> WS-NOMKEY
+         L     8,BL0000            base locator
+         USING WSC0000,8
          MVC   D0005(10),S0001     numeric literal as zoned digits
 T0002    DS    0H
 * READ DESCIDX
@@ -56,7 +71,9 @@ T0002    DS    0H
          L     15,FD000+88         DCBLRAN: read-write K module
          BALR  14,15
          WAIT  ECB=DB000           not CHECK, and not WAITF
-         CLC   DB000+24(2),=X'0000'  exception code set?
+         TM    DB000+24,X'FD'      an exception, other than 'overflow r
+         BNZ   L0001
+         CLI   DB000+25,X'00'
          BNE   L0001
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0001
@@ -69,12 +86,12 @@ L0001    DS    0H                  INVALID KEY
          L     8,BL0000            base locator
          USING WSC0000,8
          TM    DB000+24,X'80'      DECB exception: record not found?
-         BO    L0007
+         BO    L0009
          MVC   D0006(2),=C'30'     FILE STATUS
-         B     L0008
-L0007    DS    0H
+         B     L0010
+L0009    DS    0H
          MVC   D0006(2),=C'23'     FILE STATUS
-L0008    DS    0H
+L0010    DS    0H
          DROP  8
 T0003    DS    0H
 * DISPLAY
@@ -110,7 +127,9 @@ T0006    DS    0H
          L     15,FD000+88         DCBLRAN: read-write K module
          BALR  14,15
          WAIT  ECB=DB000           not CHECK, and not WAITF
-         CLC   DB000+24(2),=X'0000'  exception code set?
+         TM    DB000+24,X'FD'      an exception, other than 'overflow r
+         BNZ   L0003
+         CLI   DB000+25,X'00'
          BNE   L0003
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0003
@@ -123,12 +142,12 @@ L0003    DS    0H                  INVALID KEY
          L     8,BL0000            base locator
          USING WSC0000,8
          TM    DB000+24,X'80'      DECB exception: record not found?
-         BO    L0009
+         BO    L0011
          MVC   D0006(2),=C'30'     FILE STATUS
-         B     L0010
-L0009    DS    0H
+         B     L0012
+L0011    DS    0H
          MVC   D0006(2),=C'23'     FILE STATUS
-L0010    DS    0H
+L0012    DS    0H
          DROP  8
 T0007    DS    0H
 * DISPLAY
@@ -164,7 +183,9 @@ T0010    DS    0H
          L     15,FD000+88         DCBLRAN: read-write K module
          BALR  14,15
          WAIT  ECB=DB000           not CHECK, and not WAITF
-         CLC   DB000+24(2),=X'0000'  exception code set?
+         TM    DB000+24,X'FD'      an exception, other than 'overflow r
+         BNZ   L0005
+         CLI   DB000+25,X'00'
          BNE   L0005
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0005
@@ -177,12 +198,12 @@ L0005    DS    0H                  INVALID KEY
          L     8,BL0000            base locator
          USING WSC0000,8
          TM    DB000+24,X'80'      DECB exception: record not found?
-         BO    L0011
+         BO    L0013
          MVC   D0006(2),=C'30'     FILE STATUS
-         B     L0012
-L0011    DS    0H
+         B     L0014
+L0013    DS    0H
          MVC   D0006(2),=C'23'     FILE STATUS
-L0012    DS    0H
+L0014    DS    0H
          DROP  8
 T0011    DS    0H
 * DISPLAY

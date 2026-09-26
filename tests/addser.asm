@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -43,11 +46,14 @@ T0001    DS    0H
 * MOVE D -> S
          PACK  PWK1(16),D0003(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0001               not negative?
          MVI   EDWK+2,C'-'
-G0001    DS    0H
+         B     G0002
+G0001    MVI   EDWK+2,C' '
+G0002    DS    0H
          MVC   D0006(7),EDWK+2     the edited result
 T0002    DS    0H
 * DISPLAY
@@ -66,11 +72,14 @@ T0004    DS    0H
 * MOVE E -> S
          PACK  PWK1(16),D0004(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0003               not negative?
          MVI   EDWK+2,C'-'
-G0003    DS    0H
+         B     G0004
+G0003    MVI   EDWK+2,C' '
+G0004    DS    0H
          MVC   D0006(7),EDWK+2     the edited result
 T0005    DS    0H
 * DISPLAY
@@ -92,11 +101,14 @@ T0007    DS    0H
 * MOVE E -> S
          PACK  PWK1(16),D0004(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0005               not negative?
          MVI   EDWK+2,C'-'
-G0005    DS    0H
+         B     G0006
+G0005    MVI   EDWK+2,C' '
+G0006    DS    0H
          MVC   D0006(7),EDWK+2     the edited result
 T0008    DS    0H
 * DISPLAY
@@ -117,11 +129,14 @@ T0010    DS    0H
 * MOVE D -> S
          PACK  PWK1(16),D0003(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0007               not negative?
          MVI   EDWK+2,C'-'
-G0007    DS    0H
+         B     G0008
+G0007    MVI   EDWK+2,C' '
+G0008    DS    0H
          MVC   D0006(7),EDWK+2     the edited result
 T0011    DS    0H
 * DISPLAY
@@ -142,11 +157,14 @@ T0013    DS    0H
 * MOVE E -> S
          PACK  PWK1(16),D0004(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0009               not negative?
          MVI   EDWK+2,C'-'
-G0009    DS    0H
+         B     G0010
+G0009    MVI   EDWK+2,C' '
+G0010    DS    0H
          MVC   D0006(7),EDWK+2     the edited result
 T0014    DS    0H
 * DISPLAY
@@ -168,11 +186,14 @@ T0016    DS    0H
 * MOVE F -> T
          PACK  PWK1(16),D0005(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(10),M0002      load the ED pattern
          ED    EDWK(10),EDSRC
          BNM   G0011               not negative?
          MVI   EDWK+2,C'-'
-G0011    DS    0H
+         B     G0012
+G0011    MVI   EDWK+2,C' '
+G0012    DS    0H
          MVC   D0007(8),EDWK+2     the edited result
 T0017    DS    0H
 * DISPLAY
@@ -192,11 +213,14 @@ T0019    DS    0H
 * MOVE A -> S
          PACK  PWK1(16),D0000(4)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0013               not negative?
          MVI   EDWK+2,C'-'
-G0013    DS    0H
+         B     G0014
+G0013    MVI   EDWK+2,C' '
+G0014    DS    0H
          MVC   D0006(7),EDWK+2     the edited result
 T0020    DS    0H
 * DISPLAY

@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -36,6 +39,8 @@ T0000    DS    0H
 * MOVE 42 -> IN-VAL
          ZAP   PWK1(16),K0001+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -87,6 +92,8 @@ T0005    DS    0H
 * MOVE 7 -> IN-VAL
          ZAP   PWK1(16),K0002+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0001
 T0006    DS    0H

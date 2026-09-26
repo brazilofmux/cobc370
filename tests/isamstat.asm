@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,11 +38,23 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN OUTPUT DESCIDX
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0009
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0005(2),=C'30'     FILE STATUS
+         B     L0010
+L0009    DS    0H
+         DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0005(2),=C'00'     FILE STATUS
+L0010    DS    0H
+         DROP  8
 T0001    DS    0H
 * MOVE SPACES -> DESC-RECORD
+         L     8,BL0000            base locator
+         USING WSC0000,8
          LA    1,D0001             SPACES
          MVI   0(1),C' '
          MVC   1(80,1),0(1)        propagate across the item
@@ -63,17 +78,17 @@ L0001    DS    0H                  INVALID KEY
          L     8,BL0000            base locator
          USING WSC0000,8
          TM    FD000+81,X'80'      DCBEXCD2: sequence check?
-         BO    L0009
+         BO    L0011
          TM    FD000+81,X'40'      a duplicate?
-         BO    L0010
+         BO    L0012
          MVC   D0005(2),=C'30'     FILE STATUS
-         B     L0011
-L0009    DS    0H
-         MVC   D0005(2),=C'21'     FILE STATUS
-         B     L0011
-L0010    DS    0H
-         MVC   D0005(2),=C'22'     FILE STATUS
+         B     L0013
 L0011    DS    0H
+         MVC   D0005(2),=C'21'     FILE STATUS
+         B     L0013
+L0012    DS    0H
+         MVC   D0005(2),=C'22'     FILE STATUS
+L0013    DS    0H
 T0005    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0003
@@ -109,17 +124,17 @@ L0003    DS    0H                  INVALID KEY
          L     8,BL0000            base locator
          USING WSC0000,8
          TM    FD000+81,X'80'      DCBEXCD2: sequence check?
-         BO    L0012
+         BO    L0014
          TM    FD000+81,X'40'      a duplicate?
-         BO    L0013
+         BO    L0015
          MVC   D0005(2),=C'30'     FILE STATUS
-         B     L0014
-L0012    DS    0H
-         MVC   D0005(2),=C'21'     FILE STATUS
-         B     L0014
-L0013    DS    0H
-         MVC   D0005(2),=C'22'     FILE STATUS
+         B     L0016
 L0014    DS    0H
+         MVC   D0005(2),=C'21'     FILE STATUS
+         B     L0016
+L0015    DS    0H
+         MVC   D0005(2),=C'22'     FILE STATUS
+L0016    DS    0H
 T0009    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0005
@@ -155,17 +170,17 @@ L0005    DS    0H                  INVALID KEY
          L     8,BL0000            base locator
          USING WSC0000,8
          TM    FD000+81,X'80'      DCBEXCD2: sequence check?
-         BO    L0015
+         BO    L0017
          TM    FD000+81,X'40'      a duplicate?
-         BO    L0016
+         BO    L0018
          MVC   D0005(2),=C'30'     FILE STATUS
-         B     L0017
-L0015    DS    0H
-         MVC   D0005(2),=C'21'     FILE STATUS
-         B     L0017
-L0016    DS    0H
-         MVC   D0005(2),=C'22'     FILE STATUS
+         B     L0019
 L0017    DS    0H
+         MVC   D0005(2),=C'21'     FILE STATUS
+         B     L0019
+L0018    DS    0H
+         MVC   D0005(2),=C'22'     FILE STATUS
+L0019    DS    0H
 T0013    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0008
@@ -204,17 +219,17 @@ L0007    DS    0H                  INVALID KEY
          L     8,BL0000            base locator
          USING WSC0000,8
          TM    FD000+81,X'80'      DCBEXCD2: sequence check?
-         BO    L0018
+         BO    L0020
          TM    FD000+81,X'40'      a duplicate?
-         BO    L0019
+         BO    L0021
          MVC   D0005(2),=C'30'     FILE STATUS
-         B     L0020
-L0018    DS    0H
-         MVC   D0005(2),=C'21'     FILE STATUS
-         B     L0020
-L0019    DS    0H
-         MVC   D0005(2),=C'22'     FILE STATUS
+         B     L0022
 L0020    DS    0H
+         MVC   D0005(2),=C'21'     FILE STATUS
+         B     L0022
+L0021    DS    0H
+         MVC   D0005(2),=C'22'     FILE STATUS
+L0022    DS    0H
 T0018    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0012
@@ -295,7 +310,7 @@ WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=DESCIDX,DSORG=IS,MACRF=(PM),RECFM=FB,            X
-               LRECL=81,BLKSIZE=810,KEYLEN=10,RKP=1,OPTCD=L,           X
+               LRECL=81,BLKSIZE=810,KEYLEN=10,RKP=1,OPTCD=LY,CYLOFL=2, X
                SYNAD=ISYNAD
 S0001    DC    CL10'0000000200'    nonnumeric constants
 S0002    DC    CL48'TWO HUNDRED                                     '
@@ -382,28 +397,28 @@ CB0001   DC    A(B0001)            a code block's base
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F
-         DC    A(T0000-COBBEG),AL2(26,0)
-         DC    A(T0001-COBBEG),AL2(27,0)
-         DC    A(T0002-COBBEG),AL2(28,0)
-         DC    A(T0003-COBBEG),AL2(29,0)
-         DC    A(T0004-COBBEG),AL2(30,0)
-         DC    A(T0005-COBBEG),AL2(30,0)
-         DC    A(T0006-COBBEG),AL2(31,0)
-         DC    A(T0007-COBBEG),AL2(32,0)
-         DC    A(T0008-COBBEG),AL2(33,0)
-         DC    A(T0009-COBBEG),AL2(33,0)
-         DC    A(T0010-COBBEG),AL2(34,0)
-         DC    A(T0011-COBBEG),AL2(35,0)
-         DC    A(T0012-COBBEG),AL2(36,0)
-         DC    A(T0013-COBBEG),AL2(36,0)
-         DC    A(T0014-COBBEG),AL2(37,0)
-         DC    A(T0015-COBBEG),AL2(38,0)
-         DC    A(T0016-COBBEG),AL2(39,0)
-         DC    A(T0017-COBBEG),AL2(40,0)
-         DC    A(T0018-COBBEG),AL2(40,0)
-         DC    A(T0019-COBBEG),AL2(41,0)
-         DC    A(T0020-COBBEG),AL2(42,0)
-         DC    A(T0021-COBBEG),AL2(43,0)
+         DC    A(T0000-COBBEG),AL2(29,0)
+         DC    A(T0001-COBBEG),AL2(30,0)
+         DC    A(T0002-COBBEG),AL2(31,0)
+         DC    A(T0003-COBBEG),AL2(32,0)
+         DC    A(T0004-COBBEG),AL2(33,0)
+         DC    A(T0005-COBBEG),AL2(33,0)
+         DC    A(T0006-COBBEG),AL2(34,0)
+         DC    A(T0007-COBBEG),AL2(35,0)
+         DC    A(T0008-COBBEG),AL2(36,0)
+         DC    A(T0009-COBBEG),AL2(36,0)
+         DC    A(T0010-COBBEG),AL2(37,0)
+         DC    A(T0011-COBBEG),AL2(38,0)
+         DC    A(T0012-COBBEG),AL2(39,0)
+         DC    A(T0013-COBBEG),AL2(39,0)
+         DC    A(T0014-COBBEG),AL2(40,0)
+         DC    A(T0015-COBBEG),AL2(41,0)
+         DC    A(T0016-COBBEG),AL2(42,0)
+         DC    A(T0017-COBBEG),AL2(43,0)
+         DC    A(T0018-COBBEG),AL2(43,0)
+         DC    A(T0019-COBBEG),AL2(44,0)
+         DC    A(T0020-COBBEG),AL2(45,0)
+         DC    A(T0021-COBBEG),AL2(46,0)
          CSECT                     WORKING-STORAGE: private code, one p
 COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins

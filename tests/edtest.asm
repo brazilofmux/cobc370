@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -56,6 +59,7 @@ T0002    DS    0H
 * MOVE 123456 -> E2
          ZAP   PWK1(16),K0001+12(4)  literal
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0002      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0002(10),EDWK+2    the edited result
@@ -69,6 +73,7 @@ T0004    DS    0H
 * MOVE 42 -> E3
          ZAP   PWK1(16),K0002+14(2)  literal
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0003       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0003               not negative?
@@ -87,6 +92,7 @@ T0006    DS    0H
 * MOVE 123456 -> E4
          ZAP   PWK1(16),K0001+12(4)  literal
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0004      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0004(10),EDWK+2    the edited result
@@ -100,6 +106,7 @@ T0008    DS    0H
 * MOVE -98765 -> E5
          ZAP   PWK1(16),K0003+13(3)  literal
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(13),M0005      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(13),EDSRC

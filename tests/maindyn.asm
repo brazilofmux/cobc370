@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -37,22 +40,24 @@ T0000    DS    0H
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT001
+         ST    2,PT001
 L0001    DS    0H
-         LH    2,PT001
+         L     2,PT001
          LTR   2,2
          BNP   L0002
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
-         LH    2,PT001
+         L     2,PT001
          BCTR  2,0
-         STH   2,PT001
+         ST    2,PT001
          B     L0001
 L0002    DS    0H
 T0001    DS    0H
@@ -70,22 +75,24 @@ T0002    DS    0H
          ZAP   WK0+15(1),K0002+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT003
+         ST    2,PT003
 L0003    DS    0H
-         LH    2,PT003
+         L     2,PT003
          LTR   2,2
          BNP   L0004
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0002    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0001
-         LH    2,PT003
+         L     2,PT003
          BCTR  2,0
-         STH   2,PT003
+         ST    2,PT003
          B     L0003
 L0004    DS    0H
 T0003    DS    0H
@@ -97,13 +104,15 @@ T0003    DS    0H
          BALR  14,15               release it, if it was loaded
 T0004    DS    0H
 * PERFORM CALL-IT
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0003    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0001
 T0005    DS    0H
 * CANCEL
@@ -173,8 +182,10 @@ T0010    DS    0H
 F0001    DS    0H                  fall-through when not performed
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
-PT001    DC    H'0'                PERFORM n TIMES counter
-PT003    DC    H'0'                PERFORM n TIMES counter
+         DS    0F
+PT001    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
+         DS    0F
+PT003    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
 X0001    DC    A(F0001)            CALL-IT
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
@@ -282,7 +293,9 @@ CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
 PA0001   DC    A(P0001)            CALL-IT
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,10 +38,17 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN INPUT GLACCT
          OPEN  (FD000,INPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0007
+         WTO   'COBC370: OPEN FAILED, DD GLACCT',ROUTCDE=11
+         ABEND 35
+         B     L0008
+L0007    DS    0H
          LH    0,FD000+62          DCBBLKSI, filled in by OPEN
          AH    0,=H'16'            ISAM's working prefix
          GETMAIN R,LV=(0)
          ST    1,DB000+12          area address into the DECB
+L0008    DS    0H
 T0001    DS    0H
 * MOVE 10303 -> WS-NOMKEY
          ZAP   PWK1(16),K0001+13(3)  literal
@@ -57,7 +67,9 @@ T0002    DS    0H
          L     15,FD000+88         DCBLRAN: read-write K module
          BALR  14,15
          WAIT  ECB=DB000           not CHECK, and not WAITF
-         CLC   DB000+24(2),=X'0000'  exception code set?
+         TM    DB000+24,X'FD'      an exception, other than 'overflow r
+         BNZ   L0001
+         CLI   DB000+25,X'00'
          BNE   L0001
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0001
@@ -126,7 +138,9 @@ T0009    DS    0H
          L     15,FD000+88         DCBLRAN: read-write K module
          BALR  14,15
          WAIT  ECB=DB000           not CHECK, and not WAITF
-         CLC   DB000+24(2),=X'0000'  exception code set?
+         TM    DB000+24,X'FD'      an exception, other than 'overflow r
+         BNZ   L0003
+         CLI   DB000+25,X'00'
          BNE   L0003
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0003
@@ -195,7 +209,9 @@ T0016    DS    0H
          L     15,FD000+88         DCBLRAN: read-write K module
          BALR  14,15
          WAIT  ECB=DB000           not CHECK, and not WAITF
-         CLC   DB000+24(2),=X'0000'  exception code set?
+         TM    DB000+24,X'FD'      an exception, other than 'overflow r
+         BNZ   L0005
+         CLI   DB000+25,X'00'
          BNE   L0005
          CLI   ISFLG,X'00'         or a permanent error?
          BNE   L0005

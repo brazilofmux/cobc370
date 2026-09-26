@@ -108,12 +108,39 @@ static const char *pool_str(const char *s, int len)
  * characters, blanks collapsed on both sides; a word operand only between
  * separators. The line may grow past column 72 -- the scanner reads to its
  * end, and a card image is what it was before the copy, not after. */
+/* The characters of a line a word operand may not match: inside a
+ * nonnumeric literal, and inside a PICTURE string, each of which is one
+ * text-word of its own (#33: REPLACING X BY NEWX once rewrote PIC X(5)). */
+static void copy_protect(const char *line, unsigned char *prot)
+{
+    size_t n = strlen(line);
+    memset(prot, 0, n + 1);
+    char q = 0; int pic = 0;   /* pic: 1 after PIC/PICTURE, 2 inside the string */
+    for (size_t i = 0; i < n; i++) {
+        char c = line[i];
+        if (q) { prot[i] = 1; if (c == q) q = 0; continue; }
+        if (c == '\'' || c == '"') { q = c; prot[i] = 1; continue; }
+        if (pic == 2) { if (c == ' ') pic = 0; else { prot[i] = 1; continue; } }
+        if (c == ' ' || c == '.' || c == ',') continue;   /* not a word: stepping back from here looped */
+        size_t j = i; while (j < n && line[j] != ' ' && line[j] != '.' && line[j] != ',') j++;
+        size_t wl = j - i;
+        if (pic == 1) {
+            if (wl == 2 && !strncasecmp(line + i, "IS", 2)) { i = j - 1; continue; }
+            pic = 2; for (size_t k = i; k < j; k++) prot[k] = 1; i = j - 1; continue;
+        }
+        if ((wl == 3 && !strncasecmp(line + i, "PIC", 3)) || (wl == 7 && !strncasecmp(line + i, "PICTURE", 7))) pic = 1;
+        i = j - 1;
+    }
+}
+
 static void copy_replace(Src *s)
 {
     /* Match every pair against the original line. Replacements are not
      * re-scanned -- REPLACING A BY B B BY C leaves A as B, not C. */
     char orig[MAXLINE * 2];
     snprintf(orig, sizeof orig, "%s", s->buf + 7);
+    unsigned char prot[MAXLINE * 2];
+    copy_protect(orig, prot);
     char out[MAXLINE * 2];
     char *o = out;
     const char *p = orig;
@@ -126,6 +153,7 @@ static void copy_replace(Src *s)
             if (!fl) continue;
             const char *nxt = p;
             char qch = 0;
+            if (!s->rep[k].pseudo && !s->rep[k].qfrom && prot[p - orig]) continue;
             if (s->rep[k].qfrom) {
                 char q = *p;
                 if ((q == '\'' || q == '"') && !strncasecmp(p + 1, from, fl) && p[1 + fl] == q)
@@ -263,6 +291,18 @@ static unsigned char host_ebcdic(char c)
         0x97,0x98,0x99,0xA2,0xA3,0xA4,0xA5,0xA6,0xA7,0xA8,0xA9,0xC0,0x4F,0xD0,0xA1 };
     unsigned char u = (unsigned char)c;
     return (u >= 0x20 && u <= 0x7E) ? t[u - 0x20] : 0x40;
+#endif
+}
+
+/* And back: an ED pattern's insertion byte as the host character, for an
+ * alphanumeric-edited image built at compile time. */
+static char host_from_ebcdic(unsigned char e)
+{
+#ifdef HOST_EBCDIC
+    return (char)e;
+#else
+    for (int c = 0x20; c <= 0x7E; c++) if (host_ebcdic((char)c) == e) return (char)c;
+    return ' ';
 #endif
 }
 
@@ -438,8 +478,9 @@ static void scan_token(void)
                 if (!nx || isspace((unsigned char)nx)) break;
             } else if (decimal_is_comma
                        || !(isdigit((unsigned char)*(src.p + 1))
-                            && (i == 0 || isdigit((unsigned char)tok.text[i-1]))))
-                break;   /* a decimal point: leading, as in .1, or between digits */
+                            && (i == 0 || isdigit((unsigned char)tok.text[i-1])
+                                || (i == 1 && (tok.text[0] == '+' || tok.text[0] == '-')))))
+                break;   /* a decimal point: leading, as in .1 or -.5, or between digits */
         }
         if (decimal_is_comma && !lex_picture && *src.p == ','
             && isdigit((unsigned char)*(src.p + 1))
@@ -572,10 +613,68 @@ static int op_len(const char *op, const char *operand)
     return 160;                 /* a macro: GET, PUT, OPEN, LINK, ... */
 }
 
+/* The bytes a DC or DS defines, near enough: duplication, type, explicit
+ * length, quoted constant or address list. Alignment padding is ignored;
+ * the caller allows for it. For the constants region's size (#36). */
+static long dcds_len(const char *o)
+{
+    long total = 0;
+    while (*o) {
+        long dup = 1;
+        if (isdigit((unsigned char)*o)) dup = strtol(o, (char **)&o, 10);
+        char t = (char)toupper((unsigned char)*o); if (*o) o++;
+        long len = -1;
+        if (*o == 'L' && isdigit((unsigned char)o[1])) { o++; len = strtol(o, (char **)&o, 10); }
+        long unit = 4;
+        if (*o == '\'') {
+            o++; long n = 0; int sign = (*o == '-' || *o == '+');
+            while (*o) {
+                if (*o == '\'' && o[1] == '\'') { o += 2; n++; continue; }
+                if (*o == '\'') break;
+                o++; n++;
+            }
+            if (*o == '\'') o++;
+            switch (t) {
+            case 'C': unit = n; break;
+            case 'X': unit = (n + 1) / 2; break;
+            case 'P': unit = (n - sign) / 2 + 1; break;
+            case 'Z': unit = n - sign; break;
+            case 'H': unit = 2; break;
+            case 'F': unit = 4; break;
+            case 'D': unit = 8; break;
+            default:  unit = n; break;
+            }
+        } else if (*o == '(') {
+            int depth = 0; long items = 1;
+            do {
+                if (*o == '(') depth++;
+                else if (*o == ')') depth--;
+                else if (*o == ',' && depth == 1) items++;
+                o++;
+            } while (*o && depth > 0);
+            unit = (len >= 0 ? len : 4) * items;
+            len = -1;
+        } else {
+            unit = (t == 'F') ? 4 : (t == 'H') ? 2 : (t == 'D') ? 8 : (t == 'X' || t == 'C') ? 1 : 4;
+        }
+        if (len >= 0) unit = len;
+        total += dup * unit;
+        if (*o == ',') o++; else break;
+    }
+    return total;
+}
+
+static int  in_con;             /* estimating: inside the constants region */
+static long est_con;            /* its bytes so far */
+
 static void asm_line(const char *name, const char *op, const char *operand,
                      const char *comment)
 {
     if (in_code && op && *op) est_pc += op_len(op, operand);
+    if (in_con && op && *op) {
+        if (!strcmp(op, "DC") || !strcmp(op, "DS")) est_con += dcds_len(operand ? operand : "");
+        else est_con += op_len(op, operand);
+    }
     char b[128];
     memset(b, ' ', sizeof b);
     size_t n;
@@ -700,7 +799,11 @@ typedef struct {
     int  edited;      /* needs an ED pattern */
     int  floating;    /* floating insertion -> EDMK */
     int  masklen;
-    char sign_char;
+    char sign_char;   /* a fixed sign at sign_pos */
+    char flt_char;    /* the floating symbol, if any */
+    char fillch;      /* ' ' or '*' */
+    int  cur_pos;     /* a fixed currency symbol's position, -1 if none */
+    int  no_nine;     /* no '9': zero shows no digit */
     int  sign_pos, first_sel, need_lead_start;
     unsigned char mask[PIC_MAXMASK];
     int  occurs;      /* OCCURS count, 0 when not a table */
@@ -792,6 +895,8 @@ typedef struct Node {
 /* Conditions. Relations compare two expressions; AND/OR short-circuit. */
 enum { REL_EQ, REL_LT, REL_GT, REL_NE, REL_NGT, REL_NLT };
 enum { C_REL, C_AND, C_OR, C_NOT, C_CLASS, C_SWITCH };
+enum { FIG_NONE = 0, FIG_SPACE = 1, FIG_ZERO = 2, FIG_HIGH = 3, FIG_LOW = 4,
+       FIG_QUOTE = 5, FIG_ALL = 6 };
 
 typedef struct Cond {
     int kind, op;
@@ -929,6 +1034,7 @@ typedef struct {
     int  lc_sym;       /* the LINAGE-COUNTER item, -1 if none */
     int  optional;     /* SELECT OPTIONAL: the DD may be absent */
     int  reserve;      /* RESERVE n AREAS: BUFNO, 0 for the default */
+    int  cylofl;       /* APPLY CYL-OVERFLOW OF n TRACKS: ISAM CYLOFL, 0 for none */
     int  reversed;     /* OPEN INPUT ... REVERSED: RDBACK */
     /* VSAM. The ANS COBOL system-name says which access method is meant:
      * UT-S-x is QSAM, DA-I-x is ISAM, and a bare name -- or AS-x -- is VSAM.
@@ -2109,6 +2215,8 @@ static void parse_report_section(void)
             sy->edited = pi.edited; sy->floating = pi.floating;
             sy->masklen = pi.masklen; sy->sign_char = pi.sign_char;
             sy->sign_pos = pi.sign_pos; sy->first_sel = pi.first_sel;
+            sy->flt_char = pi.flt_char; sy->cur_pos = pi.cur_pos;
+            sy->no_nine = pi.no_nine; sy->fillch = pi.fillch;
             sy->need_lead_start = pi.need_lead_start;
             memcpy(sy->mask, pi.mask, sizeof sy->mask);
             sy->bytes = pi.bytes;
@@ -2181,6 +2289,9 @@ static void make_curdate(int *cursor)
     Sym *sy = &syms[nsym];
     memset(sy, 0, sizeof *sy);
     snprintf(sy->name, sizeof sy->name, "CURRENT-DATE");
+    sy->gparent = sy->occ_parent = -1;
+    sy->fd_file = sy->index_sym = sy->askey_sym = sy->odo_dep = -1;
+    sy->redef_from = sy->redef_cap = -1;
     snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
     PicInfo pi;
     if (pic_analyse("X(8)", &pi) < 0) die(pi.err);
@@ -2208,6 +2319,11 @@ static void make_binreg(int *symvar, const char *name, const char *pic, int is_s
     memset(sy, 0, sizeof *sy);
     snprintf(sy->name, sizeof sy->name, "%s", name);
     snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
+    /* Not a record of file 0, not in a table: a first use in the REPORT
+     * SECTION once made file 0 variable-length (#34). */
+    sy->gparent = sy->occ_parent = -1;
+    sy->fd_file = sy->index_sym = sy->askey_sym = sy->odo_dep = -1;
+    sy->redef_from = sy->redef_cap = -1;
     PicInfo pi;
     if (pic_analyse(pic, &pi) < 0) die(pi.err);
     sy->digits = pi.digits;
@@ -2313,6 +2429,7 @@ static void parse_data_division(void)
             if (!in_linkage && cursor > wslen) wslen = cursor;
             in_linkage = 1;
             cursor = 0;
+            cur_file = -1;      /* a linkage 01 is not another record of the last FD (#34) */
             continue;
         }
         if (is("WORKING-STORAGE")) {
@@ -2532,6 +2649,10 @@ static void parse_data_division(void)
              * and elementary, it takes d1's description. It is an alias, so
              * it defines no bytes -- the emitter gives it an EQU. */
             if (nsym >= MAXSYM) die("too many data items");
+            /* The 66 names storage the record has finished laying out, so
+             * every group below the 01 closes first: a group still open has
+             * no length yet, and a RENAMES THRU it came out empty (#34). */
+            while (sp > 1) close_group(&cursor, stack, &sp);
             Sym *rn = &syms[nsym];
             char nm[31]; snprintf(nm, sizeof nm, "%s", tok.text);
             if (lookup(nm) >= 0) die("duplicate data name");
@@ -2579,9 +2700,14 @@ static void parse_data_division(void)
             cn->level = 88; cn->is_88 = 1;
             snprintf(cn->label, sizeof cn->label, "C%04d", nsym);
             snprintf(cn->name, sizeof cn->name, "%s", tok.text);
+            /* The item it tests is the one before it, past any 88s of a
+             * VALUE series. That may be a group -- a condition-name on a
+             * group is legal, and compares it as alphanumeric (#34); an 88
+             * written directly under a group used to skip past the group to
+             * whatever elementary item preceded it. */
             int p = nsym - 1;
-            while (p >= 0 && (syms[p].is_88 || syms[p].is_group)) p--;
-            if (p < 0) die("level 88 must follow an elementary item");
+            while (p >= 0 && syms[p].is_88) p--;
+            if (p < 0) die("level 88 must follow a data item");
             cn->parent = p;
             cn->gparent = p;            /* FLAG OF item, the same as a data-name */
             for (int k = 0; k < nsym; k++)
@@ -2661,6 +2787,11 @@ static void parse_data_division(void)
                             die("SAME RECORD AREA for variable-length files is not implemented yet");
                         fd_from = cursor;
                         cursor = syms[files[k].rec_sym].offset;
+                        /* The area is the first file's record; a longer one
+                         * laid over it would run into whatever came after
+                         * (#34). Its length is not known until the record
+                         * closes, so the cap is checked there. */
+                        redef_limit = syms[files[k].rec_sym].offset + syms[files[k].rec_sym].bytes;
                         break;
                     }
             }
@@ -2986,6 +3117,8 @@ static void parse_data_division(void)
             sy->sign_char = pi.sign_char;
             sy->sign_pos = pi.sign_pos;
             sy->first_sel = pi.first_sel;
+            sy->flt_char = pi.flt_char; sy->cur_pos = pi.cur_pos;
+            sy->no_nine = pi.no_nine; sy->fillch = pi.fillch;
             sy->need_lead_start = pi.need_lead_start;
             memcpy(sy->mask, pi.mask, sizeof sy->mask);
             if (pi.is_alpha) {
@@ -3449,6 +3582,33 @@ static void parse_environment(void)
             next(); expect(".");
             int ngroup = 0;
             while (!tok.eof && !is("DATA") && !is("PROCEDURE")) {
+                if (is("APPLY")) {
+                    /* IBM's APPLY CYL-OVERFLOW OF n TRACKS ON file: the ISAM
+                     * load reserves n tracks of every cylinder for records
+                     * added after the load (CYLOFL, OPTCD=Y). Without it, or
+                     * an independent overflow area, a file loaded here takes
+                     * no additions at all -- BISAM says invalid request.
+                     * APPLY CORE-INDEX and the rest are accepted and ignored. */
+                    next();
+                    int n = 0, cyl = 0;
+                    if (is("CYL-OVERFLOW")) {
+                        cyl = 1; next(); if (is("OF")) next();
+                        if (!isdigit((unsigned char)tok.text[0])) die("APPLY CYL-OVERFLOW OF needs a number of tracks");
+                        n = atoi(tok.text); next();
+                        if (is("TRACKS")) next();
+                        if (n < 1 || n > 99) die("APPLY CYL-OVERFLOW: 1 to 99 tracks");
+                    }
+                    while (!tok.eof && !is("ON") && !is(".")) next();
+                    if (is("ON")) next();
+                    while (!tok.eof && !is(".")) {
+                        int fi = file_index(tok.text);
+                        if (fi < 0) die("APPLY ... ON names something that is not a file");
+                        if (cyl) files[fi].cylofl = n;
+                        next();
+                    }
+                    if (is(".")) next();
+                    continue;
+                }
                 if (!is("SAME")) { next(); continue; }
                 next();
                 int rec = 0;
@@ -3524,7 +3684,9 @@ static Node *parse_primary(void)
         return n;
     }
     if (is("ZERO") || is("ZEROS") || is("ZEROES")) {
-        Node *n = node(N_LIT); strcpy(n->lit, "0"); n->litscale = 0; next(); return n;
+        /* A numeric zero, and marked as the figurative: against an
+         * alphanumeric item it is the character 0 throughout (#33). */
+        Node *n = node(N_LIT); strcpy(n->lit, "0"); n->litscale = 0; n->fig = FIG_ZERO; next(); return n;
     }
     if (is("SPACE") || is("SPACES")) {
         Node *n = node(N_STR); strcpy(n->lit, " "); n->litlen = 1; next(); return n;
@@ -3599,8 +3761,6 @@ static Node *parse_expr(void)
  * ALL against the unit repeated to the item's length. QUOTE is the
  * apostrophe, X'7D': that is what IBM's compilers mean by it and what every
  * literal in this compiler's world is delimited with. */
-enum { FIG_NONE = 0, FIG_SPACE = 1, FIG_ZERO = 2, FIG_HIGH = 3, FIG_LOW = 4,
-       FIG_QUOTE = 5, FIG_ALL = 6 };
 static int fig_code(const char *w)
 {
     if (!strcmp(w, "SPACE")  || !strcmp(w, "SPACES"))  return FIG_SPACE;
@@ -3952,11 +4112,14 @@ static int at_relop(void)
 
 /* The condition a level-88 name stands for: its value, or its range, ORed
  * with the rest of its VALUE series. */
-static Cond *cond_of_88(int ci)
+/* The condition a condition-name stands for: its parent compared with its
+ * value(s). A subscript on the condition-name is the parent's, and every
+ * comparison in a VALUE series carries it (#33). */
+static Cond *cond_of_88(int ci, Node *sub)
 {
     const Sym *cn = &syms[ci];
     Cond *c;
-    Node *p = node(N_SYM); p->sym = cn->parent;
+    Node *p = node(N_SYM); p->sym = cn->parent; p->sub = sub;
     Node *v;
     if (cn->cvalue_str) {
         v = node(N_STR);
@@ -3964,6 +4127,12 @@ static Cond *cond_of_88(int ci)
         v->litlen = cn->cvalue_len;
         if (cn->cvalue_len == 1 && (unsigned char)cn->cvalue[0] == 0xFF) v->fig = FIG_HIGH;
         if (cn->cvalue_len == 1 && cn->cvalue[0] == 0) v->fig = FIG_LOW;
+    } else if (syms[cn->parent].is_alpha || syms[cn->parent].is_group) {
+        /* 88 x VALUE ZERO on a PIC X item: the character 0 throughout;
+         * another numeric literal, its digits as characters (#33). */
+        v = node(N_STR);
+        if (!strcmp(cn->cvalue, "0")) { v->fig = FIG_ALL; strcpy(v->lit, "0"); v->litlen = 1; }
+        else { snprintf(v->lit, sizeof v->lit, "%s", cn->cvalue); v->litlen = (int)strlen(v->lit); }
     } else {
         v = node(N_LIT);
         scale_literal(cn->cvalue, syms[cn->parent].scale, v->lit, sizeof v->lit);
@@ -3988,7 +4157,7 @@ static Cond *cond_of_88(int ci)
         c = cnode(C_AND); c->cl = lo; c->cr = hi;
     }
     if (cn->c88_next >= 0) {
-        Cond *o = cnode(C_OR); o->cl = c; o->cr = cond_of_88(cn->c88_next);
+        Cond *o = cnode(C_OR); o->cl = c; o->cr = cond_of_88(cn->c88_next, sub);
         c = o;
     }
     return c;
@@ -4042,7 +4211,7 @@ static Cond *parse_relation(void)
             return c;
         }
         if (l->kind == N_SYM && syms[l->sym].is_88)
-            return cond_of_88(l->sym);
+            return cond_of_88(l->sym, l->sub);
         if (abbr_subj) {
             /* Subject and operator omitted: IF A = 1 OR 2, IF A = B OR C. */
             Cond *c = cnode(C_REL);
@@ -6044,12 +6213,17 @@ static const char *ds_len(char *buf, size_t n, char type, int len)
 static const int base_reg[NBASE] = { 8, 9 };
 static int base_chunk[NBASE] = { -9999, -9999 };
 static int base_next;
+/* How many of them are in use. WORKING-STORAGE that fits one chunk, with no
+ * LINKAGE SECTION, needs one base -- which is nearly every program -- and
+ * then R9 serves the constants region as a third base, 12K of it (#36). */
+static int nbase_live = NBASE;
+static long con_limit = 8192;
 
 static void reset_bases(void)
 {
     char b[64]; int j = 0, any = 0;
     b[0] = 0;
-    for (int i = 0; i < NBASE; i++) {
+    for (int i = 0; i < nbase_live; i++) {
         if (base_chunk[i] == -9999) continue;
         j += snprintf(b + j, sizeof b - j, "%s%d", any ? "," : "", base_reg[i]);
         any = 1;
@@ -6067,8 +6241,8 @@ static void reset_bases(void)
 static void need_base(int area)
 {
     char b[64];
-    for (int i = 0; i < NBASE; i++) if (base_chunk[i] == area) return;
-    int slot = base_next % NBASE;
+    for (int i = 0; i < nbase_live; i++) if (base_chunk[i] == area) return;
+    int slot = base_next % nbase_live;
     base_next++;
     if (base_chunk[slot] != -9999) {
         snprintf(b, sizeof b, "%d", base_reg[slot]);
@@ -6493,6 +6667,12 @@ static void gen_comp_load_r(const Sym *sy, Node *sub, int reg)
 static void gen_comp_store_r(const Sym *sy, Node *sub, int reg)
 {
     char b[96], f[64];
+    if (!sy->is_signed) {
+        /* An unsigned receiver stores the absolute value, as the DISPLAY and
+         * COMP-3 stores do with their F zone (#28). */
+        snprintf(b, sizeof b, "%d,%d", reg, reg);
+        asm_line("", "LPR", b, "unsigned: the magnitude");
+    }
     if (comp_rx_aligned(sy)) {
         field_ref(sy, sub, 0, 6, f, sizeof f);
         snprintf(b, sizeof b, "%d,%s", reg, f);
@@ -6950,24 +7130,35 @@ static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
 
     snprintf(b, sizeof b, "EDSRC(%d),%s(16)", n, wk);
     asm_line("", "ZAP", b, "source, sized to the selector count");
+    /* The ZAP kept 2n-1 digits; the spare selector(s) must see zeros, not
+     * the high-order digits of a value wider than the picture, or they
+     * would turn significance on early -- 10005 into ZZZ9 printed 0005
+     * where COBOL truncates to 5 (#30). */
+    if (spare == 1) asm_line("", "NI", "EDSRC,X'0F'", "truncate to the picture: the spare digit is zero");
+    else if (spare == 2) asm_line("", "MVI", "EDSRC,X'00'", "truncate to the picture: the spare digits are zero");
     snprintf(b, sizeof b, "EDWK(%d),%s", patlen, intern_mask(pat, patlen));
     asm_line("", "MVC", b, "load the ED pattern");
 
+    char lz[16] = "", ld[16] = "";
+    if (sy->no_nine) {
+        /* No '9' anywhere: a zero value shows no digit, no floating symbol
+         * and no point -- all fill (#30). Tested here, since a starter
+         * before the point (ZZ.ZZ) would otherwise print .00, and EDMK's
+         * fallback would print the symbol of ++++ or $$$$. */
+        snprintf(lz, sizeof lz, "G%04d", ++gen_edited_labels);
+        snprintf(ld, sizeof ld, "G%04d", ++gen_edited_labels);
+        snprintf(b, sizeof b, "EDSRC(%d),%s+15(1)", n, intern_const("0"));
+        asm_line("", "CP", b, "zero: nothing to show");
+        asm_line("", "BE", lz, "");
+    }
+
     if (sy->floating) {
         /* EDMK reports where the first significant digit landed, and the
-           floating sign goes one byte to its left.
-           
-           But EDMK loads R1 only when it meets a nonzero digit with the
-           significance indicator still OFF. A value small enough that its first
-           nonzero digit falls at or after the significance starter never
-           satisfies that: the starter itself turns significance on, so every
-           later digit prints with the indicator already set and R1 is never
-           touched. -1.98 in ---,---,--9.99 is exactly that case, and the sign
-           then landed wherever R1 happened to point.
-           
-           So the fallback must be one byte past the significance starter, which
-           is where printing begins when EDMK stays silent. Scan the pattern
-           rather than recomputing the arithmetic. */
+           floating symbol goes one byte to its left. EDMK loads R1 only when
+           it meets a nonzero digit with significance still off; a value whose
+           first nonzero digit falls at or after the starter never does, so
+           the fallback is one byte past the starter, where printing begins
+           when EDMK stays silent (-1.98 in ---,---,--9.99). */
         int fallback = sy->first_sel + spare;
         for (int i = 0; i < patlen; i++)
             if (pat[i] == 0x21) { fallback = i + 1; break; }
@@ -6976,47 +7167,66 @@ static void gen_store_edited(const Sym *sy, Node *sub, const char *wk)
         snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
         asm_line("", "EDMK", b, "");
         asm_line("", "BCTR", "1,0", "one left of the first significant digit");
-        if (sy->sign_char == '$') {
+        if (sy->flt_char == '$') {
             /* A floating currency symbol is not a sign: it goes in whatever
              * the value. Written as hex so that the CURRENCY SIGN character
              * never has to survive the assembler's quoting rules. */
             snprintf(b, sizeof b, "0(1),X'%02X'", host_ebcdic(currency_sym));
             asm_line("", "MVI", b, "the floating currency symbol");
-            goto floated;
-        }
-        int l1 = ++gen_edited_labels, l2 = ++gen_edited_labels;
-        char la[16], lb[16];
-        snprintf(la, sizeof la, "G%04d", l1);
-        snprintf(lb, sizeof lb, "G%04d", l2);
-        asm_line("", "BNM", la, "not negative?");
-        asm_line("", "MVI", "0(1),C'-'", "");
-        if (sy->sign_char == '+') {
-            asm_line("", "B", lb, "");
-            asm_line(la, "MVI", "0(1),C'+'", "");
-            asm_line(lb, "DS", "0H", "");
         } else {
-            asm_line(la, "DS", "0H", "");
-        }
-    floated: ;
-    } else {
-        snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
-        asm_line("", "ED", b, "");
-        if (sy->sign_pos >= 0) {
             int l1 = ++gen_edited_labels, l2 = ++gen_edited_labels;
-            char la[16], lb[16], pos[24];
+            char la[16], lb[16];
             snprintf(la, sizeof la, "G%04d", l1);
             snprintf(lb, sizeof lb, "G%04d", l2);
-            snprintf(pos, sizeof pos, "EDWK+%d", sy->sign_pos + spare);
             asm_line("", "BNM", la, "not negative?");
-            snprintf(b, sizeof b, "%s,C'-'", pos); asm_line("", "MVI", b, "");
-            if (sy->sign_char == '+') {
+            asm_line("", "MVI", "0(1),C'-'", "");
+            if (sy->flt_char == '+') {
                 asm_line("", "B", lb, "");
-                snprintf(b, sizeof b, "%s,C'+'", pos); asm_line(la, "MVI", b, "");
+                asm_line(la, "MVI", "0(1),C'+'", "");
                 asm_line(lb, "DS", "0H", "");
             } else {
                 asm_line(la, "DS", "0H", "");
             }
         }
+    } else {
+        snprintf(b, sizeof b, "EDWK(%d),EDSRC", patlen);
+        asm_line("", "ED", b, "");
+    }
+    /* A fixed sign, after a floating symbol or not: '-' or space, '+' or
+     * '-'. The space matters with '*' fill, where ED had left an asterisk
+     * (#30: **9.99- printed **5.00* for a positive value). */
+    if (sy->sign_pos >= 0) {
+        int l1 = ++gen_edited_labels, l2 = ++gen_edited_labels;
+        char la[16], lb[16], pos[24];
+        snprintf(la, sizeof la, "G%04d", l1);
+        snprintf(lb, sizeof lb, "G%04d", l2);
+        snprintf(pos, sizeof pos, "EDWK+%d", sy->sign_pos + spare);
+        asm_line("", "BNM", la, "not negative?");
+        snprintf(b, sizeof b, "%s,C'-'", pos); asm_line("", "MVI", b, "");
+        asm_line("", "B", lb, "");
+        snprintf(b, sizeof b, "%s,C'%c'", pos, sy->sign_char == '+' ? '+' : ' ');
+        asm_line(la, "MVI", b, "");
+        asm_line(lb, "DS", "0H", "");
+    }
+    /* A fixed currency symbol, whatever the value (#30). */
+    if (sy->cur_pos >= 0) {
+        snprintf(b, sizeof b, "EDWK+%d,X'%02X'", sy->cur_pos + spare, host_ebcdic(currency_sym));
+        asm_line("", "MVI", b, "the fixed currency symbol");
+    }
+    if (sy->no_nine) {
+        asm_line("", "B", ld, "");
+        asm_line(lz, "DS", "0H", "zero: all fill");
+        if (sy->fillch == '*') {
+            char stars[PIC_MAXMASK];
+            memset(stars, '*', (size_t)sy->bytes); stars[sy->bytes] = 0;
+            snprintf(b, sizeof b, "EDWK+%d(%d),%s", 1 + spare, sy->bytes, intern_str(stars, sy->bytes, sy->bytes));
+            asm_line("", "MVC", b, "asterisks throughout");
+        } else {
+            use_spcs = 1;
+            snprintf(b, sizeof b, "EDWK+%d(%d),SPCS", 1 + spare, sy->bytes);
+            asm_line("", "MVC", b, "");
+        }
+        asm_line(ld, "DS", "0H", "");
     }
 
     field_ref_m(sy, sub, FR_SS_LEN, sy->bytes, 6, f, sizeof f);
@@ -7127,6 +7337,17 @@ static void gen_store_op(const Sym *sy, Node *sub, const char *op)
     case U_COMP:
         snprintf(b, sizeof b, "DWK(8),%s", op);
         asm_line("", "ZAP", b, "");
+        if (sy->digits < 15) {
+            /* Truncate to the item's digits, on the left, as COBOL says: a
+             * shift up that drops the high-order digits (decimal overflow is
+             * masked) and back down. Without it a 10-digit value into a
+             * 9-digit COMP item reached CVB as 10 digits and took a
+             * fixed-point-divide exception (#28). */
+            snprintf(b, sizeof b, "DWK(8),%d,0", 15 - sy->digits);
+            asm_line("", "SRP", b, "drop the digits past the picture");
+            snprintf(b, sizeof b, "DWK(8),%d,0", 64 - (15 - sy->digits));
+            asm_line("", "SRP", b, "");
+        }
         asm_line("", "CVB", "2,DWK", "packed -> binary");
         gen_comp_store_r(sy, sub, 2);
         break;
@@ -7404,7 +7625,9 @@ static void expr_shape(Node *n, int tgtscale, int *scale, int *prec)
         break;
     }
     case N_TRUNC: {
-        expr_shape(n->l, tgtscale, &sl, &pl);
+        /* The quotient as stored in its own item: shaped at that item's
+         * scale, not the remainder's (#29). */
+        expr_shape(n->l, n->litscale, &sl, &pl);
         int sh = n->litscale - sl;
         *scale = n->litscale; *prec = pl + sh;
         if (*prec < 1) *prec = 1;
@@ -7451,6 +7674,18 @@ static void gen_load_t(const Sym *sy, Node *sub, const char *wk, int len)
 /* An operand the instruction can take straight from the program's data: a
  * COMP-3 item, or a literal, at the scale asked for (any scale when anyscale
  * is set -- a multiplier or divisor brings its own). */
+/* Would direct_operand take this COMP-3 item, and how long is it? Decided
+ * without emitting anything: its address goes into R7, and the left operand
+ * may use R7 for its own subscripts, so the address is emitted only once
+ * the left operand's code is out (#26). */
+static int direct_sym_len(const Node *r, int maxlen)
+{
+    if (r->kind != N_SYM) return 0;
+    const Sym *y = &syms[r->sym];
+    if (y->usage != U_COMP3 || y->is_group || y->elem > maxlen) return 0;
+    return y->elem;
+}
+
 static int direct_operand(Node *r, int scale, int anyscale, int maxlen,
                           char *out, size_t on, int *len)
 {
@@ -7531,7 +7766,11 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
         /* MP: the multiplier at most 8 bytes, the multiplicand with at least
          * that many high-order zero bytes -- so the area is the multiplicand's
          * bytes plus the multiplier's. */
-        int direct = direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        /* A literal operand emits nothing here; a COMP-3 item is only sized
+         * here and addressed after the left operand's code (#26). */
+        int dsym = direct_sym_len(n->r, 8);
+        int direct = dsym ? 1 : direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        if (dsym) oplen = dsym;
         int L2 = direct ? oplen : pk_bytes(pr);
         /* MP's second operand is at most 8 bytes. A 16-18 digit right
          * operand used to be truncated to its low 15 digits. Put the
@@ -7561,7 +7800,8 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
         if (L1 > 16) L1 = 16;
         if (L < L1) L = L1;
         gen_expr(n->l, d, tgtscale, L);
-        if (!direct) {
+        if (dsym) direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        else if (!direct) {
             gen_expr(n->r, d + 1, tgtscale, 1);
             tail_op(wk2, L2, op, sizeof op);
         }
@@ -7580,14 +7820,17 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
         /* DP: the divisor at most 8 bytes; the quotient takes the bytes the
          * divisor leaves, so the area is the shifted dividend's bytes plus
          * the divisor's. */
-        int direct = direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        int dsym = direct_sym_len(n->r, 8);
+        int direct = dsym ? 1 : direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        if (dsym) oplen = dsym;
         int L2 = direct ? oplen : pk_bytes(pr);
         if (L2 > 8)
             die("a divisor of more than 15 digits is not implemented");
         int L1 = pk_bytes(prec) + L2;
         if (L1 > 16) L1 = 16;
         gen_expr(n->l, d, tgtscale, L1);
-        if (!direct) {
+        if (dsym) direct_operand(n->r, sr, 1, 8, op, sizeof op, &oplen);
+        else if (!direct) {
             gen_expr(n->r, d + 1, tgtscale, 1);
             tail_op(wk2, L2, op, sizeof op);
         }
@@ -7621,9 +7864,9 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
 
     case N_TRUNC: {
         int sl, pl;
-        expr_shape(n->l, tgtscale, &sl, &pl);
-        if (n->litscale > sl) gen_expr(n->l, d, tgtscale, L);
-        else L = gen_expr(n->l, d, tgtscale, want);
+        expr_shape(n->l, n->litscale, &sl, &pl);
+        if (n->litscale > sl) gen_expr(n->l, d, n->litscale, L);
+        else L = gen_expr(n->l, d, n->litscale, want);
         gen_rescale_t(wk, L, sl, n->litscale, 0);
         return L;
     }
@@ -7650,10 +7893,17 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
                 return 16;
             }
             if (e > 1) {
+                /* The multiplier only as long as the base needs: MP wants as
+                 * many leading zero bytes in the product as the multiplier
+                 * is long, so an 8-byte multiplier capped the running
+                 * product at 15 digits and 1.05 ** 9 took a data exception
+                 * on the ninth multiply (#27). With the base's own length
+                 * the product may fill the rest of the 16 bytes. */
+                int lb = pk_bytes(pl); if (lb > 8) lb = 8;
                 snprintf(b, sizeof b, "MULT8(8),%s(16)", wk);
                 asm_line("", "ZAP", b, "the base");
                 for (int k = 1; k < e; k++) {
-                    snprintf(b, sizeof b, "%s(16),MULT8(8)", wk);
+                    snprintf(b, sizeof b, "%s(16),MULT8+%d(%d)", wk, 8 - lb, lb);
                     asm_line("", "MP", b, k == 1 ? "** unrolled" : "");
                 }
             }
@@ -7679,10 +7929,11 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
         snprintf(le, sizeof le, "L%04d", ++genlabel);
         asm_line("", "LTR", "3,3", "");
         asm_line("", "BNP", le, "exponent of zero: one");
+        int lb = pk_bytes(pl); if (lb > 8) lb = 8;
         snprintf(b, sizeof b, "MULT8(8),%s(16)", wk2);
         asm_line(lp, "ZAP", b, "the base");
-        snprintf(b, sizeof b, "%s(16),MULT8(8)", wk);
-        asm_line("", "MP", b, "");
+        snprintf(b, sizeof b, "%s(16),MULT8+%d(%d)", wk, 8 - lb, lb);
+        asm_line("", "MP", b, "the multiplier as long as the base (#27)");
         snprintf(b, sizeof b, "3,%s", lp);
         asm_line("", "BCT", b, "once per exponent");
         asm_line(le, "DS", "0H", "");
@@ -7713,6 +7964,29 @@ static void gen_var_len(const Sym *y, int reg)
     snprintf(b, sizeof b, "%d,%s", reg, intern_half(t->elem));
     asm_line("", "MH", b, "times the element");
     if (fixed) { snprintf(b, sizeof b, "%d,%d(%d)", reg, fixed, reg); asm_line("", "LA", b, "plus the fixed part"); }
+}
+
+/* The RDW of a variable-length record about to be written: the length of
+ * the record description named (IV-33) plus the RDW's own four -- and when
+ * that description has OCCURS DEPENDING ON, its length as of now, not its
+ * longest (#38): the file was fixed-length in disguise. */
+static void gen_write_rdw(const File *f, const Sym *wrec)
+{
+    char b[96];
+    const Sym *rw = &syms[f->rdw_sym];
+    if (var_len(wrec)) {
+        gen_var_len(wrec, 1);
+        asm_line("", "LA", "1,4(,1)", "plus the RDW");
+        need_sym_base(rw);
+        snprintf(b, sizeof b, "1,%s", rw->label);
+        asm_line("", "STH", b, "RDW: the length of this record, as it is now");
+    } else {
+        need_sym_base(rw);
+        snprintf(b, sizeof b, "%s(2),%s", rw->label, intern_half(wrec->bytes + 4));
+        asm_line("", "MVC", b, "RDW: the length of this record");
+    }
+    snprintf(b, sizeof b, "%s+2(2),%s+2", rw->label, rw->label);
+    asm_line("", "XC", b, "");
 }
 
 /* A numeric literal as a packed operand of exactly the bytes it needs, at
@@ -7775,11 +8049,16 @@ static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
          * time, so this is a handful of MVCs and no run-time decisions. */
         char fs2[64];
         field_ref_m(sv, ssub, FR_SS_NOLEN, sn, 7, fs2, sizeof fs2);
+        /* The template: the insertion characters, and a space at every data
+         * position, so the positions a short sender leaves are spaces and
+         * not the mask's zeros (#31). */
+        unsigned char tmpl[PIC_MAXMASK];
+        for (int k = 0; k < d->masklen; k++) tmpl[k] = d->mask[k] ? d->mask[k] : 0x40;
         snprintf(b, sizeof b, "%s(%d),%s", dsub ? "0(6)" : d->label, d->masklen,
-                 intern_mask(d->mask, d->masklen));
+                 intern_mask(tmpl, d->masklen));
         if (dsub) { field_ref_m(d, dsub, FR_SS_NOLEN, dn, 6, fd, sizeof fd);
                     snprintf(b, sizeof b, "0(%d,6),%s", d->masklen,
-                             intern_mask(d->mask, d->masklen)); }
+                             intern_mask(tmpl, d->masklen)); }
         asm_line("", "MVC", b, "the insertion characters");
         int soff = 0, i = 0;
         while (i < d->masklen) {
@@ -7851,8 +8130,11 @@ static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
  * continuation of this one. That is how a DCB once swallowed the DCB defined
  * after it, leaving its label undefined -- so split at commas across as many
  * cards as it takes rather than assuming two will do. */
+static void asm_cont_count(void) { if (in_con) est_con += 160; }
+
 static void asm_cont(const char *first, const char *second)
 {
+    asm_cont_count();
     if (strlen(first) > 71) die("internal: continuation line too long");
     /* The operand lives at buffer indices 15..70, i.e. columns 16..71.
      * Index 71 is column 72 and must stay free for the continuation flag. */
@@ -8914,7 +9196,34 @@ static int  cur_block = -1;     /* the block being emitted; -1 outside the code 
 static int  nblock;
 static long blk_start;          /* est_pc where it began */
 static int  para_block[MAXPARA];/* the block a paragraph starts, -1 not yet */
-static char used_pa[MAXPARA], used_fa[MAXPARA];  /* A(Pnnnn) / A(Fnnnn) cells wanted */
+static char used_pa[MAXPARA];   /* A(Pnnnn) cells wanted */
+#define MAXSV 16384
+static unsigned char used_sv[MAXSV]; /* SVnnnn: a PERFORM site's saved exit cell */
+
+/* A PERFORM (or a call of a USE range): the range's exit cell gets this
+ * site's return address, and what it held before is kept in a cell of the
+ * site's own and put back on return. That is IKFCBL00's mechanism too (its
+ * VN and PSV cells), and it is what makes a common exit work -- PERFORM A
+ * THRU C where B performs C: the inner PERFORM's return, then the outer's,
+ * each restored in turn (#35). Restoring the fall-through address instead
+ * lost the outer return. R14 is free between statements. */
+static void perform_enter(const char *x, int r)
+{
+    char b[48];
+    if (r < 0 || r >= MAXSV) die("too many PERFORM sites");
+    used_sv[r] = 1;
+    snprintf(b, sizeof b, "14,%s", x);      asm_line("", "L", b, "what the exit cell holds");
+    snprintf(b, sizeof b, "14,SV%04d", r);  asm_line("", "ST", b, "kept for the return");
+    snprintf(b, sizeof b, "15,R%04d", r);   asm_line("", "LA", b, "return here");
+    snprintf(b, sizeof b, "15,%s", x);      asm_line("", "ST", b, "into the range's exit cell");
+}
+
+static void perform_return(const char *x, int r)
+{
+    char b[48];
+    snprintf(b, sizeof b, "15,SV%04d", r);  asm_line("", "L", b, "what the cell held before");
+    snprintf(b, sizeof b, "15,%s", x);      asm_line("", "ST", b, "");
+}
 
 static void start_block(const char *why)
 {
@@ -8972,18 +9281,15 @@ static void gen_call_retcode(void)
 
 static void gen_call_range(int a, int b, int *nret)
 {
-    char x[16], r[16], t[64];
+    char x[16], r[16];
     snprintf(x,  sizeof x,  "X%04d", b);
     snprintf(r,  sizeof r,  "R%04d", ++*nret);
-    snprintf(t, sizeof t, "15,%s", r);  asm_line("", "LA", t, "return here");
-    snprintf(t, sizeof t, "15,%s", x);  asm_line("", "ST", t, "into the range's exit cell");
+    perform_enter(x, *nret);
     branch_para(a, "");
     asm_line(r, "DS", "0H", "");
     reload_block();
     reset_bases();
-    used_fa[b] = 1;
-    snprintf(t, sizeof t, "15,FA%04d", b);  asm_line("", "L", t, "restore fall-through");
-    snprintf(t, sizeof t, "15,%s", x);  asm_line("", "ST", t, "");
+    perform_return(x, *nret);
 }
 
 /* Branch mnemonics after CP or CLC, by relation and by sense. */
@@ -9149,17 +9455,31 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
         return;
     }
     case C_REL: {
+        /* The relation the branch at the end tests: c->op, unless the
+         * alphanumeric path below turned the operands round. */
+        int rop = c->op;
         if (node_alpha(c->l) || node_alpha(c->r)) {
             /* Alphanumeric: compare over the longer operand, the shorter one
                space padded, which is what COBOL specifies. */
             const Node *L = c->l, *R = c->r;
+            /* The identifier goes on the left. A literal that was on the left
+             * of < or > is now on the right, so the relation turns round
+             * with it (#33): 'M' < X is X > 'M'. */
+            static const int mirror[] = { REL_EQ, REL_GT, REL_LT, REL_NE, REL_NLT, REL_NGT };
             if (L->kind != N_SYM || node_alpha(L) == 0)
-                { const Node *t = L; L = R; R = t; }
+                { const Node *t = L; L = R; R = t; rop = mirror[c->op]; }
             if (L->kind != N_SYM || !node_alpha(L))
                 die("alphanumeric comparison needs an identifier on one side");
             const Sym *ls = &syms[L->sym];
             int n = L->sub ? ls->elem : ls->bytes;
             char fl[64], fr[64];
+            Node zero;
+            if (R->kind == N_LIT && R->fig == FIG_ZERO) {
+                /* IF X = ZERO on an alphanumeric item: ALL '0' (II-42). */
+                memset(&zero, 0, sizeof zero);
+                zero.kind = N_STR; zero.fig = FIG_ALL; strcpy(zero.lit, "0"); zero.litlen = 1;
+                R = &zero;
+            }
             if (R->kind == N_STR && !R->fig && R->litlen > n) {
                 /* A literal longer than the item: the item is space-padded to
                  * the literal's length. Compare the item's width, and only if
@@ -9177,7 +9497,7 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
                 asm_line("", "CLC", b, "spaces against the literal's tail");
                 asm_line(lx, "DS", "0H", "");
                 snprintf(l, sizeof l, "L%04d", label);
-                asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
+                asm_line("", jump_if_true ? br_true[rop] : br_false[rop], l, "");
                 return;
             }
             if ((L->kind == N_SYM && var_len(&syms[L->sym]) && !L->sub) ||
@@ -9208,7 +9528,7 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
                 asm_line("", "CLC", b, "the longer one's tail against spaces");
                 asm_line(lx, "DS", "0H", "");
                 snprintf(l, sizeof l, "L%04d", label);
-                asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
+                asm_line("", jump_if_true ? br_true[rop] : br_false[rop], l, "");
                 return;
             }
             if (R->kind == N_STR) {
@@ -9290,7 +9610,7 @@ static void gen_cond(Cond *c, int label, int jump_if_true)
             asm_line("", "CP", b, "numeric compare");
         }
         snprintf(l, sizeof l, "L%04d", label);
-        asm_line("", jump_if_true ? br_true[c->op] : br_false[c->op], l, "");
+        asm_line("", jump_if_true ? br_true[rop] : br_false[rop], l, "");
         return;
     }
     }
@@ -9304,6 +9624,14 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
         gen_move_alpha(d, dsub, sv, ssub);
         return;
     }
+    if (sv->edited && !sv->is_alpha) {
+        /* A numeric-edited sender is alphanumeric for a MOVE (II-74: its
+         * category as a sending item), so it moves as characters, sign
+         * character and all (#31). Into a numeric item it would have to be
+         * de-edited, which COBOL-74 does not have. */
+        if (d->is_alpha || d->is_group) { gen_move_alpha(d, dsub, sv, ssub); return; }
+        die("MOVE of a numeric-edited item to a numeric item (de-editing) is not in COBOL-74");
+    }
     if (d->is_alpha || d->is_group) {
         /* Numeric to alphanumeric. Rule 3c on II-75 allows it only for an
          * integer, and rule 4a says the receiving item is filled from the left
@@ -9312,21 +9640,39 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
         if (sv->scale != 0)
             die("MOVE of a non-integer numeric item to an alphanumeric item is "
                 "not allowed -- rule 3c on II-75");
+        if (sv->usage == U_DISPLAY && sv->sgn_sep) {
+            /* SIGN SEPARATE: the digits without the sign character (#31).
+             * Through ZWK, as an unsigned DISPLAY item of the digits. */
+            char b[96], fr[64];
+            field_ref_m(sv, ssub, FR_SS_NOLEN, sv->elem, 7, fr, sizeof fr);
+            snprintf(b, sizeof b, "ZWK(%d),%s+%d", sv->digits, fr, sv->sgn_lead ? 1 : 0);
+            asm_line("", "MVC", b, "the digits, not the sign character");
+            Sym tmp; memset(&tmp, 0, sizeof tmp);
+            tmp.usage = U_DISPLAY; tmp.digits = sv->digits; tmp.bytes = tmp.elem = sv->digits;
+            tmp.occ_parent = tmp.gparent = tmp.index_sym = tmp.askey_sym = -1;
+            tmp.fd_file = tmp.redef_from = tmp.redef_cap = -1; tmp.parent = -1;
+            snprintf(tmp.label, sizeof tmp.label, "ZWK");
+            snprintf(tmp.name, sizeof tmp.name, "%s", sv->name);
+            gen_move_alpha(d, dsub, &tmp, NULL);
+            return;
+        }
         if (sv->usage == U_DISPLAY) {
             /* Already a string of digits. */
             gen_move_alpha(d, dsub, sv, ssub);
             if (sv->is_signed) {
-                /* The last byte carries the sign as an overpunch. It is moved
-                 * as a character and then made a plain digit again, which is
-                 * what "the operational sign will not be moved" means for a
-                 * trailing sign. Only if it was moved at all: a sender wider
-                 * than the receiver is truncated on the right first. */
+                /* The byte that carries the sign as an overpunch -- the last,
+                 * or the first under SIGN LEADING (#31) -- is moved as a
+                 * character and then made a plain digit again, which is what
+                 * "the operational sign will not be moved" means. Only if it
+                 * was moved at all: a sender wider than the receiver is
+                 * truncated on the right first. */
                 int dn = dsub ? d->elem : d->bytes;
                 int sn = ssub ? sv->elem : sv->bytes;
-                if (sn <= dn) {
+                int sb = sv->sgn_lead ? 0 : sn - 1;
+                if (sb < dn) {
                     char b[96];
-                    if (dsub) snprintf(b, sizeof b, "%d(6),X'F0'", sn - 1);
-                    else      snprintf(b, sizeof b, "%s+%d,X'F0'", d->label, sn - 1);
+                    if (dsub) snprintf(b, sizeof b, "%d(6),X'F0'", sb);
+                    else      snprintf(b, sizeof b, "%s+%d,X'F0'", d->label, sb);
                     asm_line("", "OI", b, "the sign is not moved");
                 }
             }
@@ -10089,7 +10435,7 @@ static void generate(void)
     asm_line("", "USING", "COBBEG,12", "");
     cur_block = 0; nblock = 1; est_pc = 0; blk_start = 0; in_code = 1;
     for (int k = 0; k < MAXPARA; k++) para_block[k] = -1;
-    memset(used_pa, 0, sizeof used_pa); memset(used_fa, 0, sizeof used_fa);
+    memset(used_pa, 0, sizeof used_pa); memset(used_sv, 0, sizeof used_sv);
     /* The constants region, after all the code, on R11 and R10 for good. */
     asm_line("", "B", "PRO001", "");
     asm_line("PROCON", "DC", "A(COBCON)", "");
@@ -10098,6 +10444,15 @@ static void generate(void)
     asm_line("", "LA", "10,2048(,10)", "");
     asm_line("", "USING", "COBCON,11", "");
     asm_line("", "USING", "COBCON+4096,10", "");
+    {
+        int nchunk = (wslen + CHUNK - 1) / CHUNK;
+        if (nchunk <= 1 && nlinkarea == 0) {
+            nbase_live = 1; con_limit = 12288;
+            asm_line("", "LA", "9,2048(,10)", "and its third 4K: one data base is enough");
+            asm_line("", "LA", "9,2048(,9)", "");
+            asm_line("", "USING", "COBCON+8192,9", "");
+        } else { nbase_live = NBASE; con_limit = 8192; }
+    }
     asm_line("", "ST", "13,SAVEAREA+4", "backward chain to caller");
     asm_line("", "LA", "0,SAVEAREA", "");
     asm_line("", "ST", "0,8(13)", "forward chain from caller");
@@ -10186,8 +10541,19 @@ static void generate(void)
         /* A block that has grown long ends at the next sentence: nothing
          * branches within a paragraph across a period, so the new block is
          * only ever fallen into. */
-        if (st->new_sentence && st->op != ST_PARA && est_pc - blk_start > 3000)
+        if (st->new_sentence && st->op != ST_PARA && est_pc - blk_start > 2048)
             start_block("a new code block: the paragraph is long");
+        /* A sentence is never split, so one longer than the room a block
+         * has left would run past what its base reaches -- an IF with a
+         * hundred statements in its arms after a long stretch of code. The
+         * estimate errs large, so this fires before the assembler would (#36). */
+        if (cur_block >= 0 && est_pc - blk_start > 4000) {
+            char m[160];
+            snprintf(m, sizeof m, "the sentence at line %d, with what came before it in the "
+                     "paragraph, is more code than one 4K block holds: split the "
+                     "paragraph or the sentence", st->line);
+            die(m);
+        }
         /* Which USE procedure could take an error on this statement. */
         gen_use_decl = -1;
         switch (st->op) {
@@ -10277,6 +10643,34 @@ static void generate(void)
                  * it for INPUT and I-O; a load (OUTPUT) leaves them shut, since
                  * VSAM does not maintain an alternate index while the base is
                  * being created -- BLDINDEX does that afterwards. */
+                int nmodes = !!f->opened_input + !!f->opened_output + !!f->opened_io + !!f->opened_extend;
+                char lmod[16] = "";
+                if (f->opened_output && nmodes > 1) {
+                    /* One static ACB serves every OPEN of the file, so its
+                     * assembled MACRF was the union of the program's modes:
+                     * the OUT,RST of an OPEN OUTPUT emptied the cluster again
+                     * at the OPEN INPUT that followed (#37). MODCB sets the
+                     * mode for this OPEN while the ACB is shut. OUT for the
+                     * modes that read, too: the retrieval RPL may say UPD. */
+                    snprintf(b, sizeof b, "ACB=%s,MACRF=(%s,%s,%s)", f->label,
+                             f->org == 0 ? "ADR" : "KEY",
+                             f->access == 2 ? "SEQ,DIR" : f->access == 1 ? "DIR" : "SEQ",
+                             st->src == 2 && !f->nalt ? "OUT,RST" : "OUT,NRS");
+                    asm_line("", "MODCB", b, "this OPEN's mode: MACRF is replaced whole");
+                    snprintf(lmod, sizeof lmod, "L%04d", ++genlabel);
+                    asm_line("", "LTR", "15,15", "");
+                    asm_line("", "BNZ", lmod, "a MODCB that failed is an OPEN that failed");
+                }
+                if (f->access == 2 && f->opened_io && f->has_write && f->opened_output) {
+                    /* A DYNAMIC file's insert string is DIR, so that a keyed
+                     * GET after a WRITE finds no sequential hold in its way;
+                     * but a cluster being loaded (OPEN OUTPUT: RST, or empty)
+                     * takes only sequential PUTs -- feedback 116 for a direct
+                     * one (#37). The string is SEQ while the file is being
+                     * created and DIR for every other OPEN. */
+                    snprintf(b, sizeof b, "RPL=%sN,OPTCD=(%s)", f->label, st->src == 2 ? "SEQ" : "DIR");
+                    asm_line("", "MODCB", b, st->src == 2 ? "insert sequentially: load mode" : "insert by key");
+                }
                 if (f->nalt && st->src == 1) {
                     /* INPUT: the base and its paths together. For I-O the
                      * base opens alone -- this VSAM will not have a path, or
@@ -10305,6 +10699,7 @@ static void generate(void)
                 asm_line("", "CH", "15,VSFOUR", "a warning?");
                 asm_line("", "BNE", "*+6", "");
                 asm_line("", "SR", "15,15", "then it opened");
+                if (lmod[0]) asm_line(lmod, "DS", "0H", "");
                 gen_vsam_status(f, NULL, vs_simple);
                 reset_bases();
                 break;
@@ -10328,8 +10723,48 @@ static void generate(void)
                      st->src == 3 ? "UPDAT" : st->src == 4 ? "EXTEND"
                      : st->src == 1 ? (f->reversed ? "RDBACK" : "INPUT") : "OUTPUT");
             asm_line("", "OPEN", b, st->src == 3 ? "QSAM update mode" : st->src == 4 ? "append" : "");
-            if (lskip[0]) { asm_line(lskip, "DS", "0H", ""); reset_bases(); }
-            gen_file_status(f, "00");
+            {
+                /* MVS comes back from an OPEN it could not do -- no DD, the
+                 * wrong DSORG -- with the DCB shut and DCBOFLGS' open bit off.
+                 * The status was stored as 00 regardless, and the first READ
+                 * went through the unopened DCB: 0C1 (#38). Status 30 and the
+                 * USE procedure, as the standard has it; a program with
+                 * neither cannot be told, so it ends here, with a message that
+                 * names the file, instead of in the READ. */
+                char lok[16], ldn[16];
+                snprintf(lok, sizeof lok, "L%04d", ++genlabel);
+                snprintf(ldn, sizeof ldn, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "%s+48,X'10'", f->label);
+                asm_line("", "TM", b, "DCBOFLGS: did it open?");
+                asm_line("", "BO", lok, "");
+                if (f->status_sym >= 0 || gen_use_decl >= 0) {
+                    gen_file_status(f, "30");
+                    gen_use_call();
+                } else {
+                    snprintf(b, sizeof b, "'COBC370: OPEN FAILED, DD %s',ROUTCDE=11", f->ddname);
+                    asm_line("", "WTO", b, "");
+                    asm_line("", "ABEND", "35", "");
+                }
+                asm_line("", "B", ldn, "");
+                asm_line(lok, "DS", "0H", "");
+                reset_bases();
+                if (lskip[0]) asm_line(lskip, "DS", "0H", "");
+                gen_file_status(f, "00");
+                if (f->print) {
+                    /* The line cells start over with the file: IV-15, the
+                     * LINAGE-COUNTER is 1 when the file is opened (#38). */
+                    snprintf(b, sizeof b, "%sO(2),%sO", f->pbuf, f->pbuf);
+                    asm_line("", "XC", b, "no lines owed from before");
+                    if (f->linage) {
+                        const Sym *lc = &syms[f->lc_sym];
+                        need_sym_base(lc);
+                        snprintf(b, sizeof b, "%s(2),=H'1'", lc->label);
+                        asm_line("", "MVC", b, "LINAGE-COUNTER = 1 at OPEN");
+                    }
+                }
+                if (f->isam != 2) { asm_line(ldn, "DS", "0H", ""); reset_bases(); }
+                else snprintf(lskip, sizeof lskip, "%s", ldn);   /* closed below the GETMAIN */
+            }
             if (f->isam == 2) {
                 /* BISAM reads a whole BLOCK, not a record, and wants 16 bytes
                  * of working room in front of it. BLKSIZE is only known once
@@ -10342,6 +10777,8 @@ static void generate(void)
                 asm_line("", "GETMAIN", "R,LV=(0)", "");
                 snprintf(b, sizeof b, "1,DB%03d+12", st->dst);
                 asm_line("", "ST", b, "area address into the DECB");
+                asm_line(lskip, "DS", "0H", "");
+                reset_bases();
             }
             break;
         }
@@ -10422,8 +10859,14 @@ static void generate(void)
                 asm_line("", "BALR", "14,15", "");
                 snprintf(b, sizeof b, "ECB=DB%03d", st->dst);
                 asm_line("", "WAIT", b, "not CHECK, and not WAITF");
-                snprintf(b, sizeof b, "DB%03d+24(2),=X'0000'", st->dst);
-                asm_line("", "CLC", b, "exception code set?");
+                /* DECBEXC1 bit X'02' says the record came from the overflow
+                 * area, which a file added to since its load is full of; it
+                 * is information, not an exception (#38). */
+                snprintf(b, sizeof b, "DB%03d+24,X'FD'", st->dst);
+                asm_line("", "TM", b, "an exception, other than 'overflow record'?");
+                asm_line("", "BNZ", le, "");
+                snprintf(b, sizeof b, "DB%03d+25,X'00'", st->dst);
+                asm_line("", "CLI", b, "");
                 asm_line("", "BNE", le, "");
                 asm_line("", "CLI", "ISFLG,X'00'", "or a permanent error?");
                 asm_line("", "BNE", le, "");
@@ -10432,8 +10875,18 @@ static void generate(void)
                 snprintf(b, sizeof b, "1,DB%03d+16", st->dst);
                 asm_line("", "L", b, "record pointer word");
                 need_sym_base(&syms[f->rec_sym]);
-                snprintf(b, sizeof b, "%s(%d),0(1)", syms[f->rec_sym].label, f->reclen);
-                asm_line("", "MVC", b, "block-relative record into the FD area");
+                if (f->reclen > 256) {
+                    snprintf(b, sizeof b, "2,%s", syms[f->rec_sym].label);
+                    asm_line("", "LA", b, "the FD area");
+                    snprintf(b, sizeof b, "3,%s", intern_half(f->reclen));
+                    asm_line("", "LH", b, "");
+                    asm_line("", "LR", "4,1", "the record in the block");
+                    asm_line("", "LR", "5,3", "");
+                    asm_line("", "MVCL", "2,4", "block-relative record into the FD area (#38)");
+                } else {
+                    snprintf(b, sizeof b, "%s(%d),0(1)", syms[f->rec_sym].label, f->reclen);
+                    asm_line("", "MVC", b, "block-relative record into the FD area");
+                }
                 if (st->src >= 0) {
                     const Sym *t = &syms[st->src];
                     asm_comment("  INTO: only reached when a record was found");
@@ -11273,14 +11726,7 @@ static void generate(void)
                  * and no no-op ahead of it. Zero has no negative, so it goes
                  * as BEFORE CSP, which is exactly that. */
                 if (st->adv_before && st->adv == 0 && st->adv_sym < 0) adv = -1013;
-                if (f->varrec) {
-                    const Sym *rw = &syms[f->rdw_sym];
-                    need_sym_base(rw);
-                    snprintf(b, sizeof b, "%s(2),%s", rw->label, intern_half(wrec->bytes + 4));
-                    asm_line("", "MVC", b, "RDW: the length of this record");
-                    snprintf(b, sizeof b, "%s+2(2),%s+2", rw->label, rw->label);
-                    asm_line("", "XC", b, "");
-                }
+                if (f->varrec) gen_write_rdw(f, wrec);
                 if (st->adv_sym >= 0) {
                     need_sym_base(&syms[st->adv_sym]);
                     gen_load(&syms[st->adv_sym], st->adv_sub, "PWK1");
@@ -11318,11 +11764,8 @@ static void generate(void)
                 /* The RDW carries the length of the record description named
                  * (IV-33: that is the record written), plus its own four. */
                 const Sym *rw = &syms[f->rdw_sym];
+                gen_write_rdw(f, wrec);
                 need_sym_base(rw);
-                snprintf(b, sizeof b, "%s(2),%s", rw->label, intern_half(wrec->bytes + 4));
-                asm_line("", "MVC", b, "RDW: the length of this record");
-                snprintf(b, sizeof b, "%s+2(2),%s+2", rw->label, rw->label);
-                asm_line("", "XC", b, "");
                 snprintf(b, sizeof b, "%s,%s", f->label, rw->label);
                 asm_line("", "PUT", b, "variable-length record");
                 gen_file_status(f, "00");
@@ -11417,6 +11860,23 @@ static void generate(void)
                     asm_line("", "MVC", b, "CHARACTERS BY: the first");
                     asm_line("", "LR", "4,5", "");
                     asm_line("", "BCTR", "4,0", "");
+                    if (n > 256) {
+                        /* EX takes eight bits of the length: 256 bytes at a
+                         * time first, the propagation carrying across each
+                         * chunk from its last byte (#32). */
+                        char lch[16]; snprintf(lch, sizeof lch, "L%04d", ++genlabel);
+                        char lgo[16]; snprintf(lgo, sizeof lgo, "L%04d", ++genlabel);
+                        asm_line(lch, "DS", "0H", "");
+                        snprintf(b, sizeof b, "4,%s", intern_full(256));
+                        asm_line("", "C", b, "more than a chunk left?");
+                        asm_line("", "BL", lgo, "");
+                        asm_line("", "MVC", "1(256,3),0(3)", "propagate a chunk");
+                        asm_line("", "LA", "3,256(,3)", "");
+                        snprintf(b, sizeof b, "4,%s", intern_full(256));
+                        asm_line("", "S", b, "");
+                        asm_line("", "B", lch, "");
+                        asm_line(lgo, "DS", "0H", "");
+                    }
                     asm_line("", "LTR", "4,4", "");
                     asm_line("", "BZ", lld, "");
                     asm_line("", "BCTR", "4,0", "");
@@ -11572,11 +12032,55 @@ static void generate(void)
                 need_sym_base(&syms[f->rec_sym]); need_sym_base(sv);
                 gen_move_alpha(&syms[f->rec_sym], NULL, sv, NULL);
             }
-            /* Neither macro takes a key. The RPL is holding the record the
-             * last GET returned, and that is the one acted on -- which is why
-             * changing the key first is an error rather than a move. */
-            need_sym_base(&syms[f->rec_sym]);
             char un[10]; rpl_name(f, 0, un, sizeof un);
+            if (f->access != 0) {
+                /* RANDOM or DYNAMIC: the record is the one whose key is in
+                 * the record area, READ or no READ (VI-13, VI-27). PUT and
+                 * ERASE act on a held record, so GET it first, for update --
+                 * around a copy of the record area, which the GET would
+                 * otherwise overwrite with the stored record. A key VSAM
+                 * cannot find is feedback 16, status 23 (#37). */
+                const Sym *rs = &syms[f->rec_sym];
+                need_sym_base(rs);
+                if (f->reclen > 256) {
+                    snprintf(b, sizeof b, "2,%sS", f->label); asm_line("", "LA", b, "");
+                    snprintf(b, sizeof b, "3,%s", intern_half(f->reclen)); asm_line("", "LH", b, "");
+                    snprintf(b, sizeof b, "4,%s", rs->label); asm_line("", "LA", b, "");
+                    asm_line("", "LR", "5,3", "");
+                    asm_line("", "MVCL", "2,4", "keep the record area");
+                } else {
+                    snprintf(b, sizeof b, "%sS(%d),%s", f->label, f->reclen, rs->label);
+                    asm_line("", "MVC", b, "keep the record area");
+                }
+                if (f->access == 2) {
+                    snprintf(b, sizeof b, "RPL=%s,OPTCD=(DIR,UPD)", un);
+                    asm_line("", "MODCB", b, "by key, for update");
+                    asm_line("", "LTR", "15,15", "");
+                    asm_line("", "BNZ", wle, "");
+                }
+                snprintf(b, sizeof b, "RPL=%s", un);
+                asm_line("", "GET", b, "hold the record the key names");
+                rpl_mark(f, un);
+                asm_line("", "LR", "0,15", "");
+                need_sym_base(rs);
+                if (f->reclen > 256) {
+                    snprintf(b, sizeof b, "2,%s", rs->label); asm_line("", "LA", b, "");
+                    snprintf(b, sizeof b, "3,%s", intern_half(f->reclen)); asm_line("", "LH", b, "");
+                    snprintf(b, sizeof b, "4,%sS", f->label); asm_line("", "LA", b, "");
+                    asm_line("", "LR", "5,3", "");
+                    asm_line("", "MVCL", "2,4", "the record area back");
+                } else {
+                    snprintf(b, sizeof b, "%s(%d),%sS", rs->label, f->reclen, f->label);
+                    asm_line("", "MVC", b, "the record area back");
+                }
+                asm_line("", "LTR", "15,0", "found?");
+                asm_line("", "BNZ", wle, "");
+            }
+            /* Neither macro takes a key. The RPL is holding the record the
+             * last GET returned (or the GET just above), and that is the one
+             * acted on -- which is why changing the key first is an error
+             * rather than a move. */
+            need_sym_base(&syms[f->rec_sym]);
             snprintf(b, sizeof b, "RPL=%s", un);
             asm_line("", erase ? "ERASE" : "PUT", b,
                      erase ? "erase the held record" : "put the held record back");
@@ -11628,15 +12132,12 @@ static void generate(void)
                     gen_cond(st->acond3, lr3, 1);
                 }
                 snprintf(r, sizeof r, "R%04d", ++nret);
-                snprintf(b, sizeof b, "15,%s", r);  asm_line("", "LA", b, "return here");
-                snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
+                perform_enter(x, nret);
                 branch_para(st->dst, "");
                 asm_line(r, "DS", "0H", "");
                 reload_block();
                 reset_bases();
-                used_fa[st->src] = 1;
-                snprintf(b, sizeof b, "15,FA%04d", st->src);  asm_line("", "L", b, "restore fall-through");
-                snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
+                perform_return(x, nret);
                 if (st->vary3_sym >= 0) {
                     emit_set_from_expr(&syms[st->vary3_sym], st->vary3_by, 1);
                     asm_line("", "B", s3, "");
@@ -11661,7 +12162,7 @@ static void generate(void)
                 snprintf(b, sizeof b, "DWK(8),%s", top);
                 asm_line("", "ZAP", b, "");
                 asm_line("", "CVB", "2,DWK", "repeat count");
-                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "STH", b, "");
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "ST", b, "");
             }
 
             int ltop = ++genlabel, lend = ++genlabel;
@@ -11672,28 +12173,25 @@ static void generate(void)
                times -- that is the COBOL rule, not an implementation choice. */
             if (st->cond) gen_cond(st->cond, lend, 1);
             if (st->times_expr) {
-                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "LH", b, "");
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "L", b, "");
                 asm_line("", "LTR", "2,2", "");
                 asm_line("", "BNP", le, "");
             }
 
             snprintf(r, sizeof r, "R%04d", ++nret);
-            snprintf(b, sizeof b, "15,%s", r);  asm_line("", "LA", b, "return here");
-            snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "into the range's exit cell");
+            perform_enter(x, nret);
             branch_para(st->dst, "");
             asm_line(r, "DS", "0H", "");
             reload_block();
             reset_bases();
-            used_fa[st->src] = 1;
-            snprintf(b, sizeof b, "15,FA%04d", st->src);  asm_line("", "L", b, "restore fall-through");
-            snprintf(b, sizeof b, "15,%s", x);  asm_line("", "ST", b, "");
+            perform_return(x, nret);
 
             if (st->vary_sym >= 0)
                 emit_set_from_expr(&syms[st->vary_sym], st->vary_by, 1);
             if (st->times_expr) {
-                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "LH", b, "");
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "L", b, "");
                 asm_line("", "BCTR", "2,0", "");
-                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "STH", b, "");
+                snprintf(b, sizeof b, "2,%s", pt); asm_line("", "ST", b, "");
             }
             if (looping) {
                 asm_line("", "B", lt, "");
@@ -12083,7 +12581,6 @@ static void generate(void)
                      * Addressing goes through R1 so it works the same whether
                      * the item is subscripted or reached off a base locator. */
                     int dn = st->dsub ? d->elem : d->bytes;
-                    if (dn > 256) die("a figurative MOVE is limited to 256 bytes");
                     char fd[64];
                     field_ref_m(d, st->dsub, FR_RX, dn, 6, fd, sizeof fd);
                     snprintf(b, sizeof b, "1,%s", fd);
@@ -12101,9 +12598,16 @@ static void generate(void)
                         snprintf(b, sizeof b, "0(1),%s", fig_byte(st->fig));
                         asm_line("", "MVI", b, "");
                     }
-                    if (dn > ul) {
-                        snprintf(b, sizeof b, "%d(%d,1),0(1)", ul, dn - ul);
-                        asm_line("", "MVC", b, "propagate across the item");
+                    /* Past 256 bytes the propagation continues in further
+                     * MVCs, each copying from the start of what is already
+                     * filled -- a record area is often longer than that,
+                     * and MOVE SPACES to one was refused (#38). */
+                    for (int done = ul; done < dn; ) {
+                        int k = dn - done; if (k > 256) k = 256;
+                        snprintf(b, sizeof b, "%d(%d,1),%d(1)", done, k, done < 256 ? 0 : done - 256);
+                        asm_line("", "MVC", b, done == ul ? "propagate across the item" : "and on");
+                        if (done + k - 4095 > 0 && done + k > 4095) die("a figurative MOVE to an item longer than 4095 bytes is not implemented");
+                        done += k;
                     }
                     break;
                 }
@@ -12150,7 +12654,20 @@ static void generate(void)
                     int dn = st->dsub ? d->elem : d->bytes;
                     if (dn > 256) die("MVC is limited to 256 bytes");
                     const char *sl;
-                    if (d->just) {
+                    if (d->edited && d->is_alpha) {
+                        /* Alphanumeric edited: the literal's characters into
+                         * the data positions, in order, spaces after it, the
+                         * insertion characters as the mask has them -- all
+                         * known here, so one MVC (#31). */
+                        char img[PIC_MAXMASK + 1]; int k = 0;
+                        for (int i = 0; i < d->masklen; i++)
+                            img[i] = d->mask[i] ? (char)d->mask[i]
+                                   : (k < st->litlen ? st->lit[k++] : ' ');
+                        for (int i = 0; i < d->masklen; i++)
+                            if (d->mask[i]) img[i] = (char)host_from_ebcdic(d->mask[i]);
+                        img[d->masklen] = 0;
+                        sl = intern_str(img, d->masklen, dn);
+                    } else if (d->just) {
                         /* A literal is a compile-time string, so JUSTIFIED
                          * costs nothing at run time: pad it on the left, and
                          * keep the right-hand characters when it is too long. */
@@ -12350,6 +12867,7 @@ static void generate(void)
     cur_block = -1;
     asm_line("", "DROP", "12", "");
     asm_line("COBCON", "DS", "0D", "constants, work areas, out-of-line code");
+    in_con = 1; est_con = 0;
 
     if (use_sort) {
         /* The sort's exits. Entered from the sort with its registers and its
@@ -12429,7 +12947,8 @@ static void generate(void)
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_PERFORM && stmts[i].times_expr) {
             char lab[16]; snprintf(lab, sizeof lab, "PT%03d", i);
-            asm_line(lab, "DC", "H'0'", "PERFORM n TIMES counter");
+            asm_line("", "DS", "0F", "");
+            asm_line(lab, "DC", "F'0'", "PERFORM n TIMES counter: 40000 TIMES is legal (#35)");
         }
 
     /* ---- report group renderers and page advances, reached only by BAL ---- */
@@ -12716,6 +13235,11 @@ static void generate(void)
             }
             if (rrncell[0])
                 asm_line(rrncell, "DS", "F", "relative record number");
+            if (f->access != 0 && f->opened_io) {
+                snprintf(b, sizeof b, "%sS", f->label);
+                char ln[24]; snprintf(ln, sizeof ln, "CL%d", f->reclen);
+                asm_line(b, "DS", ln, "the record area, across a REWRITE's GET");
+            }
             if (f->nalt) {
                 /* Each alternate key: an ACB on its path, and a retrieval RPL
                  * whose search argument is that key inside the record. The
@@ -12770,9 +13294,14 @@ static void generate(void)
                      (f->blk_records > 1 || (f->blk_chars > 0 && f->blk_chars > f->reclen))
                          ? "FB" : "F");
             char second[96];
-            snprintf(second, sizeof second,
-                     "LRECL=%d,BLKSIZE=%d,KEYLEN=%d,RKP=%d,OPTCD=L,SYNAD=ISYNAD",
-                     f->reclen, blksize, keylen, rkp);
+            if (f->cylofl)
+                snprintf(second, sizeof second,
+                         "LRECL=%d,BLKSIZE=%d,KEYLEN=%d,RKP=%d,OPTCD=LY,CYLOFL=%d,SYNAD=ISYNAD",
+                         f->reclen, blksize, keylen, rkp, f->cylofl);
+            else
+                snprintf(second, sizeof second,
+                         "LRECL=%d,BLKSIZE=%d,KEYLEN=%d,RKP=%d,OPTCD=L,SYNAD=ISYNAD",
+                         f->reclen, blksize, keylen, rkp);
             asm_cont(first, second);
             continue;
         }
@@ -13123,13 +13652,27 @@ static void generate(void)
             snprintf(cl, sizeof cl, "PA%04d", k); snprintf(a, sizeof a, "A(P%04d)", k);
             asm_line(cl, "DC", a, paras[k].name);
         }
-        if (used_fa[k]) {
-            snprintf(cl, sizeof cl, "FA%04d", k); snprintf(a, sizeof a, "A(F%04d)", k);
-            asm_line(cl, "DC", a, "fall-through, to put back");
-        }
     }
+    for (int k = 0; k < MAXSV; k++)
+        if (used_sv[k]) {
+            char cl[16];
+            snprintf(cl, sizeof cl, "SV%04d", k);
+            asm_line(cl, "DS", "F", "a PERFORM site's saved exit cell");
+        }
     /* The literal pool here, inside the region's 8K, rather than at the end
      * of the CSECT -- which is past the line table. */
+    in_con = 0;
+    /* Everything from COBCON to here is addressed off R11, R10 (and R9):
+     * 8K, or 12K. Past that the assembler fails on every later reference
+     * with no hint why; say so here instead, with the size (#36). The
+     * estimate ignores alignment, hence the allowance. */
+    if (est_con + est_con / 20 + 256 > con_limit) {
+        char m[200];
+        snprintf(m, sizeof m, "the program's constants and work areas come to about %ld bytes; "
+                 "%ld is what the base registers reach. Fewer or shorter literals, "
+                 "fewer files or reports, or a smaller program", est_con, con_limit);
+        die(m);
+    }
     asm_line("", "LTORG", "", "");
     if (gen_lines) {
         /* Last of all and out of any base's reach, which it needs no base
@@ -13290,6 +13833,22 @@ static void generate(void)
                              sy->elem - 1, sy->elem - 1, digs,
                              neg ? 'D' : 'C', digs[sy->elem - 1]);
                 }
+                else if (sy->is_signed && (sy->sgn_sep || sy->sgn_lead)) {
+                    /* The sign where the SIGN clause puts it: a separate
+                     * character before or after the digits, or the zone of
+                     * the first digit. A Z constant would have overpunched
+                     * the last (#34). */
+                    const char *p2 = v; int neg = 0;
+                    if (*p2 == '+' || *p2 == '-') { neg = (*p2 == '-'); p2++; }
+                    zero_pad(p2, sy->digits, digs, sizeof digs);
+                    if (sy->sgn_sep && sy->sgn_lead)
+                        snprintf(b, sizeof b, "%sC'%c',CL%d'%s'", dup, neg ? '-' : '+', sy->digits, digs);
+                    else if (sy->sgn_sep)
+                        snprintf(b, sizeof b, "%sCL%d'%s',C'%c'", dup, sy->digits, digs, neg ? '-' : '+');
+                    else
+                        snprintf(b, sizeof b, "%sXL1'%c%c',CL%d'%s'", dup, neg ? 'D' : 'C', digs[0],
+                                 sy->digits - 1, digs + 1);
+                }
                 else if (sy->is_signed) snprintf(b, sizeof b, "%sZL%d'%s'", dup, sy->elem, v);
                 else {
                     zero_pad(v, sy->elem, digs, sizeof digs);
@@ -13349,6 +13908,14 @@ static void generate(void)
         for (int i = 0; i < nsym; i++) {
             Sym *sy = &syms[i];
             if (!sy->linkage || sy->link_area != a || sy->is_88 || sy->is_switch) continue;
+            if (sy->alias) {
+                /* REDEFINES or 66: another name for storage already placed;
+                 * as a DS it shifted every later item (#34). */
+                snprintf(b, sizeof b, "LS%04d+%d", a, sy->offset);
+                snprintf(cmt, sizeof cmt, "%s %s", sy->name, sy->level == 66 ? "RENAMES" : "REDEFINES");
+                asm_line(sy->label, "EQU", b, cmt);
+                continue;
+            }
             if (sy->offset > at) {
                 ds_len(b, sizeof b, 'X', sy->offset - at);
                 asm_line("", "DS", b, "");

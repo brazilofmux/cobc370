@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -39,13 +42,15 @@ B0002    EQU   *
          USING B0002,12
 T0000    DS    0H
 * PERFORM SECT-A
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0003
          BR    15
 R0001    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0005
 T0001    DS    0H
 * DISPLAY
@@ -61,6 +66,8 @@ T0002    DS    0H
          MVC   D0000(6),S0002      literal move, space padded
 T0003    DS    0H
 * PERFORM SECT-B THRU SECT-C
+         L     14,X0010            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0010            into the range's exit cell
          L     15,PA0006
@@ -68,7 +75,7 @@ T0003    DS    0H
 R0002    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0010           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0010
 T0004    DS    0H
 * DISPLAY
@@ -84,6 +91,8 @@ T0005    DS    0H
          MVC   D0000(6),S0002      literal move, space padded
 T0006    DS    0H
 * PERFORM P-ONE THRU SECT-A
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0002
@@ -91,7 +100,7 @@ T0006    DS    0H
 R0003    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0005           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0005
 T0007    DS    0H
 * DISPLAY
@@ -107,6 +116,8 @@ T0008    DS    0H
          MVC   D0000(6),S0002      literal move, space padded
 T0009    DS    0H
 * PERFORM SECT-C
+         L     14,X0010            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0010            into the range's exit cell
          L     15,PA0009
@@ -114,7 +125,7 @@ T0009    DS    0H
 R0004    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0010           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0010
 T0010    DS    0H
 * DISPLAY
@@ -372,11 +383,13 @@ CB0012   DC    A(B0012)            a code block's base
 CB0013   DC    A(B0013)            a code block's base
 PA0002   DC    A(P0002)            P-ONE
 PA0003   DC    A(P0003)            SECT-A
-FA0005   DC    A(F0005)            fall-through, to put back
 PA0006   DC    A(P0006)            SECT-B
 PA0009   DC    A(P0009)            SECT-C
-FA0010   DC    A(F0010)            fall-through, to put back
 PA0011   DC    A(P0011)            SECT-D
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

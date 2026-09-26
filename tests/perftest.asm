@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -37,6 +40,8 @@ T0000    DS    0H
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK1(16),WK0+15(1)
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -51,6 +56,8 @@ L0002    DS    0H
          ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0003
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0001
@@ -58,7 +65,7 @@ L0002    DS    0H
 R0001    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0002           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0002
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -69,6 +76,8 @@ R0001    DS    0H
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0003
          B     L0002
@@ -93,12 +102,16 @@ T0003    DS    0H
 * MOVE 0 -> WS-TOT
          ZAP   PWK1(16),K0003+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),8,0          drop the digits past the picture
+         SRP   DWK(8),56,0
          CVB   2,DWK               packed -> binary
          ST    2,D0004
 T0004    DS    0H
 * MOVE 1 -> WS-IDX
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0003
 T0005    DS    0H
@@ -123,6 +136,8 @@ L0004    DS    0H
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0005
+         L     14,X0004            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0004            into the range's exit cell
          L     15,PA0003
@@ -130,7 +145,7 @@ L0004    DS    0H
 R0002    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0004           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0004
          B     L0004
 L0005    DS    0H
@@ -153,6 +168,8 @@ T0008    DS    0H
 * MOVE 0 -> WS-CNT
          ZAP   PWK1(16),K0003+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0005
 T0009    DS    0H
@@ -163,6 +180,8 @@ L0006    DS    0H
          USING WSC0000,8
          CLC   D0006(1),S0001      alphanumeric compare
          BE    L0007
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
@@ -170,7 +189,7 @@ L0006    DS    0H
 R0003    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0006           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0006
          B     L0006
 L0007    DS    0H
@@ -193,6 +212,8 @@ T0012    DS    0H
 * MOVE 0 -> WS-CNT
          ZAP   PWK1(16),K0003+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0005
 T0013    DS    0H
@@ -200,23 +221,25 @@ T0013    DS    0H
          ZAP   WK0+15(1),K0005+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT014
+         ST    2,PT014
 L0008    DS    0H
          DROP  8
-         LH    2,PT014
+         L     2,PT014
          LTR   2,2
          BNP   L0009
+         L     14,X0008            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0008            into the range's exit cell
          L     15,PA0007
          BR    15
 R0004    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0008           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0008
-         LH    2,PT014
+         L     2,PT014
          BCTR  2,0
-         STH   2,PT014
+         ST    2,PT014
          B     L0008
 L0009    DS    0H
 T0014    DS    0H
@@ -238,6 +261,8 @@ T0016    DS    0H
 * MOVE 0 -> WS-CNT
          ZAP   PWK1(16),K0003+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0005
 T0017    DS    0H
@@ -252,6 +277,8 @@ L0010    DS    0H
          ZAP   WK1+15(1),K0003+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BE    L0011
+         L     14,X0008            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0008            into the range's exit cell
          L     15,PA0007
@@ -259,7 +286,7 @@ L0010    DS    0H
 R0005    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0008           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0008
          B     L0010
 L0011    DS    0H
@@ -409,7 +436,8 @@ T0031    DS    0H
 F0008    DS    0H                  fall-through when not performed
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
-PT014    DC    H'0'                PERFORM n TIMES counter
+         DS    0F
+PT014    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
 X0002    DC    A(F0002)            FILL-EXIT
 X0004    DC    A(F0004)            SUM-EXIT
 X0006    DC    A(F0006)            EOF-EXIT
@@ -537,13 +565,14 @@ CB0007   DC    A(B0007)            a code block's base
 CB0008   DC    A(B0008)            a code block's base
 CB0009   DC    A(B0009)            a code block's base
 PA0001   DC    A(P0001)            FILL-PARA
-FA0002   DC    A(F0002)            fall-through, to put back
 PA0003   DC    A(P0003)            SUM-PARA
-FA0004   DC    A(F0004)            fall-through, to put back
 PA0005   DC    A(P0005)            EOF-PARA
-FA0006   DC    A(F0006)            fall-through, to put back
 PA0007   DC    A(P0007)            BUMP-PARA
-FA0008   DC    A(F0008)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

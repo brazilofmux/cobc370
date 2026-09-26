@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -579,6 +582,9 @@ T0080    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0020    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0081    DS    0H
 * ADD 21 -> TOTAL
          L     8,BL0000            base locator
@@ -822,9 +828,6 @@ T0116    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0029    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0002    EQU   *
-         USING B0002,12
 T0117    DS    0H
 * ADD 30 -> TOTAL
          L     8,BL0000            base locator
@@ -1122,6 +1125,9 @@ T0160    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0040    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0003    EQU   *
+         USING B0003,12
 T0161    DS    0H
 * ADD 41 -> TOTAL
          L     8,BL0000            base locator
@@ -1617,9 +1623,6 @@ T0233    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
-         BALR  12,0                a new code block: the paragraph is l
-B0003    EQU   *
-         USING B0003,12
 T0234    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -1665,6 +1668,9 @@ T0240    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0060    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0004    EQU   *
+         USING B0004,12
 T0241    DS    0H
 * ADD 61 -> TOTAL
          L     8,BL0000            base locator
@@ -2205,6 +2211,9 @@ T0320    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0080    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0005    EQU   *
+         USING B0005,12
 T0321    DS    0H
 * ADD 81 -> TOTAL
          L     8,BL0000            base locator
@@ -2421,9 +2430,6 @@ T0352    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0088    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0004    EQU   *
-         USING B0004,12
 T0353    DS    0H
 * ADD 89 -> TOTAL
          L     8,BL0000            base locator
@@ -2748,15 +2754,20 @@ T0400    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0100    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0006    EQU   *
+         USING B0006,12
 T0401    DS    0H
 * PERFORM SMALL-PARA
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
-         L     12,CB0004           this block's base again
-         L     15,FA0001           restore fall-through
+         L     12,CB0006           this block's base again
+         L     15,SV0001           what the cell held before
          ST    15,X0001
 T0402    DS    0H
 * DISPLAY
@@ -3226,9 +3237,6 @@ T0470    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0117    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0005    EQU   *
-         USING B0005,12
 T0471    DS    0H
 * ADD 118 -> TOTAL
          L     8,BL0000            base locator
@@ -3292,6 +3300,9 @@ T0479    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
+         BALR  12,0                a new code block: the paragraph is l
+B0007    EQU   *
+         USING B0007,12
 T0480    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -3832,6 +3843,9 @@ T0559    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
+         BALR  12,0                a new code block: the paragraph is l
+B0008    EQU   *
+         USING B0008,12
 T0560    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -4021,9 +4035,6 @@ T0587    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
-         BALR  12,0                a new code block: the paragraph is l
-B0006    EQU   *
-         USING B0006,12
 T0588    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -4375,6 +4386,9 @@ T0639    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
+         BALR  12,0                a new code block: the paragraph is l
+B0009    EQU   *
+         USING B0009,12
 T0640    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -4825,9 +4839,6 @@ T0706    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0176    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0007    EQU   *
-         USING B0007,12
 T0707    DS    0H
 * ADD 177 -> TOTAL
          L     8,BL0000            base locator
@@ -4918,6 +4929,9 @@ T0719    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
+         BALR  12,0                a new code block: the paragraph is l
+B0010    EQU   *
+         USING B0010,12
 T0720    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -5458,6 +5472,9 @@ T0799    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
+         BALR  12,0                a new code block: the paragraph is l
+B0011    EQU   *
+         USING B0011,12
 T0800    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -5478,13 +5495,15 @@ T0802    DS    0H
 L0200    DS    0H
 T0803    DS    0H
 * PERFORM SMALL-PARA
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0002    DS    0H
-         L     12,CB0007           this block's base again
-         L     15,FA0001           restore fall-through
+         L     12,CB0011           this block's base again
+         L     15,SV0002           what the cell held before
          ST    15,X0001
 T0804    DS    0H
 * DISPLAY
@@ -5630,9 +5649,6 @@ T0824    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0205    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0008    EQU   *
-         USING B0008,12
 T0825    DS    0H
 * ADD 206 -> TOTAL
          L     8,BL0000            base locator
@@ -6011,6 +6027,9 @@ T0880    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0219    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0012    EQU   *
+         USING B0012,12
 T0881    DS    0H
 * ADD 220 -> TOTAL
          L     8,BL0000            base locator
@@ -6425,9 +6444,6 @@ T0941    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
-         BALR  12,0                a new code block: the paragraph is l
-B0009    EQU   *
-         USING B0009,12
 T0942    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -6554,6 +6570,9 @@ T0960    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0239    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0013    EQU   *
+         USING B0013,12
 T0961    DS    0H
 * ADD 240 -> TOTAL
          L     8,BL0000            base locator
@@ -7094,6 +7113,9 @@ T1040    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0259    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0014    EQU   *
+         USING B0014,12
 T1041    DS    0H
 * ADD 260 -> TOTAL
          L     8,BL0000            base locator
@@ -7229,9 +7251,6 @@ T1060    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0264    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0010    EQU   *
-         USING B0010,12
 T1061    DS    0H
 * ADD 265 -> TOTAL
          L     8,BL0000            base locator
@@ -7637,6 +7656,9 @@ T1120    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0279    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0015    EQU   *
+         USING B0015,12
 T1121    DS    0H
 * ADD 280 -> TOTAL
          L     8,BL0000            base locator
@@ -8024,9 +8046,6 @@ T1177    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0000(7),PWK1(16)   packed -> zoned
          OI    D0000+6,X'F0'       unsigned: force an F zone
-         BALR  12,0                a new code block: the paragraph is l
-B0011    EQU   *
-         USING B0011,12
 T1178    DS    0H
 * IF
          PACK  WK0+12(4),D0000(7)  zoned -> packed
@@ -8180,6 +8199,9 @@ T1200    DS    0H
          OI    D0003+2,X'F0'       unsigned: force an F zone
          DROP  8
 L0299    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0016    EQU   *
+         USING B0016,12
 T1201    DS    0H
 * ADD 300 -> TOTAL
          L     8,BL0000            base locator
@@ -8209,13 +8231,15 @@ T1204    DS    0H
 L0300    DS    0H
 T1205    DS    0H
 * PERFORM SMALL-PARA
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0003    DS    0H
-         L     12,CB0011           this block's base again
-         L     15,FA0001           restore fall-through
+         L     12,CB0016           this block's base again
+         L     15,SV0003           what the cell held before
          ST    15,X0001
 T1206    DS    0H
 * DISPLAY
@@ -8267,8 +8291,8 @@ T1210    DS    0H
 * SMALL-PARA.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
-B0012    EQU   *
-         USING B0012,12
+B0017    EQU   *
+         USING B0017,12
 T1211    DS    0H
 * ADD 1 -> SCOUNT
          L     8,BL0000            base locator
@@ -9003,9 +9027,16 @@ CB0009   DC    A(B0009)            a code block's base
 CB0010   DC    A(B0010)            a code block's base
 CB0011   DC    A(B0011)            a code block's base
 CB0012   DC    A(B0012)            a code block's base
+CB0013   DC    A(B0013)            a code block's base
+CB0014   DC    A(B0014)            a code block's base
+CB0015   DC    A(B0015)            a code block's base
+CB0016   DC    A(B0016)            a code block's base
+CB0017   DC    A(B0017)            a code block's base
 PA0000   DC    A(P0000)            BIG-PARA
 PA0001   DC    A(P0001)            SMALL-PARA
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

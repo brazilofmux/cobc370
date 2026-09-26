@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -68,13 +71,15 @@ L0012    DS    0H
 L0001    DS    0H
 T0001    DS    0H
 * PERFORM LOAD-IT
+         L     14,X0004            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0004           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0004
 T0002    DS    0H
 * end of the SORT's input: E15 says no more
@@ -86,13 +91,15 @@ T0002    DS    0H
 L0002    DS    0H
 T0003    DS    0H
 * PERFORM SHOW-IT
+         L     14,X0007            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0007            into the range's exit cell
          L     15,PA0005
          BR    15
 R0002    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0007           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0007
 T0004    DS    0H
 * end of the SORT's output: E35 says no more
@@ -143,6 +150,8 @@ L0017    DS    0H
          ZAP   WK1+14(2),K0002+14(2)  literal
          CP    WK0+14(2),WK1+14(2)  numeric compare
          BH    L0018
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0003
@@ -150,7 +159,7 @@ L0017    DS    0H
 R0003    DS    0H
          L     12,CB0003           this block's base again
          DROP  8
-         L     15,FA0003           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0003
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -246,6 +255,8 @@ T0016    DS    0H
          LA    7,D0033(7)          element address
          PACK  PWK1(16),0(4,7)     zoned -> packed
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,DWK
          MVC   D0013(2),DWK        COMP, not on its boundary
@@ -267,6 +278,8 @@ T0018    DS    0H
          ZAP   WK1+13(3),DWK(8)
          SP    WK0+12(4),WK1+13(3)
          ZAP   DWK(8),WK0+12(4)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,DWK
          MVC   D0013(2),DWK        COMP, not on its boundary
@@ -386,21 +399,27 @@ T0030    DS    0H
 * MOVE W-ZD -> D-ZD
          PACK  PWK1(16),D0011(3)   zoned -> packed
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0001               not negative?
          MVI   EDWK+3,C'-'
-G0001    DS    0H
+         B     G0002
+G0001    MVI   EDWK+3,C' '
+G0002    DS    0H
          MVC   D0035(4),EDWK+3     the edited result
 T0031    DS    0H
 * MOVE W-PD -> D-PD
          ZAP   PWK1(16),D0012(2)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0003               not negative?
          MVI   EDWK+3,C'-'
-G0003    DS    0H
+         B     G0004
+G0003    MVI   EDWK+3,C' '
+G0004    DS    0H
          MVC   D0036(4),EDWK+3     the edited result
 T0032    DS    0H
 * MOVE W-BI -> D-BI
@@ -409,11 +428,14 @@ T0032    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0002       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0005               not negative?
          MVI   EDWK+2,C'-'
-G0005    DS    0H
+         B     G0006
+G0005    MVI   EDWK+2,C' '
+G0006    DS    0H
          MVC   D0037(5),EDWK+2     the edited result
 T0033    DS    0H
 * DISPLAY
@@ -606,12 +628,12 @@ CB0007   DC    A(B0007)            a code block's base
 CB0008   DC    A(B0008)            a code block's base
 PA0001   DC    A(P0001)            LOAD-IT
 PA0003   DC    A(P0003)            LOAD-ONE
-FA0003   DC    A(F0003)            fall-through, to put back
 PA0004   DC    A(P0004)            L-EXIT
-FA0004   DC    A(F0004)            fall-through, to put back
 PA0005   DC    A(P0005)            SHOW-IT
 PA0007   DC    A(P0007)            S-EXIT
-FA0007   DC    A(F0007)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -123,13 +126,15 @@ G0001    DS    0H
 G0003    DS    0H
          DROP  8
 *  no phrase for this: the USE procedure
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0000
          BR    15
 R0001    DS    0H
          L     12,CB0006           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
 G0002    DS    0H
 T0005    DS    0H
@@ -153,13 +158,15 @@ G0004    DS    0H
 G0006    DS    0H
          DROP  8
 *  no phrase for this: the USE procedure
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0002
          BR    15
 R0002    DS    0H
          L     12,CB0006           this block's base again
-         L     15,FA0003           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0003
 G0005    DS    0H
 T0006    DS    0H
@@ -202,13 +209,15 @@ G0010    DS    0H
          MVI   FD000RA,X'00'
 L0009    DS    0H
 *  no phrase for this: the USE procedure
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0000
          BR    15
 R0003    DS    0H
          L     12,CB0006           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0001
 G0008    DS    0H
          B     L0002
@@ -242,13 +251,15 @@ G0014    DS    0H
          MVI   FD000RA,X'00'
 L0010    DS    0H
 *  no phrase for this: the USE procedure
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0000
          BR    15
 R0004    DS    0H
          L     12,CB0006           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0001
 G0012    DS    0H
 L0002    DS    0H
@@ -267,7 +278,10 @@ T0009    DS    0H
 * MOVE 1 -> RR-NUM
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0008
 T0010    DS    0H
 * READ RRDS-FILE
@@ -302,13 +316,15 @@ G0018    DS    0H
          MVI   FD001RA,X'00'
 L0011    DS    0H
 *  no phrase for this: the USE procedure
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0002
          BR    15
 R0005    DS    0H
          L     12,CB0006           this block's base again
-         L     15,FA0003           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0003
 G0016    DS    0H
          B     L0004
@@ -342,16 +358,21 @@ G0022    DS    0H
          MVI   FD001RA,X'00'
 L0012    DS    0H
 *  no phrase for this: the USE procedure
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0006           kept for the return
          LA    15,R0006            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0002
          BR    15
 R0006    DS    0H
          L     12,CB0006           this block's base again
-         L     15,FA0003           restore fall-through
+         L     15,SV0006           what the cell held before
          ST    15,X0003
 G0020    DS    0H
 L0004    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0007    EQU   *
+         USING B0007,12
 T0011    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(29),S0006
@@ -367,7 +388,10 @@ T0012    DS    0H
 * MOVE 99999 -> RR-NUM
          ZAP   PWK1(16),K0002+13(3)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0008
 T0013    DS    0H
 * READ RRDS-FILE
@@ -402,13 +426,15 @@ G0026    DS    0H
          MVI   FD001RA,X'00'
 L0013    DS    0H
 *  no phrase for this: the USE procedure
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0007           kept for the return
          LA    15,R0007            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0002
          BR    15
 R0007    DS    0H
-         L     12,CB0006           this block's base again
-         L     15,FA0003           restore fall-through
+         L     12,CB0007           this block's base again
+         L     15,SV0007           what the cell held before
          ST    15,X0003
 G0024    DS    0H
          B     L0006
@@ -442,19 +468,18 @@ G0030    DS    0H
          MVI   FD001RA,X'00'
 L0014    DS    0H
 *  no phrase for this: the USE procedure
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0008           kept for the return
          LA    15,R0008            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0002
          BR    15
 R0008    DS    0H
-         L     12,CB0006           this block's base again
-         L     15,FA0003           restore fall-through
+         L     12,CB0007           this block's base again
+         L     15,SV0008           what the cell held before
          ST    15,X0003
 G0028    DS    0H
 L0006    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0007    EQU   *
-         USING B0007,12
 T0014    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(28),S0007
@@ -542,6 +567,9 @@ T0017    DS    0H
          L     15,VDISP
          BALR  14,15
 L0008    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0008    EQU   *
+         USING B0008,12
 T0018    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(19),S0009
@@ -567,13 +595,15 @@ G0039    DS    0H
 G0041    DS    0H
          DROP  8
 *  no phrase for this: the USE procedure
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0009           kept for the return
          LA    15,R0009            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0000
          BR    15
 R0009    DS    0H
-         L     12,CB0007           this block's base again
-         L     15,FA0001           restore fall-through
+         L     12,CB0008           this block's base again
+         L     15,SV0009           what the cell held before
          ST    15,X0001
 G0040    DS    0H
 T0020    DS    0H
@@ -594,13 +624,15 @@ G0042    DS    0H
 G0044    DS    0H
          DROP  8
 *  no phrase for this: the USE procedure
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0010           kept for the return
          LA    15,R0010            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0002
          BR    15
 R0010    DS    0H
-         L     12,CB0007           this block's base again
-         L     15,FA0003           restore fall-through
+         L     12,CB0008           this block's base again
+         L     15,SV0010           what the cell held before
          ST    15,X0003
 G0043    DS    0H
 T0021    DS    0H
@@ -664,6 +696,7 @@ FD001RA  DC    F'0'                has carried a request
 FD001R   RPL   ACB=FD001,AREA=D0005,                                   X
                AREALEN=80,RECLEN=80,ARG=D0008,OPTCD=(KEY,DIR,KEQ,UPD,  X
                MVE)
+FD001S   DS    CL80                the record area, across a REWRITE's
 K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
 K0002    EQU   *-13
@@ -752,11 +785,20 @@ CB0004   DC    A(B0004)            a code block's base
 CB0005   DC    A(B0005)            a code block's base
 CB0006   DC    A(B0006)            a code block's base
 CB0007   DC    A(B0007)            a code block's base
+CB0008   DC    A(B0008)            a code block's base
 PA0000   DC    A(P0000)            K-ERR
-FA0001   DC    A(F0001)            fall-through, to put back
 PA0002   DC    A(P0002)            R-ERR
-FA0003   DC    A(F0003)            fall-through, to put back
 PA0004   DC    A(P0004)            MAIN
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
+SV0006   DS    F                   a PERFORM site's saved exit cell
+SV0007   DS    F                   a PERFORM site's saved exit cell
+SV0008   DS    F                   a PERFORM site's saved exit cell
+SV0009   DS    F                   a PERFORM site's saved exit cell
+SV0010   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

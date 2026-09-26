@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -626,7 +629,7 @@ D0000    DC    CL5'12345'          U5 PIC 9(5)v0 DISP
          DS    XL3                 reserve the rest of a table
 D0001    DC    ZL5'-123'           S5 PIC S9(5)v0 DISP
          DS    XL3                 reserve the rest of a table
-D0002    DC    ZL6'0'              SEP5 PIC S9(5)v0 DISP
+D0002    DC    CL5'00000',C'+'     SEP5 PIC S9(5)v0 DISP
          DS    XL2                 reserve the rest of a table
 D0003    DC    CL5'ABCDE'          A5 PIC X(5)
          DS    XL3                 reserve the rest of a table

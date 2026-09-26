@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -307,6 +310,9 @@ T0009    DS    0H
          BALR  14,15
          DROP  8
 L0004    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0010    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0006
@@ -412,18 +418,17 @@ T0013    DS    0H
          L     15,VDISP
          BALR  14,15
 L0006    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0002    EQU   *
-         USING B0002,12
 T0014    DS    0H
 * PERFORM SHOW
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
          BR    15
 R0001    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0002           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0002
 T0015    DS    0H
 * MOVE AAA -> AIX-DEPT
@@ -432,6 +437,16 @@ T0015    DS    0H
          MVC   D0004(3),S0009      literal move, space padded
 T0016    DS    0H
 * REWRITE AIX-RECORD
+         MVC   FD000S(80),D0001    keep the record area
+         MODCB RPL=FD000R,OPTCD=(DIR,UPD)  by key, for update
+         LTR   15,15
+         BNZ   L0007
+         GET   RPL=FD000R          hold the record the key names
+         MVI   FD000RA,X'01'       the RPL has carried a request
+         LR    0,15
+         MVC   D0001(80),FD000S    the record area back
+         LTR   15,0                found?
+         BNZ   L0007
          PUT   RPL=FD000R          put the held record back
          MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
@@ -542,6 +557,9 @@ T0017    DS    0H
          BALR  14,15
          DROP  8
 L0008    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0003    EQU   *
+         USING B0003,12
 T0018    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(8),S0011
@@ -649,18 +667,30 @@ T0021    DS    0H
 L0010    DS    0H
 T0022    DS    0H
 * PERFORM SHOW
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
          BR    15
 R0002    DS    0H
-         L     12,CB0002           this block's base again
-         L     15,FA0002           restore fall-through
+         L     12,CB0003           this block's base again
+         L     15,SV0002           what the cell held before
          ST    15,X0002
 T0023    DS    0H
 * DELETE AIX-FILE
          L     8,BL0000            base locator
          USING WSC0000,8
+         MVC   FD000S(80),D0001    keep the record area
+         MODCB RPL=FD000R,OPTCD=(DIR,UPD)  by key, for update
+         LTR   15,15
+         BNZ   L0011
+         GET   RPL=FD000R          hold the record the key names
+         MVI   FD000RA,X'01'       the RPL has carried a request
+         LR    0,15
+         MVC   D0001(80),FD000S    the record area back
+         LTR   15,0                found?
+         BNZ   L0011
          ERASE RPL=FD000R          erase the held record
          MVI   FD000RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
@@ -767,8 +797,8 @@ T0024    DS    0H
          DROP  8
 L0012    DS    0H
          BALR  12,0                a new code block: the paragraph is l
-B0003    EQU   *
-         USING B0003,12
+B0004    EQU   *
+         USING B0004,12
 T0025    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0015
@@ -879,22 +909,24 @@ T0029    DS    0H
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT037
+         ST    2,PT037
 L0036    DS    0H
-         LH    2,PT037
+         L     2,PT037
          LTR   2,2
          BNP   L0037
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0003    DS    0H
-         L     12,CB0003           this block's base again
-         L     15,FA0001           restore fall-through
+         L     12,CB0004           this block's base again
+         L     15,SV0003           what the cell held before
          ST    15,X0001
-         LH    2,PT037
+         L     2,PT037
          BCTR  2,0
-         STH   2,PT037
+         ST    2,PT037
          B     L0036
 L0037    DS    0H
 T0030    DS    0H
@@ -921,6 +953,9 @@ G0091    DS    0H
 G0093    DS    0H
          DROP  8
 G0092    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0005    EQU   *
+         USING B0005,12
 T0031    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(6),S0018
@@ -942,8 +977,8 @@ T0032    DS    0H
 * NEXT-ONE.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
-B0004    EQU   *
-         USING B0004,12
+B0006    EQU   *
+         USING B0006,12
 T0033    DS    0H
 * READ AIX-FILE
          L     1,FD000X            the key of reference's RPL
@@ -1070,14 +1105,16 @@ T0035    DS    0H
          BE    L0017
 T0036    DS    0H
 * PERFORM SHOW
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
          BR    15
 R0004    DS    0H
-         L     12,CB0004           this block's base again
+         L     12,CB0006           this block's base again
          DROP  8
-         L     15,FA0002           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0002
 L0017    DS    0H
 * end of a PERFORM range: return through its cell
@@ -1087,8 +1124,8 @@ F0001    DS    0H                  fall-through when not performed
 * SHOW.
 P0002    DS    0H
          BALR  12,0                this paragraph's code base
-B0005    EQU   *
-         USING B0005,12
+B0007    EQU   *
+         USING B0007,12
 T0037    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
@@ -1109,7 +1146,8 @@ T0037    DS    0H
 F0002    DS    0H                  fall-through when not performed
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
-PT037    DC    H'0'                PERFORM n TIMES counter
+         DS    0F
+PT037    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
 X0001    DC    A(F0001)            NEXT-ONE
 X0002    DC    A(F0002)            SHOW
 VDISP    DC    V(COBDISP)
@@ -1181,6 +1219,7 @@ FD000NA  DC    F'0'                has carried a request
 FD000N   RPL   ACB=FD000,AREA=D0001,                                   X
                AREALEN=80,RECLEN=80,ARG=D0002,KEYLEN=5,OPTCD=(KEY,DIR, X
                KEQ,NUP,MVE)
+FD000S   DS    CL80                the record area, across a REWRITE's
 FD000P1  ACB   DDNAME=AIXBA01,MACRF=(KEY,SEQ,DIR,IN)  AIX-DEPT
 FD000Q1A DC    F'0'                has carried a request
 FD000Q1   RPL   ACB=FD000P1,AREA=D0001,                                X
@@ -1291,10 +1330,14 @@ CB0002   DC    A(B0002)            a code block's base
 CB0003   DC    A(B0003)            a code block's base
 CB0004   DC    A(B0004)            a code block's base
 CB0005   DC    A(B0005)            a code block's base
+CB0006   DC    A(B0006)            a code block's base
+CB0007   DC    A(B0007)            a code block's base
 PA0001   DC    A(P0001)            NEXT-ONE
-FA0001   DC    A(F0001)            fall-through, to put back
 PA0002   DC    A(P0002)            SHOW
-FA0002   DC    A(F0002)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

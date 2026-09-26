@@ -17,8 +17,12 @@ typedef struct {
     int  edited;      /* needs an ED pattern rather than a plain move */
     int  bytes;       /* character positions in the field */
     int  floating;    /* a floating insertion string is present -> EDMK */
-    char sign_char;   /* '+' or '-' if the picture carries a sign symbol */
-    int  sign_pos;    /* mask index of a FIXED sign position */
+    char sign_char;   /* '+' or '-': a FIXED sign symbol, at sign_pos */
+    int  sign_pos;    /* mask index of a FIXED sign position, -1 if none */
+    char flt_char;    /* the floating symbol ('+', '-' or '$'), 0 if none */
+    int  cur_pos;     /* mask index of a FIXED currency symbol, -1 if none */
+    int  no_nine;     /* no '9': a zero value shows no digit at all */
+    char fillch;      /* ' ' or '*' */
     int  first_sel;   /* mask index of the first digit selector */
     int  need_lead_start; /* the first digit position always prints, so
                              significance must be on before it: the starter

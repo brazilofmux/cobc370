@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -74,11 +77,14 @@ T0005    DS    0H
 * MOVE DEF-T -> SHOW-N
          PACK  PWK1(16),D0000(5)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0001               not negative?
          MVI   EDWK+3,C'-'
-G0001    DS    0H
+         B     G0002
+G0001    MVI   EDWK+3,C' '
+G0002    DS    0H
          MVC   D0009(6),EDWK+3     the edited result
 T0006    DS    0H
 * DISPLAY
@@ -94,11 +100,14 @@ T0007    DS    0H
          OI    ZWK,X'F0'           the leading digit is a digit again
          PACK  PWK1(16),ZWK(5)     zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0003               not negative?
          MVI   EDWK+3,C'-'
-G0003    DS    0H
+         B     G0004
+G0003    MVI   EDWK+3,C' '
+G0004    DS    0H
          MVC   D0009(6),EDWK+3     the edited result
 T0008    DS    0H
 * DISPLAY
@@ -111,11 +120,14 @@ T0009    DS    0H
 * MOVE TRA-O -> SHOW-N
          PACK  PWK1(16),D0002(5)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0005               not negative?
          MVI   EDWK+3,C'-'
-G0005    DS    0H
+         B     G0006
+G0005    MVI   EDWK+3,C' '
+G0006    DS    0H
          MVC   D0009(6),EDWK+3     the edited result
 T0010    DS    0H
 * DISPLAY
@@ -134,11 +146,14 @@ T0011    DS    0H
          OI    PWK1+15,X'0D'       and make it negative
 L0005    DS    0H
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0007               not negative?
          MVI   EDWK+3,C'-'
-G0007    DS    0H
+         B     G0008
+G0007    MVI   EDWK+3,C' '
+G0008    DS    0H
          MVC   D0009(6),EDWK+3     the edited result
 T0012    DS    0H
 * DISPLAY
@@ -157,11 +172,14 @@ T0013    DS    0H
          OI    PWK1+15,X'0D'       and make it negative
 L0006    DS    0H
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0009               not negative?
          MVI   EDWK+3,C'-'
-G0009    DS    0H
+         B     G0010
+G0009    MVI   EDWK+3,C' '
+G0010    DS    0H
          MVC   D0009(6),EDWK+3     the edited result
 T0014    DS    0H
 * DISPLAY
@@ -242,11 +260,14 @@ T0022    DS    0H
          OI    ZWK,X'F0'           the leading digit is a digit again
          PACK  PWK1(16),ZWK(5)     zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0011               not negative?
          MVI   EDWK+3,C'-'
-G0011    DS    0H
+         B     G0012
+G0011    MVI   EDWK+3,C' '
+G0012    DS    0H
          MVC   D0009(6),EDWK+3     the edited result
 T0023    DS    0H
 * DISPLAY
@@ -274,11 +295,14 @@ T0025    DS    0H
          OI    ZWK,X'F0'           the leading digit is a digit again
          PACK  PWK1(16),ZWK(5)     zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          BNM   G0013               not negative?
          MVI   EDWK+3,C'-'
-G0013    DS    0H
+         B     G0014
+G0013    MVI   EDWK+3,C' '
+G0014    DS    0H
          MVC   D0009(6),EDWK+3     the edited result
 T0026    DS    0H
 * DISPLAY
@@ -508,16 +532,16 @@ WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DC    ZL5'0'              DEF-T PIC S9(5)v0 DISP
          DS    XL3                 reserve the rest of a table
-D0001    DC    ZL5'0'              LEA-O PIC S9(5)v0 DISP
+D0001    DC    XL1'C0',CL4'0000'   LEA-O PIC S9(5)v0 DISP
          DS    XL3                 reserve the rest of a table
 D0002    DC    ZL5'0'              TRA-O PIC S9(5)v0 DISP
          DS    XL3                 reserve the rest of a table
 D0003    DS    0CL6                G-LEA-S (01 group)
-D0004    DC    ZL6'0'              LEA-S PIC S9(5)v0 DISP
+D0004    DC    C'+',CL5'00000'     LEA-S PIC S9(5)v0 DISP
 D0005    EQU   COBWS+24            X-LEA-S REDEFINES
          DS    XL2                 reserve the rest of a table
 D0006    DS    0CL6                G-TRA-S (01 group)
-D0007    DC    ZL6'0'              TRA-S PIC S9(5)v0 DISP
+D0007    DC    CL5'00000',C'+'     TRA-S PIC S9(5)v0 DISP
 D0008    EQU   COBWS+32            X-TRA-S REDEFINES
          DS    XL2                 reserve the rest of a table
 D0009    DC    CL6' '              SHOW-N edited, 6 chars

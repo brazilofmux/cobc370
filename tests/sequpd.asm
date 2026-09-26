@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -30,6 +33,13 @@ SPIEARMD DS    0H
 T0000    DS    0H
 * OPEN OUTPUT OUT-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0026
+         WTO   'COBC370: OPEN FAILED, DD UPDFILE',ROUTCDE=11
+         ABEND 35
+         B     L0027
+L0026    DS    0H
+L0027    DS    0H
 T0001    DS    0H
 * MOVE RECORD 01 ORIGINAL   -> OUT-REC
          L     8,BL0000            base locator
@@ -96,6 +106,16 @@ T0013    DS    0H
 T0014    DS    0H
 * OPEN I-O UPD-FILE
          OPEN  (FD001,UPDAT)       QSAM update mode
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0028
+         WTO   'COBC370: OPEN FAILED, DD UPDFILE',ROUTCDE=11
+         ABEND 35
+         B     L0029
+L0028    DS    0H
+L0029    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0001    EQU   *
+         USING B0001,12
 T0015    DS    0H
 * MOVE 0 -> CTR
          L     8,BL0000            base locator
@@ -108,8 +128,8 @@ T0016    DS    0H
 * UPD-LOOP.
 P0000    DS    0H
          BALR  12,0                this paragraph's code base
-B0001    EQU   *
-         USING B0001,12
+B0002    EQU   *
+         USING B0002,12
 T0017    DS    0H
 * READ UPD-FILE
          LA    1,L0013             this READ's AT END
@@ -192,12 +212,12 @@ T0027    DS    0H
 L0018    DS    0H
 T0028    DS    0H
 * GO TO UPD-LOOP
-         B     B0001
+         B     B0002
 * UPD-CHANGE.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
-B0002    EQU   *
-         USING B0002,12
+B0003    EQU   *
+         USING B0003,12
 T0029    DS    0H
 * MOVE CHANGED    -> U-TAIL
          L     8,BL0000            base locator
@@ -217,8 +237,8 @@ T0031    DS    0H
 * UPD-FROM.
 P0002    DS    0H
          BALR  12,0                this paragraph's code base
-B0003    EQU   *
-         USING B0003,12
+B0004    EQU   *
+         USING B0004,12
 T0032    DS    0H
 * REWRITE UPD-REC
 *  FROM: fill the record area first
@@ -237,14 +257,21 @@ T0033    DS    0H
 * UPD-DONE.
 P0003    DS    0H
          BALR  12,0                this paragraph's code base
-B0004    EQU   *
-         USING B0004,12
+B0005    EQU   *
+         USING B0005,12
 T0034    DS    0H
 * CLOSE UPD-FILE
          CLOSE (FD001)
 T0035    DS    0H
 * OPEN INPUT IN-FILE
          OPEN  (FD002,INPUT)
+         TM    FD002+48,X'10'      DCBOFLGS: did it open?
+         BO    L0030
+         WTO   'COBC370: OPEN FAILED, DD UPDFILE',ROUTCDE=11
+         ABEND 35
+         B     L0031
+L0030    DS    0H
+L0031    DS    0H
 T0036    DS    0H
 * MOVE N -> EOF-FLAG
          L     8,BL0000            base locator
@@ -254,8 +281,8 @@ T0036    DS    0H
 * IN-LOOP.
 P0004    DS    0H
          BALR  12,0                this paragraph's code base
-B0005    EQU   *
-         USING B0005,12
+B0006    EQU   *
+         USING B0006,12
 T0037    DS    0H
 * READ IN-FILE
          LA    1,L0023             this READ's AT END
@@ -300,13 +327,13 @@ T0042    DS    0H
          BALR  14,15
 T0043    DS    0H
 * GO TO IN-LOOP
-         B     B0005
+         B     B0006
          DROP  8
 * IN-DONE.
 P0005    DS    0H
          BALR  12,0                this paragraph's code base
-B0006    EQU   *
-         USING B0006,12
+B0007    EQU   *
+         USING B0007,12
 T0044    DS    0H
 * CLOSE IN-FILE
          CLOSE (FD002)
@@ -438,6 +465,7 @@ CB0003   DC    A(B0003)            a code block's base
 CB0004   DC    A(B0004)            a code block's base
 CB0005   DC    A(B0005)            a code block's base
 CB0006   DC    A(B0006)            a code block's base
+CB0007   DC    A(B0007)            a code block's base
 PA0000   DC    A(P0000)            UPD-LOOP
 PA0001   DC    A(P0001)            UPD-CHANGE
 PA0002   DC    A(P0002)            UPD-FROM

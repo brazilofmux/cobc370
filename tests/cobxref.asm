@@ -84,6 +84,8 @@ T0007    DS    0H
          MVC   D0212(6),D0258      alphanumeric move
 T0008    DS    0H
 * PERFORM OPEN-SOURCE-FILE THRU READ-EXIT
+         L     14,X0100            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0100            into the range's exit cell
          L     15,PA0098
@@ -91,14 +93,29 @@ T0008    DS    0H
 R0001    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0100           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0100
 T0009    DS    0H
 * OPEN OUTPUT SUPPLEMENTAL-PART1-OUT
          OPEN  (FD002,OUTPUT)
+         TM    FD002+48,X'10'      DCBOFLGS: did it open?
+         BO    L0237
+         WTO   'COBC370: OPEN FAILED, DD SYSPART1',ROUTCDE=11
+         ABEND 35
+         B     L0238
+L0237    DS    0H
+L0238    DS    0H
 T0010    DS    0H
 * OPEN OUTPUT SOURCE-LISTING
          OPEN  (FD003,OUTPUT)
+         TM    FD003+48,X'10'      DCBOFLGS: did it open?
+         BO    L0239
+         WTO   'COBC370: OPEN FAILED, DD PRINT',ROUTCDE=11
+         ABEND 35
+         B     L0240
+L0239    DS    0H
+         XC    FP003O(2),FP003O    no lines owed from before
+L0240    DS    0H
 * READLOOP1.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
@@ -106,33 +123,39 @@ B0002    EQU   *
          USING B0002,12
 T0011    DS    0H
 * PERFORM READ-A-SOURCE-RECORD THRU READ-EXIT
+         L     14,X0100            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0100            into the range's exit cell
          L     15,PA0099
          BR    15
 R0002    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0100           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0100
 T0012    DS    0H
 * PERFORM INC-COBOLREFNO
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0003    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0005
 T0013    DS    0H
 * PERFORM OUTPUTSOURCE
+         L     14,X0097            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0097            into the range's exit cell
          L     15,PA0097
          BR    15
 R0004    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0097           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0097
 T0014    DS    0H
 * IF
@@ -149,6 +172,8 @@ T0016    DS    0H
 * MOVE 0 -> WBUCKET
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -188,7 +213,10 @@ T0022    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0259
@@ -196,25 +224,28 @@ T0023    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0259
 T0024    DS    0H
 * INSPECT SV3PROGRAMID
          LA    3,D0132             the field
          LA    5,61                its length
          SR    4,4                 the tally
-L0243    CH    5,H0001             room for the string?
-         BL    L0245
+L0247    CH    5,H0001             room for the string?
+         BL    L0249
          CLC   0(1,3),S0001
-         BNE   L0245
+         BNE   L0249
          LA    4,1(4)              one more
          LA    3,1(3)              past the string
          SH    5,H0001
-         B     L0243
-L0244    DS    0H
+         B     L0247
+L0248    DS    0H
          LA    3,1(3)
-         BCT   5,L0243
-L0245    DS    0H
+         BCT   5,L0247
+L0249    DS    0H
          DROP  8
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
@@ -225,7 +256,10 @@ L0245    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0259
 T0025    DS    0H
 * MOVE TALLY -> Q
@@ -241,6 +275,8 @@ T0026    DS    0H
          BNH   L0004
 T0027    DS    0H
 * PERFORM READ-A-SOURCE-RECORD THRU READ-EXIT
+         L     14,X0100            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0100            into the range's exit cell
          L     15,PA0099
@@ -248,27 +284,31 @@ T0027    DS    0H
 R0005    DS    0H
          L     12,CB0003           this block's base again
          DROP  8
-         L     15,FA0100           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0100
 T0028    DS    0H
 * PERFORM INC-COBOLREFNO
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0006           kept for the return
          LA    15,R0006            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0006    DS    0H
          L     12,CB0003           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0006           what the cell held before
          ST    15,X0005
 T0029    DS    0H
 * PERFORM OUTPUTSOURCE
+         L     14,X0097            what the exit cell holds
+         ST    14,SV0007           kept for the return
          LA    15,R0007            return here
          ST    15,X0097            into the range's exit cell
          L     15,PA0097
          BR    15
 R0007    DS    0H
          L     12,CB0003           this block's base again
-         L     15,FA0097           restore fall-through
+         L     15,SV0007           what the cell held before
          ST    15,X0097
 T0030    DS    0H
 * GO TO EXAMINELOOP1
@@ -337,6 +377,8 @@ T0038    DS    0H
 * MOVE 0 -> WBUCKET
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -417,43 +459,49 @@ B0007    EQU   *
          USING B0007,12
 T0048    DS    0H
 * PERFORM READ-A-SOURCE-RECORD THRU READ-EXIT
+         L     14,X0100            what the exit cell holds
+         ST    14,SV0008           kept for the return
          LA    15,R0008            return here
          ST    15,X0100            into the range's exit cell
          L     15,PA0099
          BR    15
 R0008    DS    0H
          L     12,CB0007           this block's base again
-         L     15,FA0100           restore fall-through
+         L     15,SV0008           what the cell held before
          ST    15,X0100
 T0049    DS    0H
 * PERFORM INC-COBOLREFNO
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0009           kept for the return
          LA    15,R0009            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0009    DS    0H
          L     12,CB0007           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0009           what the cell held before
          ST    15,X0005
 T0050    DS    0H
 * PERFORM OUTPUTSOURCE
+         L     14,X0097            what the exit cell holds
+         ST    14,SV0010           kept for the return
          LA    15,R0010            return here
          ST    15,X0097            into the range's exit cell
          L     15,PA0097
          BR    15
 R0010    DS    0H
          L     12,CB0007           this block's base again
-         L     15,FA0097           restore fall-through
+         L     15,SV0010           what the cell held before
          ST    15,X0097
 T0051    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0258
+         BE    L0262
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0009
-L0258    DS    0H
+L0262    DS    0H
 T0052    DS    0H
 * GO TO READLOOP2
          B     B0007
@@ -477,43 +525,49 @@ B0008    EQU   *
          USING B0008,12
 T0055    DS    0H
 * PERFORM READ-A-SOURCE-RECORD THRU READ-EXIT
+         L     14,X0100            what the exit cell holds
+         ST    14,SV0011           kept for the return
          LA    15,R0011            return here
          ST    15,X0100            into the range's exit cell
          L     15,PA0099
          BR    15
 R0011    DS    0H
          L     12,CB0008           this block's base again
-         L     15,FA0100           restore fall-through
+         L     15,SV0011           what the cell held before
          ST    15,X0100
 T0056    DS    0H
 * PERFORM INC-COBOLREFNO
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0012           kept for the return
          LA    15,R0012            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0012    DS    0H
          L     12,CB0008           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0012           what the cell held before
          ST    15,X0005
 T0057    DS    0H
 * PERFORM OUTPUTSOURCE
+         L     14,X0097            what the exit cell holds
+         ST    14,SV0013           kept for the return
          LA    15,R0013            return here
          ST    15,X0097            into the range's exit cell
          L     15,PA0097
          BR    15
 R0013    DS    0H
          L     12,CB0008           this block's base again
-         L     15,FA0097           restore fall-through
+         L     15,SV0013           what the cell held before
          ST    15,X0097
 T0058    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0265
+         BE    L0269
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0011
-L0265    DS    0H
+L0269    DS    0H
 T0059    DS    0H
 * GO TO READLOOP3
          B     B0008
@@ -647,6 +701,8 @@ T0086    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -655,18 +711,24 @@ T0087    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0054
 T0088    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0089    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0056
 T0090    DS    0H
@@ -710,13 +772,15 @@ T0094    DS    0H
 L0020    DS    0H
 T0095    DS    0H
 * PERFORM LOADSOURCEGROUP THRU LSGEND
+         L     14,X0074            what the exit cell holds
+         ST    14,SV0014           kept for the return
          LA    15,R0014            return here
          ST    15,X0074            into the range's exit cell
          L     15,PA0073
          BR    15
 R0014    DS    0H
          L     12,CB0010           this block's base again
-         L     15,FA0074           restore fall-through
+         L     15,SV0014           what the cell held before
          ST    15,X0074
 * RL3GETDIGIT.
 P0010    DS    0H
@@ -737,6 +801,8 @@ T0097    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0054
 T0098    DS    0H
@@ -747,28 +813,30 @@ T0098    DS    0H
 L0021    DS    0H
 T0099    DS    0H
 * PERFORM LOADSOURCEDIGIT THRU LSDEND
+         L     14,X0076            what the exit cell holds
+         ST    14,SV0015           kept for the return
          LA    15,R0015            return here
          ST    15,X0076            into the range's exit cell
          L     15,PA0075
          BR    15
 R0015    DS    0H
          L     12,CB0011           this block's base again
-         L     15,FA0076           restore fall-through
+         L     15,SV0015           what the cell held before
          ST    15,X0076
 T0100    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0080(1),D0059      alphanumeric compare
-         BNE   L0271
+         BNE   L0275
          CLC   D0081(1),S0001      alphanumeric compare
-         BE    L0270
-L0271    DS    0H
+         BE    L0274
+L0275    DS    0H
          CLC   D0081(1),S0028      alphanumeric compare
-         BE    L0270
+         BE    L0274
          CLC   D0081(1),S0029      alphanumeric compare
          BNE   L0022
-L0270    DS    0H
+L0274    DS    0H
 T0101    DS    0H
 * MOVE SPACES -> THEDIGIT
          LA    1,D0081             SPACES
@@ -786,10 +854,10 @@ T0103    DS    0H
 T0104    DS    0H
 * IF
          CLC   D0081(1),S0028      alphanumeric compare
-         BE    L0272
+         BE    L0276
          CLC   D0081(1),S0029      alphanumeric compare
          BNE   L0023
-L0272    DS    0H
+L0276    DS    0H
 T0105    DS    0H
 * MOVE SPACES -> THEDIGIT
          LA    1,D0081             SPACES
@@ -801,10 +869,10 @@ T0106    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0001      alphanumeric compare
-         BE    L0273
+         BE    L0277
          CLC   D0081(1),S0002      alphanumeric compare
          BNE   L0024
-L0273    DS    0H
+L0277    DS    0H
 T0107    DS    0H
 * MOVE YES -> IGNORELEADSPACES
          MVC   D0080(1),D0059      alphanumeric move
@@ -833,6 +901,8 @@ T0110    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0111    DS    0H
@@ -843,13 +913,15 @@ T0111    DS    0H
 L0025    DS    0H
 T0112    DS    0H
 * PERFORM SFD0 THRU SFDEND
+         L     14,X0082            what the exit cell holds
+         ST    14,SV0016           kept for the return
          LA    15,R0016            return here
          ST    15,X0082            into the range's exit cell
          L     15,PA0081
          BR    15
 R0016    DS    0H
          L     12,CB0012           this block's base again
-         L     15,FA0082           restore fall-through
+         L     15,SV0016           what the cell held before
          ST    15,X0082
 T0113    DS    0H
 * GO TO RL3GETDIGIT
@@ -878,13 +950,15 @@ T0115    DS    0H
 L0026    DS    0H
 T0116    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0017           kept for the return
          LA    15,R0017            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0017    DS    0H
          L     12,CB0013           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0017           what the cell held before
          ST    15,X0084
 T0117    DS    0H
 * GO TO RL3STOREDIGIT
@@ -921,27 +995,29 @@ B0015    EQU   *
          USING B0015,12
 T0122    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0018           kept for the return
          LA    15,R0018            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0018    DS    0H
          L     12,CB0015           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0018           what the cell held before
          ST    15,X0084
 T0123    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0030      alphanumeric compare
-         BE    L0280
+         BE    L0284
          CLC   D0154(3),S0031      alphanumeric compare
-         BE    L0280
+         BE    L0284
          CLC   D0154(3),S0032      alphanumeric compare
-         BE    L0280
+         BE    L0284
          CLC   D0154(3),S0033      alphanumeric compare
          BNE   L0029
-L0280    DS    0H
+L0284    DS    0H
 T0124    DS    0H
 * GO TO RL3ISLEVEL
          L     15,PA0015
@@ -965,12 +1041,12 @@ T0127    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0035      alphanumeric compare
-         BE    L0281
+         BE    L0285
          CLC   D0154(3),S0036      alphanumeric compare
-         BE    L0281
+         BE    L0285
          CLC   D0154(3),S0037      alphanumeric compare
          BNE   L0031
-L0281    DS    0H
+L0285    DS    0H
 T0128    DS    0H
 * GO TO RL3ISLEVEL
          L     15,PA0015
@@ -1003,12 +1079,16 @@ T0132    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0133    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0056
 T0134    DS    0H
@@ -1036,23 +1116,25 @@ B0017    EQU   *
          USING B0017,12
 T0138    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0019           kept for the return
          LA    15,R0019            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0019    DS    0H
          L     12,CB0017           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0019           what the cell held before
          ST    15,X0084
 T0139    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0039      alphanumeric compare
-         BE    L0284
+         BE    L0288
          CLC   D0150(7),S0040      alphanumeric compare
          BNE   L0033
-L0284    DS    0H
+L0288    DS    0H
 T0140    DS    0H
 * GO TO RL3CLEARTOPERIOD
          L     15,PA0018
@@ -1105,7 +1187,10 @@ T0148    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0259
@@ -1113,28 +1198,31 @@ T0149    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0259
 T0150    DS    0H
 * INSPECT SV3PROGRAMID
          LA    3,D0132             the field
          LA    5,61                its length
          LR    7,3                 the field's start
-L0285    CH    5,H0001             room for the bounding string?
-         BL    L0287
+L0289    CH    5,H0001             room for the bounding string?
+         BL    L0291
          CLC   0(1,3),S0002        INITIAL
-         BE    L0286
+         BE    L0290
          LA    3,1(3)
-         BCT   5,L0285
-L0287    DS    0H                  not found
+         BCT   5,L0289
+L0291    DS    0H                  not found
          LR    3,7
          LA    5,61                BEFORE: the whole field
-         B     L0288
-L0286    DS    0H                  found
+         B     L0292
+L0290    DS    0H                  found
          LR    5,3
          SR    5,7                 BEFORE: up to it
          LR    3,7
-L0288    DS    0H
+L0292    DS    0H
          LR    2,5                 CHARACTERS: every position in range
          CVD   2,DWK
          ZAP   PWK1(16),DWK(8)
@@ -1143,7 +1231,10 @@ L0288    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0259
          DROP  8
 T0151    DS    0H
@@ -1162,6 +1253,8 @@ T0152    DS    0H
          BNH   L0036
 T0153    DS    0H
 * PERFORM READLOOP3 THRU RL3RESET
+         L     14,X0008            what the exit cell holds
+         ST    14,SV0020           kept for the return
          LA    15,R0020            return here
          ST    15,X0008            into the range's exit cell
          L     15,PA0007
@@ -1169,7 +1262,7 @@ T0153    DS    0H
 R0020    DS    0H
          L     12,CB0019           this block's base again
          DROP  8
-         L     15,FA0008           restore fall-through
+         L     15,SV0020           what the cell held before
          ST    15,X0008
 T0154    DS    0H
 * GO TO RL3CLEARTOPERIOD
@@ -1296,6 +1389,8 @@ T0174    DS    0H
          MVI   0(1),C' '
 T0175    DS    0H
 * PERFORM GETINPUTGROUP
+         L     14,X0025            what the exit cell holds
+         ST    14,SV0021           kept for the return
          LA    15,R0021            return here
          ST    15,X0025            into the range's exit cell
          L     15,PA0025
@@ -1303,7 +1398,7 @@ T0175    DS    0H
 R0021    DS    0H
          L     12,CB0021           this block's base again
          DROP  8
-         L     15,FA0025           restore fall-through
+         L     15,SV0021           what the cell held before
          ST    15,X0025
 T0176    DS    0H
 * GO TO OVERLAPENTER
@@ -1343,30 +1438,40 @@ T0182    DS    0H
 * MOVE 0 -> WITHINPARENS-COUNT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0044
 T0183    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0053
 T0184    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0054
 T0185    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0186    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0056
 T0187    DS    0H
@@ -1393,43 +1498,49 @@ B0024    EQU   *
          USING B0024,12
 T0189    DS    0H
 * PERFORM READ-A-SOURCE-RECORD THRU READ-EXIT
+         L     14,X0100            what the exit cell holds
+         ST    14,SV0022           kept for the return
          LA    15,R0022            return here
          ST    15,X0100            into the range's exit cell
          L     15,PA0099
          BR    15
 R0022    DS    0H
          L     12,CB0024           this block's base again
-         L     15,FA0100           restore fall-through
+         L     15,SV0022           what the cell held before
          ST    15,X0100
 T0190    DS    0H
 * PERFORM INC-COBOLREFNO
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0023           kept for the return
          LA    15,R0023            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0023    DS    0H
          L     12,CB0024           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0023           what the cell held before
          ST    15,X0005
 T0191    DS    0H
 * PERFORM OUTPUTSOURCE
+         L     14,X0097            what the exit cell holds
+         ST    14,SV0024           kept for the return
          LA    15,R0024            return here
          ST    15,X0097            into the range's exit cell
          L     15,PA0097
          BR    15
 R0024    DS    0H
          L     12,CB0024           this block's base again
-         L     15,FA0097           restore fall-through
+         L     15,SV0024           what the cell held before
          ST    15,X0097
 T0192    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0299
+         BE    L0303
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0042
-L0299    DS    0H
+L0303    DS    0H
 T0193    DS    0H
 * GO TO READALINE
          B     B0024
@@ -1487,6 +1598,8 @@ T0201    DS    0H
          BNE   L0046
 T0202    DS    0H
 * PERFORM LOADSOURCEGROUP THRU LSGEND
+         L     14,X0074            what the exit cell holds
+         ST    14,SV0025           kept for the return
          LA    15,R0025            return here
          ST    15,X0074            into the range's exit cell
          L     15,PA0073
@@ -1494,7 +1607,7 @@ T0202    DS    0H
 R0025    DS    0H
          L     12,CB0025           this block's base again
          DROP  8
-         L     15,FA0074           restore fall-through
+         L     15,SV0025           what the cell held before
          ST    15,X0074
 T0203    DS    0H
 * MOVE HOLDOVERLAPDIGIT -> THEDIGIT
@@ -1555,10 +1668,10 @@ T0215    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0028      alphanumeric compare
-         BE    L0302
+         BE    L0306
          CLC   D0081(1),S0029      alphanumeric compare
          BNE   L0049
-L0302    DS    0H
+L0306    DS    0H
 T0216    DS    0H
 * MOVE SPACES -> THEDIGIT
          LA    1,D0081             SPACES
@@ -1589,6 +1702,8 @@ T0219    DS    0H
          BNE   L0051
 T0220    DS    0H
 * PERFORM LOADSOURCEGROUP THRU LSGEND
+         L     14,X0074            what the exit cell holds
+         ST    14,SV0026           kept for the return
          LA    15,R0026            return here
          ST    15,X0074            into the range's exit cell
          L     15,PA0073
@@ -1596,17 +1711,19 @@ T0220    DS    0H
 R0026    DS    0H
          L     12,CB0025           this block's base again
          DROP  8
-         L     15,FA0074           restore fall-through
+         L     15,SV0026           what the cell held before
          ST    15,X0074
 T0221    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0027           kept for the return
          LA    15,R0027            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0027    DS    0H
          L     12,CB0025           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0027           what the cell held before
          ST    15,X0084
 T0222    DS    0H
 * MOVE NOS -> DIDHAVEPERIOD
@@ -1624,10 +1741,10 @@ T0224    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0002      alphanumeric compare
-         BE    L0307
+         BE    L0311
          CLC   D0071(1),S0002      alphanumeric compare
          BNE   L0052
-L0307    DS    0H
+L0311    DS    0H
 T0225    DS    0H
 * MOVE YES -> FOUNDPERIOD
          MVC   D0084(1),D0059      alphanumeric move
@@ -1636,6 +1753,8 @@ T0226    DS    0H
          MVC   D0074(1),D0059      alphanumeric move
 T0227    DS    0H
 * PERFORM LOADSOURCEGROUP THRU LSGEND
+         L     14,X0074            what the exit cell holds
+         ST    14,SV0028           kept for the return
          LA    15,R0028            return here
          ST    15,X0074            into the range's exit cell
          L     15,PA0073
@@ -1643,17 +1762,19 @@ T0227    DS    0H
 R0028    DS    0H
          L     12,CB0025           this block's base again
          DROP  8
-         L     15,FA0074           restore fall-through
+         L     15,SV0028           what the cell held before
          ST    15,X0074
 T0228    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0029           kept for the return
          LA    15,R0029            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0029    DS    0H
          L     12,CB0025           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0029           what the cell held before
          ST    15,X0084
 T0229    DS    0H
 * MOVE NOS -> DIDHAVEPERIOD
@@ -1685,6 +1806,8 @@ T0233    DS    0H
          BNE   L0054
 T0234    DS    0H
 * PERFORM DECREMENT-WITHINPARENS-COUNT
+         L     14,X0029            what the exit cell holds
+         ST    14,SV0030           kept for the return
          LA    15,R0030            return here
          ST    15,X0029            into the range's exit cell
          L     15,PA0029
@@ -1692,18 +1815,20 @@ T0234    DS    0H
 R0030    DS    0H
          L     12,CB0025           this block's base again
          DROP  8
-         L     15,FA0029           restore fall-through
+         L     15,SV0030           what the cell held before
          ST    15,X0029
 L0054    DS    0H
 T0235    DS    0H
 * PERFORM LOADSOURCEGROUP THRU LSGEND
+         L     14,X0074            what the exit cell holds
+         ST    14,SV0031           kept for the return
          LA    15,R0031            return here
          ST    15,X0074            into the range's exit cell
          L     15,PA0073
          BR    15
 R0031    DS    0H
          L     12,CB0025           this block's base again
-         L     15,FA0074           restore fall-through
+         L     15,SV0031           what the cell held before
          ST    15,X0074
 T0236    DS    0H
 * MOVE HOLDOVERLAPDIGIT -> THEDIGIT
@@ -1712,6 +1837,8 @@ T0236    DS    0H
          MVC   D0081(1),D0071      alphanumeric move
 T0237    DS    0H
 * PERFORM STOREFOUNDDIGIT THRU SFDEND
+         L     14,X0082            what the exit cell holds
+         ST    14,SV0032           kept for the return
          LA    15,R0032            return here
          ST    15,X0082            into the range's exit cell
          L     15,PA0077
@@ -1719,7 +1846,7 @@ T0237    DS    0H
 R0032    DS    0H
          L     12,CB0025           this block's base again
          DROP  8
-         L     15,FA0082           restore fall-through
+         L     15,SV0032           what the cell held before
          ST    15,X0082
 T0238    DS    0H
 * IF
@@ -1735,10 +1862,14 @@ T0239    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0240    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0033           kept for the return
          LA    15,R0033            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
@@ -1746,28 +1877,32 @@ T0240    DS    0H
 R0033    DS    0H
          L     12,CB0025           this block's base again
          DROP  8
-         L     15,FA0084           restore fall-through
+         L     15,SV0033           what the cell held before
          ST    15,X0084
 T0241    DS    0H
 * PERFORM STOREFOUNDDIGIT THRU SFDEND
+         L     14,X0082            what the exit cell holds
+         ST    14,SV0034           kept for the return
          LA    15,R0034            return here
          ST    15,X0082            into the range's exit cell
          L     15,PA0077
          BR    15
 R0034    DS    0H
          L     12,CB0025           this block's base again
-         L     15,FA0082           restore fall-through
+         L     15,SV0034           what the cell held before
          ST    15,X0082
 L0055    DS    0H
 T0242    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0035           kept for the return
          LA    15,R0035            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0035    DS    0H
          L     12,CB0025           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0035           what the cell held before
          ST    15,X0084
 T0243    DS    0H
 * GO TO OVERLAPENTER
@@ -1792,6 +1927,8 @@ T0245    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0053
 T0246    DS    0H
@@ -1805,13 +1942,15 @@ T0247    DS    0H
 L0056    DS    0H
 T0248    DS    0H
 * PERFORM LOADSOURCEGROUP THRU LSGEND
+         L     14,X0074            what the exit cell holds
+         ST    14,SV0036           kept for the return
          LA    15,R0036            return here
          ST    15,X0074            into the range's exit cell
          L     15,PA0073
          BR    15
 R0036    DS    0H
          L     12,CB0026           this block's base again
-         L     15,FA0074           restore fall-through
+         L     15,SV0036           what the cell held before
          ST    15,X0074
 T0249    DS    0H
 * IF
@@ -1849,6 +1988,8 @@ T0252    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0054
 T0253    DS    0H
@@ -1859,13 +2000,15 @@ T0253    DS    0H
 L0058    DS    0H
 T0254    DS    0H
 * PERFORM LOADSOURCEDIGIT THRU LSDEND
+         L     14,X0076            what the exit cell holds
+         ST    14,SV0037           kept for the return
          LA    15,R0037            return here
          ST    15,X0076            into the range's exit cell
          L     15,PA0075
          BR    15
 R0037    DS    0H
          L     12,CB0027           this block's base again
-         L     15,FA0076           restore fall-through
+         L     15,SV0037           what the cell held before
          ST    15,X0076
 * GETINPUTDIGIT2.
 P0027    DS    0H
@@ -1930,10 +2073,10 @@ T0264    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0077(1),D0060      alphanumeric compare
-         BE    L0328
+         BE    L0332
          CLC   D0077(1),D0061      alphanumeric compare
          BNE   L0063
-L0328    DS    0H
+L0332    DS    0H
          CLC   D0081(1),S0045      alphanumeric compare
          BNE   L0063
 T0265    DS    0H
@@ -1958,10 +2101,10 @@ T0268    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0077(1),D0061      alphanumeric compare
-         BE    L0329
+         BE    L0333
          CLC   D0077(1),D0060      alphanumeric compare
          BNE   L0065
-L0329    DS    0H
+L0333    DS    0H
          CLC   D0081(1),S0043      alphanumeric compare
          BNE   L0065
 T0269    DS    0H
@@ -2208,10 +2351,10 @@ T0307    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0045      alphanumeric compare
-         BE    L0330
+         BE    L0334
          CLC   D0081(1),S0043      alphanumeric compare
          BNE   L0078
-L0330    DS    0H
+L0334    DS    0H
 T0308    DS    0H
 * GO TO GETINPUTDIGIT
          L     15,PA0026
@@ -2256,6 +2399,8 @@ T0314    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0315    DS    0H
@@ -2266,13 +2411,15 @@ T0315    DS    0H
 L0080    DS    0H
 T0316    DS    0H
 * PERFORM STOREFOUNDDIGIT THRU SFDEND
+         L     14,X0082            what the exit cell holds
+         ST    14,SV0038           kept for the return
          LA    15,R0038            return here
          ST    15,X0082            into the range's exit cell
          L     15,PA0077
          BR    15
 R0038    DS    0H
          L     12,CB0032           this block's base again
-         L     15,FA0082           restore fall-through
+         L     15,SV0038           what the cell held before
          ST    15,X0082
 T0317    DS    0H
 * GO TO GETINPUTDIGIT
@@ -2317,13 +2464,15 @@ B0034    EQU   *
          USING B0034,12
 T0324    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0039           kept for the return
          LA    15,R0039            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0039    DS    0H
          L     12,CB0034           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0039           what the cell held before
          ST    15,X0084
 T0325    DS    0H
 * IF
@@ -2339,10 +2488,14 @@ T0326    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0056
 T0327    DS    0H
 * PERFORM SFWEND
+         L     14,X0085            what the exit cell holds
+         ST    14,SV0040           kept for the return
          LA    15,R0040            return here
          ST    15,X0085            into the range's exit cell
          L     15,PA0085
@@ -2350,7 +2503,7 @@ T0327    DS    0H
 R0040    DS    0H
          L     12,CB0034           this block's base again
          DROP  8
-         L     15,FA0085           restore fall-through
+         L     15,SV0040           what the cell held before
          ST    15,X0085
 L0082    DS    0H
 T0328    DS    0H
@@ -2416,13 +2569,15 @@ T0339    DS    0H
 L0085    DS    0H
 T0340    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
+         L     14,X0084            what the exit cell holds
+         ST    14,SV0041           kept for the return
          LA    15,R0041            return here
          ST    15,X0084            into the range's exit cell
          L     15,PA0083
          BR    15
 R0041    DS    0H
          L     12,CB0035           this block's base again
-         L     15,FA0084           restore fall-through
+         L     15,SV0041           what the cell held before
          ST    15,X0084
 T0341    DS    0H
 * IF
@@ -2451,7 +2606,7 @@ T0344    DS    0H
          USING WSC0000,8
          TRT   D0156(1),CLSNUM     every byte a digit?
          BZ    L0087
-L0339    DS    0H
+L0343    DS    0H
          DROP  8
 T0345    DS    0H
 * MOVE NOS -> NUMERIC-PARAGRAPH-SWITCH
@@ -2596,20 +2751,20 @@ T0370    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0046      alphanumeric compare
-         BE    L0340
+         BE    L0344
          CLC   D0150(7),S0047      alphanumeric compare
-         BE    L0340
+         BE    L0344
          CLC   D0150(7),S0048      alphanumeric compare
-         BE    L0340
+         BE    L0344
          CLC   D0150(7),S0049      alphanumeric compare
-         BE    L0340
+         BE    L0344
          CLC   D0150(7),S0050      alphanumeric compare
-         BE    L0340
+         BE    L0344
          CLC   D0150(7),S0051      alphanumeric compare
-         BE    L0340
+         BE    L0344
          CLC   D0150(7),S0052      alphanumeric compare
          BNE   L0095
-L0340    DS    0H
+L0344    DS    0H
 T0371    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -2642,45 +2797,51 @@ T0375    DS    0H
 L0096    DS    0H
 T0376    DS    0H
 * PERFORM READ-A-SOURCE-RECORD THRU READ-EXIT
+         L     14,X0100            what the exit cell holds
+         ST    14,SV0042           kept for the return
          LA    15,R0042            return here
          ST    15,X0100            into the range's exit cell
          L     15,PA0099
          BR    15
 R0042    DS    0H
          L     12,CB0039           this block's base again
-         L     15,FA0100           restore fall-through
+         L     15,SV0042           what the cell held before
          ST    15,X0100
 T0377    DS    0H
 * PERFORM INC-COBOLREFNO
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0043           kept for the return
          LA    15,R0043            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0043    DS    0H
          L     12,CB0039           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0043           what the cell held before
          ST    15,X0005
 T0378    DS    0H
 * PERFORM OUTPUTSOURCE
+         L     14,X0097            what the exit cell holds
+         ST    14,SV0044           kept for the return
          LA    15,R0044            return here
          ST    15,X0097            into the range's exit cell
          L     15,PA0097
          BR    15
 R0044    DS    0H
          L     12,CB0039           this block's base again
-         L     15,FA0097           restore fall-through
+         L     15,SV0044           what the cell held before
          ST    15,X0097
 T0379    DS    0H
 * IF
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0108(4),S0041      alphanumeric compare
-         BE    L0347
+         BE    L0351
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0347
+         BE    L0351
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0097
-L0347    DS    0H
+L0351    DS    0H
 T0380    DS    0H
 * GO TO DELETENOTE
          B     B0039
@@ -2690,6 +2851,8 @@ T0381    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -2698,18 +2861,24 @@ T0382    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0054
 T0383    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0384    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0056
 T0385    DS    0H
@@ -2787,10 +2956,10 @@ T0398    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0144(13),S0054     alphanumeric compare
-         BE    L0348
+         BE    L0352
          CLC   D0144(13),S0055     alphanumeric compare
          BNE   L0101
-L0348    DS    0H
+L0352    DS    0H
 T0399    DS    0H
 * MOVE NOS -> ISPARSEC
          MVC   D0079(1),D0060      alphanumeric move
@@ -2805,10 +2974,10 @@ T0401    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0056      alphanumeric compare
-         BE    L0349
+         BE    L0353
          CLC   D0152(5),S0057      alphanumeric compare
          BNE   L0102
-L0349    DS    0H
+L0353    DS    0H
 T0402    DS    0H
 * GO TO KILLWORD
          L     15,PA0048
@@ -2834,6 +3003,8 @@ T0405    DS    0H
          MVC   D0079(1),D0060      alphanumeric move
 T0406    DS    0H
 * PERFORM BUILDANALYZER
+         L     14,X0046            what the exit cell holds
+         ST    14,SV0045           kept for the return
          LA    15,R0045            return here
          ST    15,X0046            into the range's exit cell
          L     15,PA0046
@@ -2841,7 +3012,7 @@ T0406    DS    0H
 R0045    DS    0H
          L     12,CB0041           this block's base again
          DROP  8
-         L     15,FA0046           restore fall-through
+         L     15,SV0045           what the cell held before
          ST    15,X0046
 T0407    DS    0H
 * MOVE YES -> JUST-READ-A-PARAGRAPH-NAME
@@ -2865,6 +3036,8 @@ T0409    DS    0H
          MVC   D0088(32),D0139     alphanumeric move
 T0410    DS    0H
 * PERFORM BUILDANALYZER
+         L     14,X0046            what the exit cell holds
+         ST    14,SV0046           kept for the return
          LA    15,R0046            return here
          ST    15,X0046            into the range's exit cell
          L     15,PA0046
@@ -2872,7 +3045,7 @@ T0410    DS    0H
 R0046    DS    0H
          L     12,CB0042           this block's base again
          DROP  8
-         L     15,FA0046           restore fall-through
+         L     15,SV0046           what the cell held before
          ST    15,X0046
 T0411    DS    0H
 * MOVE 2 -> SW-HAVEPARSEC
@@ -3202,13 +3375,15 @@ B0048    EQU   *
          USING B0048,12
 T0468    DS    0H
 * PERFORM SFWEND
+         L     14,X0085            what the exit cell holds
+         ST    14,SV0047           kept for the return
          LA    15,R0047            return here
          ST    15,X0085            into the range's exit cell
          L     15,PA0085
          BR    15
 R0047    DS    0H
          L     12,CB0048           this block's base again
-         L     15,FA0085           restore fall-through
+         L     15,SV0047           what the cell held before
          ST    15,X0085
 T0469    DS    0H
 * MOVE YES -> IGNORELEADSPACES
@@ -3242,10 +3417,10 @@ T0473    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0058      alphanumeric compare
-         BE    L0356
+         BE    L0360
          CLC   D0154(3),S0059      alphanumeric compare
          BNE   L0123
-L0356    DS    0H
+L0360    DS    0H
 T0474    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3257,32 +3432,32 @@ T0475    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0060      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0061      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0062      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0063      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0064      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0065      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0066      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0067      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0068      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0069      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0070      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0071      alphanumeric compare
-         BE    L0357
+         BE    L0361
          CLC   D0154(3),S0072      alphanumeric compare
          BNE   L0124
-L0357    DS    0H
+L0361    DS    0H
 T0476    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3305,10 +3480,10 @@ T0479    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0074      alphanumeric compare
-         BE    L0358
+         BE    L0362
          CLC   D0154(3),S0073      alphanumeric compare
          BNE   L0126
-L0358    DS    0H
+L0362    DS    0H
 T0480    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3320,12 +3495,12 @@ T0481    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0075      alphanumeric compare
-         BE    L0359
+         BE    L0363
          CLC   D0154(3),S0076      alphanumeric compare
-         BE    L0359
+         BE    L0363
          CLC   D0154(3),S0077      alphanumeric compare
          BNE   L0127
-L0359    DS    0H
+L0363    DS    0H
 T0482    DS    0H
 * GO TO KILLWORD
          L     15,PA0048
@@ -3339,15 +3514,15 @@ T0483    DS    0H
          LA    6,D0154             the left item
          LA    7,D0060             the right item
          CLC   0(1,6),0(7)         the common length
-         BNE   L0361
+         BNE   L0365
          CLC   1(2,6),SPCS         the longer one's tail against spaces
-L0361    DS    0H
-         BE    L0360
+L0365    DS    0H
+         BE    L0364
          CLC   D0154(3),S0078      alphanumeric compare
-         BE    L0360
+         BE    L0364
          CLC   D0154(3),S0079      alphanumeric compare
          BNE   L0128
-L0360    DS    0H
+L0364    DS    0H
 T0484    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3424,12 +3599,12 @@ T0494    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0084      alphanumeric compare
-         BE    L0362
+         BE    L0366
          CLC   D0153(4),S0085      alphanumeric compare
-         BE    L0362
+         BE    L0366
          CLC   D0153(4),S0086      alphanumeric compare
          BNE   L0133
-L0362    DS    0H
+L0366    DS    0H
 T0495    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3441,20 +3616,20 @@ T0496    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0087      alphanumeric compare
-         BE    L0363
+         BE    L0367
          CLC   D0153(4),S0088      alphanumeric compare
-         BE    L0363
+         BE    L0367
          CLC   D0153(4),S0089      alphanumeric compare
-         BE    L0363
+         BE    L0367
          CLC   D0153(4),S0090      alphanumeric compare
-         BE    L0363
+         BE    L0367
          CLC   D0153(4),S0091      alphanumeric compare
-         BE    L0363
+         BE    L0367
          CLC   D0153(4),S0092      alphanumeric compare
-         BE    L0363
+         BE    L0367
          CLC   D0153(4),S0093      alphanumeric compare
          BNE   L0134
-L0363    DS    0H
+L0367    DS    0H
 T0497    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3466,10 +3641,10 @@ T0498    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0056      alphanumeric compare
-         BE    L0364
+         BE    L0368
          CLC   D0153(4),S0094      alphanumeric compare
          BNE   L0135
-L0364    DS    0H
+L0368    DS    0H
 T0499    DS    0H
 * GO TO BREAKWORD
          L     15,PA0089
@@ -3495,26 +3670,26 @@ T0501    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0095      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0096      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0097      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0098      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0099      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0100      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0101      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0102      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0103      alphanumeric compare
-         BE    L0365
+         BE    L0369
          CLC   D0152(5),S0104      alphanumeric compare
          BNE   L0136
-L0365    DS    0H
+L0369    DS    0H
 T0502    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3526,30 +3701,30 @@ T0503    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0105      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0106      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0107      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0108      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0109      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0110      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0111      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0112      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0113      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0114      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0115      alphanumeric compare
-         BE    L0366
+         BE    L0370
          CLC   D0152(5),S0116      alphanumeric compare
          BNE   L0137
-L0366    DS    0H
+L0370    DS    0H
 T0504    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3561,10 +3736,10 @@ T0505    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0117      alphanumeric compare
-         BE    L0367
+         BE    L0371
          CLC   D0152(5),S0118      alphanumeric compare
          BNE   L0138
-L0367    DS    0H
+L0371    DS    0H
 T0506    DS    0H
 * GO TO BREAKWORD
          L     15,PA0089
@@ -3576,14 +3751,14 @@ T0507    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0119      alphanumeric compare
-         BE    L0368
+         BE    L0372
          CLC   D0152(5),S0120      alphanumeric compare
-         BE    L0368
+         BE    L0372
          CLC   D0152(5),S0121      alphanumeric compare
-         BE    L0368
+         BE    L0372
          CLC   D0152(5),S0122      alphanumeric compare
          BNE   L0139
-L0368    DS    0H
+L0372    DS    0H
 T0508    DS    0H
 * GO TO KILLWORD
          L     15,PA0048
@@ -3620,24 +3795,24 @@ T0512    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0123      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0124      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0125      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0126      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0127      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0128      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0129      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0130      alphanumeric compare
-         BE    L0369
+         BE    L0373
          CLC   D0151(6),S0131      alphanumeric compare
          BNE   L0141
-L0369    DS    0H
+L0373    DS    0H
 T0513    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3649,18 +3824,18 @@ T0514    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0132      alphanumeric compare
-         BE    L0370
+         BE    L0374
          CLC   D0151(6),S0133      alphanumeric compare
-         BE    L0370
+         BE    L0374
          CLC   D0151(6),S0134      alphanumeric compare
-         BE    L0370
+         BE    L0374
          CLC   D0151(6),S0135      alphanumeric compare
-         BE    L0370
+         BE    L0374
          CLC   D0151(6),S0136      alphanumeric compare
-         BE    L0370
+         BE    L0374
          CLC   D0151(6),S0137      alphanumeric compare
          BNE   L0142
-L0370    DS    0H
+L0374    DS    0H
 T0515    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3672,18 +3847,18 @@ T0516    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0138      alphanumeric compare
-         BE    L0371
+         BE    L0375
          CLC   D0151(6),S0139      alphanumeric compare
-         BE    L0371
+         BE    L0375
          CLC   D0151(6),S0140      alphanumeric compare
-         BE    L0371
+         BE    L0375
          CLC   D0151(6),S0141      alphanumeric compare
-         BE    L0371
+         BE    L0375
          CLC   D0151(6),S0142      alphanumeric compare
-         BE    L0371
+         BE    L0375
          CLC   D0151(6),S0143      alphanumeric compare
          BNE   L0143
-L0371    DS    0H
+L0375    DS    0H
 T0517    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3695,22 +3870,22 @@ T0518    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0144      alphanumeric compare
-         BE    L0372
+         BE    L0376
          CLC   D0151(6),S0145      alphanumeric compare
-         BE    L0372
+         BE    L0376
          CLC   D0151(6),S0146      alphanumeric compare
-         BE    L0372
+         BE    L0376
          CLC   D0151(6),S0147      alphanumeric compare
-         BE    L0372
+         BE    L0376
          CLC   D0151(6),S0148      alphanumeric compare
-         BE    L0372
+         BE    L0376
          CLC   D0151(6),S0149      alphanumeric compare
-         BE    L0372
+         BE    L0376
          CLC   D0151(6),S0150      alphanumeric compare
-         BE    L0372
+         BE    L0376
          CLC   D0151(6),S0130      alphanumeric compare
          BNE   L0144
-L0372    DS    0H
+L0376    DS    0H
 T0519    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3736,14 +3911,14 @@ T0521    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0151      alphanumeric compare
-         BE    L0373
+         BE    L0377
          CLC   D0150(7),S0152      alphanumeric compare
-         BE    L0373
+         BE    L0377
          CLC   D0150(7),S0153      alphanumeric compare
-         BE    L0373
+         BE    L0377
          CLC   D0150(7),S0154      alphanumeric compare
          BNE   L0145
-L0373    DS    0H
+L0377    DS    0H
 T0522    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3755,24 +3930,24 @@ T0523    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0155      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0156      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0157      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0158      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0159      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0160      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0052      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0161      alphanumeric compare
-         BE    L0374
+         BE    L0378
          CLC   D0150(7),S0162      alphanumeric compare
          BNE   L0146
-L0374    DS    0H
+L0378    DS    0H
 T0524    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3821,18 +3996,18 @@ T0530    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0149(8),S0165      alphanumeric compare
-         BE    L0375
+         BE    L0379
          CLC   D0149(8),S0164      alphanumeric compare
-         BE    L0375
+         BE    L0379
          CLC   D0149(8),S0166      alphanumeric compare
-         BE    L0375
+         BE    L0379
          CLC   D0149(8),S0167      alphanumeric compare
-         BE    L0375
+         BE    L0379
          CLC   D0149(8),S0168      alphanumeric compare
-         BE    L0375
+         BE    L0379
          CLC   D0149(8),S0169      alphanumeric compare
          BNE   L0149
-L0375    DS    0H
+L0379    DS    0H
 T0531    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3844,28 +4019,28 @@ T0532    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0149(8),S0170      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0171      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0172      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0173      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0174      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0175      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0176      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0177      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0178      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0179      alphanumeric compare
-         BE    L0376
+         BE    L0380
          CLC   D0149(8),S0180      alphanumeric compare
          BNE   L0150
-L0376    DS    0H
+L0380    DS    0H
 T0533    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3903,14 +4078,14 @@ T0537    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0148(9),S0182      alphanumeric compare
-         BE    L0377
+         BE    L0381
          CLC   D0148(9),S0183      alphanumeric compare
-         BE    L0377
+         BE    L0381
          CLC   D0148(9),S0184      alphanumeric compare
-         BE    L0377
+         BE    L0381
          CLC   D0148(9),S0185      alphanumeric compare
          BNE   L0152
-L0377    DS    0H
+L0381    DS    0H
 T0538    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3934,18 +4109,18 @@ T0541    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0148(9),S0187      alphanumeric compare
-         BE    L0378
+         BE    L0382
          CLC   D0148(9),S0188      alphanumeric compare
-         BE    L0378
+         BE    L0382
          CLC   D0148(9),S0189      alphanumeric compare
-         BE    L0378
+         BE    L0382
          CLC   D0148(9),S0190      alphanumeric compare
-         BE    L0378
+         BE    L0382
          CLC   D0148(9),S0191      alphanumeric compare
-         BE    L0378
+         BE    L0382
          CLC   D0148(9),S0192      alphanumeric compare
          BNE   L0154
-L0378    DS    0H
+L0382    DS    0H
 T0542    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3971,10 +4146,10 @@ T0544    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0147(10),S0193     alphanumeric compare
-         BE    L0379
+         BE    L0383
          CLC   D0147(10),S0194     alphanumeric compare
          BNE   L0155
-L0379    DS    0H
+L0383    DS    0H
 T0545    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3986,24 +4161,24 @@ T0546    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0147(10),S0195     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0196     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0197     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0198     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0199     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0200     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0201     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0202     alphanumeric compare
-         BE    L0380
+         BE    L0384
          CLC   D0147(10),S0203     alphanumeric compare
          BNE   L0156
-L0380    DS    0H
+L0384    DS    0H
 T0547    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4044,16 +4219,16 @@ T0552    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0146(11),S0205     alphanumeric compare
-         BE    L0381
+         BE    L0385
          CLC   D0146(11),S0206     alphanumeric compare
-         BE    L0381
+         BE    L0385
          CLC   D0146(11),S0207     alphanumeric compare
-         BE    L0381
+         BE    L0385
          CLC   D0146(11),S0208     alphanumeric compare
-         BE    L0381
+         BE    L0385
          CLC   D0146(11),S0209     alphanumeric compare
          BNE   L0158
-L0381    DS    0H
+L0385    DS    0H
 T0553    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4079,12 +4254,12 @@ T0555    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0145(12),S0210     alphanumeric compare
-         BE    L0382
+         BE    L0386
          CLC   D0145(12),S0211     alphanumeric compare
-         BE    L0382
+         BE    L0386
          CLC   D0145(12),S0212     alphanumeric compare
          BNE   L0159
-L0382    DS    0H
+L0386    DS    0H
 T0556    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4271,10 +4446,10 @@ T0580    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0215      alphanumeric compare
-         BE    L0383
+         BE    L0387
          CLC   D0081(1),S0042      alphanumeric compare
          BNE   L0165
-L0383    DS    0H
+L0387    DS    0H
 T0581    DS    0H
 * GO TO SFD0
          L     15,PA0081
@@ -4327,18 +4502,18 @@ T0588    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          TRT   D0081(1),CLSNUM     every byte a digit?
-         BZ    L0384
-L0385    DS    0H
+         BZ    L0388
+L0389    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0002      alphanumeric compare
-         BE    L0384
+         BE    L0388
          CLC   D0081(1),S0215      alphanumeric compare
-         BE    L0384
+         BE    L0388
          CLC   D0081(1),S0042      alphanumeric compare
          BNE   L0169
-L0384    DS    0H
+L0388    DS    0H
 T0589    DS    0H
 * MOVE YES -> ISNUMERICLITERAL
          MVC   D0078(1),D0059      alphanumeric move
@@ -4450,12 +4625,16 @@ T0601    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0055
 T0602    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0056
 * end of a PERFORM range: return through its cell
@@ -4541,6 +4720,8 @@ T0612    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -4549,6 +4730,8 @@ T0613    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
          STH   2,D0056
 T0614    DS    0H
@@ -4630,6 +4813,8 @@ T0626    DS    0H
 * MOVE 8 -> RETURN-CODE
          ZAP   PWK1(16),K0006+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0260
 T0627    DS    0H
@@ -4688,13 +4873,15 @@ B0098    EQU   *
          USING B0098,12
 T0635    DS    0H
 * PERFORM WRITEHDB THRU HDB-EXIT
+         L     14,X0105            what the exit cell holds
+         ST    14,SV0048           kept for the return
          LA    15,R0048            return here
          ST    15,X0105            into the range's exit cell
          L     15,PA0104
          BR    15
 R0048    DS    0H
          L     12,CB0098           this block's base again
-         L     15,FA0105           restore fall-through
+         L     15,SV0048           what the cell held before
          ST    15,X0105
 T0636    DS    0H
 * MOVE SPACES -> SOURCE-LIST
@@ -4710,6 +4897,7 @@ T0638    DS    0H
 * MOVE GEN-REFNO1 -> SL-GEN-REFNO1
          PACK  PWK1(16),D0048(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          MVC   D0003(7),EDWK+2     the edited result
@@ -4717,6 +4905,7 @@ T0639    DS    0H
 * MOVE GEN-REFNO2 -> SL-GEN-REFNO2
          PACK  PWK1(16),D0049(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0001       load the ED pattern
          ED    EDWK(9),EDSRC
          MVC   D0004(7),EDWK+2     the edited result
@@ -4742,6 +4931,7 @@ T0642    DS    0H
          USING WSC0000,8
          LH    2,D0057
          AH    2,H0001             binary, same scale: in the register
+         LPR   2,2                 unsigned: the magnitude
          STH   2,D0057
 T0643    DS    0H
 * IF
@@ -4777,13 +4967,13 @@ T0647    DS    0H
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BNH   L0389
+         BNH   L0393
          CLC   D0255(1),S0217      alphanumeric compare
-         BE    L0388
-L0389    DS    0H
+         BE    L0392
+L0393    DS    0H
          CLC   D0255(1),S0218      alphanumeric compare
          BNE   L0182
-L0388    DS    0H
+L0392    DS    0H
 T0648    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(21),S0219
@@ -4853,6 +5043,13 @@ L0186    DS    0H
 T0659    DS    0H
 * OPEN INPUT SOURCEINPUT
          OPEN  (FD004,INPUT)
+         TM    FD004+48,X'10'      DCBOFLGS: did it open?
+         BO    L0394
+         WTO   'COBC370: OPEN FAILED, DD SOURCE',ROUTCDE=11
+         ABEND 35
+         B     L0395
+L0394    DS    0H
+L0395    DS    0H
 T0660    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -4862,7 +5059,14 @@ T0660    DS    0H
 T0661    DS    0H
 * OPEN OUTPUT REBUILD-SOURCE
          OPEN  (FD005,OUTPUT)
+         TM    FD005+48,X'10'      DCBOFLGS: did it open?
+         BO    L0396
+         WTO   'COBC370: OPEN FAILED, DD NEWSRC',ROUTCDE=11
+         ABEND 35
+         B     L0397
+L0396    DS    0H
          DROP  8
+L0397    DS    0H
 L0187    DS    0H
 T0662    DS    0H
 * GO TO READ-EXIT
@@ -4921,15 +5125,15 @@ T0667    DS    0H
          MVI   SRTHAVE,0
          L     15,D0262            SORT-FILE-SIZE
          LTR   15,15
-         BNP   L0390
+         BNP   L0398
          CVD   15,DWK
          UNPK  SRT0951Z(7),DWK+4(4)
          OI    SRT0951Z+6,X'F0'
          LA    15,SRT0951G
-         B     L0391
-L0390    DS    0H
+         B     L0399
+L0398    DS    0H
          LA    15,SRT0951F
-L0391    DS    0H
+L0399    DS    0H
          ST    15,SRT0951E+4       the SORT statement's last byte
          DROP  8
          LA    1,SRTSAVE           a save area of its own, so the
@@ -4947,6 +5151,13 @@ L0190    DS    0H
 T0668    DS    0H
 * OPEN INPUT SUPPLEMENTAL-PART1-OUT
          OPEN  (FD002,INPUT)
+         TM    FD002+48,X'10'      DCBOFLGS: did it open?
+         BO    L0400
+         WTO   'COBC370: OPEN FAILED, DD SYSPART1',ROUTCDE=11
+         ABEND 35
+         B     L0401
+L0400    DS    0H
+L0401    DS    0H
 L0193    DS    0H
 T0669    DS    0H
 * READ SUPPLEMENTAL-PART1-OUT
@@ -4968,13 +5179,13 @@ T0671    DS    0H
          MVC   D0040(40),D0032     alphanumeric move
 T0672    DS    0H
 * RELEASE: the record to the sort, and back here for the next
-         LA    14,L0392
+         LA    14,L0402
          ST    14,SRTRES
          ST    12,SRTR12
          LA    1,D0040             the record
          LA    15,12               E15: insert it
          B     SRTYLD
-L0392    DS    0H
+L0402    DS    0H
          DROP  8
 T0673    DS    0H
          B     L0193
@@ -4993,18 +5204,25 @@ L0191    DS    0H
 T0676    DS    0H
 * OPEN OUTPUT SUPPLEMENTAL-PART2-IN
          OPEN  (FD001,OUTPUT)
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0403
+         WTO   'COBC370: OPEN FAILED, DD SYSPART2',ROUTCDE=11
+         ABEND 35
+         B     L0404
+L0403    DS    0H
+L0404    DS    0H
 L0197    DS    0H
 T0677    DS    0H
 * RETURN SORTFILE
          CLI   SRTHAVE,1           a record the sort handed over?
-         BE    L0394
-         LA    14,L0393
+         BE    L0406
+         LA    14,L0405
          ST    14,SRTRES
          ST    12,SRTR12
          LA    15,4                E35: taken; the next one, please
          B     SRTYLD
-L0393    DS    0H
-L0394    DS    0H
+L0405    DS    0H
+L0406    DS    0H
          MVI   SRTHAVE,0
          L     1,SRTREC
          LTR   1,1                 zero: the sort has no more
@@ -5038,6 +5256,9 @@ T0683    DS    0H
          LA    15,8
          B     SRTYLD
 L0192    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0103    EQU   *
+         USING B0103,12
 T0684    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5067,7 +5288,10 @@ T0688    DS    0H
 * MOVE 70 -> LCONB
          ZAP   PWK1(16),K0012+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          STH   2,D0057
 T0689    DS    0H
 * MOVE SPACES -> SAVESKADATANAME
@@ -5077,10 +5301,20 @@ T0689    DS    0H
 T0690    DS    0H
 * OPEN INPUT SUPPLEMENTAL-PART2-IN
          OPEN  (FD001,INPUT)
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0407
+         WTO   'COBC370: OPEN FAILED, DD SYSPART2',ROUTCDE=11
+         ABEND 35
+         B     L0408
+L0407    DS    0H
+         DROP  8
+L0408    DS    0H
 T0691    DS    0H
 * READ SUPPLEMENTAL-PART2-IN
          LA    1,L0202             this READ's AT END
          STCM  1,7,FD001+33        into DCBEODAD
+         L     8,BL0000            base locator
+         USING WSC0000,8
          GET   FD001,D0038         QSAM move mode
          B     L0203
 L0202    DS    0H                  AT END
@@ -5101,18 +5335,22 @@ T0693    DS    0H
 L0203    DS    0H
 T0694    DS    0H
 * PERFORM WRITEHDB THRU HDB-EXIT
+         L     14,X0105            what the exit cell holds
+         ST    14,SV0049           kept for the return
          LA    15,R0049            return here
          ST    15,X0105            into the range's exit cell
          L     15,PA0104
          BR    15
 R0049    DS    0H
-         L     12,CB0102           this block's base again
-         L     15,FA0105           restore fall-through
+         L     12,CB0103           this block's base again
+         L     15,SV0049           what the cell held before
          ST    15,X0105
 T0695    DS    0H
 * MOVE 0 -> Q
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -5125,8 +5363,8 @@ T0696    DS    0H
 * READ-SORTER.
 P0102    DS    0H
          BALR  12,0                this paragraph's code base
-B0103    EQU   *
-         USING B0103,12
+B0104    EQU   *
+         USING B0104,12
 T0697    DS    0H
 * READ SUPPLEMENTAL-PART2-IN
          LA    1,L0204             this READ's AT END
@@ -5145,8 +5383,8 @@ L0205    DS    0H
 * ISX.
 P0103    DS    0H
          BALR  12,0                this paragraph's code base
-B0104    EQU   *
-         USING B0104,12
+B0105    EQU   *
+         USING B0105,12
 T0699    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5161,13 +5399,15 @@ T0700    DS    0H
 L0206    DS    0H
 T0701    DS    0H
 * PERFORM PRINTXREF THRU PRINTXREFEXIT
+         L     14,X0110            what the exit cell holds
+         ST    14,SV0050           kept for the return
          LA    15,R0050            return here
          ST    15,X0110            into the range's exit cell
          L     15,PA0106
          BR    15
 R0050    DS    0H
-         L     12,CB0104           this block's base again
-         L     15,FA0110           restore fall-through
+         L     12,CB0105           this block's base again
+         L     15,SV0050           what the cell held before
          ST    15,X0110
 T0702    DS    0H
 * GO TO READ-SORTER
@@ -5176,8 +5416,8 @@ T0702    DS    0H
 * WRITEHDB.
 P0104    DS    0H
          BALR  12,0                this paragraph's code base
-B0105    EQU   *
-         USING B0105,12
+B0106    EQU   *
+         USING B0106,12
 T0703    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5207,15 +5447,16 @@ T0706    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(6),M0002       load the ED pattern
          ED    EDWK(6),EDSRC
          MVC   D0207(4),EDWK+2     the edited result
 T0707    DS    0H
 * IF
          CLC   D0212(6),S0224      the item's width
-         BNE   L0399
+         BNE   L0413
          CLC   SPCS(2),S0224+6     spaces against the literal's tail
-L0399    DS    0H
+L0413    DS    0H
          BE    L0208
 T0708    DS    0H
 * MOVE HD-HH -> HD2-HH
@@ -5255,7 +5496,10 @@ T0714    DS    0H
 * MOVE 1 -> LCONB
          ZAP   PWK1(16),K0005+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),13,0         drop the digits past the picture
+         SRP   DWK(8),51,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
          STH   2,D0057
@@ -5284,6 +5528,7 @@ T0717    DS    0H
          USING WSC0000,8
          LH    2,D0057
          AH    2,H0002             binary, same scale: in the register
+         LPR   2,2                 unsigned: the magnitude
          STH   2,D0057
          DROP  8
 L0211    DS    0H
@@ -5311,13 +5556,14 @@ T0720    DS    0H
          USING WSC0000,8
          LH    2,D0057
          AH    2,H0001             binary, same scale: in the register
+         LPR   2,2                 unsigned: the magnitude
          STH   2,D0057
          DROP  8
 * HDB-EXIT.
 P0105    DS    0H
          BALR  12,0                this paragraph's code base
-B0106    EQU   *
-         USING B0106,12
+B0107    EQU   *
+         USING B0107,12
 T0721    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
@@ -5327,8 +5573,8 @@ F0105    DS    0H                  fall-through when not performed
 * PRINTXREF.
 P0106    DS    0H
          BALR  12,0                this paragraph's code base
-B0107    EQU   *
-         USING B0107,12
+B0108    EQU   *
+         USING B0108,12
 T0722    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5350,8 +5596,8 @@ T0724    DS    0H
 * CHECK-Q.
 P0107    DS    0H
          BALR  12,0                this paragraph's code base
-B0108    EQU   *
-         USING B0108,12
+B0109    EQU   *
+         USING B0109,12
 T0725    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5368,6 +5614,8 @@ T0726    DS    0H
 * MOVE 1 -> Q
          ZAP   PWK1(16),K0005+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
          ST    2,D0052
          DROP  8
@@ -5399,23 +5647,28 @@ T0729    DS    0H
          USING WSC0000,8
          LH    2,D0057
          AH    2,H0001             binary, same scale: in the register
+         LPR   2,2                 unsigned: the magnitude
          STH   2,D0057
 T0730    DS    0H
 * MOVE 0 -> Q
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
          ST    2,D0052
 T0731    DS    0H
 * PERFORM WRITEHDB THRU HDB-EXIT
+         L     14,X0105            what the exit cell holds
+         ST    14,SV0051           kept for the return
          LA    15,R0051            return here
          ST    15,X0105            into the range's exit cell
          L     15,PA0104
          BR    15
 R0051    DS    0H
-         L     12,CB0108           this block's base again
+         L     12,CB0109           this block's base again
          DROP  8
-         L     15,FA0105           restore fall-through
+         L     15,SV0051           what the cell held before
          ST    15,X0105
 T0732    DS    0H
 * MOVE SPACES -> PRINTLINE
@@ -5433,8 +5686,8 @@ F0107    DS    0H                  fall-through when not performed
 * CONNECTC.
 P0108    DS    0H
          BALR  12,0                this paragraph's code base
-B0109    EQU   *
-         USING B0109,12
+B0110    EQU   *
+         USING B0110,12
 T0733    DS    0H
 * MOVE SPACES -> PRINTLINE
          L     8,BL0000            base locator
@@ -5464,8 +5717,8 @@ T0737    DS    0H
 * CONNECTD.
 P0109    DS    0H
          BALR  12,0                this paragraph's code base
-B0110    EQU   *
-         USING B0110,12
+B0111    EQU   *
+         USING B0111,12
 T0738    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5478,14 +5731,16 @@ T0738    DS    0H
          BNH   L0221
 T0739    DS    0H
 * PERFORM CHECK-Q
+         L     14,X0107            what the exit cell holds
+         ST    14,SV0052           kept for the return
          LA    15,R0052            return here
          ST    15,X0107            into the range's exit cell
          L     15,PA0107
          BR    15
 R0052    DS    0H
-         L     12,CB0110           this block's base again
+         L     12,CB0111           this block's base again
          DROP  8
-         L     15,FA0107           restore fall-through
+         L     15,SV0052           what the cell held before
          ST    15,X0107
 L0221    DS    0H
 T0740    DS    0H
@@ -5506,8 +5761,8 @@ T0741    DS    0H
 * PRINTXREFEXIT.
 P0110    DS    0H
          BALR  12,0                this paragraph's code base
-B0111    EQU   *
-         USING B0111,12
+B0112    EQU   *
+         USING B0112,12
 T0742    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
@@ -5517,17 +5772,19 @@ F0110    DS    0H                  fall-through when not performed
 * WRAPUP.
 P0111    DS    0H
          BALR  12,0                this paragraph's code base
-B0112    EQU   *
-         USING B0112,12
+B0113    EQU   *
+         USING B0113,12
 T0743    DS    0H
 * PERFORM CHECK-Q
+         L     14,X0107            what the exit cell holds
+         ST    14,SV0053           kept for the return
          LA    15,R0053            return here
          ST    15,X0107            into the range's exit cell
          L     15,PA0107
          BR    15
 R0053    DS    0H
-         L     12,CB0112           this block's base again
-         L     15,FA0107           restore fall-through
+         L     12,CB0113           this block's base again
+         L     15,SV0053           what the cell held before
          ST    15,X0107
 T0744    DS    0H
 * CLOSE SOURCE-LISTING
@@ -5562,13 +5819,13 @@ T0748    DS    0H
 * PROCESS-COPY.
 P0112    DS    0H
          BALR  12,0                this paragraph's code base
-B0113    EQU   *
-         USING B0113,12
+B0114    EQU   *
+         USING B0114,12
 * ZZ000-INITIATE.
 P0113    DS    0H
          BALR  12,0                this paragraph's code base
-B0114    EQU   *
-         USING B0114,12
+B0115    EQU   *
+         USING B0115,12
 T0749    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(23),S0227
@@ -5577,43 +5834,51 @@ T0749    DS    0H
          BALR  14,15
 T0750    DS    0H
 * PERFORM ZZ100-OPEN-PDS
+         L     14,X0114            what the exit cell holds
+         ST    14,SV0054           kept for the return
          LA    15,R0054            return here
          ST    15,X0114            into the range's exit cell
          L     15,PA0114
          BR    15
 R0054    DS    0H
-         L     12,CB0114           this block's base again
-         L     15,FA0114           restore fall-through
+         L     12,CB0115           this block's base again
+         L     15,SV0054           what the cell held before
          ST    15,X0114
 T0751    DS    0H
 * PERFORM ZZ200-LOCATE-MEMBER-1
+         L     14,X0115            what the exit cell holds
+         ST    14,SV0055           kept for the return
          LA    15,R0055            return here
          ST    15,X0115            into the range's exit cell
          L     15,PA0115
          BR    15
 R0055    DS    0H
-         L     12,CB0114           this block's base again
-         L     15,FA0115           restore fall-through
+         L     12,CB0115           this block's base again
+         L     15,SV0055           what the cell held before
          ST    15,X0115
 T0752    DS    0H
 * PERFORM ZZ400-READ-MEMBER
+         L     14,X0116            what the exit cell holds
+         ST    14,SV0056           kept for the return
          LA    15,R0056            return here
          ST    15,X0116            into the range's exit cell
          L     15,PA0116
          BR    15
 R0056    DS    0H
-         L     12,CB0114           this block's base again
-         L     15,FA0116           restore fall-through
+         L     12,CB0115           this block's base again
+         L     15,SV0056           what the cell held before
          ST    15,X0116
 T0753    DS    0H
 * PERFORM ZZ500-CLOSE-PDS
+         L     14,X0118            what the exit cell holds
+         ST    14,SV0057           kept for the return
          LA    15,R0057            return here
          ST    15,X0118            into the range's exit cell
          L     15,PA0118
          BR    15
 R0057    DS    0H
-         L     12,CB0114           this block's base again
-         L     15,FA0118           restore fall-through
+         L     12,CB0115           this block's base again
+         L     15,SV0057           what the cell held before
          ST    15,X0118
 T0754    DS    0H
 * DISPLAY
@@ -5624,8 +5889,8 @@ T0754    DS    0H
 * ZZ100-OPEN-PDS.
 P0114    DS    0H
          BALR  12,0                this paragraph's code base
-B0115    EQU   *
-         USING B0115,12
+B0116    EQU   *
+         USING B0116,12
 T0755    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(30),S0229
@@ -5643,14 +5908,16 @@ T0757    DS    0H
          MVC   D0252(8),S0230      literal move, space padded
 T0758    DS    0H
 * PERFORM ZZ900-CALL-NCZ93205
+         L     14,X0119            what the exit cell holds
+         ST    14,SV0058           kept for the return
          LA    15,R0058            return here
          ST    15,X0119            into the range's exit cell
          L     15,PA0119
          BR    15
 R0058    DS    0H
-         L     12,CB0115           this block's base again
+         L     12,CB0116           this block's base again
          DROP  8
-         L     15,FA0119           restore fall-through
+         L     15,SV0058           what the cell held before
          ST    15,X0119
 T0759    DS    0H
 * IF
@@ -5720,8 +5987,8 @@ F0114    DS    0H                  fall-through when not performed
 * ZZ200-LOCATE-MEMBER-1.
 P0115    DS    0H
          BALR  12,0                this paragraph's code base
-B0116    EQU   *
-         USING B0116,12
+B0117    EQU   *
+         USING B0117,12
 T0766    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(33),S0234
@@ -5739,14 +6006,16 @@ T0768    DS    0H
          MVC   D0247(8),S0235      literal move, space padded
 T0769    DS    0H
 * PERFORM ZZ900-CALL-NCZ93205
+         L     14,X0119            what the exit cell holds
+         ST    14,SV0059           kept for the return
          LA    15,R0059            return here
          ST    15,X0119            into the range's exit cell
          L     15,PA0119
          BR    15
 R0059    DS    0H
-         L     12,CB0116           this block's base again
+         L     12,CB0117           this block's base again
          DROP  8
-         L     15,FA0119           restore fall-through
+         L     15,SV0059           what the cell held before
          ST    15,X0119
 T0770    DS    0H
 * IF
@@ -5816,8 +6085,8 @@ F0115    DS    0H                  fall-through when not performed
 * ZZ400-READ-MEMBER.
 P0116    DS    0H
          BALR  12,0                this paragraph's code base
-B0117    EQU   *
-         USING B0117,12
+B0118    EQU   *
+         USING B0118,12
 T0777    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(31),S0239
@@ -5832,7 +6101,7 @@ T0778    DS    0H
          ST    2,D0242
 T0779    DS    0H
 * PERFORM ZZ410-READ-MEMBER
-L0418    DS    0H
+L0432    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -5841,18 +6110,20 @@ L0418    DS    0H
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BNE   L0419
+         BNE   L0433
+         L     14,X0117            what the exit cell holds
+         ST    14,SV0060           kept for the return
          LA    15,R0060            return here
          ST    15,X0117            into the range's exit cell
          L     15,PA0117
          BR    15
 R0060    DS    0H
-         L     12,CB0117           this block's base again
+         L     12,CB0118           this block's base again
          DROP  8
-         L     15,FA0117           restore fall-through
+         L     15,SV0060           what the cell held before
          ST    15,X0117
-         B     L0418
-L0419    DS    0H
+         B     L0432
+L0433    DS    0H
 T0780    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5928,17 +6199,19 @@ F0116    DS    0H                  fall-through when not performed
 * ZZ410-READ-MEMBER.
 P0117    DS    0H
          BALR  12,0                this paragraph's code base
-B0118    EQU   *
-         USING B0118,12
+B0119    EQU   *
+         USING B0119,12
 T0788    DS    0H
 * PERFORM ZZ900-CALL-NCZ93205
+         L     14,X0119            what the exit cell holds
+         ST    14,SV0061           kept for the return
          LA    15,R0061            return here
          ST    15,X0119            into the range's exit cell
          L     15,PA0119
          BR    15
 R0061    DS    0H
-         L     12,CB0118           this block's base again
-         L     15,FA0119           restore fall-through
+         L     12,CB0119           this block's base again
+         L     15,SV0061           what the cell held before
          ST    15,X0119
 T0789    DS    0H
 * IF
@@ -5966,8 +6239,8 @@ F0117    DS    0H                  fall-through when not performed
 * ZZ500-CLOSE-PDS.
 P0118    DS    0H
          BALR  12,0                this paragraph's code base
-B0119    EQU   *
-         USING B0119,12
+B0120    EQU   *
+         USING B0120,12
 T0791    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(16),S0244
@@ -5982,14 +6255,16 @@ T0792    DS    0H
          ST    2,D0242
 T0793    DS    0H
 * PERFORM ZZ900-CALL-NCZ93205
+         L     14,X0119            what the exit cell holds
+         ST    14,SV0062           kept for the return
          LA    15,R0062            return here
          ST    15,X0119            into the range's exit cell
          L     15,PA0119
          BR    15
 R0062    DS    0H
-         L     12,CB0119           this block's base again
+         L     12,CB0120           this block's base again
          DROP  8
-         L     15,FA0119           restore fall-through
+         L     15,SV0062           what the cell held before
          ST    15,X0119
 T0794    DS    0H
 * IF
@@ -6041,8 +6316,8 @@ F0118    DS    0H                  fall-through when not performed
 * ZZ900-CALL-NCZ93205.
 P0119    DS    0H
          BALR  12,0                this paragraph's code base
-B0120    EQU   *
-         USING B0120,12
+B0121    EQU   *
+         USING B0121,12
 T0799    DS    0H
 * CALL 'NCZ93205'
          L     8,BL0000            base locator
@@ -6726,12 +7001,11 @@ CB0117   DC    A(B0117)            a code block's base
 CB0118   DC    A(B0118)            a code block's base
 CB0119   DC    A(B0119)            a code block's base
 CB0120   DC    A(B0120)            a code block's base
+CB0121   DC    A(B0121)            a code block's base
 PA0004   DC    A(P0004)            EXAMINELOOP3
 PA0005   DC    A(P0005)            INC-COBOLREFNO
-FA0005   DC    A(F0005)            fall-through, to put back
 PA0006   DC    A(P0006)            READLOOP2
 PA0007   DC    A(P0007)            READLOOP3
-FA0008   DC    A(F0008)            fall-through, to put back
 PA0009   DC    A(P0009)            RL3GETGROUP
 PA0010   DC    A(P0010)            RL3GETDIGIT
 PA0011   DC    A(P0011)            RL3STOREDIGIT
@@ -6747,12 +7021,10 @@ PA0021   DC    A(P0021)            MAINLINE
 PA0023   DC    A(P0023)            READALINE
 PA0024   DC    A(P0024)            NOTEENT
 PA0025   DC    A(P0025)            GETINPUTGROUP
-FA0025   DC    A(F0025)            fall-through, to put back
 PA0026   DC    A(P0026)            GETINPUTDIGIT
 PA0027   DC    A(P0027)            GETINPUTDIGIT2
 PA0028   DC    A(P0028)            INCREMENT-WITHINPARENS-COUNT
 PA0029   DC    A(P0029)            DECREMENT-WITHINPARENS-COUNT
-FA0029   DC    A(F0029)            fall-through, to put back
 PA0030   DC    A(P0030)            CONTINUE-TEST-DIGIT
 PA0031   DC    A(P0031)            STOREOUTDIGIT
 PA0032   DC    A(P0032)            NOTE-TEST
@@ -6769,7 +7041,6 @@ PA0043   DC    A(P0043)            PARTEST3
 PA0044   DC    A(P0044)            HAVESUBSCRIPT
 PA0045   DC    A(P0045)            CHECKTHEWORD
 PA0046   DC    A(P0046)            BUILDANALYZER
-FA0046   DC    A(F0046)            fall-through, to put back
 PA0047   DC    A(P0047)            STOREWORD
 PA0048   DC    A(P0048)            KILLWORD
 PA0049   DC    A(P0049)            CHECK2
@@ -6785,19 +7056,14 @@ PA0067   DC    A(P0067)            CHECK11
 PA0069   DC    A(P0069)            CHECK12
 PA0071   DC    A(P0071)            CHECK13
 PA0073   DC    A(P0073)            LOADSOURCEGROUP
-FA0074   DC    A(F0074)            fall-through, to put back
 PA0075   DC    A(P0075)            LOADSOURCEDIGIT
-FA0076   DC    A(F0076)            fall-through, to put back
 PA0077   DC    A(P0077)            STOREFOUNDDIGIT
 PA0079   DC    A(P0079)            SFDTEST
 PA0080   DC    A(P0080)            SFD01
 PA0081   DC    A(P0081)            SFD0
 PA0082   DC    A(P0082)            SFDEND
-FA0082   DC    A(F0082)            fall-through, to put back
 PA0083   DC    A(P0083)            STOREFOUNDGROUP
-FA0084   DC    A(F0084)            fall-through, to put back
 PA0085   DC    A(P0085)            SFWEND
-FA0085   DC    A(F0085)            fall-through, to put back
 PA0086   DC    A(P0086)            YESVERB
 PA0087   DC    A(P0087)            FIRSTVERB
 PA0088   DC    A(P0088)            NEXTVERB
@@ -6807,36 +7073,87 @@ PA0094   DC    A(P0094)            INVALIDEND
 PA0095   DC    A(P0095)            VALIDEND
 PA0096   DC    A(P0096)            TERMINATERUN
 PA0097   DC    A(P0097)            OUTPUTSOURCE
-FA0097   DC    A(F0097)            fall-through, to put back
 PA0098   DC    A(P0098)            OPEN-SOURCE-FILE
 PA0099   DC    A(P0099)            READ-A-SOURCE-RECORD
 PA0100   DC    A(P0100)            READ-EXIT
-FA0100   DC    A(F0100)            fall-through, to put back
 PA0101   DC    A(P0101)            BEGINLASTPASS
 PA0102   DC    A(P0102)            READ-SORTER
 PA0103   DC    A(P0103)            ISX
 PA0104   DC    A(P0104)            WRITEHDB
 PA0105   DC    A(P0105)            HDB-EXIT
-FA0105   DC    A(F0105)            fall-through, to put back
 PA0106   DC    A(P0106)            PRINTXREF
 PA0107   DC    A(P0107)            CHECK-Q
-FA0107   DC    A(F0107)            fall-through, to put back
 PA0109   DC    A(P0109)            CONNECTD
 PA0110   DC    A(P0110)            PRINTXREFEXIT
-FA0110   DC    A(F0110)            fall-through, to put back
 PA0111   DC    A(P0111)            WRAPUP
 PA0114   DC    A(P0114)            ZZ100-OPEN-PDS
-FA0114   DC    A(F0114)            fall-through, to put back
 PA0115   DC    A(P0115)            ZZ200-LOCATE-MEMBER-1
-FA0115   DC    A(F0115)            fall-through, to put back
 PA0116   DC    A(P0116)            ZZ400-READ-MEMBER
-FA0116   DC    A(F0116)            fall-through, to put back
 PA0117   DC    A(P0117)            ZZ410-READ-MEMBER
-FA0117   DC    A(F0117)            fall-through, to put back
 PA0118   DC    A(P0118)            ZZ500-CLOSE-PDS
-FA0118   DC    A(F0118)            fall-through, to put back
 PA0119   DC    A(P0119)            ZZ900-CALL-NCZ93205
-FA0119   DC    A(F0119)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
+SV0006   DS    F                   a PERFORM site's saved exit cell
+SV0007   DS    F                   a PERFORM site's saved exit cell
+SV0008   DS    F                   a PERFORM site's saved exit cell
+SV0009   DS    F                   a PERFORM site's saved exit cell
+SV0010   DS    F                   a PERFORM site's saved exit cell
+SV0011   DS    F                   a PERFORM site's saved exit cell
+SV0012   DS    F                   a PERFORM site's saved exit cell
+SV0013   DS    F                   a PERFORM site's saved exit cell
+SV0014   DS    F                   a PERFORM site's saved exit cell
+SV0015   DS    F                   a PERFORM site's saved exit cell
+SV0016   DS    F                   a PERFORM site's saved exit cell
+SV0017   DS    F                   a PERFORM site's saved exit cell
+SV0018   DS    F                   a PERFORM site's saved exit cell
+SV0019   DS    F                   a PERFORM site's saved exit cell
+SV0020   DS    F                   a PERFORM site's saved exit cell
+SV0021   DS    F                   a PERFORM site's saved exit cell
+SV0022   DS    F                   a PERFORM site's saved exit cell
+SV0023   DS    F                   a PERFORM site's saved exit cell
+SV0024   DS    F                   a PERFORM site's saved exit cell
+SV0025   DS    F                   a PERFORM site's saved exit cell
+SV0026   DS    F                   a PERFORM site's saved exit cell
+SV0027   DS    F                   a PERFORM site's saved exit cell
+SV0028   DS    F                   a PERFORM site's saved exit cell
+SV0029   DS    F                   a PERFORM site's saved exit cell
+SV0030   DS    F                   a PERFORM site's saved exit cell
+SV0031   DS    F                   a PERFORM site's saved exit cell
+SV0032   DS    F                   a PERFORM site's saved exit cell
+SV0033   DS    F                   a PERFORM site's saved exit cell
+SV0034   DS    F                   a PERFORM site's saved exit cell
+SV0035   DS    F                   a PERFORM site's saved exit cell
+SV0036   DS    F                   a PERFORM site's saved exit cell
+SV0037   DS    F                   a PERFORM site's saved exit cell
+SV0038   DS    F                   a PERFORM site's saved exit cell
+SV0039   DS    F                   a PERFORM site's saved exit cell
+SV0040   DS    F                   a PERFORM site's saved exit cell
+SV0041   DS    F                   a PERFORM site's saved exit cell
+SV0042   DS    F                   a PERFORM site's saved exit cell
+SV0043   DS    F                   a PERFORM site's saved exit cell
+SV0044   DS    F                   a PERFORM site's saved exit cell
+SV0045   DS    F                   a PERFORM site's saved exit cell
+SV0046   DS    F                   a PERFORM site's saved exit cell
+SV0047   DS    F                   a PERFORM site's saved exit cell
+SV0048   DS    F                   a PERFORM site's saved exit cell
+SV0049   DS    F                   a PERFORM site's saved exit cell
+SV0050   DS    F                   a PERFORM site's saved exit cell
+SV0051   DS    F                   a PERFORM site's saved exit cell
+SV0052   DS    F                   a PERFORM site's saved exit cell
+SV0053   DS    F                   a PERFORM site's saved exit cell
+SV0054   DS    F                   a PERFORM site's saved exit cell
+SV0055   DS    F                   a PERFORM site's saved exit cell
+SV0056   DS    F                   a PERFORM site's saved exit cell
+SV0057   DS    F                   a PERFORM site's saved exit cell
+SV0058   DS    F                   a PERFORM site's saved exit cell
+SV0059   DS    F                   a PERFORM site's saved exit cell
+SV0060   DS    F                   a PERFORM site's saved exit cell
+SV0061   DS    F                   a PERFORM site's saved exit cell
+SV0062   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

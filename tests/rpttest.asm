@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,6 +38,13 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN OUTPUT PRINT-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0002
+         WTO   'COBC370: OPEN FAILED, DD PROUT',ROUTCDE=11
+         ABEND 35
+         B     L0003
+L0002    DS    0H
+L0003    DS    0H
 T0001    DS    0H
 * INITIATE SIMPLE-RPT
          SR    2,2
@@ -54,6 +64,8 @@ T0002    DS    0H
 * MOVE 0 -> WS-IDX
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -103,12 +115,12 @@ T0008    DS    0H
 * GENERATE DETAIL-LINE
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0002
+         BNE   L0004
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
          L     12,CB0002           this block's base again
-L0002    DS    0H
-L0003    DS    0H
+L0004    DS    0H
+L0005    DS    0H
          BAL   14,RG001
          L     12,CB0002           this block's base again
 T0009    DS    0H
@@ -122,8 +134,8 @@ B0003    EQU   *
 T0010    DS    0H
 * TERMINATE SIMPLE-RPT
          CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
-         BE    L0004               no: nothing to do
-L0004    DS    0H
+         BE    L0006               no: nothing to do
+L0006    DS    0H
 T0011    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -172,19 +184,19 @@ RG000    ST    14,RGS000           save the return
 * report group DETAIL-LINE
 RG001    ST    14,RGS001           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0006
+         BE    L0008
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0006             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0005               fits
+         BNH   L0007               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0006    DS    0H
+L0008    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0005               none: the first group on a page fits
+         BZ    L0007               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0006             into LINE-COUNTER
@@ -192,24 +204,24 @@ L0006    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0005               fits
+         BNH   L0007               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0005    DS    0H
+L0007    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0006             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0007
+         BE    L0009
          LA    2,1(2)              LINE PLUS n
-         B     L0008
-L0007    DS    0H
+         B     L0010
+L0009    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
-         B     L0008
+         B     L0010
          LA    2,1(2)              yes: the line after it
-L0008    DS    0H
+L0010    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -224,6 +236,7 @@ L0008    DS    0H
          MVC   RBUF+1(5),D0014     COLUMN placement
          ZAP   PWK1(16),D0003(5)
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(16),M0001      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(16),EDSRC

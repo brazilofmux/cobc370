@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -53,6 +56,13 @@ T0002    DS    0H
 T0003    DS    0H
 * OPEN INPUT RECORD-IMAGES
          OPEN  (FD000,INPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0027
+         WTO   'COBC370: OPEN FAILED, DD CARDIN',ROUTCDE=11
+         ABEND 35
+         B     L0028
+L0027    DS    0H
+L0028    DS    0H
 T0004    DS    0H
 * OPEN I-O RRDS-FILE
          OPEN  (FD001)             VSAM ACB
@@ -99,11 +109,13 @@ B0002    EQU   *
          USING B0002,12
 T0008    DS    0H
 * PERFORM 110-PROCESS-UPDATES THRU 119-EXIT
-L0027    DS    0H
+L0029    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0013(1),S0006      alphanumeric compare
-         BE    L0028
+         BE    L0030
+         L     14,X0004            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
          L     15,PA0003
@@ -111,10 +123,10 @@ L0027    DS    0H
 R0001    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0004           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0004
-         B     L0027
-L0028    DS    0H
+         B     L0029
+L0030    DS    0H
 * 020-TERMINATE.
 P0002    DS    0H
          BALR  12,0                this paragraph's code base
@@ -179,6 +191,8 @@ T0014    DS    0H
          BE    L0004
 T0015    DS    0H
 * PERFORM 111-DISPATCH THRU 112-EXIT
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
@@ -186,7 +200,7 @@ T0015    DS    0H
 R0002    DS    0H
          L     12,CB0004           this block's base again
          DROP  8
-         L     15,FA0006           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0006
 L0004    DS    0H
 * 119-EXIT.
@@ -213,6 +227,8 @@ T0017    DS    0H
          BNE   L0005
 T0018    DS    0H
 * PERFORM 120-ADD-PROCESS THRU 129-EXIT
+         L     14,X0008            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0008            into the range's exit cell
          L     15,PA0007
@@ -220,7 +236,7 @@ T0018    DS    0H
 R0003    DS    0H
          L     12,CB0006           this block's base again
          DROP  8
-         L     15,FA0008           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0008
 L0005    DS    0H
 T0019    DS    0H
@@ -231,6 +247,8 @@ T0019    DS    0H
          BNE   L0006
 T0020    DS    0H
 * PERFORM 130-CHANGE-PROCESS THRU 139-EXIT
+         L     14,X0010            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0010            into the range's exit cell
          L     15,PA0009
@@ -238,7 +256,7 @@ T0020    DS    0H
 R0004    DS    0H
          L     12,CB0006           this block's base again
          DROP  8
-         L     15,FA0010           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0010
 L0006    DS    0H
 T0021    DS    0H
@@ -249,6 +267,8 @@ T0021    DS    0H
          BNE   L0007
 T0022    DS    0H
 * PERFORM 140-DELETE-PROCESS THRU 149-EXIT
+         L     14,X0014            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0014            into the range's exit cell
          L     15,PA0013
@@ -256,7 +276,7 @@ T0022    DS    0H
 R0005    DS    0H
          L     12,CB0006           this block's base again
          DROP  8
-         L     15,FA0014           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0014
 L0007    DS    0H
 * 112-EXIT.
@@ -286,7 +306,10 @@ T0025    DS    0H
 * MOVE RRK-LOW -> WS-RRN
          PACK  PWK1(16),D0009(3)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0011
 T0026    DS    0H
 * MOVE WS-RRN -> COUNTER-EDIT
@@ -294,6 +317,7 @@ T0026    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0019(10),EDWK+2    the edited result
@@ -352,10 +376,10 @@ G0007    DS    0H
 G0012    DS    0H
          DROP  8
          CLI   FD001NA,X'00'       ever used?
-         BE    L0037
+         BE    L0039
          ENDREQ RPL=FD001N         the failed request is over
          MVI   FD001NA,X'00'
-L0037    DS    0H
+L0039    DS    0H
 G0008    DS    0H
          B     L0009
 L0008    DS    0H                  INVALID KEY
@@ -399,10 +423,10 @@ G0013    DS    0H
 G0018    DS    0H
          DROP  8
          CLI   FD001NA,X'00'       ever used?
-         BE    L0038
+         BE    L0040
          ENDREQ RPL=FD001N         the failed request is over
          MVI   FD001NA,X'00'
-L0038    DS    0H
+L0040    DS    0H
 G0014    DS    0H
 T0030    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -482,13 +506,15 @@ B0010    EQU   *
          USING B0010,12
 T0039    DS    0H
 * PERFORM 150-READ-RECORD THRU 159-EXIT
+         L     14,X0018            what the exit cell holds
+         ST    14,SV0006           kept for the return
          LA    15,R0006            return here
          ST    15,X0018            into the range's exit cell
          L     15,PA0017
          BR    15
 R0006    DS    0H
          L     12,CB0010           this block's base again
-         L     15,FA0018           restore fall-through
+         L     15,SV0006           what the cell held before
          ST    15,X0018
 T0040    DS    0H
 * IF
@@ -502,6 +528,7 @@ T0041    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0019(10),EDWK+2    the edited result
@@ -528,6 +555,8 @@ T0044    DS    0H
          BNE   L0014
 T0045    DS    0H
 * PERFORM 132-DO-CHANGE THRU 133-EXIT
+         L     14,X0012            what the exit cell holds
+         ST    14,SV0007           kept for the return
          LA    15,R0007            return here
          ST    15,X0012            into the range's exit cell
          L     15,PA0011
@@ -535,7 +564,7 @@ T0045    DS    0H
 R0007    DS    0H
          L     12,CB0010           this block's base again
          DROP  8
-         L     15,FA0012           restore fall-through
+         L     15,SV0007           what the cell held before
          ST    15,X0012
 L0014    DS    0H
 * 139-EXIT.
@@ -562,6 +591,7 @@ T0047    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0019(10),EDWK+2    the edited result
@@ -589,6 +619,13 @@ T0051    DS    0H
          MVC   D0017(1),S0011      literal move, space padded
 T0052    DS    0H
 * REWRITE RRDS-RECORD
+         MVC   FD001S(80),D0006    keep the record area
+         GET   RPL=FD001R          hold the record the key names
+         MVI   FD001RA,X'01'       the RPL has carried a request
+         LR    0,15
+         MVC   D0006(80),FD001S    the record area back
+         LTR   15,0                found?
+         BNZ   L0015
          PUT   RPL=FD001R          put the held record back
          MVI   FD001RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
@@ -631,10 +668,10 @@ G0019    DS    0H
 G0024    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0043
+         BE    L0045
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0043    DS    0H
+L0045    DS    0H
 G0020    DS    0H
          B     L0016
 L0015    DS    0H                  INVALID KEY
@@ -678,10 +715,10 @@ G0025    DS    0H
 G0030    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0044
+         BE    L0046
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0044    DS    0H
+L0046    DS    0H
 G0026    DS    0H
 T0053    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -702,6 +739,7 @@ T0055    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0019(10),EDWK+2    the edited result
@@ -760,13 +798,15 @@ B0014    EQU   *
          USING B0014,12
 T0062    DS    0H
 * PERFORM 150-READ-RECORD THRU 159-EXIT
+         L     14,X0018            what the exit cell holds
+         ST    14,SV0008           kept for the return
          LA    15,R0008            return here
          ST    15,X0018            into the range's exit cell
          L     15,PA0017
          BR    15
 R0008    DS    0H
          L     12,CB0014           this block's base again
-         L     15,FA0018           restore fall-through
+         L     15,SV0008           what the cell held before
          ST    15,X0018
 T0063    DS    0H
 * IF
@@ -780,6 +820,7 @@ T0064    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0019(10),EDWK+2    the edited result
@@ -806,6 +847,8 @@ T0067    DS    0H
          BNE   L0020
 T0068    DS    0H
 * PERFORM 142-DO-DELETE THRU 143-EXIT
+         L     14,X0016            what the exit cell holds
+         ST    14,SV0009           kept for the return
          LA    15,R0009            return here
          ST    15,X0016            into the range's exit cell
          L     15,PA0015
@@ -813,7 +856,7 @@ T0068    DS    0H
 R0009    DS    0H
          L     12,CB0014           this block's base again
          DROP  8
-         L     15,FA0016           restore fall-through
+         L     15,SV0009           what the cell held before
          ST    15,X0016
 L0020    DS    0H
 * 149-EXIT.
@@ -840,6 +883,7 @@ T0070    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0019(10),EDWK+2    the edited result
@@ -862,6 +906,13 @@ T0073    DS    0H
          MVC   D0017(1),S0011      literal move, space padded
 T0074    DS    0H
 * DELETE RRDS-FILE
+         MVC   FD001S(80),D0006    keep the record area
+         GET   RPL=FD001R          hold the record the key names
+         MVI   FD001RA,X'01'       the RPL has carried a request
+         LR    0,15
+         MVC   D0006(80),FD001S    the record area back
+         LTR   15,0                found?
+         BNZ   L0021
          ERASE RPL=FD001R          erase the held record
          MVI   FD001RA,X'01'       the RPL has carried a request
          LTR   15,15               done?
@@ -904,10 +955,10 @@ G0031    DS    0H
 G0036    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0049
+         BE    L0051
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0049    DS    0H
+L0051    DS    0H
 G0032    DS    0H
          B     L0022
 L0021    DS    0H                  INVALID KEY
@@ -951,10 +1002,10 @@ G0037    DS    0H
 G0042    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0050
+         BE    L0052
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0050    DS    0H
+L0052    DS    0H
 G0038    DS    0H
 T0075    DS    0H
 * MOVE Y -> OP-FAILED-SWITCH
@@ -1025,7 +1076,10 @@ T0083    DS    0H
 * MOVE RRK-LOW -> WS-RRN
          PACK  PWK1(16),D0009(3)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0011
 T0084    DS    0H
 * MOVE Y -> FOUND-SWITCH
@@ -1058,10 +1112,10 @@ G0043    DS    0H
 G0046    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0051
+         BE    L0053
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0051    DS    0H
+L0053    DS    0H
 G0044    DS    0H
          B     L0026
 L0025    DS    0H                  INVALID KEY
@@ -1089,10 +1143,10 @@ G0047    DS    0H
 G0050    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0052
+         BE    L0054
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0052    DS    0H
+L0054    DS    0H
 G0048    DS    0H
 T0086    DS    0H
 * MOVE N -> FOUND-SWITCH
@@ -1222,6 +1276,7 @@ FD001NA  DC    F'0'                has carried a request
 FD001N   RPL   ACB=FD001,AREA=D0006,                                   X
                AREALEN=80,RECLEN=80,ARG=D0011,OPTCD=(KEY,DIR,KEQ,NUP,  X
                MVE)
+FD001S   DS    CL80                the record area, across a REWRITE's
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
 S0001    DC    CL34'RRDSRAND: READ/REWRITE RRDS DIRECT'  nonnumeric con
 S0002    DC    CL34'----------------------------------'
@@ -1334,21 +1389,22 @@ CB0017   DC    A(B0017)            a code block's base
 CB0018   DC    A(B0018)            a code block's base
 CB0019   DC    A(B0019)            a code block's base
 PA0003   DC    A(P0003)            110-PROCESS-UPDATES
-FA0004   DC    A(F0004)            fall-through, to put back
 PA0005   DC    A(P0005)            111-DISPATCH
-FA0006   DC    A(F0006)            fall-through, to put back
 PA0007   DC    A(P0007)            120-ADD-PROCESS
-FA0008   DC    A(F0008)            fall-through, to put back
 PA0009   DC    A(P0009)            130-CHANGE-PROCESS
-FA0010   DC    A(F0010)            fall-through, to put back
 PA0011   DC    A(P0011)            132-DO-CHANGE
-FA0012   DC    A(F0012)            fall-through, to put back
 PA0013   DC    A(P0013)            140-DELETE-PROCESS
-FA0014   DC    A(F0014)            fall-through, to put back
 PA0015   DC    A(P0015)            142-DO-DELETE
-FA0016   DC    A(F0016)            fall-through, to put back
 PA0017   DC    A(P0017)            150-READ-RECORD
-FA0018   DC    A(F0018)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
+SV0006   DS    F                   a PERFORM site's saved exit cell
+SV0007   DS    F                   a PERFORM site's saved exit cell
+SV0008   DS    F                   a PERFORM site's saved exit cell
+SV0009   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

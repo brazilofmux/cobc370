@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -31,6 +34,8 @@ T0000    DS    0H
 * MOVE 12 -> H-S4
          ZAP   PWK1(16),K0001+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -55,6 +60,8 @@ T0002    DS    0H
 * MOVE -12 -> H-S4
          ZAP   PWK1(16),K0002+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0000
 T0003    DS    0H
@@ -77,6 +84,8 @@ T0004    DS    0H
 * MOVE 0 -> H-S4
          ZAP   PWK1(16),K0003+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0000
 T0005    DS    0H
@@ -99,7 +108,10 @@ T0006    DS    0H
 * MOVE 1234 -> H-U4
          ZAP   PWK1(16),K0004+13(3)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          STH   2,D0001
 T0007    DS    0H
 * DISPLAY
@@ -121,6 +133,8 @@ T0008    DS    0H
 * MOVE -123456789 -> F-S9
          ZAP   PWK1(16),K0005+11(5)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0009    DS    0H
@@ -143,6 +157,8 @@ T0010    DS    0H
 * MOVE 987654321 -> F-S9
          ZAP   PWK1(16),K0006+11(5)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0011    DS    0H
@@ -165,6 +181,8 @@ T0012    DS    0H
 * MOVE -1234 -> H-S2V2
          ZAP   PWK1(16),K0007+13(3)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0003
 T0013    DS    0H
@@ -367,6 +385,8 @@ T0033    DS    0H
 * MOVE 11 -> T-H
          ZAP   PWK1(16),K0016+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          LA    6,0                 subscript-1
          MH    6,H0001             times element size
@@ -376,6 +396,8 @@ T0034    DS    0H
 * MOVE -22 -> T-H
          ZAP   PWK1(16),K0017+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
@@ -385,6 +407,8 @@ T0035    DS    0H
 * MOVE 33 -> T-H
          ZAP   PWK1(16),K0018+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          LA    6,2                 subscript-1
          MH    6,H0001             times element size
@@ -437,6 +461,9 @@ L0019    DS    0H
          LA    1,PARM0018
          L     15,VDISP
          BALR  14,15
+         BALR  12,0                a new code block: the paragraph is l
+B0001    EQU   *
+         USING B0001,12
 T0037    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
@@ -642,6 +669,7 @@ SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
          DS    0F
 CB0000   DC    A(B0000)            a code block's base
+CB0001   DC    A(B0001)            a code block's base
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

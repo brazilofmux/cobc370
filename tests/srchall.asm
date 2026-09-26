@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -39,6 +42,8 @@ T0000    DS    0H
          MVC   D0010(1),S0001      literal move, space padded
 T0001    DS    0H
 * PERFORM LOOKUP
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -46,7 +51,7 @@ T0001    DS    0H
 R0001    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
 T0002    DS    0H
 * MOVE E -> WS-WANT
@@ -55,6 +60,8 @@ T0002    DS    0H
          MVC   D0010(1),S0002      literal move, space padded
 T0003    DS    0H
 * PERFORM LOOKUP
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -62,7 +69,7 @@ T0003    DS    0H
 R0002    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0001
 T0004    DS    0H
 * MOVE I -> WS-WANT
@@ -71,6 +78,8 @@ T0004    DS    0H
          MVC   D0010(1),S0003      literal move, space padded
 T0005    DS    0H
 * PERFORM LOOKUP
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -78,7 +87,7 @@ T0005    DS    0H
 R0003    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0001
 T0006    DS    0H
 * MOVE L -> WS-WANT
@@ -87,6 +96,8 @@ T0006    DS    0H
          MVC   D0010(1),S0004      literal move, space padded
 T0007    DS    0H
 * PERFORM LOOKUP
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -94,7 +105,7 @@ T0007    DS    0H
 R0004    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0001
 T0008    DS    0H
 * MOVE Q -> WS-WANT
@@ -103,6 +114,8 @@ T0008    DS    0H
          MVC   D0010(1),S0005      literal move, space padded
 T0009    DS    0H
 * PERFORM LOOKUP
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -110,7 +123,7 @@ T0009    DS    0H
 R0005    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0001
 T0010    DS    0H
 * MOVE Z -> WS-WANT
@@ -119,6 +132,8 @@ T0010    DS    0H
          MVC   D0010(1),S0006      literal move, space padded
 T0011    DS    0H
 * PERFORM LOOKUP
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0006           kept for the return
          LA    15,R0006            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -126,7 +141,7 @@ T0011    DS    0H
 R0006    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0006           what the cell held before
          ST    15,X0001
 T0012    DS    0H
 * MOVE B -> WS-WANT
@@ -135,6 +150,8 @@ T0012    DS    0H
          MVC   D0010(1),S0007      literal move, space padded
 T0013    DS    0H
 * PERFORM LOOKUP
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0007           kept for the return
          LA    15,R0007            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -142,7 +159,7 @@ T0013    DS    0H
 R0007    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0007           what the cell held before
          ST    15,X0001
 T0014    DS    0H
 * STOP RUN
@@ -339,7 +356,13 @@ CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
 PA0001   DC    A(P0001)            LOOKUP
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
+SV0006   DS    F                   a PERFORM site's saved exit cell
+SV0007   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

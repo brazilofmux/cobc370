@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -60,6 +63,8 @@ L0003    DS    0H                  AFTER test
          ZAP   WK1+15(1),K0003+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0005
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -67,7 +72,7 @@ L0003    DS    0H                  AFTER test
 R0001    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -149,6 +154,8 @@ L0010    DS    0H                  second AFTER test
          ZAP   WK1+15(1),K0003+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BL    L0012
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
@@ -156,7 +163,7 @@ L0010    DS    0H                  second AFTER test
 R0002    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0002           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0002
          ZAP   WK0+15(1),K0005+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -239,6 +246,8 @@ L0015    DS    0H                  AFTER test
          ZAP   WK1+15(1),K0007+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0017
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
@@ -246,7 +255,7 @@ L0015    DS    0H                  AFTER test
 R0003    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0002           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0002
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -312,6 +321,8 @@ L0021    DS    0H                  AFTER test
          ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+14(2),WK1+15(1)  numeric compare
          BH    L0023
+         L     14,X0003            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0003            into the range's exit cell
          L     15,PA0002
@@ -319,7 +330,7 @@ L0021    DS    0H                  AFTER test
 R0004    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0003           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0003
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -613,10 +624,11 @@ CB0002   DC    A(B0002)            a code block's base
 CB0003   DC    A(B0003)            a code block's base
 CB0004   DC    A(B0004)            a code block's base
 PA0001   DC    A(P0001)            SHOW-IJ
-FA0001   DC    A(F0001)            fall-through, to put back
 PA0002   DC    A(P0002)            COUNT-IT
-FA0002   DC    A(F0002)            fall-through, to put back
-FA0003   DC    A(F0003)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

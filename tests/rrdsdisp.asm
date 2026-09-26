@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -70,7 +73,10 @@ T0003    DS    0H
 *  the RELATIVE KEY into VSAM's search argument
          PACK  PWK1(16),D0002(5)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,FD000K
          GET   RPL=FD000R          VSAM retrieval by key
          MVI   FD000RA,X'01'       the RPL has carried a request
@@ -167,7 +173,10 @@ T0007    DS    0H
 *  the RELATIVE KEY into VSAM's search argument
          PACK  PWK1(16),D0002(5)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,FD000K
          GET   RPL=FD000R          VSAM retrieval by key
          MVI   FD000RA,X'01'       the RPL has carried a request
@@ -241,6 +250,9 @@ G0019    DS    0H
 L0010    DS    0H
 G0017    DS    0H
 L0004    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0008    DS    0H
 * MOVE RRDS-RECORD -> SEEN
          L     8,BL0000            base locator
@@ -264,7 +276,10 @@ T0011    DS    0H
 *  the RELATIVE KEY into VSAM's search argument
          PACK  PWK1(16),D0002(5)   zoned -> packed
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,FD000K
          GET   RPL=FD000R          VSAM retrieval by key
          MVI   FD000RA,X'01'       the RPL has carried a request
@@ -338,9 +353,6 @@ G0027    DS    0H
 L0012    DS    0H
 G0025    DS    0H
 L0006    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0002    EQU   *
-         USING B0002,12
 T0012    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0009

@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,6 +38,18 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN OUTPUT PRT-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0026
+         WTO   'COBC370: OPEN FAILED, DD LINFILE',ROUTCDE=11
+         ABEND 35
+         B     L0027
+L0026    DS    0H
+         XC    FP000O(2),FP000O    no lines owed from before
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         MVC   D0026(2),=H'1'      LINAGE-COUNTER = 1 at OPEN
+L0027    DS    0H
+         DROP  8
 T0001    DS    0H
 * MOVE LINE ONE   -> P-TEXT
          L     8,BL0000            base locator
@@ -96,13 +111,15 @@ T0008    DS    0H
          BZ    L0003               no: past the imperative statements
 T0009    DS    0H
 * PERFORM SHOW-LC
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0001    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0005
 L0003    DS    0H
 T0010    DS    0H
@@ -122,13 +139,15 @@ T0011    DS    0H
          BZ    L0004               no: past the imperative statements
 T0012    DS    0H
 * PERFORM SHOW-LC
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0005
          BR    15
 R0002    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0005
 L0004    DS    0H
 T0013    DS    0H
@@ -233,7 +252,14 @@ T0026    DS    0H
 T0027    DS    0H
 * OPEN INPUT RAW-FILE
          OPEN  (FD001,INPUT)
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0032
+         WTO   'COBC370: OPEN FAILED, DD LINFILE',ROUTCDE=11
+         ABEND 35
+         B     L0033
+L0032    DS    0H
          DROP  8
+L0033    DS    0H
 * RAW-LOOP.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
@@ -316,9 +342,16 @@ T0038    DS    0H
          MVI   FD002A,X'00'        present
          BZ    *+12
          MVI   FD002A,X'01'        absent: the file is empty
-         B     L0030
+         B     L0034
          OPEN  (FD002,INPUT)
-L0030    DS    0H
+         TM    FD002+48,X'10'      DCBOFLGS: did it open?
+         BO    L0035
+         WTO   'COBC370: OPEN FAILED, DD OPTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0036
+L0035    DS    0H
+L0034    DS    0H
+L0036    DS    0H
 T0039    DS    0H
 * READ OPT-FILE
          CLI   FD002A,X'01'        absent OPTIONAL file?
@@ -341,9 +374,9 @@ L0015    DS    0H
 T0041    DS    0H
 * CLOSE OPT-FILE
          CLI   FD002A,X'01'        absent?
-         BE    L0031               nothing to close
+         BE    L0037               nothing to close
          CLOSE (FD002)
-L0031    DS    0H
+L0037    DS    0H
 T0042    DS    0H
 * OPEN INPUT OPT2-FILE
          DEVTYPE FD003N,DVAREA     is the DD there?
@@ -351,9 +384,16 @@ T0042    DS    0H
          MVI   FD003A,X'00'        present
          BZ    *+12
          MVI   FD003A,X'01'        absent: the file is empty
-         B     L0032
+         B     L0038
          OPEN  (FD003,INPUT)
-L0032    DS    0H
+         TM    FD003+48,X'10'      DCBOFLGS: did it open?
+         BO    L0039
+         WTO   'COBC370: OPEN FAILED, DD OPTFILE2',ROUTCDE=11
+         ABEND 35
+         B     L0040
+L0039    DS    0H
+L0038    DS    0H
+L0040    DS    0H
 T0043    DS    0H
 * READ OPT2-FILE
          CLI   FD003A,X'01'        absent OPTIONAL file?
@@ -373,6 +413,9 @@ T0044    DS    0H
          L     15,VDISP
          BALR  14,15
 L0017    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0004    EQU   *
+         USING B0004,12
 T0045    DS    0H
 * MOVE OPT2-REC -> CARD-SHOW
          L     8,BL0000            base locator
@@ -389,13 +432,20 @@ T0046    DS    0H
 T0047    DS    0H
 * CLOSE OPT2-FILE
          CLI   FD003A,X'01'        absent?
-         BE    L0033               nothing to close
+         BE    L0041               nothing to close
          CLOSE (FD003)
-L0033    DS    0H
+L0041    DS    0H
          DROP  8
 T0048    DS    0H
 * OPEN OUTPUT EXT-FILE
          OPEN  (FD004,OUTPUT)
+         TM    FD004+48,X'10'      DCBOFLGS: did it open?
+         BO    L0042
+         WTO   'COBC370: OPEN FAILED, DD EXTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0043
+L0042    DS    0H
+L0043    DS    0H
 T0049    DS    0H
 * MOVE E1 -> EXT-REC
          L     8,BL0000            base locator
@@ -422,6 +472,13 @@ T0053    DS    0H
 T0054    DS    0H
 * OPEN EXTEND EXT-FILE
          OPEN  (FD004,EXTEND)      append
+         TM    FD004+48,X'10'      DCBOFLGS: did it open?
+         BO    L0044
+         WTO   'COBC370: OPEN FAILED, DD EXTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0045
+L0044    DS    0H
+L0045    DS    0H
 T0055    DS    0H
 * MOVE E3 -> EXT-REC
          L     8,BL0000            base locator
@@ -435,14 +492,24 @@ L0023    DS    0H
 T0057    DS    0H
 * CLOSE EXT-FILE
          CLOSE (FD004)
+         BALR  12,0                a new code block: the paragraph is l
+B0005    EQU   *
+         USING B0005,12
 T0058    DS    0H
 * OPEN INPUT EXT-IN
          OPEN  (FD005,INPUT)
+         TM    FD005+48,X'10'      DCBOFLGS: did it open?
+         BO    L0046
+         WTO   'COBC370: OPEN FAILED, DD EXTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0047
+L0046    DS    0H
+L0047    DS    0H
 * EXT-LOOP.
 P0003    DS    0H
          BALR  12,0                this paragraph's code base
-B0004    EQU   *
-         USING B0004,12
+B0006    EQU   *
+         USING B0006,12
 T0059    DS    0H
 * READ EXT-IN
          LA    1,L0024             this READ's AT END
@@ -469,13 +536,13 @@ T0061    DS    0H
          OI    D0019+0,X'F0'       unsigned: force an F zone
 T0062    DS    0H
 * GO TO EXT-LOOP
-         B     B0004
+         B     B0006
          DROP  8
 * EXT-DONE.
 P0004    DS    0H
          BALR  12,0                this paragraph's code base
-B0005    EQU   *
-         USING B0005,12
+B0007    EQU   *
+         USING B0007,12
 T0063    DS    0H
 * CLOSE EXT-IN
          CLOSE (FD005)
@@ -500,8 +567,8 @@ T0065    DS    0H
 * SHOW-LC.
 P0005    DS    0H
          BALR  12,0                this paragraph's code base
-B0006    EQU   *
-         USING B0006,12
+B0008    EQU   *
+         USING B0008,12
 T0066    DS    0H
 * MOVE LINAGE-COUNTER -> LC-SHOW
          L     8,BL0000            base locator
@@ -705,10 +772,13 @@ CB0003   DC    A(B0003)            a code block's base
 CB0004   DC    A(B0004)            a code block's base
 CB0005   DC    A(B0005)            a code block's base
 CB0006   DC    A(B0006)            a code block's base
+CB0007   DC    A(B0007)            a code block's base
+CB0008   DC    A(B0008)            a code block's base
 PA0002   DC    A(P0002)            RAW-DONE
 PA0004   DC    A(P0004)            EXT-DONE
 PA0005   DC    A(P0005)            SHOW-LC
-FA0005   DC    A(F0005)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

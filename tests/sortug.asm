@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -69,6 +72,13 @@ L0001    DS    0H
 T0001    DS    0H
 * OPEN INPUT IN-FILE
          OPEN  (FD000,INPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0018
+         WTO   'COBC370: OPEN FAILED, DD INFILE',ROUTCDE=11
+         ABEND 35
+         B     L0019
+L0018    DS    0H
+L0019    DS    0H
 L0004    DS    0H
 T0002    DS    0H
 * READ IN-FILE
@@ -90,13 +100,13 @@ T0004    DS    0H
          MVC   D0005(80),D0001     alphanumeric move
 T0005    DS    0H
 * RELEASE: the record to the sort, and back here for the next
-         LA    14,L0018
+         LA    14,L0020
          ST    14,SRTRES
          ST    12,SRTR12
          LA    1,D0005             the record
          LA    15,12               E15: insert it
          B     SRTYLD
-L0018    DS    0H
+L0020    DS    0H
          DROP  8
 T0006    DS    0H
          B     L0004
@@ -115,18 +125,25 @@ L0002    DS    0H
 T0009    DS    0H
 * OPEN OUTPUT OUT-FILE
          OPEN  (FD001,OUTPUT)
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0021
+         WTO   'COBC370: OPEN FAILED, DD OUTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0022
+L0021    DS    0H
+L0022    DS    0H
 L0008    DS    0H
 T0010    DS    0H
 * RETURN SORT-FILE
          CLI   SRTHAVE,1           a record the sort handed over?
-         BE    L0020
-         LA    14,L0019
+         BE    L0024
+         LA    14,L0023
          ST    14,SRTRES
          ST    12,SRTR12
          LA    15,4                E35: taken; the next one, please
          B     SRTYLD
-L0019    DS    0H
-L0020    DS    0H
+L0023    DS    0H
+L0024    DS    0H
          MVI   SRTHAVE,0
          L     1,SRTREC
          LTR   1,1                 zero: the sort has no more
@@ -160,6 +177,9 @@ T0016    DS    0H
          LA    15,8
          B     SRTYLD
 L0003    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0017    DS    0H
 * MOVE SORT-RETURN -> SR
          L     8,BL0000            base locator
@@ -178,10 +198,20 @@ T0018    DS    0H
 T0019    DS    0H
 * OPEN INPUT OUT-FILE
          OPEN  (FD001,INPUT)
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0025
+         WTO   'COBC370: OPEN FAILED, DD OUTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0026
+L0025    DS    0H
+         DROP  8
+L0026    DS    0H
 T0020    DS    0H
 * READ OUT-FILE
          LA    1,L0012             this READ's AT END
          STCM  1,7,FD001+33        into DCBEODAD
+         L     8,BL0000            base locator
+         USING WSC0000,8
          GET   FD001,D0003         QSAM move mode
          B     L0013
 L0012    DS    0H                  AT END
@@ -195,22 +225,24 @@ T0021    DS    0H
 L0013    DS    0H
 T0022    DS    0H
 * PERFORM SHOW-ONE
-L0021    DS    0H
+L0027    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0009(1),S0002      alphanumeric compare
-         BE    L0022
+         BE    L0028
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
-         L     12,CB0001           this block's base again
+         L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
-         B     L0021
-L0022    DS    0H
+         B     L0027
+L0028    DS    0H
 T0023    DS    0H
 * CLOSE OUT-FILE
          CLOSE (FD001)
@@ -231,8 +263,8 @@ T0025    DS    0H
 * SHOW-ONE.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
-B0002    EQU   *
-         USING B0002,12
+B0003    EQU   *
+         USING B0003,12
 T0026    DS    0H
 * DISPLAY
          L     8,BL0000            base locator
@@ -407,8 +439,9 @@ SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
 CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
+CB0003   DC    A(B0003)            a code block's base
 PA0001   DC    A(P0001)            SHOW-ONE
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

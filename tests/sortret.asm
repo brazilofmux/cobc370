@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -68,13 +71,15 @@ L0007    DS    0H
 L0001    DS    0H
 T0001    DS    0H
 * PERFORM IN-STOP
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0002           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0002
 T0002    DS    0H
 * end of the SORT's input: E15 says no more
@@ -86,13 +91,15 @@ T0002    DS    0H
 L0002    DS    0H
 T0003    DS    0H
 * PERFORM OUT-STOP
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0003
          BR    15
 R0002    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0005           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0005
 T0004    DS    0H
 * end of the SORT's output: E35 says no more
@@ -155,6 +162,8 @@ T0011    DS    0H
 * MOVE 16 -> SORT-RETURN
          ZAP   PWK1(16),K0001+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -272,6 +281,8 @@ T0025    DS    0H
 * MOVE 16 -> SORT-RETURN
          ZAP   PWK1(16),K0001+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0005
 T0026    DS    0H
@@ -459,10 +470,10 @@ CB0004   DC    A(B0004)            a code block's base
 CB0005   DC    A(B0005)            a code block's base
 CB0006   DC    A(B0006)            a code block's base
 PA0001   DC    A(P0001)            IN-STOP
-FA0002   DC    A(F0002)            fall-through, to put back
 PA0003   DC    A(P0003)            OUT-STOP
 PA0005   DC    A(P0005)            O-EXIT
-FA0005   DC    A(F0005)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

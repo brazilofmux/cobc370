@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,6 +38,13 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN INPUT GLACCT
          OPEN  (FD000,INPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0004
+         WTO   'COBC370: OPEN FAILED, DD GLACCT',ROUTCDE=11
+         ABEND 35
+         B     L0005
+L0004    DS    0H
+L0005    DS    0H
 * LOOP-PARA.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base

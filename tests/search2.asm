@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -110,6 +113,8 @@ T0012    DS    0H
 * MOVE 1 -> X1
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
          ST    2,D0016
 T0013    DS    0H
@@ -219,6 +224,8 @@ T0022    DS    0H
 * MOVE 1 -> X1
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
          ST    2,D0016
 T0023    DS    0H
@@ -285,6 +292,8 @@ T0029    DS    0H
 * MOVE 2 -> X1
          ZAP   PWK1(16),K0004+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),6,0          drop the digits past the picture
+         SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -638,6 +647,9 @@ T0060    DS    0H
          MH    6,H0002             times element size
          LA    6,D0012(6)          element address
          MVC   0(3,6),S0002        literal move, space padded
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0061    DS    0H
 * MOVE 01 -> K3A
          LA    6,1                 subscript-1
@@ -923,9 +935,6 @@ T0083    DS    0H
          BALR  14,15
          DROP  8
 L0029    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0002    EQU   *
-         USING B0002,12
 T0084    DS    0H
 * SEARCH ALL E3
          LA    1,1

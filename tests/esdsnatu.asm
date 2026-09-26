@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -101,6 +104,8 @@ L0010    DS    0H
          USING WSC0000,8
          CLC   D0008(1),S0006      alphanumeric compare
          BE    L0011
+         L     14,X0004            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
          L     15,PA0003
@@ -108,7 +113,7 @@ L0010    DS    0H
 R0001    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0004           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0004
          B     L0010
 L0011    DS    0H
@@ -235,6 +240,8 @@ T0013    DS    0H
          UNPK  D0012(8),PWK1(16)   packed -> zoned
 T0014    DS    0H
 * PERFORM 120-UPDATE-PROCESS THRU 129-EXIT
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
@@ -242,7 +249,7 @@ T0014    DS    0H
 R0002    DS    0H
          L     12,CB0004           this block's base again
          DROP  8
-         L     15,FA0006           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0006
 L0004    DS    0H
 * 119-EXIT.
@@ -280,6 +287,8 @@ T0016    DS    0H
 L0016    DS    0H
 T0017    DS    0H
 * PERFORM 122-DO-UPDATE THRU 123-EXIT
+         L     14,X0008            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0008            into the range's exit cell
          L     15,PA0007
@@ -287,7 +296,7 @@ T0017    DS    0H
 R0003    DS    0H
          L     12,CB0006           this block's base again
          DROP  8
-         L     15,FA0008           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0008
 L0005    DS    0H
 * 129-EXIT.
@@ -312,6 +321,7 @@ T0019    DS    0H
          USING WSC0000,8
          PACK  PWK1(16),D0012(8)   zoned -> packed
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0013(10),EDWK+2    the edited result
@@ -619,11 +629,11 @@ CB0007   DC    A(B0007)            a code block's base
 CB0008   DC    A(B0008)            a code block's base
 CB0009   DC    A(B0009)            a code block's base
 PA0003   DC    A(P0003)            110-PROCESS-DATA
-FA0004   DC    A(F0004)            fall-through, to put back
 PA0005   DC    A(P0005)            120-UPDATE-PROCESS
-FA0006   DC    A(F0006)            fall-through, to put back
 PA0007   DC    A(P0007)            122-DO-UPDATE
-FA0008   DC    A(F0008)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

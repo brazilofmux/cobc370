@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -619,6 +622,9 @@ T0063    DS    0H
          BALR  14,15
          DROP  8
 L0029    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0064    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -966,6 +972,7 @@ SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
          DS    0F
 CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

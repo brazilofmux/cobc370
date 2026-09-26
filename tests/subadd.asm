@@ -74,6 +74,8 @@ T0005    DS    0H
 * MOVE 3 -> RETURN-CODE
          ZAP   PWK1(16),K0002+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          DROP  8
          L     8,BL0000            base locator
@@ -87,6 +89,8 @@ T0007    DS    0H
 * MOVE 0 -> RETURN-CODE
          ZAP   PWK1(16),K0003+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8

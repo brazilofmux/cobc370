@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -213,6 +216,7 @@ T0026    DS    0H
 * MOVE N -> E-N
          PACK  PWK1(16),D0003(7)   zoned -> packed
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(11),M0001      load the ED pattern
          ED    EDWK(11),EDSRC
          MVC   D0004(8),EDWK+3     the edited result
@@ -229,6 +233,7 @@ T0029    DS    0H
 * MOVE N -> E-N
          PACK  PWK1(16),D0003(7)   zoned -> packed
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(11),M0001      load the ED pattern
          ED    EDWK(11),EDSRC
          MVC   D0004(8),EDWK+3     the edited result

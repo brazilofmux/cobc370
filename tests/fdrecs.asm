@@ -15,6 +15,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -29,6 +32,13 @@ SPIEARMD DS    0H
 T0000    DS    0H
 * OPEN OUTPUT OUT-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0011
+         WTO   'COBC370: OPEN FAILED, DD OUTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0012
+L0011    DS    0H
+L0012    DS    0H
 T0001    DS    0H
 * MOVE HDR  -> H-TAG
          L     8,BL0000            base locator

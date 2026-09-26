@@ -17,6 +17,10 @@ DSN2=SVD001.TESTIDX2
 "$CC/cobc370" "$TDIR/isamrd2.cbl"  > "$TDIR/isamrd2.asm"  || die "isamrd2 did not compile"
 "$CC/cobc370" "$TDIR/isamstat.cbl" > "$TDIR/isamstat.asm" || die "isamstat did not compile"
 "$CC/cobc370" "$TDIR/isamrnf.cbl"  > "$TDIR/isamrnf.asm"  || die "isamrnf did not compile"
+"$CC/cobc370" "$TDIR/isamrno.cbl"  > "$TDIR/isamrno.asm"  || die "isamrno did not compile"
+"$CC/cobc370" "$TDIR/isamld3.cbl"  > "$TDIR/isamld3.asm"  || die "isamld3 did not compile"
+"$CC/cobc370" "$TDIR/isamrd3.cbl"  > "$TDIR/isamrd3.asm"  || die "isamrd3 did not compile"
+DSN3=SVD001.TESTIDX3
 
 {
 cat <<EOF
@@ -103,15 +107,75 @@ cat <<EOF
 //GO.SYSOUT  DD  SYSOUT=Z
 //GO.DESCIDX DD  DSNAME=$DSN2,DISP=(OLD,KEEP),
 //             VOL=SER=SVD003,UNIT=3380
-//* 7. leave the volume as we found it
+//* 7. add a record after the load, with BISAM WRITE KN (hand-written
+//*    assembler: cobc370 has no ISAM add). It lands in the overflow area.
+//S7A     EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/isamadd.asm"
+cat <<EOF
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET5(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+//GO.DESCIDX DD  DSNAME=$DSN2,DISP=(OLD,KEEP),
+//             VOL=SER=SVD003,UNIT=3380
+//* 8. read the overflow record back at random: 00, not 30 (#38).
+//S7B     EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/isamrno.asm"
+cat <<EOF
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET6(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+//GO.DESCIDX DD  DSNAME=$DSN2,DISP=(OLD,KEEP),
+//             VOL=SER=SVD003,UNIT=3380
+//* 9. leave the volume as we found it
 //S8      EXEC PGM=IEFBR14
 //DSN3DEL  DD  DSN=$DSN2,DISP=(MOD,DELETE,DELETE),
+//             UNIT=3380,VOL=SER=SVD003
+//* 10. 301-byte records: load, then read one at random -- the whole
+//*     record, past the 256 bytes one MVC can move (#38).
+//S9      EXEC PGM=IEFBR14
+//DSN4DEL  DD  DSN=$DSN3,DISP=(MOD,DELETE,DELETE),
+//             UNIT=3380,VOL=SER=SVD003
+//S10     EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/isamld3.asm"
+cat <<EOF
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET7(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+//GO.DESCIDX DD  DSNAME=$DSN3(INDEX),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,1),
+//             DCB=(DSORG=IS,RECFM=F)
+//           DD  DSNAME=$DSN3(PRIME),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,2),DCB=*.DESCIDX
+//           DD  DSNAME=$DSN3(OVFLOW),DISP=(,KEEP),UNIT=3380,
+//             VOL=SER=SVD003,SPACE=(CYL,1),DCB=*.DESCIDX
+//S11     EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/isamrd3.asm"
+cat <<EOF
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET8(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//GO.SYSOUT  DD  SYSOUT=Z
+//GO.DESCIDX DD  DSNAME=$DSN3,DISP=(OLD,KEEP),
+//             VOL=SER=SVD003,UNIT=3380
+//S12     EXEC PGM=IEFBR14
+//DSN4DEL  DD  DSN=$DSN3,DISP=(MOD,DELETE,DELETE),
 //             UNIT=3380,VOL=SER=SVD003
 EOF
 } > "$WORK/roundtrip.jcl"
 
 run_deck "$WORK/roundtrip.jcl" "$WORK/roundtrip.out"
-grep -a "^DESCIDX LOADED\|^BACK \|^DUPLICATE\|^W[0-9] \|^IK[0-9] \|^R[0-9] " "$WORK/roundtrip.out" > "$WORK/got.txt"
+grep -a "^DESCIDX LOADED\|^BACK \|^DUPLICATE\|^W[0-9] \|^IK[0-9] \|^R[0-9] \|^ISAMADD: \|^OV[0-9] \|^L3 \|^B3 " "$WORK/roundtrip.out" > "$WORK/got.txt"
 
 exp="$TDIR/isamroundtrip.expected"
 if [ ! -r "$exp" ]; then

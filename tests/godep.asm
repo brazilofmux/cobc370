@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -39,6 +42,8 @@ T0000    DS    0H
          MVC   D0000(1),S0001      numeric literal as zoned digits
 T0001    DS    0H
 * PERFORM TRY THRU TRY-X
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0001
@@ -46,7 +51,7 @@ T0001    DS    0H
 R0001    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0005           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0005
 T0002    DS    0H
 * MOVE 1 -> SEL
@@ -55,6 +60,8 @@ T0002    DS    0H
          MVC   D0000(1),S0002      numeric literal as zoned digits
 T0003    DS    0H
 * PERFORM TRY THRU TRY-X
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0001
@@ -62,7 +69,7 @@ T0003    DS    0H
 R0002    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0005           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0005
 T0004    DS    0H
 * MOVE 2 -> SEL
@@ -71,6 +78,8 @@ T0004    DS    0H
          MVC   D0000(1),S0003      numeric literal as zoned digits
 T0005    DS    0H
 * PERFORM TRY THRU TRY-X
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0001
@@ -78,7 +87,7 @@ T0005    DS    0H
 R0003    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0005           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0005
 T0006    DS    0H
 * MOVE 3 -> SEL
@@ -87,6 +96,8 @@ T0006    DS    0H
          MVC   D0000(1),S0004      numeric literal as zoned digits
 T0007    DS    0H
 * PERFORM TRY THRU TRY-X
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0001
@@ -94,7 +105,7 @@ T0007    DS    0H
 R0004    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0005           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0005
 T0008    DS    0H
 * MOVE 4 -> SEL
@@ -103,6 +114,8 @@ T0008    DS    0H
          MVC   D0000(1),S0005      numeric literal as zoned digits
 T0009    DS    0H
 * PERFORM TRY THRU TRY-X
+         L     14,X0005            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0005            into the range's exit cell
          L     15,PA0001
@@ -110,18 +123,22 @@ T0009    DS    0H
 R0005    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0005           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0005
 T0010    DS    0H
 * MOVE 2 -> SELC
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
          STH   2,D0001
 T0011    DS    0H
 * PERFORM TRYC THRU TRYC-X
+         L     14,X0009            what the exit cell holds
+         ST    14,SV0006           kept for the return
          LA    15,R0006            return here
          ST    15,X0009            into the range's exit cell
          L     15,PA0006
@@ -129,7 +146,7 @@ T0011    DS    0H
 R0006    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0009           restore fall-through
+         L     15,SV0006           what the cell held before
          ST    15,X0009
 T0012    DS    0H
 * MOVE 1 -> TV
@@ -151,6 +168,8 @@ T0013    DS    0H
          OI    1(6),X'F0'          unsigned: force an F zone
 T0014    DS    0H
 * PERFORM TRYT THRU TRYT-X
+         L     14,X0014            what the exit cell holds
+         ST    14,SV0007           kept for the return
          LA    15,R0007            return here
          ST    15,X0014            into the range's exit cell
          L     15,PA0010
@@ -158,7 +177,7 @@ T0014    DS    0H
 R0007    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0014           restore fall-through
+         L     15,SV0007           what the cell held before
          ST    15,X0014
 T0015    DS    0H
 * STOP RUN
@@ -596,13 +615,17 @@ CB0014   DC    A(B0014)            a code block's base
 CB0015   DC    A(B0015)            a code block's base
 PA0001   DC    A(P0001)            TRY
 PA0005   DC    A(P0005)            TRY-X
-FA0005   DC    A(F0005)            fall-through, to put back
 PA0006   DC    A(P0006)            TRYC
 PA0009   DC    A(P0009)            TRYC-X
-FA0009   DC    A(F0009)            fall-through, to put back
 PA0010   DC    A(P0010)            TRYT
 PA0014   DC    A(P0014)            TRYT-X
-FA0014   DC    A(F0014)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
+SV0006   DS    F                   a PERFORM site's saved exit cell
+SV0007   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

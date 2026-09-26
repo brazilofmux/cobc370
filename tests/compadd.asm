@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -45,11 +48,14 @@ T0001    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0001               not negative?
          MVI   EDWK+2,C'-'
-G0001    DS    0H
+         B     G0002
+G0001    MVI   EDWK+2,C' '
+G0002    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0002    DS    0H
 * DISPLAY
@@ -69,11 +75,14 @@ T0004    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0003               not negative?
          MVI   EDWK+2,C'-'
-G0003    DS    0H
+         B     G0004
+G0003    MVI   EDWK+2,C' '
+G0004    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0005    DS    0H
 * DISPLAY
@@ -93,11 +102,14 @@ T0007    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0005               not negative?
          MVI   EDWK+2,C'-'
-G0005    DS    0H
+         B     G0006
+G0005    MVI   EDWK+2,C' '
+G0006    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0008    DS    0H
 * DISPLAY
@@ -117,11 +129,14 @@ T0010    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0007               not negative?
          MVI   EDWK+2,C'-'
-G0007    DS    0H
+         B     G0008
+G0007    MVI   EDWK+2,C' '
+G0008    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0011    DS    0H
 * DISPLAY
@@ -141,11 +156,14 @@ T0013    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0009               not negative?
          MVI   EDWK+2,C'-'
-G0009    DS    0H
+         B     G0010
+G0009    MVI   EDWK+2,C' '
+G0010    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0014    DS    0H
 * DISPLAY
@@ -165,11 +183,14 @@ T0016    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0011               not negative?
          MVI   EDWK+2,C'-'
-G0011    DS    0H
+         B     G0012
+G0011    MVI   EDWK+2,C' '
+G0012    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0017    DS    0H
 * DISPLAY
@@ -189,11 +210,14 @@ T0019    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0013               not negative?
          MVI   EDWK+2,C'-'
-G0013    DS    0H
+         B     G0014
+G0013    MVI   EDWK+2,C' '
+G0014    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0020    DS    0H
 * DISPLAY
@@ -213,11 +237,14 @@ T0022    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0015               not negative?
          MVI   EDWK+2,C'-'
-G0015    DS    0H
+         B     G0016
+G0015    MVI   EDWK+2,C' '
+G0016    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0023    DS    0H
 * DISPLAY
@@ -237,11 +264,14 @@ T0025    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0017               not negative?
          MVI   EDWK+2,C'-'
-G0017    DS    0H
+         B     G0018
+G0017    MVI   EDWK+2,C' '
+G0018    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0026    DS    0H
 * DISPLAY
@@ -261,11 +291,14 @@ T0028    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0019               not negative?
          MVI   EDWK+2,C'-'
-G0019    DS    0H
+         B     G0020
+G0019    MVI   EDWK+2,C' '
+G0020    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0029    DS    0H
 * DISPLAY
@@ -282,6 +315,8 @@ T0030    DS    0H
          PACK  PWK2(16),D0009(3)   zoned -> packed
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0031    DS    0H
@@ -290,11 +325,14 @@ T0031    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0021               not negative?
          MVI   EDWK+2,C'-'
-G0021    DS    0H
+         B     G0022
+G0021    MVI   EDWK+2,C' '
+G0022    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0032    DS    0H
 * DISPLAY
@@ -311,6 +349,8 @@ T0033    DS    0H
          ZAP   PWK2(16),D0010(3)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0034    DS    0H
@@ -319,11 +359,14 @@ T0034    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0023               not negative?
          MVI   EDWK+2,C'-'
-G0023    DS    0H
+         B     G0024
+G0023    MVI   EDWK+2,C' '
+G0024    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0035    DS    0H
 * DISPLAY
@@ -336,6 +379,7 @@ T0036    DS    0H
 * SUBTRACT 3 -> UW1
          L     2,D0005
          SH    2,H0004             binary, same scale: in the register
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0037    DS    0H
 * MOVE UW1 -> E8
@@ -343,11 +387,14 @@ T0037    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(11),M0002      load the ED pattern
          ED    EDWK(11),EDSRC
          BNM   G0025               not negative?
          MVI   EDWK+2,C'-'
-G0025    DS    0H
+         B     G0026
+G0025    MVI   EDWK+2,C' '
+G0026    DS    0H
          MVC   D0016(9),EDWK+2     the edited result
 T0038    DS    0H
 * DISPLAY
@@ -367,11 +414,14 @@ T0040    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(10),M0003      load the ED pattern
          ED    EDWK(10),EDSRC
          BNM   G0027               not negative?
          MVI   EDWK+3,C'-'
-G0027    DS    0H
+         B     G0028
+G0027    MVI   EDWK+3,C' '
+G0028    DS    0H
          MVC   D0017(7),EDWK+3     the edited result
 T0041    DS    0H
 * DISPLAY
@@ -391,11 +441,14 @@ T0043    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(10),M0003      load the ED pattern
          ED    EDWK(10),EDSRC
          BNM   G0029               not negative?
          MVI   EDWK+3,C'-'
-G0029    DS    0H
+         B     G0030
+G0029    MVI   EDWK+3,C' '
+G0030    DS    0H
          MVC   D0017(7),EDWK+3     the edited result
 T0044    DS    0H
 * DISPLAY
@@ -415,11 +468,14 @@ T0046    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(10),M0003      load the ED pattern
          ED    EDWK(10),EDSRC
          BNM   G0031               not negative?
          MVI   EDWK+3,C'-'
-G0031    DS    0H
+         B     G0032
+G0031    MVI   EDWK+3,C' '
+G0032    DS    0H
          MVC   D0017(7),EDWK+3     the edited result
 T0047    DS    0H
 * DISPLAY
@@ -439,11 +495,14 @@ T0049    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(10),M0003      load the ED pattern
          ED    EDWK(10),EDSRC
          BNM   G0033               not negative?
          MVI   EDWK+3,C'-'
-G0033    DS    0H
+         B     G0034
+G0033    MVI   EDWK+3,C' '
+G0034    DS    0H
          MVC   D0017(7),EDWK+3     the edited result
 T0050    DS    0H
 * DISPLAY
@@ -463,6 +522,8 @@ T0051    DS    0H
          SRP   PWK2(16),1,0        align scale (left)
          AP    PWK1(16),PWK2(16)
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
          ST    2,D0006
 T0052    DS    0H
@@ -471,11 +532,14 @@ T0052    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(10),M0003      load the ED pattern
          ED    EDWK(10),EDSRC
          BNM   G0035               not negative?
          MVI   EDWK+3,C'-'
-G0035    DS    0H
+         B     G0036
+G0035    MVI   EDWK+3,C' '
+G0036    DS    0H
          MVC   D0017(7),EDWK+3     the edited result
 T0053    DS    0H
 * DISPLAY
@@ -494,19 +558,27 @@ T0054    DS    0H
          AP    PWK1(16),PWK2(16)
          SRP   PWK1(16),63,0       align scale (right)
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
          ST    2,D0006
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0055    DS    0H
 * MOVE SC1 -> ES
          L     2,D0006
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(10),M0003      load the ED pattern
          ED    EDWK(10),EDSRC
          BNM   G0037               not negative?
          MVI   EDWK+3,C'-'
-G0037    DS    0H
+         B     G0038
+G0037    MVI   EDWK+3,C' '
+G0038    DS    0H
          MVC   D0017(7),EDWK+3     the edited result
 T0056    DS    0H
 * DISPLAY
@@ -519,6 +591,8 @@ T0057    DS    0H
 * MOVE 10 -> CELL
          ZAP   PWK1(16),K0002+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          LA    6,0                 subscript-1
          MH    6,H0008             times element size
@@ -528,6 +602,8 @@ T0058    DS    0H
 * MOVE 20 -> CELL
          ZAP   PWK1(16),K0003+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          LA    6,1                 subscript-1
          MH    6,H0008             times element size
@@ -537,6 +613,8 @@ T0059    DS    0H
 * MOVE 30 -> CELL
          ZAP   PWK1(16),K0004+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),11,0         drop the digits past the picture
+         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          LA    6,2                 subscript-1
          MH    6,H0008             times element size
@@ -616,11 +694,14 @@ T0064    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0039               not negative?
          MVI   EDWK+2,C'-'
-G0039    DS    0H
+         B     G0040
+G0039    MVI   EDWK+2,C' '
+G0040    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0065    DS    0H
 * DISPLAY
@@ -638,11 +719,14 @@ T0066    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0041               not negative?
          MVI   EDWK+2,C'-'
-G0041    DS    0H
+         B     G0042
+G0041    MVI   EDWK+2,C' '
+G0042    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0067    DS    0H
 * DISPLAY
@@ -660,11 +744,14 @@ T0068    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          BNM   G0043               not negative?
          MVI   EDWK+2,C'-'
-G0043    DS    0H
+         B     G0044
+G0043    MVI   EDWK+2,C' '
+G0044    DS    0H
          MVC   D0015(5),EDWK+2     the edited result
 T0069    DS    0H
 * DISPLAY
@@ -876,6 +963,7 @@ SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
          DS    0F
 CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

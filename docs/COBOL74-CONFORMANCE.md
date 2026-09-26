@@ -1126,6 +1126,71 @@ literal pool, where it needs no base. And a program that printed but never
 displayed anything linked without the runtime and branched to zero -- the
 runtime is now there for every caller of it, not only `DISPLAY`.
 
+### The 2026-09-26 audit
+
+A read of the whole compiler for what no program had yet tripped over, each
+finding first run under IKFCBL00 on TK5 where IBM has the feature, and filed
+as issues #26 to #39 so that the fixes could be watched. What changed, with
+the tests that hold it:
+
+- **Arithmetic.** A subscripted `COMP-3` right operand of `*` or `/` was
+  read as element one (`subsmul`). `**` sized its multiplier at eight bytes,
+  which capped the running product at 15 digits: `1.05 ** 9` took a data
+  exception on the ninth multiply (`powfix`). A `COMP` receiver was not
+  truncated to its PICTURE and an unsigned one kept a sign (`compunsg`).
+  `DIVIDE ... REMAINDER` formed the quotient at the remainder's scale
+  (`remaindr`).
+- **Editing and MOVE.** Fixed and floating `$`, all-`Z` pictures, `*` fill
+  beside a sign, and high-order truncation into an edited field, each
+  measured against IBM's (`editfix`); numeric-edited senders,
+  alphanumeric-edited receivers, and `SIGN SEPARATE` senders (`signmove`).
+- **Conditions.** A literal on the left of an ordering compare was compared
+  the wrong way round; `IF X = ZERO` on an alphanumeric item; `-.5`; a
+  condition-name under a subscripted or group item (`condlit`, `lvl88grp`).
+  `COPY ... REPLACING X BY Y` renamed the `X` inside `PIC X(5)` and inside
+  literals (`cpyrepx`) -- and its word protector then stepped backward on a
+  bare period and never returned, which is the hang the first regression
+  run after it found.
+- **PERFORM.** Nested ranges sharing an exit paragraph lost the outer
+  return; `n TIMES` with n over 32767 ran zero times (`perfnest`).
+- **Data Division.** `66` over an open group, `88` under a group, `VALUE`
+  on `SIGN` items (`signval`), `SAME RECORD AREA`, a special register first
+  named in the REPORT SECTION making file 0 variable-length (`rptdate`).
+- **Code size.** A sentence too long for one 4K block is now refused with
+  its line, and the constants region is checked before its `LTORG`; a
+  program with WORKING-STORAGE in one chunk and no LINKAGE gets a 12K
+  constants region on a third base.
+- **VSAM.** One static ACB carried `OUT,RST` into every OPEN, so a program
+  that loaded a cluster and then opened it `INPUT` emptied it again: the mode
+  is now set by `MODCB` at each OPEN when a file is opened more than one way.
+  `REWRITE` and `DELETE` in `RANDOM` and `DYNAMIC` access name the record by
+  key, with no READ first, as VI-13 and VI-27 have it -- a `GET` for update
+  around a copy of the record area, feedback 16 becoming status 23. And a
+  `DYNAMIC` file's insert string, which is `DIR` so that a keyed READ after a
+  WRITE meets no hold, is `SEQ` while the file is being created: a cluster in
+  load mode takes only sequential `PUT`s (`ksdsboth`, `ksdsrnd2`).
+- **QSAM and ISAM.** An OPEN that MVS could not do -- no DD -- stored status
+  00 and left the USE procedure unentered; the first READ then went through
+  the unopened DCB. `DCBOFLGS` is tested: status 30 and the USE procedure, or
+  a message naming the DD and a U0035 when the program has neither
+  (`opennodd`). A BISAM READ took the DECB's "overflow record" bit for an
+  exception, so any record added after the load read as 30; and it moved the
+  record with one `MVC`, which a record over 256 bytes cannot assemble
+  (`cobc-isam-roundtrip`, which now adds a record with a hand-written BISAM
+  step and loads a 301-byte file). Making that record took two things worth
+  writing down: a file loaded with `OPTCD=L` alone has no overflow area, so
+  IBM's `APPLY CYL-OVERFLOW OF n TRACKS ON file` (I-O-CONTROL) is now
+  honoured, as `CYLOFL=n,OPTCD=LY` on the load DCB; and the area a `WRITE
+  KN` names begins with 16 bytes for the control program, which GC26-3873
+  says and nothing else does. `LINAGE-COUNTER` and the lines a `BEFORE`
+  left owing start over at every OPEN, IV-15 (`linreopn`). `MOVE SPACES` to
+  an item longer than 256 bytes was refused; it propagates in further `MVC`s.
+
+Not done: single-pass multi-operand `INSPECT` (#32), `VALUE` in an `OCCURS`
+(#34), and the notes in #39. `OCCURS DEPENDING ON` in a file record is still
+refused, so the variable-length `WRITE` in #38 cannot arise; the RDW code is
+right for it when it is allowed.
+
 ## What this map is not
 
 It is not a plan. Reading it, the honest conclusions are that Debug and

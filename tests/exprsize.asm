@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -262,7 +265,7 @@ T0024    DS    0H
 * COMPUTE D3 = ...
          ZAP   WK0(16),D0000(4)
          ZAP   MULT8(8),WK0(16)    the base
-         MP    WK0(16),MULT8(8)    ** unrolled
+         MP    WK0(16),MULT8+4(4)  ** unrolled
          SP    WK0(16),K0006+13(3)
          UNPK  D0005(15),WK0(16)   packed -> zoned
 T0025    DS    0H
@@ -309,6 +312,7 @@ T0028    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0003      load the ED pattern
          LA    1,EDWK+20           where printing starts if EDMK stays
          EDMK  EDWK(21),EDSRC
@@ -353,6 +357,7 @@ T0031    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0003      load the ED pattern
          LA    1,EDWK+20           where printing starts if EDMK stays
          EDMK  EDWK(21),EDSRC
@@ -435,6 +440,7 @@ T0039    DS    0H
 * MOVE T1 -> E4
          ZAP   PWK1(16),D0011(6)
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(14),M0004      load the ED pattern
          LA    1,EDWK+9            where printing starts if EDMK stays
          EDMK  EDWK(14),EDSRC
@@ -469,6 +475,7 @@ T0042    DS    0H
 * MOVE T1 -> E4
          ZAP   PWK1(16),D0011(6)
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(14),M0004      load the ED pattern
          LA    1,EDWK+9            where printing starts if EDMK stays
          EDMK  EDWK(14),EDSRC
@@ -494,6 +501,7 @@ T0045    DS    0H
 * MOVE T1 -> E4
          ZAP   PWK1(16),D0011(6)
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(14),M0004      load the ED pattern
          LA    1,EDWK+9            where printing starts if EDMK stays
          EDMK  EDWK(14),EDSRC
@@ -502,6 +510,9 @@ T0045    DS    0H
          MVI   0(1),C'-'
 G0031    DS    0H
          MVC   D0017(12),EDWK+2    the edited result
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0046    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0016
@@ -775,28 +786,27 @@ T0071    DS    0H
          ZAP   WK0+14(2),D0020(2)
          ZAP   DWK(8),WK0+14(2)
          CVB   2,DWK               repeat count
-         STH   2,PT082
+         ST    2,PT082
 L0022    DS    0H
          DROP  8
-         LH    2,PT082
+         L     2,PT082
          LTR   2,2
          BNP   L0023
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
-         L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     12,CB0002           this block's base again
+         L     15,SV0001           what the cell held before
          ST    15,X0001
-         LH    2,PT082
+         L     2,PT082
          BCTR  2,0
-         STH   2,PT082
+         ST    2,PT082
          B     L0022
 L0023    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0002    EQU   *
-         USING B0002,12
 T0072    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0029
@@ -820,6 +830,8 @@ L0024    DS    0H
          USING WSC0000,8
          CP    D0019(4),K0018+14(2)  packed compare, in place
          BH    L0025
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -827,7 +839,7 @@ L0024    DS    0H
 R0002    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0001
          ZAP   WK0+14(2),K0019+14(2)  literal
          SRP   WK0+14(2),1,0       align scale (left)
@@ -892,7 +904,8 @@ T0078    DS    0H
 F0001    DS    0H                  fall-through when not performed
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
-PT082    DC    H'0'                PERFORM n TIMES counter
+         DS    0F
+PT082    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
 X0001    DC    A(F0001)            COUNT-ONE
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
@@ -1147,7 +1160,8 @@ CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
 CB0003   DC    A(B0003)            a code block's base
 PA0001   DC    A(P0001)            COUNT-ONE
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F
@@ -1254,7 +1268,7 @@ D0008    DC    CL18'123456789012345678'  W1 PIC 9(18)v0 DISP
          DS    XL6                 reserve the rest of a table
 D0009    DC    CL17'00000000000000000',XL1'C0'  W2 PIC S9(18)v0 DISP
          DS    XL6                 reserve the rest of a table
-D0010    DC    ZL6'-250'           L1 PIC S9(5)v0 DISP
+D0010    DC    C'-',CL5'00250'     L1 PIC S9(5)v0 DISP
          DS    XL2                 reserve the rest of a table
 D0011    DC    PL6'0000'           T1 PIC S9(10)v3 COMP-3
          DS    XL2                 reserve the rest of a table

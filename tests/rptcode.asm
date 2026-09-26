@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,6 +38,13 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN OUTPUT PRINT-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0001
+         WTO   'COBC370: OPEN FAILED, DD PROUT',ROUTCDE=11
+         ABEND 35
+         B     L0002
+L0001    DS    0H
+L0002    DS    0H
 T0001    DS    0H
 * INITIATE RPT-ONE
          SR    2,2
@@ -73,14 +83,16 @@ T0003    DS    0H
          USING WSC0000,8
          UNPK  D0001(1),PWK1(16)   packed -> zoned
          OI    D0001+0,X'F0'       unsigned: force an F zone
-L0001    DS    0H
+L0003    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  WK0+15(1),D0001(1)  zoned -> packed
          ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+15(1),WK1+15(1)  numeric compare
-         BH    L0002
+         BH    L0004
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -88,7 +100,7 @@ L0001    DS    0H
 R0001    DS    0H
          L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   PWK2(16),WK0+15(1)
@@ -98,19 +110,19 @@ R0001    DS    0H
          AP    PWK1(16),PWK2(16)
          UNPK  D0001(1),PWK1(16)   packed -> zoned
          OI    D0001+0,X'F0'       unsigned: force an F zone
-         B     L0001
-L0002    DS    0H
+         B     L0003
+L0004    DS    0H
          DROP  8
 T0004    DS    0H
 * TERMINATE RPT-ONE
          CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
-         BE    L0003               no: nothing to do
-L0003    DS    0H
+         BE    L0005               no: nothing to do
+L0005    DS    0H
 T0005    DS    0H
 * TERMINATE RPT-TWO
          CLI   RFGEN001,X'00'      any GENERATE since INITIATE?
-         BE    L0004               no: nothing to do
-L0004    DS    0H
+         BE    L0006               no: nothing to do
+L0006    DS    0H
 T0006    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -128,23 +140,23 @@ B0002    EQU   *
 T0008    DS    0H
 * GENERATE ONE-LINE
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0005
+         BNE   L0007
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
          L     12,CB0002           this block's base again
-L0005    DS    0H
-L0006    DS    0H
+L0007    DS    0H
+L0008    DS    0H
          BAL   14,RG001
          L     12,CB0002           this block's base again
 T0009    DS    0H
 * GENERATE TWO-LINE
          CLI   RFGEN001,X'00'      the first GENERATE?
-         BNE   L0007
+         BNE   L0009
          MVI   RFGEN001,X'01'
          BAL   14,RG002            the first page heading
          L     12,CB0002           this block's base again
-L0007    DS    0H
-L0008    DS    0H
+L0009    DS    0H
+L0010    DS    0H
          BAL   14,RG003
          L     12,CB0002           this block's base again
 * end of a PERFORM range: return through its cell
@@ -182,19 +194,19 @@ RG000    ST    14,RGS000           save the return
 * report group ONE-LINE
 RG001    ST    14,RGS001           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0010
+         BE    L0012
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0003             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0009               fits
+         BNH   L0011               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0010    DS    0H
+L0012    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0009               none: the first group on a page fits
+         BZ    L0011               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0003             into LINE-COUNTER
@@ -202,24 +214,24 @@ L0010    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0009               fits
+         BNH   L0011               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0009    DS    0H
+L0011    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0003             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0011
+         BE    L0013
          LA    2,1(2)              LINE PLUS n
-         B     L0012
-L0011    DS    0H
+         B     L0014
+L0013    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,2                 no: the first line is FIRST DETAIL
-         B     L0012
+         B     L0014
          LA    2,1(2)              yes: the line after it
-L0012    DS    0H
+L0014    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -267,19 +279,19 @@ RG002    ST    14,RGS002           save the return
 * report group TWO-LINE
 RG003    ST    14,RGS003           save the return
          CLI   RBODY001,X'00'      a body group on this page yet?
-         BE    L0014
+         BE    L0016
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0011             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0013               fits
+         BNH   L0015               fits
          BAL   14,RADV001          page advance processing
          DROP  8
-L0014    DS    0H
+L0016    DS    0H
          L     2,RSNG001           the saved next group integer
          LTR   2,2
-         BZ    L0013               none: the first group on a page fits
+         BZ    L0015               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0011             into LINE-COUNTER
@@ -287,24 +299,24 @@ L0014    DS    0H
          ST    3,RSNG001           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0013               fits
+         BNH   L0015               fits
          BAL   14,RADV001          page advance processing
          DROP  8
-L0013    DS    0H
+L0015    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0011             LINE-COUNTER
          CLI   RBODY001,X'00'      a body group on this page yet?
-         BE    L0015
+         BE    L0017
          LA    2,1(2)              LINE PLUS n
-         B     L0016
-L0015    DS    0H
+         B     L0018
+L0017    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,2                 no: the first line is FIRST DETAIL
-         B     L0016
+         B     L0018
          LA    2,1(2)              yes: the line after it
-L0016    DS    0H
+L0018    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -525,7 +537,7 @@ CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
 PA0001   DC    A(P0001)            PAIR
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

@@ -202,24 +202,34 @@ int pic_analyse(const char *s, PicInfo *info)
      * preceding selector, and every digit must print. That is what the spare
      * leading selector is for, and it is why IKFCBL00 always carried two extra
      * pattern bytes rather than computing the parity spare exactly. */
-    int first9 = -1, nprev = -1, seen = 0;
+    int first9 = -1, nprev = -1, seen = 0, before_pt = -1;
     for (int i = 0; i < nf; i++) {
         int is_digit_pos = (f[i] == '9' || f[i] == 'Z' || f[i] == '*' ||
                             (fl && f[i] == fl && i != fl_first));
         if (f[i] == '9') { first9 = i; nprev = seen - 1; break; }
+        if (f[i] == '.' && before_pt < 0) before_pt = seen - 1;
         if (is_digit_pos) seen++;
     }
     info->need_lead_start = (first9 >= 0 && nprev < 0);
+    info->no_nine = (first9 < 0);
+    info->fillch = fillch;
     int start_at = -1;                  /* which digit position gets X'21' */
     if (first9 >= 0 && nprev >= 0) start_at = nprev;
+    /* No '9' but a decimal point with digit positions after it (ZZ.ZZ,
+     * $$$.$$): significance starts at the point, so .05 prints as .05 and
+     * not as 5 (#30). A zero value is still all fill: the generator tests
+     * for it, since the starter alone would print .00. */
+    if (first9 < 0 && before_pt >= 0 && seen > before_pt + 1) start_at = before_pt;
 
     if (info->bytes + 1 > PIC_MAXMASK)
         return fail(info, "PICTURE too wide for an ED pattern");
     info->mask[0] = ebcdic(fillch);
     info->masklen = 1;
     info->sign_pos = -1;
+    info->cur_pos = -1;
     info->first_sel = -1;
-    info->sign_char = fl ? fl : 0;
+    info->sign_char = 0;
+    info->flt_char = fl;
 
     int dseen = 0;
     for (int i = 0; i < nf; i++) {
@@ -253,7 +263,11 @@ int pic_analyse(const char *s, PicInfo *info)
             info->sign_char = c; info->sign_pos = info->masklen;
             info->mask[info->masklen++] = ebcdic(fillch); break;
         case '$':
-            info->mask[info->masklen++] = ebcdic(c); break;
+            /* A fixed currency symbol, like a fixed sign: left of the
+             * starter ED would fill it away, so the generator stores it
+             * after ED (#30). */
+            info->cur_pos = info->masklen;
+            info->mask[info->masklen++] = ebcdic(fillch); break;
         case 'C': info->mask[info->masklen++] = ebcdic('C');
                   info->mask[info->masklen++] = ebcdic('R'); break;
         case 'D': info->mask[info->masklen++] = ebcdic('D');

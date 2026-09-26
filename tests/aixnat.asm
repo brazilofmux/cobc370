@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -163,35 +166,39 @@ T0004    DS    0H
 L0002    DS    0H
 T0005    DS    0H
 * PERFORM SHOW
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
          BR    15
 R0001    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0002           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0002
 T0006    DS    0H
 * PERFORM NEXT-ONE
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT008
+         ST    2,PT008
 L0016    DS    0H
-         LH    2,PT008
+         L     2,PT008
          LTR   2,2
          BNP   L0017
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0002    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0001
-         LH    2,PT008
+         L     2,PT008
          BCTR  2,0
-         STH   2,PT008
+         ST    2,PT008
          B     L0016
 L0017    DS    0H
 T0007    DS    0H
@@ -308,23 +315,25 @@ T0011    DS    0H
          ZAP   WK0+15(1),K0002+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT014
+         ST    2,PT014
 L0020    DS    0H
          DROP  8
-         LH    2,PT014
+         L     2,PT014
          LTR   2,2
          BNP   L0021
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0003    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0001
-         LH    2,PT014
+         L     2,PT014
          BCTR  2,0
-         STH   2,PT014
+         ST    2,PT014
          B     L0020
 L0021    DS    0H
 T0012    DS    0H
@@ -427,35 +436,39 @@ T0014    DS    0H
 L0006    DS    0H
 T0015    DS    0H
 * PERFORM SHOW
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
          BR    15
 R0004    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0002           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0002
 T0016    DS    0H
 * PERFORM NEXT-ONE
          ZAP   WK0+15(1),K0003+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT020
+         ST    2,PT020
 L0026    DS    0H
-         LH    2,PT020
+         L     2,PT020
          LTR   2,2
          BNP   L0027
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0005    DS    0H
          L     12,CB0002           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0001
-         LH    2,PT020
+         L     2,PT020
          BCTR  2,0
-         STH   2,PT020
+         ST    2,PT020
          B     L0026
 L0027    DS    0H
 T0017    DS    0H
@@ -729,6 +742,8 @@ T0025    DS    0H
          BE    L0011
 T0026    DS    0H
 * PERFORM SHOW
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0006           kept for the return
          LA    15,R0006            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
@@ -736,7 +751,7 @@ T0026    DS    0H
 R0006    DS    0H
          L     12,CB0004           this block's base again
          DROP  8
-         L     15,FA0002           restore fall-through
+         L     15,SV0006           what the cell held before
          ST    15,X0002
 L0011    DS    0H
 * end of a PERFORM range: return through its cell
@@ -768,9 +783,12 @@ T0027    DS    0H
 F0002    DS    0H                  fall-through when not performed
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
-PT008    DC    H'0'                PERFORM n TIMES counter
-PT014    DC    H'0'                PERFORM n TIMES counter
-PT020    DC    H'0'                PERFORM n TIMES counter
+         DS    0F
+PT008    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
+         DS    0F
+PT014    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
+         DS    0F
+PT020    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
 X0001    DC    A(F0001)            NEXT-ONE
 X0002    DC    A(F0002)            SHOW
 VDISP    DC    V(COBDISP)
@@ -929,9 +947,13 @@ CB0003   DC    A(B0003)            a code block's base
 CB0004   DC    A(B0004)            a code block's base
 CB0005   DC    A(B0005)            a code block's base
 PA0001   DC    A(P0001)            NEXT-ONE
-FA0001   DC    A(F0001)            fall-through, to put back
 PA0002   DC    A(P0002)            SHOW
-FA0002   DC    A(F0002)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
+SV0006   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

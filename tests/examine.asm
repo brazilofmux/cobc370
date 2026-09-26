@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -36,7 +39,10 @@ T0001    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0002    DS    0H
 * INSPECT W
@@ -65,7 +71,10 @@ L0003    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0003    DS    0H
 * MOVE TALLY -> T
@@ -88,7 +97,10 @@ T0005    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0006    DS    0H
 * INSPECT W
@@ -117,7 +129,10 @@ L0006    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0007    DS    0H
 * MOVE TALLY -> T
@@ -137,7 +152,10 @@ T0009    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0010    DS    0H
 * INSPECT W
@@ -167,7 +185,10 @@ L0010    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
          DROP  8
 T0011    DS    0H
@@ -190,7 +211,10 @@ T0013    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0014    DS    0H
 * INSPECT W
@@ -220,7 +244,10 @@ L0014    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
          DROP  8
 T0015    DS    0H
@@ -243,7 +270,10 @@ T0017    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0018    DS    0H
 * INSPECT W
@@ -272,7 +302,10 @@ L0017    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
          LA    3,D0000             the field
          LA    5,12                its length
@@ -315,7 +348,10 @@ T0022    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0023    DS    0H
 * INSPECT W
@@ -344,7 +380,10 @@ L0023    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
          LA    3,D0000             the field
          LA    5,12                its length
@@ -387,7 +426,10 @@ T0027    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0028    DS    0H
 * INSPECT W
@@ -417,7 +459,10 @@ L0030    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
          DROP  8
          L     8,BL0000            base locator
@@ -460,6 +505,9 @@ T0029    DS    0H
          ZAP   PWK1(16),DWK(8)
          UNPK  D0004(5),PWK1(16)   packed -> zoned
          OI    D0004+4,X'F0'       unsigned: force an F zone
+         BALR  12,0                a new code block: the paragraph is l
+B0001    EQU   *
+         USING B0001,12
 T0030    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(20),S0022
@@ -643,7 +691,10 @@ T0047    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0048    DS    0H
 * INSPECT N
@@ -672,7 +723,10 @@ L0055    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0049    DS    0H
 * MOVE TALLY -> T
@@ -723,7 +777,10 @@ T0054    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0055    DS    0H
 * INSPECT S
@@ -752,7 +809,10 @@ L0061    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0056    DS    0H
 * MOVE TALLY -> T
@@ -785,9 +845,6 @@ L0063    DS    0H
          BCT   5,L0062
 L0064    DS    0H
          DROP  8
-         BALR  12,0                a new code block: the paragraph is l
-B0001    EQU   *
-         USING B0001,12
 T0059    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(16),S0032
@@ -802,6 +859,7 @@ T0060    DS    0H
 * MOVE 19990102 -> ED
          ZAP   PWK1(16),K0003+11(5)  literal
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0003(10),EDWK+2    the edited result
@@ -839,7 +897,10 @@ T0064    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0065    DS    0H
 * INSPECT W
@@ -868,7 +929,10 @@ L0070    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0066    DS    0H
 * MOVE TALLY -> T
@@ -888,7 +952,10 @@ T0068    DS    0H
 * MOVE 42 -> TALLY
          ZAP   PWK1(16),K0004+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0069    DS    0H
 * MOVE TALLY -> T
@@ -908,6 +975,7 @@ T0071    DS    0H
 * ADD 1 -> TALLY
          L     2,D0005
          AH    2,H0001             binary, same scale: in the register
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0072    DS    0H
 * DISPLAY
@@ -931,7 +999,10 @@ T0074    DS    0H
 * MOVE 0 -> TALLY
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0075    DS    0H
 * INSPECT W
@@ -960,7 +1031,10 @@ L0074    DS    0H
          ZAP   PWK2(16),DWK(8)
          AP    PWK1(16),PWK2(16)   TALLYING adds
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),10,0         drop the digits past the picture
+         SRP   DWK(8),54,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
 T0076    DS    0H
 * DISPLAY

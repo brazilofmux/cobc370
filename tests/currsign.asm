@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -38,6 +41,7 @@ T0000    DS    0H
          USING WSC0000,8
          PACK  PWK1(16),D0000(9)   zoned -> packed
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(16),M0001      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(16),EDSRC
@@ -48,23 +52,29 @@ T0001    DS    0H
 * MOVE AMT -> E-FIXED
          PACK  PWK1(16),D0000(9)   zoned -> packed
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(16),M0002      load the ED pattern
          ED    EDWK(16),EDSRC
+         MVI   EDWK+3,X'C6'        the fixed currency symbol
          MVC   D0003(13),EDWK+3    the edited result
 T0002    DS    0H
 * MOVE AMT -> E-ZED
          PACK  PWK1(16),D0000(9)   zoned -> packed
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(16),M0003      load the ED pattern
          ED    EDWK(16),EDSRC
          BNM   G0001               not negative?
          MVI   EDWK+15,C'-'
-G0001    DS    0H
+         B     G0002
+G0001    MVI   EDWK+15,C' '
+G0002    DS    0H
          MVC   D0004(14),EDWK+2    the edited result
 T0003    DS    0H
 * MOVE AMT -> E-PLAIN
          PACK  PWK1(16),D0000(9)   zoned -> packed
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(15),M0004      load the ED pattern
          ED    EDWK(15),EDSRC
          MVC   D0005(12),EDWK+3    the edited result
@@ -92,6 +102,7 @@ T0006    DS    0H
 * MOVE SMALL -> E-FLOAT
          PACK  PWK1(16),D0001(9)   zoned -> packed
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(16),M0001      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(16),EDSRC
@@ -102,18 +113,23 @@ T0007    DS    0H
 * MOVE SMALL -> E-FIXED
          PACK  PWK1(16),D0001(9)   zoned -> packed
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         MVI   EDSRC,X'00'         truncate to the picture: the spare d
          MVC   EDWK(16),M0002      load the ED pattern
          ED    EDWK(16),EDSRC
+         MVI   EDWK+3,X'C6'        the fixed currency symbol
          MVC   D0003(13),EDWK+3    the edited result
 T0008    DS    0H
 * MOVE SMALL -> E-ZED
          PACK  PWK1(16),D0001(9)   zoned -> packed
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(16),M0003      load the ED pattern
          ED    EDWK(16),EDSRC
          BNM   G0003               not negative?
          MVI   EDWK+15,C'-'
-G0003    DS    0H
+         B     G0004
+G0003    MVI   EDWK+15,C' '
+G0004    DS    0H
          MVC   D0004(14),EDWK+2    the edited result
 T0009    DS    0H
 * DISPLAY
@@ -137,6 +153,7 @@ T0011    DS    0H
 * MOVE 725 -> E-FLOAT
          ZAP   PWK1(16),K0001+14(2)  literal
          ZAP   EDSRC(6),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(16),M0001      load the ED pattern
          LA    1,EDWK+12           where printing starts if EDMK stays
          EDMK  EDWK(16),EDSRC
@@ -162,6 +179,7 @@ T0014    DS    0H
 * MOVE R -> E-R
          PACK  PWK1(16),D0007(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0005       load the ED pattern
          ED    EDWK(9),EDSRC
          MVC   D0008(7),EDWK+2     the edited result
@@ -184,6 +202,7 @@ T0017    DS    0H
 * MOVE R -> E-R
          PACK  PWK1(16),D0007(6)   zoned -> packed
          ZAP   EDSRC(4),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(9),M0005       load the ED pattern
          ED    EDWK(9),EDSRC
          MVC   D0008(7),EDWK+2     the edited result
@@ -250,7 +269,7 @@ K0002    EQU   *-14
 K0003    EQU   *-14
          DC    PL2'0125'
 M0001    DC    XL16'40204020204B2020204B2021206B2020'  ED patterns
-M0002    DC    XL16'402021C6204B2020204B2020206B2020'
+M0002    DC    XL16'40202140204B2020204B2020206B2020'
 M0003    DC    XL16'402020204B2020204B2021206B202040'
 M0004    DC    XL15'402021204B2020204B2020206B2020'
 M0005    DC    XL9'40212020206B202020'

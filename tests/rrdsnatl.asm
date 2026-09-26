@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -53,6 +56,13 @@ T0002    DS    0H
 T0003    DS    0H
 * OPEN INPUT RECORD-IMAGES
          OPEN  (FD000,INPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0009
+         WTO   'COBC370: OPEN FAILED, DD IMAGES',ROUTCDE=11
+         ABEND 35
+         B     L0010
+L0009    DS    0H
+L0010    DS    0H
 T0004    DS    0H
 * OPEN OUTPUT RRDS-FILE
          OPEN  (FD001)             VSAM ACB
@@ -99,11 +109,13 @@ B0002    EQU   *
          USING B0002,12
 T0008    DS    0H
 * PERFORM 110-PROCESS-DATA THRU 119-EXIT
-L0009    DS    0H
+L0011    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0005(1),S0006      alphanumeric compare
-         BE    L0010
+         BE    L0012
+         L     14,X0004            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
          L     15,PA0003
@@ -111,10 +123,10 @@ L0009    DS    0H
 R0001    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0004           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0004
-         B     L0009
-L0010    DS    0H
+         B     L0011
+L0012    DS    0H
 * 020-TERMINATE.
 P0002    DS    0H
          BALR  12,0                this paragraph's code base
@@ -147,6 +159,7 @@ T0011    DS    0H
          USING WSC0000,8
          PACK  PWK1(16),D0009(8)   zoned -> packed
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0010(10),EDWK+2    the edited result
@@ -196,6 +209,8 @@ T0016    DS    0H
          BE    L0004
 T0017    DS    0H
 * PERFORM 120-ADD-RECORD THRU 129-EXIT
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
@@ -203,7 +218,7 @@ T0017    DS    0H
 R0002    DS    0H
          L     12,CB0004           this block's base again
          DROP  8
-         L     15,FA0006           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0006
 L0004    DS    0H
 * 119-EXIT.
@@ -274,10 +289,10 @@ G0007    DS    0H
 G0012    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0013
+         BE    L0015
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0013    DS    0H
+L0015    DS    0H
 G0008    DS    0H
          B     L0006
 L0005    DS    0H                  INVALID KEY
@@ -321,10 +336,10 @@ G0013    DS    0H
 G0018    DS    0H
          DROP  8
          CLI   FD001RA,X'00'       ever used?
-         BE    L0014
+         BE    L0016
          ENDREQ RPL=FD001R         the failed request is over
          MVI   FD001RA,X'00'
-L0014    DS    0H
+L0016    DS    0H
 G0014    DS    0H
 T0022    DS    0H
 * MOVE Y -> WRITE-FAILED-SWITCH
@@ -510,9 +525,9 @@ CB0005   DC    A(B0005)            a code block's base
 CB0006   DC    A(B0006)            a code block's base
 CB0007   DC    A(B0007)            a code block's base
 PA0003   DC    A(P0003)            110-PROCESS-DATA
-FA0004   DC    A(F0004)            fall-through, to put back
 PA0005   DC    A(P0005)            120-ADD-RECORD
-FA0006   DC    A(F0006)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

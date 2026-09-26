@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -155,11 +158,11 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-M0001    DC    XL8'0000610000610000'  ED patterns
-M0002    DC    XL5'0040004000'
-M0003    DC    XL6'0000F0F00000'
-M0004    DC    XL3'004000'
-M0005    DC    XL8'0000400000610000'
+M0001    DC    XL8'4040614040614040'  ED patterns
+M0002    DC    XL5'4040404040'
+M0003    DC    XL6'4040F0F04040'
+M0004    DC    XL3'404040'
+M0005    DC    XL8'4040404040614040'
 S0001    DC    CL7'DATE  ['        nonnumeric constants
 S0002    DC    CL1']'
 S0003    DC    CL7'SPACE ['

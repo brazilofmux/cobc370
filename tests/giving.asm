@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -42,6 +45,8 @@ T0000    DS    0H
          ZAP   WK1+10(6),DWK(8)
          AP    WK0+10(6),WK1+10(6)
          ZAP   DWK(8),WK0+10(6)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0001    DS    0H
@@ -68,6 +73,8 @@ T0003    DS    0H
          ZAP   WK1+10(6),DWK(8)
          AP    WK0+10(6),WK1+10(6)
          ZAP   DWK(8),WK0+10(6)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0004    DS    0H
@@ -91,6 +98,8 @@ T0006    DS    0H
          ZAP   WK0+10(6),DWK(8)
          SP    WK0+10(6),K0001+15(1)
          ZAP   DWK(8),WK0+10(6)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0007    DS    0H
@@ -117,6 +126,8 @@ T0009    DS    0H
          ZAP   WK1+10(6),DWK(8)
          SP    WK0+10(6),WK1+10(6)
          ZAP   DWK(8),WK0+10(6)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0010    DS    0H
@@ -143,6 +154,8 @@ T0012    DS    0H
          ZAP   WK1+10(6),DWK(8)
          MP    WK0+4(12),WK1+10(6)  scale becomes the sum of the scales
          ZAP   DWK(8),WK0+4(12)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0013    DS    0H
@@ -173,6 +186,8 @@ T0015    DS    0H
          ZAP   WK0+8(8),QTMP(8)    drop the remainder
          SRP   WK0+8(8),60,0       align scale (right)
          ZAP   DWK(8),WK0+8(8)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0016    DS    0H
@@ -203,6 +218,8 @@ T0018    DS    0H
          ZAP   WK0+8(8),QTMP(8)    drop the remainder
          SRP   WK0+8(8),60,0       align scale (right)
          ZAP   DWK(8),WK0+8(8)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0019    DS    0H
@@ -231,6 +248,8 @@ T0021    DS    0H
          ZAP   WK1+10(6),DWK(8)
          AP    WK0+9(7),WK1+10(6)
          ZAP   DWK(8),WK0+9(7)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
          ST    2,D0002
 T0022    DS    0H

@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -38,11 +41,14 @@ T0000    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0001               not negative?
          MVI   EDWK+2,C'-'
-G0001    DS    0H
+         B     G0002
+G0001    MVI   EDWK+2,C' '
+G0002    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0001    DS    0H
 * DISPLAY
@@ -59,11 +65,14 @@ T0002    DS    0H
          PACK  DWK(2),ZWK(1)       and the leading digits on their own
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0003               not negative?
          MVI   EDWK+2,C'-'
-G0003    DS    0H
+         B     G0004
+G0003    MVI   EDWK+2,C' '
+G0004    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0003    DS    0H
 * DISPLAY
@@ -81,11 +90,14 @@ T0004    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0005               not negative?
          MVI   EDWK+2,C'-'
-G0005    DS    0H
+         B     G0006
+G0005    MVI   EDWK+2,C' '
+G0006    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0005    DS    0H
 * DISPLAY
@@ -106,11 +118,14 @@ T0007    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0007               not negative?
          MVI   EDWK+2,C'-'
-G0007    DS    0H
+         B     G0008
+G0007    MVI   EDWK+2,C' '
+G0008    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0008    DS    0H
 * DISPLAY
@@ -130,11 +145,14 @@ T0010    DS    0H
          PACK  DWK(2),ZWK(1)       and the leading digits on their own
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0009               not negative?
          MVI   EDWK+2,C'-'
-G0009    DS    0H
+         B     G0010
+G0009    MVI   EDWK+2,C' '
+G0010    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0011    DS    0H
 * DISPLAY
@@ -156,11 +174,14 @@ T0013    DS    0H
 * MOVE P18 -> E18
          ZAP   PWK1(16),D0005(10)
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0011               not negative?
          MVI   EDWK+2,C'-'
-G0011    DS    0H
+         B     G0012
+G0011    MVI   EDWK+2,C' '
+G0012    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0014    DS    0H
 * DISPLAY
@@ -181,11 +202,14 @@ T0016    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0013               not negative?
          MVI   EDWK+2,C'-'
-G0013    DS    0H
+         B     G0014
+G0013    MVI   EDWK+2,C' '
+G0014    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0017    DS    0H
 * DISPLAY
@@ -220,11 +244,14 @@ T0019    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0015               not negative?
          MVI   EDWK+2,C'-'
-G0015    DS    0H
+         B     G0016
+G0015    MVI   EDWK+2,C' '
+G0016    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0020    DS    0H
 * DISPLAY
@@ -245,11 +272,14 @@ T0022    DS    0H
          MVC   PWK1+6(1),DWK       digit 1 into the free byte
          MVZ   PWK1+7(1),DWK+1     and the next one into the free nibbl
          ZAP   EDSRC(10),PWK1(16)  source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(21),M0001      load the ED pattern
          ED    EDWK(21),EDSRC
          BNM   G0017               not negative?
          MVI   EDWK+2,C'-'
-G0017    DS    0H
+         B     G0018
+G0017    MVI   EDWK+2,C' '
+G0018    DS    0H
          MVC   D0006(19),EDWK+2    the edited result
 T0023    DS    0H
 * DISPLAY

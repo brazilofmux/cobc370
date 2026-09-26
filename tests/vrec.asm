@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,6 +38,13 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN OUTPUT VOUT
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0024
+         WTO   'COBC370: OPEN FAILED, DD VRECF',ROUTCDE=11
+         ABEND 35
+         B     L0025
+L0024    DS    0H
+L0025    DS    0H
 T0001    DS    0H
 * MOVE L001 -> VOL-KEY
          L     8,BL0000            base locator
@@ -121,17 +131,29 @@ T0017    DS    0H
          BALR  14,15
 T0018    DS    0H
 * PERFORM READ-ALL
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
 T0019    DS    0H
 * OPEN I-O VUPD
          OPEN  (FD001,UPDAT)       QSAM update mode
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0028
+         WTO   'COBC370: OPEN FAILED, DD VRECF',ROUTCDE=11
+         ABEND 35
+         B     L0029
+L0028    DS    0H
+L0029    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0020    DS    0H
 * READ VUPD
          LA    1,L0011             this READ's AT END
@@ -244,13 +266,15 @@ T0031    DS    0H
          BALR  14,15
 T0032    DS    0H
 * PERFORM READ-ALL
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0002    DS    0H
-         L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     12,CB0002           this block's base again
+         L     15,SV0002           what the cell held before
          ST    15,X0001
 T0033    DS    0H
 * STOP RUN
@@ -263,11 +287,18 @@ T0033    DS    0H
 * READ-ALL.
 P0001    DS    0H
          BALR  12,0                this paragraph's code base
-B0002    EQU   *
-         USING B0002,12
+B0003    EQU   *
+         USING B0003,12
 T0034    DS    0H
 * OPEN INPUT VIN
          OPEN  (FD002,INPUT)
+         TM    FD002+48,X'10'      DCBOFLGS: did it open?
+         BO    L0032
+         WTO   'COBC370: OPEN FAILED, DD VRECF',ROUTCDE=11
+         ABEND 35
+         B     L0033
+L0032    DS    0H
+L0033    DS    0H
 T0035    DS    0H
 * MOVE N -> WS-EOF
          L     8,BL0000            base locator
@@ -280,23 +311,25 @@ T0036    DS    0H
          MVC   1(39,1),0(1)        propagate across the item
 T0037    DS    0H
 * PERFORM READ-ONE
-L0028    DS    0H
+L0034    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0021(1),S0012      alphanumeric compare
-         BE    L0029
+         BE    L0035
+         L     14,X0002            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0002            into the range's exit cell
          L     15,PA0002
          BR    15
 R0003    DS    0H
-         L     12,CB0002           this block's base again
+         L     12,CB0003           this block's base again
          DROP  8
-         L     15,FA0002           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0002
-         B     L0028
-L0029    DS    0H
+         B     L0034
+L0035    DS    0H
 T0038    DS    0H
 * CLOSE VIN
          CLOSE (FD002)
@@ -307,8 +340,8 @@ F0001    DS    0H                  fall-through when not performed
 * READ-ONE.
 P0002    DS    0H
          BALR  12,0                this paragraph's code base
-B0003    EQU   *
-         USING B0003,12
+B0004    EQU   *
+         USING B0004,12
 T0039    DS    0H
 * READ VIN
          LA    1,L0021             this READ's AT END
@@ -472,10 +505,12 @@ CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
 CB0003   DC    A(B0003)            a code block's base
+CB0004   DC    A(B0004)            a code block's base
 PA0001   DC    A(P0001)            READ-ALL
-FA0001   DC    A(F0001)            fall-through, to put back
 PA0002   DC    A(P0002)            READ-ONE
-FA0002   DC    A(F0002)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

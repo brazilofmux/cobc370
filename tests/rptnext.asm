@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -35,6 +38,13 @@ B0001    EQU   *
 T0000    DS    0H
 * OPEN OUTPUT PRINT-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0001
+         WTO   'COBC370: OPEN FAILED, DD PROUT',ROUTCDE=11
+         ABEND 35
+         B     L0002
+L0001    DS    0H
+L0002    DS    0H
 T0001    DS    0H
 * INITIATE NEXT-RPT
          SR    2,2
@@ -59,7 +69,7 @@ T0003    DS    0H
 * GENERATE NORMAL
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0001
+         BNE   L0003
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          L     12,CB0001           this block's base again
@@ -67,19 +77,21 @@ T0003    DS    0H
          L     12,CB0001           this block's base again
          BAL   14,RG001            the first page heading
          L     12,CB0001           this block's base again
-L0001    DS    0H
-L0002    DS    0H
+L0003    DS    0H
+L0004    DS    0H
          BAL   14,RG002
          L     12,CB0001           this block's base again
 T0004    DS    0H
 * PERFORM SHOW-LC
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0001    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0001
 T0005    DS    0H
 * MOVE 2 -> WS-NUM
@@ -90,7 +102,7 @@ T0006    DS    0H
 * GENERATE NORMAL
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0005
+         BNE   L0007
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          L     12,CB0001           this block's base again
@@ -98,19 +110,21 @@ T0006    DS    0H
          L     12,CB0001           this block's base again
          BAL   14,RG001            the first page heading
          L     12,CB0001           this block's base again
-L0005    DS    0H
-L0006    DS    0H
+L0007    DS    0H
+L0008    DS    0H
          BAL   14,RG002
          L     12,CB0001           this block's base again
 T0007    DS    0H
 * PERFORM SHOW-LC
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0002    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0001
 T0008    DS    0H
 * MOVE 3 -> WS-NUM
@@ -121,7 +135,7 @@ T0009    DS    0H
 * GENERATE FORCED
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0009
+         BNE   L0011
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          L     12,CB0001           this block's base again
@@ -129,19 +143,21 @@ T0009    DS    0H
          L     12,CB0001           this block's base again
          BAL   14,RG001            the first page heading
          L     12,CB0001           this block's base again
-L0009    DS    0H
-L0010    DS    0H
+L0011    DS    0H
+L0012    DS    0H
          BAL   14,RG003
          L     12,CB0001           this block's base again
 T0010    DS    0H
 * PERFORM SHOW-LC
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0003    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0001
 T0011    DS    0H
 * MOVE 4 -> WS-NUM
@@ -152,7 +168,7 @@ T0012    DS    0H
 * GENERATE FORCED
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0013
+         BNE   L0015
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          L     12,CB0001           this block's base again
@@ -160,19 +176,21 @@ T0012    DS    0H
          L     12,CB0001           this block's base again
          BAL   14,RG001            the first page heading
          L     12,CB0001           this block's base again
-L0013    DS    0H
-L0014    DS    0H
+L0015    DS    0H
+L0016    DS    0H
          BAL   14,RG003
          L     12,CB0001           this block's base again
 T0013    DS    0H
 * PERFORM SHOW-LC
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0004    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0001
 T0014    DS    0H
 * MOVE 5 -> WS-NUM
@@ -183,7 +201,7 @@ T0015    DS    0H
 * GENERATE NORMAL
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0017
+         BNE   L0019
          MVI   RFGEN000,X'01'
          BAL   14,RG000            REPORT HEADING
          L     12,CB0001           this block's base again
@@ -191,29 +209,31 @@ T0015    DS    0H
          L     12,CB0001           this block's base again
          BAL   14,RG001            the first page heading
          L     12,CB0001           this block's base again
-L0017    DS    0H
-L0018    DS    0H
+L0019    DS    0H
+L0020    DS    0H
          BAL   14,RG002
          L     12,CB0001           this block's base again
 T0016    DS    0H
 * PERFORM SHOW-LC
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
          BR    15
 R0005    DS    0H
          L     12,CB0001           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0005           what the cell held before
          ST    15,X0001
 T0017    DS    0H
 * TERMINATE NEXT-RPT
          CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
-         BE    L0021               no: nothing to do
+         BE    L0023               no: nothing to do
          BAL   14,REJC000          REPORT FOOTING on a page by itself
          L     12,CB0001           this block's base again
          BAL   14,RG004            REPORT FOOTING
          L     12,CB0001           this block's base again
-L0021    DS    0H
+L0023    DS    0H
 T0018    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -299,19 +319,19 @@ RG001    ST    14,RGS001           save the return
 * report group NORMAL
 RG002    ST    14,RGS002           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0023
+         BE    L0025
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0022               fits
+         BNH   L0024               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0023    DS    0H
+L0025    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0022               none: the first group on a page fits
+         BZ    L0024               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0004             into LINE-COUNTER
@@ -319,24 +339,24 @@ L0023    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0022               fits
+         BNH   L0024               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0022    DS    0H
+L0024    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0004             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0024
+         BE    L0026
          LA    2,1(2)              LINE PLUS n
-         B     L0025
-L0024    DS    0H
+         B     L0027
+L0026    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,3                 no: the first line is FIRST DETAIL
-         B     L0025
+         B     L0027
          LA    2,1(2)              yes: the line after it
-L0025    DS    0H
+L0027    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -362,22 +382,22 @@ L0025    DS    0H
 RG003    ST    14,RGS003           save the return
          DROP  8
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0027
+         BE    L0029
          BAL   14,RADV000          page advance processing
-L0027    DS    0H
+L0029    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0026               none: the first group on a page fits
+         BZ    L0028               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0004             into LINE-COUNTER
          SR    3,3
          ST    3,RSNG000           and cleared
          C     2,FC004             below the group's first line?
-         BL    L0026               fits
+         BL    L0028               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0026    DS    0H
+L0028    DS    0H
          LA    2,4                 LINE n
          ST    2,RTGT
          MVI   RBUF+1,C' '
@@ -610,7 +630,11 @@ CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
 PA0001   DC    A(P0001)            SHOW-LC
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

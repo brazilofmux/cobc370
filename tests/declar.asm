@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -76,24 +79,42 @@ T0002    DS    0H
 T0003    DS    0H
 * OPEN INPUT IN-FILE
          OPEN  (FD000,INPUT)
-T0004    DS    0H
-* PERFORM READ-ONE
-L0004    DS    0H
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         CLC   D0006(1),S0001      alphanumeric compare
-         BE    L0005
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0004
+*  no phrase for this: the USE procedure
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
-         ST    15,X0004            into the range's exit cell
-         L     15,PA0004
+         ST    15,X0001            into the range's exit cell
+         L     15,PA0000
          BR    15
 R0001    DS    0H
          L     12,CB0004           this block's base again
-         DROP  8
-         L     15,FA0004           restore fall-through
-         ST    15,X0004
-         B     L0004
+         L     15,SV0001           what the cell held before
+         ST    15,X0001
+         B     L0005
+L0004    DS    0H
 L0005    DS    0H
+T0004    DS    0H
+* PERFORM READ-ONE
+L0006    DS    0H
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         CLC   D0006(1),S0001      alphanumeric compare
+         BE    L0007
+         L     14,X0004            what the exit cell holds
+         ST    14,SV0002           kept for the return
+         LA    15,R0002            return here
+         ST    15,X0004            into the range's exit cell
+         L     15,PA0004
+         BR    15
+R0002    DS    0H
+         L     12,CB0004           this block's base again
+         DROP  8
+         L     15,SV0002           what the cell held before
+         ST    15,X0004
+         B     L0006
+L0007    DS    0H
 T0005    DS    0H
 * CLOSE IN-FILE
          CLOSE (FD000)
@@ -137,13 +158,15 @@ T0009    DS    0H
          B     L0002
 L0001    DS    0H                  AT END
          DROP  8
-         LA    15,R0002            return here
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0003           kept for the return
+         LA    15,R0003            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0000
          BR    15
-R0002    DS    0H
+R0003    DS    0H
          L     12,CB0005           this block's base again
-         L     15,FA0001           restore fall-through
+         L     15,SV0003           what the cell held before
          ST    15,X0001
 L0002    DS    0H
 T0010    DS    0H
@@ -286,10 +309,11 @@ CB0003   DC    A(B0003)            a code block's base
 CB0004   DC    A(B0004)            a code block's base
 CB0005   DC    A(B0005)            a code block's base
 PA0000   DC    A(P0000)            EOF-HANDLER
-FA0001   DC    A(F0001)            fall-through, to put back
 PA0002   DC    A(P0002)            MAIN
 PA0004   DC    A(P0004)            READ-ONE
-FA0004   DC    A(F0004)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

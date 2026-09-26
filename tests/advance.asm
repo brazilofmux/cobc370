@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -30,6 +33,14 @@ SPIEARMD DS    0H
 T0000    DS    0H
 * OPEN OUTPUT PRT-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0034
+         WTO   'COBC370: OPEN FAILED, DD PRTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0035
+L0034    DS    0H
+         XC    FP000O(2),FP000O    no lines owed from before
+L0035    DS    0H
 T0001    DS    0H
 * MOVE * -> P-CTL
          L     8,BL0000            base locator
@@ -279,24 +290,36 @@ T0043    DS    0H
 T0044    DS    0H
 * OPEN INPUT RAW-FILE
          OPEN  (FD001,INPUT)
+         TM    FD001+48,X'10'      DCBOFLGS: did it open?
+         BO    L0036
+         WTO   'COBC370: OPEN FAILED, DD PRTFILE',ROUTCDE=11
+         ABEND 35
+         B     L0037
+L0036    DS    0H
+L0037    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0001    EQU   *
+         USING B0001,12
 T0045    DS    0H
 * PERFORM READ-ONE
-L0034    DS    0H
+L0038    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0008(1),S0016      alphanumeric compare
-         BE    L0035
+         BE    L0039
+         L     14,X0000            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0000            into the range's exit cell
          L     15,PA0000
          BR    15
 R0001    DS    0H
-         L     12,CB0000           this block's base again
+         L     12,CB0001           this block's base again
          DROP  8
-         L     15,FA0000           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0000
-         B     L0034
-L0035    DS    0H
+         B     L0038
+L0039    DS    0H
 T0046    DS    0H
 * CLOSE RAW-FILE
          CLOSE (FD001)
@@ -311,8 +334,8 @@ T0047    DS    0H
 * READ-ONE.
 P0000    DS    0H
          BALR  12,0                this paragraph's code base
-B0001    EQU   *
-         USING B0001,12
+B0002    EQU   *
+         USING B0002,12
 T0048    DS    0H
 * READ RAW-FILE
          LA    1,L0029             this READ's AT END
@@ -362,32 +385,32 @@ T0054    DS    0H
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BE    L0036
+         BE    L0040
          LH    2,D0013
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BE    L0036
+         BE    L0040
          LH    2,D0013
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+14(2),K0003+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
-         BE    L0036
+         BE    L0040
          LH    2,D0013
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+14(2),K0004+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
-         BE    L0036
+         BE    L0040
          LH    2,D0013
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+14(2),K0005+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
          BNE   L0032
-L0036    DS    0H
+L0040    DS    0H
 T0055    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(2),D0009+0
@@ -555,8 +578,9 @@ SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
          DS    0F
 CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
 PA0000   DC    A(P0000)            READ-ONE
-FA0000   DC    A(F0000)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

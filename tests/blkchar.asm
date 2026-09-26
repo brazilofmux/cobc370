@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -30,42 +33,60 @@ SPIEARMD DS    0H
 T0000    DS    0H
 * OPEN OUTPUT BLK-FILE
          OPEN  (FD000,OUTPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0006
+         WTO   'COBC370: OPEN FAILED, DD BLKFILE',ROUTCDE=11
+         ABEND 35
+         B     L0007
+L0006    DS    0H
+L0007    DS    0H
 T0001    DS    0H
 * PERFORM WRITE-ONE
          ZAP   WK0+15(1),K0001+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
-         STH   2,PT001
-L0006    DS    0H
-         LH    2,PT001
+         ST    2,PT001
+L0008    DS    0H
+         L     2,PT001
          LTR   2,2
-         BNP   L0007
+         BNP   L0009
+         L     14,X0000            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0000            into the range's exit cell
          L     15,PA0000
          BR    15
 R0001    DS    0H
          L     12,CB0000           this block's base again
-         L     15,FA0000           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0000
-         LH    2,PT001
+         L     2,PT001
          BCTR  2,0
-         STH   2,PT001
-         B     L0006
-L0007    DS    0H
+         ST    2,PT001
+         B     L0008
+L0009    DS    0H
 T0002    DS    0H
 * CLOSE BLK-FILE
          CLOSE (FD000)
 T0003    DS    0H
 * OPEN INPUT BLK-FILE
          OPEN  (FD000,INPUT)
+         TM    FD000+48,X'10'      DCBOFLGS: did it open?
+         BO    L0010
+         WTO   'COBC370: OPEN FAILED, DD BLKFILE',ROUTCDE=11
+         ABEND 35
+         B     L0011
+L0010    DS    0H
+L0011    DS    0H
 T0004    DS    0H
 * PERFORM READ-ONE
-L0008    DS    0H
+L0012    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0004(1),S0001      alphanumeric compare
-         BE    L0009
+         BE    L0013
+         L     14,X0001            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0001            into the range's exit cell
          L     15,PA0001
@@ -73,10 +94,10 @@ L0008    DS    0H
 R0002    DS    0H
          L     12,CB0000           this block's base again
          DROP  8
-         L     15,FA0001           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0001
-         B     L0008
-L0009    DS    0H
+         B     L0012
+L0013    DS    0H
 T0005    DS    0H
 * CLOSE BLK-FILE
          CLOSE (FD000)
@@ -179,7 +200,8 @@ L0005    DS    0H
 F0001    DS    0H                  fall-through when not performed
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
-PT001    DC    H'0'                PERFORM n TIMES counter
+         DS    0F
+PT001    DC    F'0'                PERFORM n TIMES counter: 40000 TIMES
 X0000    DC    A(F0000)            WRITE-ONE
 X0001    DC    A(F0001)            READ-ONE
 VDISP    DC    V(COBDISP)
@@ -284,9 +306,9 @@ CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
 CB0002   DC    A(B0002)            a code block's base
 PA0000   DC    A(P0000)            WRITE-ONE
-FA0000   DC    A(F0000)            fall-through, to put back
 PA0001   DC    A(P0001)            READ-ONE
-FA0001   DC    A(F0001)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

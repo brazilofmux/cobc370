@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptraw rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec bigpara cobxref iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptraw rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam ksdsboth ksdsrnd2 copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec bigpara cobxref subsmul perfnest condlit cpyrepx remaindr compunsg lvl88grp editfix signmove signval rptdate powfix opennodd linreopn iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -27,6 +27,7 @@ TESTS=${*:-$ALL}
 prereq_for() {
     case "$1" in
         ksdsnat|ksdsnats|ksdsnatu|ksdsnatr|ksdsnatx) echo ksdsnatl ;;
+        ksdsrnd2)                                    echo ksdsboth ;;
         esdsnatr|esdsnatu|esdsnata)         echo esdsnatl ;;
         rrdsnatr|rrdsnatd|rrdsnats|rrdsdisp)         echo rrdsnatl ;;
         usevsam)                                     echo "ksdsnatl rrdsnatl" ;;
@@ -114,7 +115,7 @@ for t in $TESTS; do
         printf '/*\n//GO.SYSOUT  DD  SYSOUT=Z\n'
         case "$t" in isamseq|isamrnd)
             printf '//GO.GLACCT DD  DSN=SVD001.GLACCT,DISP=OLD,UNIT=3380,VOL=SER=SVD003\n' ;;
-        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr|ksdsnats|ksdsnatx|usevsam)
+        ksdsnat|ksdsnatl|ksdsnatu|ksdsnatr|ksdsnats|ksdsnatx|usevsam|ksdsboth|ksdsrnd2)
             # The VSAM trio is stateful and runs in this order: ksdsnatl loads
             # the cluster, ksdsnat reads back what it wrote, ksdsnatu updates
             # it in place, ksdsnatr adds and deletes by key. ksdsnats only
@@ -233,6 +234,15 @@ for t in $TESTS; do
         if [ "$t" = accept ]; then
             printf '//GO.SYSIN   DD  *\n'
             printf '%-72s\n' "FIRST CARD" "SECOND CARD"
+            printf '/*\n'
+        fi
+        if [ "$t" = linreopn ]; then
+            printf '//GO.PRTOUT  DD  SYSOUT=Z\n'
+        fi
+        if [ "$t" = rptdate ]; then
+            printf '//GO.PROUT   DD  SYSOUT=Z\n'
+            printf '//GO.INFILE  DD  *\n'
+            for r in ALPHA BRAVO CHARLIE; do printf '%-80s\n' "$r"; done
             printf '/*\n'
         fi
         if [ "$t" = declar ]; then

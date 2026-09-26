@@ -16,6 +16,9 @@ PRO001   L     11,PROCON           the constants region
          LA    10,2048(,10)
          USING COBCON,11
          USING COBCON+4096,10
+         LA    9,2048(,10)         and its third 4K: one data base is e
+         LA    9,2048(,9)
+         USING COBCON+8192,9
          ST    13,SAVEAREA+4       backward chain to caller
          LA    0,SAVEAREA
          ST    0,8(13)             forward chain from caller
@@ -83,6 +86,8 @@ L0014    DS    0H
          USING WSC0000,8
          CLC   D0004(1),S0004      alphanumeric compare
          BE    L0015
+         L     14,X0004            what the exit cell holds
+         ST    14,SV0001           kept for the return
          LA    15,R0001            return here
          ST    15,X0004            into the range's exit cell
          L     15,PA0003
@@ -90,7 +95,7 @@ L0014    DS    0H
 R0001    DS    0H
          L     12,CB0002           this block's base again
          DROP  8
-         L     15,FA0004           restore fall-through
+         L     15,SV0001           what the cell held before
          ST    15,X0004
          B     L0014
 L0015    DS    0H
@@ -134,7 +139,10 @@ T0007    DS    0H
 * MOVE 21 -> WS-RRN
          ZAP   PWK1(16),K0001+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0002
@@ -239,19 +247,24 @@ T0011    DS    0H
 L0002    DS    0H
 T0012    DS    0H
 * PERFORM 120-START-AND-READ THRU 129-EXIT
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0002           kept for the return
          LA    15,R0002            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
          BR    15
 R0002    DS    0H
          L     12,CB0004           this block's base again
-         L     15,FA0006           restore fall-through
+         L     15,SV0002           what the cell held before
          ST    15,X0006
 T0013    DS    0H
 * MOVE 51 -> WS-RRN
          ZAP   PWK1(16),K0002+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0002
@@ -354,21 +367,29 @@ T0017    DS    0H
          MVC   D0006(1),S0004      literal move, space padded
          DROP  8
 L0004    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0005    EQU   *
+         USING B0005,12
 T0018    DS    0H
 * PERFORM 120-START-AND-READ THRU 129-EXIT
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0003           kept for the return
          LA    15,R0003            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
          BR    15
 R0003    DS    0H
-         L     12,CB0004           this block's base again
-         L     15,FA0006           restore fall-through
+         L     12,CB0005           this block's base again
+         L     15,SV0003           what the cell held before
          ST    15,X0006
 T0019    DS    0H
 * MOVE 81 -> WS-RRN
          ZAP   PWK1(16),K0003+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0002
@@ -471,24 +492,26 @@ T0023    DS    0H
          MVC   D0006(1),S0004      literal move, space padded
          DROP  8
 L0006    DS    0H
-         BALR  12,0                a new code block: the paragraph is l
-B0005    EQU   *
-         USING B0005,12
 T0024    DS    0H
 * PERFORM 120-START-AND-READ THRU 129-EXIT
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0004           kept for the return
          LA    15,R0004            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
          BR    15
 R0004    DS    0H
          L     12,CB0005           this block's base again
-         L     15,FA0006           restore fall-through
+         L     15,SV0004           what the cell held before
          ST    15,X0006
 T0025    DS    0H
 * MOVE 111 -> WS-RRN
          ZAP   PWK1(16),K0004+14(2)  literal
          ZAP   DWK(8),PWK1(16)
+         SRP   DWK(8),7,0          drop the digits past the picture
+         SRP   DWK(8),57,0
          CVB   2,DWK               packed -> binary
+         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0002
@@ -591,15 +614,20 @@ T0029    DS    0H
          MVC   D0006(1),S0004      literal move, space padded
          DROP  8
 L0008    DS    0H
+         BALR  12,0                a new code block: the paragraph is l
+B0006    EQU   *
+         USING B0006,12
 T0030    DS    0H
 * PERFORM 120-START-AND-READ THRU 129-EXIT
+         L     14,X0006            what the exit cell holds
+         ST    14,SV0005           kept for the return
          LA    15,R0005            return here
          ST    15,X0006            into the range's exit cell
          L     15,PA0005
          BR    15
 R0005    DS    0H
-         L     12,CB0005           this block's base again
-         L     15,FA0006           restore fall-through
+         L     12,CB0006           this block's base again
+         L     15,SV0005           what the cell held before
          ST    15,X0006
 T0031    DS    0H
 * MOVE Y -> END-OF-FILE-SWITCH
@@ -610,8 +638,8 @@ T0031    DS    0H
 * 119-EXIT.
 P0004    DS    0H
          BALR  12,0                this paragraph's code base
-B0006    EQU   *
-         USING B0006,12
+B0007    EQU   *
+         USING B0007,12
 T0032    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
@@ -621,8 +649,8 @@ F0004    DS    0H                  fall-through when not performed
 * 120-START-AND-READ.
 P0005    DS    0H
          BALR  12,0                this paragraph's code base
-B0007    EQU   *
-         USING B0007,12
+B0008    EQU   *
+         USING B0008,12
 T0033    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -646,21 +674,23 @@ T0035    DS    0H
          BE    L0010
 T0036    DS    0H
 * PERFORM 122-READ-FIVE THRU 123-EXIT
+         L     14,X0008            what the exit cell holds
+         ST    14,SV0006           kept for the return
          LA    15,R0006            return here
          ST    15,X0008            into the range's exit cell
          L     15,PA0007
          BR    15
 R0006    DS    0H
-         L     12,CB0007           this block's base again
+         L     12,CB0008           this block's base again
          DROP  8
-         L     15,FA0008           restore fall-through
+         L     15,SV0006           what the cell held before
          ST    15,X0008
 L0010    DS    0H
 * 129-EXIT.
 P0006    DS    0H
          BALR  12,0                this paragraph's code base
-B0008    EQU   *
-         USING B0008,12
+B0009    EQU   *
+         USING B0009,12
 T0037    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
@@ -670,8 +700,8 @@ F0006    DS    0H                  fall-through when not performed
 * 122-READ-FIVE.
 P0007    DS    0H
          BALR  12,0                this paragraph's code base
-B0009    EQU   *
-         USING B0009,12
+B0010    EQU   *
+         USING B0010,12
 T0038    DS    0H
 * MOVE WS-RRN -> SLOT-COUNTER
          L     8,BL0000            base locator
@@ -696,14 +726,16 @@ L0034    DS    0H
          ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+11(5),WK1+15(1)  numeric compare
          BH    L0035
+         L     14,X0010            what the exit cell holds
+         ST    14,SV0007           kept for the return
          LA    15,R0007            return here
          ST    15,X0010            into the range's exit cell
          L     15,PA0009
          BR    15
 R0007    DS    0H
-         L     12,CB0009           this block's base again
+         L     12,CB0010           this block's base again
          DROP  8
-         L     15,FA0010           restore fall-through
+         L     15,SV0007           what the cell held before
          ST    15,X0010
          B     L0034
 L0035    DS    0H
@@ -716,8 +748,8 @@ T0041    DS    0H
 * 123-EXIT.
 P0008    DS    0H
          BALR  12,0                this paragraph's code base
-B0010    EQU   *
-         USING B0010,12
+B0011    EQU   *
+         USING B0011,12
 T0042    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
@@ -727,8 +759,8 @@ F0008    DS    0H                  fall-through when not performed
 * 130-READ-AND-DISPLAY.
 P0009    DS    0H
          BALR  12,0                this paragraph's code base
-B0011    EQU   *
-         USING B0011,12
+B0012    EQU   *
+         USING B0012,12
 T0043    DS    0H
 * READ RRDS-FILE
          GET   RPL=FD000R          VSAM sequential retrieval
@@ -812,6 +844,7 @@ T0046    DS    0H
 * MOVE SLOT-COUNTER -> COUNTER-EDIT
          PACK  PWK1(16),D0009(8)   zoned -> packed
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
+         NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
          ED    EDWK(12),EDSRC
          MVC   D0010(10),EDWK+2    the edited result
@@ -843,8 +876,8 @@ T0049    DS    0H
 * 139-EXIT.
 P0010    DS    0H
          BALR  12,0                this paragraph's code base
-B0012    EQU   *
-         USING B0012,12
+B0013    EQU   *
+         USING B0013,12
 T0050    DS    0H
 * EXIT
 * end of a PERFORM range: return through its cell
@@ -1012,14 +1045,18 @@ CB0009   DC    A(B0009)            a code block's base
 CB0010   DC    A(B0010)            a code block's base
 CB0011   DC    A(B0011)            a code block's base
 CB0012   DC    A(B0012)            a code block's base
+CB0013   DC    A(B0013)            a code block's base
 PA0003   DC    A(P0003)            110-PROCESS-DATA
-FA0004   DC    A(F0004)            fall-through, to put back
 PA0005   DC    A(P0005)            120-START-AND-READ
-FA0006   DC    A(F0006)            fall-through, to put back
 PA0007   DC    A(P0007)            122-READ-FIVE
-FA0008   DC    A(F0008)            fall-through, to put back
 PA0009   DC    A(P0009)            130-READ-AND-DISPLAY
-FA0010   DC    A(F0010)            fall-through, to put back
+SV0001   DS    F                   a PERFORM site's saved exit cell
+SV0002   DS    F                   a PERFORM site's saved exit cell
+SV0003   DS    F                   a PERFORM site's saved exit cell
+SV0004   DS    F                   a PERFORM site's saved exit cell
+SV0005   DS    F                   a PERFORM site's saved exit cell
+SV0006   DS    F                   a PERFORM site's saved exit cell
+SV0007   DS    F                   a PERFORM site's saved exit cell
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F
