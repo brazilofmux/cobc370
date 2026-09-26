@@ -6339,6 +6339,13 @@ T0799    DS    0H
          L     15,X0119
          BR    15
 F0119    DS    0H                  fall-through when not performed
+* end of the Procedure Division: an implicit STOP RUN
+* GOBACK to the caller
+         LH    15,D0260            RETURN-CODE -> the step's condition
+         L     13,4(13)            restore caller's save area
+         L     14,12(13)           caller's return address
+         LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
+         BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
 * SORT exits: E15 resumes the input part, E35 the output

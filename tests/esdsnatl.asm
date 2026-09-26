@@ -412,6 +412,14 @@ T0031    DS    0H
          L     15,X0006
          BR    15
 F0006    DS    0H                  fall-through when not performed
+* end of the Procedure Division: an implicit STOP RUN
+* STOP RUN
+         L     15,VTERM            close anything the runtime opened
+         BALR  14,15
+         L     13,4(13)            restore caller's save area
+         LM    14,12,12(13)        restore caller's registers
+         SR    15,15               return code 0
+         BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
 X0004    DC    A(F0004)            119-EXIT

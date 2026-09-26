@@ -67,6 +67,12 @@ T0004    DS    0H
          LM    14,12,12(13)        restore caller's registers
          SR    15,15               return code 0
          BR    14                  return to caller
+* end of the Procedure Division: an implicit STOP RUN
+* GOBACK to the caller
+         L     13,4(13)            restore caller's save area
+         LM    14,12,12(13)        restore caller's registers
+         SR    15,15               return code 0
+         BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
 * work areas for decimal arithmetic
