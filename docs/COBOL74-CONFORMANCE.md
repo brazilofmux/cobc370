@@ -1186,6 +1186,13 @@ the tests that hold it:
   left owing start over at every OPEN, IV-15 (`linreopn`). `MOVE SPACES` to
   an item longer than 256 bytes was refused; it propagates in further `MVC`s.
 
+Found by the port sweep after all that: the module cc370 builds gets
+negative 64-bit arithmetic wrong -- on TK5 the compiler refused `-1 ** 1`
+as "over eighteen digits" while the host folded it. The literal fold now
+works on magnitudes and puts the sign back at the end, so nothing in the
+compiler depends on a signed `long long` being negative; that is the only
+64-bit arithmetic in it.
+
 Not done: single-pass multi-operand `INSPECT` (#32), `VALUE` in an `OCCURS`
 (#34), and the notes in #39. `OCCURS DEPENDING ON` in a file record is still
 refused, so the variable-length `WRITE` in #38 cannot arise; the RDW code is

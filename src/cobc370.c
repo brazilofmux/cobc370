@@ -3718,14 +3718,19 @@ static Node *parse_power(void)
          * generator would otherwise see an exponent that is an expression. */
         /* Not atoll: that is C99's, and PDPCLIB does not owe us one. The
          * operands are validated integer literals of at most 18 digits. */
-        long long base = ll_digits(l->lit), e = ll_digits(r->lit), v = 1;
+        /* Magnitudes only: the sign is put back at the end. The module
+         * cc370 builds gets negative 64-bit arithmetic wrong -- on TK5,
+         * -1 ** 1 was "over eighteen digits" -- and a fold that never
+         * multiplies or compares a negative value does not need it. */
+        int neg = l->lit[0] == '-';
+        long long base = ll_digits(l->lit + (neg || l->lit[0] == '+')), e = ll_digits(r->lit), v = 1;
         if (e < 0) die("a negative exponent is not implemented -- it has no exact decimal value");
         for (long long k = 0; k < e; k++) {
+            if (base && v > 999999999999999999LL / base) die("a literal ** literal exceeds eighteen digits");
             v *= base;
-            if (v > 999999999999999999LL) die("a literal ** literal exceeds eighteen digits");
         }
         Node *n = node(N_LIT);
-        snprintf(n->lit, sizeof n->lit, "%lld", v);
+        snprintf(n->lit, sizeof n->lit, "%s%lld", (neg && (e & 1) && v) ? "-" : "", v);
         n->litscale = 0;
         return n;
     }
