@@ -3718,19 +3718,41 @@ static Node *parse_power(void)
          * generator would otherwise see an exponent that is an expression. */
         /* Not atoll: that is C99's, and PDPCLIB does not owe us one. The
          * operands are validated integer literals of at most 18 digits. */
-        /* Magnitudes only: the sign is put back at the end. The module
-         * cc370 builds gets negative 64-bit arithmetic wrong -- on TK5,
-         * -1 ** 1 was "over eighteen digits" -- and a fold that never
-         * multiplies or compares a negative value does not need it. */
+        /* In decimal digits, with int arithmetic. The module cc370 builds
+         * gets negative 64-bit arithmetic wrong -- on TK5, -1 ** 1 was
+         * "over eighteen digits" -- and its runtime has no 64-bit divide,
+         * so the fold uses neither: the base's magnitude as digits, the
+         * sign put back at the end. */
         int neg = l->lit[0] == '-';
-        long long base = ll_digits(l->lit + (neg || l->lit[0] == '+')), e = ll_digits(r->lit), v = 1;
-        if (e < 0) die("a negative exponent is not implemented -- it has no exact decimal value");
+        const char *bs = l->lit + (neg || l->lit[0] == '+');
+        while (bs[1] && *bs == '0') bs++;
+        if (r->lit[0] == '-') die("a negative exponent is not implemented -- it has no exact decimal value");
+        long long e = ll_digits(r->lit);
+        int bd[20], nb = 0;                        /* the base, least significant digit first */
+        for (const char *q = bs + strlen(bs); q > bs; ) bd[nb++] = *--q - '0';
+        int vd[20] = {1}, nv = 1;                 /* the running product */
+        int odd = (int)(e & 1);
+        if (nb == 1 && bd[0] <= 1) {              /* 0 or 1: the loop would run e times */
+            if (bd[0] == 0 && e > 0) vd[0] = 0;
+            e = 0;
+        }
         for (long long k = 0; k < e; k++) {
-            if (base && v > 999999999999999999LL / base) die("a literal ** literal exceeds eighteen digits");
-            v *= base;
+            int pd[40] = {0};
+            for (int i = 0; i < nv; i++)
+                for (int j = 0; j < nb; j++) pd[i + j] += vd[i] * bd[j];
+            int np = 0;
+            for (int i = 0; i < nv + nb; i++) {
+                pd[i + 1] += pd[i] / 10; pd[i] %= 10;
+                if (pd[i]) np = i + 1;
+            }
+            if (np > 18) die("a literal ** literal exceeds eighteen digits");
+            memcpy(vd, pd, sizeof vd); nv = np ? np : 1;
         }
         Node *n = node(N_LIT);
-        snprintf(n->lit, sizeof n->lit, "%s%lld", (neg && (e & 1) && v) ? "-" : "", v);
+        char *o = n->lit;
+        if (neg && odd && !(nv == 1 && vd[0] == 0)) *o++ = '-';
+        for (int i = nv - 1; i >= 0; i--) *o++ = (char)('0' + vd[i]);
+        *o = 0;
         n->litscale = 0;
         return n;
     }
