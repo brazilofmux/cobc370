@@ -88,6 +88,9 @@ def main():
     awswrap(f'{WORK}/CBLSRC.xmit', f'{WORK}/cblsrc.aws')
     console(f'devinit 0480 {WORK}/cblsrc.aws')
 
+    # DIR(60): with ISPF statistics a directory block holds six members, and
+    # RECEIVE's IEBCOPY ends RC=8, not an abend, when the directory fills;
+    # 182 members overflowed DIR(30) on 2026-09-26.
     xfer = JOBCARD % 'S' + """\
 //DEL      EXEC PGM=IEFBR14
 //DD1      DD DSN=HERC01.CBLSRC.XMIT,DISP=(MOD,DELETE),
@@ -108,7 +111,7 @@ def main():
 //SYSPRINT DD SYSOUT=Z
 //SYSTSIN  DD *
 RECEIVE INDATASET('HERC01.CBLSRC.XMIT') -
-  DATASET('HERC01.CBLSRC') DIR(30) NOPROMPT
+  DATASET('HERC01.CBLSRC') DIR(60) NOPROMPT
 /*
 //ALLOC    EXEC PGM=IEFBR14,COND=(0,NE)
 //DD1      DD DSN=HERC01.ASMOUT,DISP=(NEW,CATLG),UNIT=SYSDA,

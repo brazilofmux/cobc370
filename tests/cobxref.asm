@@ -4872,7 +4872,9 @@ T0626    DS    0H
          CVB   2,DWK               packed -> binary
          STH   2,D0260
 T0627    DS    0H
-* GOBACK to the caller
+* STOP RUN
+         L     15,VTERM            close anything the runtime opened
+         BALR  14,15
          LH    15,D0260            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
          L     14,12(13)           caller's return address
@@ -5861,7 +5863,9 @@ T0747    DS    0H
          DROP  8
 L0222    DS    0H
 T0748    DS    0H
-* GOBACK to the caller
+* STOP RUN
+         L     15,VTERM            close anything the runtime opened
+         BALR  14,15
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    15,D0260            RETURN-CODE -> the step's condition
@@ -6026,7 +6030,9 @@ T0764    DS    0H
          L     15,VDISP
          BALR  14,15
 T0765    DS    0H
-* GOBACK to the caller
+* STOP RUN
+         L     15,VTERM            close anything the runtime opened
+         BALR  14,15
          LH    15,D0260            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
          L     14,12(13)           caller's return address
@@ -6124,7 +6130,9 @@ T0775    DS    0H
          L     15,VDISP
          BALR  14,15
 T0776    DS    0H
-* GOBACK to the caller
+* STOP RUN
+         L     15,VTERM            close anything the runtime opened
+         BALR  14,15
          LH    15,D0260            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
          L     14,12(13)           caller's return address
@@ -6213,7 +6221,9 @@ T0783    DS    0H
          L     15,VDISP
          BALR  14,15
 T0784    DS    0H
-* GOBACK to the caller
+* STOP RUN
+         L     15,VTERM            close anything the runtime opened
+         BALR  14,15
          LH    15,D0260            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
          L     14,12(13)           caller's return address
@@ -6355,7 +6365,9 @@ T0797    DS    0H
          L     15,VDISP
          BALR  14,15
 T0798    DS    0H
-* GOBACK to the caller
+* STOP RUN
+         L     15,VTERM            close anything the runtime opened
+         BALR  14,15
          LH    15,D0260            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
          L     14,12(13)           caller's return address

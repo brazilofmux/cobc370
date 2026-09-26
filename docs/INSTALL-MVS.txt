@@ -6,14 +6,14 @@ runs on the guest.  Nothing here needs a C compiler on MVS.  The module
 was cross-compiled on a host and this file is the finished result.
 
 These instructions do not go stale, but the figures below describe one
-particular build -- the 2026-09-26 floating-point release.  Check them against
+particular build -- the 2026-09-26 Sort-Merge release.  Check them against
 whatever you actually downloaded rather than against this file.
 
-  SHA256   8169e5a8f05769ac5c59f83ed7ba48322d74843cccc632073e62aaa8d9e88da5
-  size     583680 bytes, FB80 when it lands on the guest
-  built    from cobc370 a211d1f with mvslovers/cc370 2c40eb3
+  SHA256   1fdcb21fe0402665e24b3a6b7515372dafcb882ac2669ce4a5b1ceb1dc8ee681
+  size     584960 bytes, FB80 when it lands on the guest
+  built    from cobc370 831b145 with mvslovers/cc370 335e7d0
            and mvslovers/libc370 f062522
-  tested   all 168 test programs compiled on the guest by this module,
+  tested   all 173 test programs compiled on the guest by this module,
            emitting assembler byte-identical to the host compiler's
 
 
@@ -99,7 +99,7 @@ Nothing here is a secret and the build is short.  You need mvslovers'
 cc370 toolchain and libc370 installed (both build host-native with make),
 and then, from a cobc370 checkout:
 
-    ASMDATE=09/26/26 ASMTIME=08.00 LDDATE=26269 LDTIME=080000 \
+    ASMDATE=09/26/26 ASMTIME=12.00 LDDATE=26269 LDTIME=120000 \
     cc370 -DMVS370 -O1 -std=gnu99 -I src \
           src/cobc370.c src/picture.c src/picture_scan.c \
           src/mvs370-millicode.c -Wl,--sparse-text \
