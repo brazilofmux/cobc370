@@ -1196,8 +1196,16 @@ the halves through a union, and the literal fold works in decimal digits
 with no 64-bit arithmetic at all; cc370's runtime has no 64-bit divide
 either, so none is used.
 
-Not done: single-pass multi-operand `INSPECT` (#32), `VALUE` in an `OCCURS`
-(#34), and the notes in #39. `OCCURS DEPENDING ON` in a file record is still
+`VALUE` in an entry with `OCCURS`, or under one, is refused: the 1974
+VALUE clause forbids it (COBOL-85 is where it became legal) and IKFCBL00
+refuses it too (IKF2149I), which was measured before deciding. The compiler
+had been laying the value into the first occurrence only, so a table that
+worked when storage happened to be zero would not elsewhere. `OCCURS` at
+level 01 or 77 is refused for the same reasons (IKF2043I). Four early
+tests, oracled against GnuCOBOL before IKFCBL00 was the oracle, set their
+tables in the Procedure Division now.
+
+Not done: single-pass multi-operand `INSPECT` (#32) and the notes in #39. `OCCURS DEPENDING ON` in a file record is still
 refused, so the variable-length `WRITE` in #38 cannot arise; the RDW code is
 right for it when it is allowed.
 

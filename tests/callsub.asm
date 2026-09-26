@@ -30,22 +30,40 @@ PRO001   L     11,PROCON           the constants region
          MVI   SPIEDONE,X'01'
 SPIEARMD DS    0H
 T0000    DS    0H
-* CALL 'FOO'
-         L     8,BL0000            base locator
-         USING WSC0000,8
+* MOVE ABCD -> T
          LA    6,0                 subscript-1
          MH    6,H0001             times element size
-         LA    6,D0000(6)          element address
-         LA    0,0(,6)             T
-         ST    0,PL000+0
-         OI    PL000+0,X'80'       high bit marks the last argument
-         LA    1,PL000             R1 -> parameter list
-         L     15,VC000
-         BALR  14,15               static call, resolved by the linkage
-         STH   15,D0001            the callee's return code -> RETURN-C
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         LA    6,D0001(6)          element address
+         MVC   0(4,6),S0001        literal move, space padded
 T0001    DS    0H
+* MOVE ABCD -> T
+         LA    6,1                 subscript-1
+         MH    6,H0001             times element size
+         LA    6,D0001(6)          element address
+         MVC   0(4,6),S0001        literal move, space padded
+T0002    DS    0H
+* MOVE ABCD -> T
+         LA    6,2                 subscript-1
+         MH    6,H0001             times element size
+         LA    6,D0001(6)          element address
+         MVC   0(4,6),S0001        literal move, space padded
+T0003    DS    0H
+* CALL 'FOO'
+         LA    6,0                 subscript-1
+         MH    6,H0001             times element size
+         LA    6,D0001(6)          element address
+         LA    0,0(,6)             T
+         ST    0,PL003+0
+         OI    PL003+0,X'80'       high bit marks the last argument
+         LA    1,PL003             R1 -> parameter list
+         L     15,VC003
+         BALR  14,15               static call, resolved by the linkage
+         STH   15,D0002            the callee's return code -> RETURN-C
+T0004    DS    0H
 * STOP RUN
-         LH    15,D0001            RETURN-CODE -> the step's condition
+         LH    15,D0002            RETURN-CODE -> the step's condition
          L     13,4(13)            restore caller's save area
          L     14,12(13)           caller's return address
          LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
@@ -68,11 +86,12 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 H0001    DC    H'4'                element sizes
+S0001    DC    CL4'ABCD'           nonnumeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 * CALL parameter lists and entry points
-PL000    DS    1F
-VC000    DC    V(FOO)
+PL003    DS    1F
+VC003    DC    V(FOO)
 SAVEAREA DS    18F
 * program-check exit: report the source line, then let it abend
 COBSPIE  DS    0H
@@ -125,7 +144,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'2'                statements in the table
+SPIENUM  DC    H'5'                statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -139,12 +158,16 @@ CB0000   DC    A(B0000)            a code block's base
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F
-         DC    A(T0000-COBBEG),AL2(7,0)
+         DC    A(T0000-COBBEG),AL2(8,0)
          DC    A(T0001-COBBEG),AL2(8,0)
+         DC    A(T0002-COBBEG),AL2(8,0)
+         DC    A(T0003-COBBEG),AL2(9,0)
+         DC    A(T0004-COBBEG),AL2(10,0)
          CSECT                     WORKING-STORAGE: private code, one p
 COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
-D0000    DC    3CL4'ABCD'          T PIC X(4) table
-D0001    DC    HL2'0'              RETURN-CODE PIC S9(4)v0 COMP
+D0000    DS    0CL12               TT (01 group)
+D0001    DC    3CL4' '             T PIC X(4) table
+D0002    DC    HL2'0'              RETURN-CODE PIC S9(4)v0 COMP
          END

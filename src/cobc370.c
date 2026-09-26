@@ -2863,6 +2863,8 @@ static void parse_data_division(void)
                 strcpy(pic, tok.text); next();
             } else if (is("OCCURS")) {
                 next();
+                if (level == 1 || level == 77)
+                    die("OCCURS is not allowed at level 01 or 77 (the OCCURS clause's syntax rules; IKFCBL00's IKF2043I) -- put the table under a group");
                 if (!is_numeric_literal(tok.text) || strchr(tok.text, '.'))
                     die("OCCURS needs a whole-number literal");
                 sy->occurs = atoi(tok.text);
@@ -3107,6 +3109,15 @@ static void parse_data_division(void)
         }
 
         {
+            /* COBOL-74's VALUE clause may not appear in an entry with OCCURS
+             * or in one subordinate to it (only COBOL-85 allows that), and
+             * IKFCBL00 refuses both (IKF2149I). This compiler once laid the
+             * value into the first occurrence only, so every other one held
+             * whatever the storage did -- a table that worked when storage
+             * happened to be zero (#34). Condition-names are the exception
+             * and never reach here. */
+            if (sy->has_value && (sy->occurs > 0 || sy->occ_parent >= 0))
+                die("VALUE is not allowed on an item with OCCURS, or on one under it (the VALUE clause's syntax rules; IKFCBL00's IKF2149I) -- set the table in the Procedure Division");
             PicInfo pi;
             if (analyse_picture(pic, &pi) < 0) die(pi.err);
             sy->digits = pi.digits; sy->scale = pi.scale;

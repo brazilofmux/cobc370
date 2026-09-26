@@ -31,17 +31,22 @@ PRO001   L     11,PROCON           the constants region
          MVI   SPIEDONE,X'01'
 SPIEARMD DS    0H
 T0000    DS    0H
+* MOVE ALL literal -> TAB
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         LA    1,D0000             ALL literal
+         MVC   0(1,1),S0001        the unit
+         MVC   1(3,1),0(1)         propagate across the item
+T0001    DS    0H
 * IF
          LA    6,0                 subscript-1
          MH    6,H0001             times element size
          LA    0,1                 subscript-1
          AR    6,0                 add this dimension
-         L     8,BL0000            base locator
-         USING WSC0000,8
          LA    6,D0002(6)          element address
          CLC   0(1,6),S0001        alphanumeric compare
          BNE   L0001
-T0001    DS    0H
+T0002    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0002
          LA    1,PARM0001
@@ -49,7 +54,7 @@ T0001    DS    0H
          BALR  14,15
          DROP  8
 L0001    DS    0H
-T0002    DS    0H
+T0003    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -137,7 +142,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'3'                statements in the table
+SPIENUM  DC    H'4'                statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -152,15 +157,16 @@ CB0000   DC    A(B0000)            a code block's base
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F
          DC    A(T0000-COBBEG),AL2(9,0)
-         DC    A(T0001-COBBEG),AL2(9,0)
+         DC    A(T0001-COBBEG),AL2(10,0)
          DC    A(T0002-COBBEG),AL2(10,0)
+         DC    A(T0003-COBBEG),AL2(11,0)
          CSECT                     WORKING-STORAGE: private code, one p
 COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DS    0CL4                TAB (01 group)
 D0001    DS    0CL2                ROW (05 group, OCCURS 2)
-D0002    DC    2CL1'A'             COL PIC X(1) table
+D0002    DC    2CL1' '             COL PIC X(1) table
          DS    XL2                 reserve the rest of the last table
 *---------------------------------------------------------------
 * COBRT -- our runtime. Nothing here is from SYS1.COBLIB.

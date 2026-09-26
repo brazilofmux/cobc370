@@ -22,7 +22,7 @@ What is normalized before the diff, and why it is honest to do so:
     as 0xAA, 0xB3, 0xD7. The bytes in the dataset are CP037; only the
     verification channel skews them.
 
-The five bad-* refusal tests stay home: their names exceed a member name,
+The bad-* refusal tests stay home: their names exceed a member name,
 and what they prove -- the refusal text -- is proven on the host.
 
 Assumes the TK5 rig this repository is developed against: tk5-run on PATH

@@ -31,21 +31,26 @@ PRO001   L     11,PROCON           the constants region
          MVI   SPIEDONE,X'01'
 SPIEARMD DS    0H
 T0000    DS    0H
+* MOVE ALL literal -> T
+         L     8,BL0000            base locator
+         USING WSC0000,8
+         LA    1,D0000             ALL literal
+         MVC   0(1,1),S0001        the unit
+         MVC   1(2,1),0(1)         propagate across the item
+T0001    DS    0H
 * MOVE 1 -> IX
          ZAP   PWK1(16),K0001+15(1)  literal
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),6,0          drop the digits past the picture
          SRP   DWK(8),58,0
          CVB   2,DWK               packed -> binary
-         L     8,BL0000            base locator
-         USING WSC0000,8
          ST    2,D0002
-T0001    DS    0H
+T0002    DS    0H
 * SUBTRACT 1 -> IX
          L     2,D0002
          SH    2,H0001             binary, same scale: in the register
          ST    2,D0002
-T0002    DS    0H
+T0003    DS    0H
 * SEARCH E
 L0004    DS    0H
          DROP  8
@@ -73,25 +78,25 @@ L0004    DS    0H
          B     L0004
          DROP  8
 L0001    DS    0H
-T0003    DS    0H
+T0004    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0002
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
-T0004    DS    0H
+T0005    DS    0H
          B     L0002
 L0003    DS    0H
-T0005    DS    0H
+T0006    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(3),S0003
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
-T0006    DS    0H
+T0007    DS    0H
          B     L0002
 L0002    DS    0H
-T0007    DS    0H
+T0008    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -101,8 +106,8 @@ T0007    DS    0H
          BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
-SL002    DC    F'0'                SEARCH ALL low bound
-SH002    DC    F'0'                high bound
+SL003    DC    F'0'                SEARCH ALL low bound
+SH003    DC    F'0'                high bound
 VDISP    DC    V(COBDISP)
 VTERM    DC    V(COBTERM)
 PARM0001 DC    A(DSPBUF)
@@ -188,7 +193,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'8'                statements in the table
+SPIENUM  DC    H'9'                statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -204,18 +209,19 @@ CB0000   DC    A(B0000)            a code block's base
 SPIELTB  DS    0F
          DC    A(T0000-COBBEG),AL2(11,0)
          DC    A(T0001-COBBEG),AL2(12,0)
-         DC    A(T0002-COBBEG),AL2(14,0)
-         DC    A(T0003-COBBEG),AL2(14,0)
+         DC    A(T0002-COBBEG),AL2(13,0)
+         DC    A(T0003-COBBEG),AL2(15,0)
          DC    A(T0004-COBBEG),AL2(15,0)
-         DC    A(T0005-COBBEG),AL2(15,0)
+         DC    A(T0005-COBBEG),AL2(16,0)
          DC    A(T0006-COBBEG),AL2(16,0)
-         DC    A(T0007-COBBEG),AL2(16,0)
+         DC    A(T0007-COBBEG),AL2(17,0)
+         DC    A(T0008-COBBEG),AL2(17,0)
          CSECT                     WORKING-STORAGE: private code, one p
 COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
 * WORKING-STORAGE
 D0000    DS    0CL3                T (01 group)
-D0001    DC    3CL1'A'             E PIC X(1) table
+D0001    DC    3CL1' '             E PIC X(1) table
          DS    XL5                 reserve the rest of a table
 D0002    DC    FL4'0'              IX PIC S9(9)v0 COMP
 *---------------------------------------------------------------

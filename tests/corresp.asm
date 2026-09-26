@@ -36,29 +36,57 @@ P0000    DS    0H
 B0001    EQU   *
          USING B0001,12
 T0000    DS    0H
-* MOVE NAME -> NAME
+* MOVE 7 -> TE
+         ZAP   PWK1(16),K0001+15(1)  literal
+         LA    6,0                 subscript-1
          L     8,BL0000            base locator
          USING WSC0000,8
+         LA    6,D0011(6)          element address
+         UNPK  0(1,6),PWK1(16)     packed -> zoned
+         OI    0(6),X'F0'          unsigned: force an F zone
+T0001    DS    0H
+* MOVE 7 -> TE
+         ZAP   PWK1(16),K0001+15(1)  literal
+         LA    6,1                 subscript-1
+         LA    6,D0011(6)          element address
+         UNPK  0(1,6),PWK1(16)     packed -> zoned
+         OI    0(6),X'F0'          unsigned: force an F zone
+T0002    DS    0H
+* MOVE 1 -> TE
+         ZAP   PWK1(16),K0002+15(1)  literal
+         LA    6,0                 subscript-1
+         LA    6,D0024(6)          element address
+         UNPK  0(1,6),PWK1(16)     packed -> zoned
+         OI    0(6),X'F0'          unsigned: force an F zone
+T0003    DS    0H
+* MOVE 1 -> TE
+         ZAP   PWK1(16),K0002+15(1)  literal
+         LA    6,1                 subscript-1
+         LA    6,D0024(6)          element address
+         UNPK  0(1,6),PWK1(16)     packed -> zoned
+         OI    0(6),X'F0'          unsigned: force an F zone
+T0004    DS    0H
+* MOVE NAME -> NAME
          MVC   D0014(6),D0001      alphanumeric move
          MVI   D0014+6,C' '        space fill the remainder
          MVC   D0014+7(1),D0014+6
-T0001    DS    0H
+T0005    DS    0H
 * MOVE AGE -> AGE
          MVC   D0016(1),S0001      leading zeros
          MVC   D0016+1(2),D0003    then the digits
-T0002    DS    0H
+T0006    DS    0H
 * MOVE CITY -> CITY
          MVC   D0019(5),D0005      alphanumeric move
-T0003    DS    0H
+T0007    DS    0H
 * MOVE ZIP -> ZIP
          MVC   D0018(5),D0006      zoned to zoned, same picture
-T0004    DS    0H
+T0008    DS    0H
 * MOVE AMT -> AMT
          MVC   D0021(5),D0008      zoned to zoned, same picture
-T0005    DS    0H
+T0009    DS    0H
 * MOVE KIND -> KIND
          MVC   D0025(1),D0012      alphanumeric move
-T0006    DS    0H
+T0010    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(8),D0014+0
@@ -68,7 +96,7 @@ T0006    DS    0H
          LA    1,PARM0001
          L     15,VDISP
          BALR  14,15
-T0007    DS    0H
+T0011    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(5),D0019+0
@@ -80,21 +108,21 @@ T0007    DS    0H
          LA    1,PARM0002
          L     15,VDISP
          BALR  14,15
-T0008    DS    0H
+T0012    DS    0H
 * MOVE AMT -> E-AMT
          PACK  PWK1(16),D0021(5)   zoned -> packed
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          MVC   D0027(6),EDWK+1     the edited result
-T0009    DS    0H
+T0013    DS    0H
 * MOVE TE -> T1
          LA    7,0                 subscript-1
          LA    7,D0024(7)          element address
          PACK  PWK1(16),0(1,7)     zoned -> packed
          UNPK  D0029(1),PWK1(16)   packed -> zoned
          OI    D0029+0,X'F0'       unsigned: force an F zone
-T0010    DS    0H
+T0014    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(6),D0027+0
@@ -104,7 +132,7 @@ T0010    DS    0H
          LA    1,PARM0003
          L     15,VDISP
          BALR  14,15
-T0011    DS    0H
+T0015    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(1),S0002
          MVC   DSPBUF+1(1),D0029+0
@@ -114,42 +142,42 @@ T0011    DS    0H
          LA    1,PARM0004
          L     15,VDISP
          BALR  14,15
-T0012    DS    0H
+T0016    DS    0H
 * COMPUTE AGE = ...
          PACK  WK0+13(3),D0016(3)  zoned -> packed
          PACK  WK1+14(2),D0003(2)  zoned -> packed
          AP    WK0+13(3),WK1+14(2)
          UNPK  D0016(3),WK0+13(3)  packed -> zoned
          OI    D0016+2,X'F0'       unsigned: force an F zone
-T0013    DS    0H
+T0017    DS    0H
 * COMPUTE ZIP = ...
          PACK  WK0+12(4),D0018(5)  zoned -> packed
          PACK  WK1+13(3),D0006(5)  zoned -> packed
          AP    WK0+12(4),WK1+13(3)
          UNPK  D0018(5),WK0+12(4)  packed -> zoned
          OI    D0018+4,X'F0'       unsigned: force an F zone
-T0014    DS    0H
+T0018    DS    0H
 * COMPUTE AMT = ...
          PACK  WK0+12(4),D0021(5)  zoned -> packed
          PACK  WK1+13(3),D0008(5)  zoned -> packed
          AP    WK0+12(4),WK1+13(3)
          UNPK  D0021(5),WK0+12(4)  packed -> zoned
          OI    D0021+4,X'F0'       unsigned: force an F zone
-T0015    DS    0H
+T0019    DS    0H
 * MOVE AMT -> E-AMT
          PACK  PWK1(16),D0021(5)   zoned -> packed
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          MVC   D0027(6),EDWK+1     the edited result
-T0016    DS    0H
+T0020    DS    0H
 * MOVE AGE -> E-AGE
          PACK  PWK1(16),D0016(3)   zoned -> packed
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0002       load the ED pattern
          ED    EDWK(4),EDSRC
          MVC   D0028(3),EDWK+1     the edited result
-T0017    DS    0H
+T0021    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0005
          MVC   DSPBUF+5(6),D0027+0
@@ -161,42 +189,42 @@ T0017    DS    0H
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
-T0018    DS    0H
+T0022    DS    0H
 * COMPUTE AGE = ...
          PACK  WK0+13(3),D0016(3)  zoned -> packed
          PACK  WK1+14(2),D0003(2)  zoned -> packed
          SP    WK0+13(3),WK1+14(2)
          UNPK  D0016(3),WK0+13(3)  packed -> zoned
          OI    D0016+2,X'F0'       unsigned: force an F zone
-T0019    DS    0H
+T0023    DS    0H
 * COMPUTE ZIP = ...
          PACK  WK0+12(4),D0018(5)  zoned -> packed
          PACK  WK1+13(3),D0006(5)  zoned -> packed
          SP    WK0+12(4),WK1+13(3)
          UNPK  D0018(5),WK0+12(4)  packed -> zoned
          OI    D0018+4,X'F0'       unsigned: force an F zone
-T0020    DS    0H
+T0024    DS    0H
 * COMPUTE AMT = ...
          PACK  WK0+12(4),D0021(5)  zoned -> packed
          PACK  WK1+13(3),D0008(5)  zoned -> packed
          SP    WK0+12(4),WK1+13(3)
          UNPK  D0021(5),WK0+12(4)  packed -> zoned
          OI    D0021+4,X'F0'       unsigned: force an F zone
-T0021    DS    0H
+T0025    DS    0H
 * MOVE AMT -> E-AMT
          PACK  PWK1(16),D0021(5)   zoned -> packed
          ZAP   EDSRC(3),PWK1(16)   source, sized to the selector count
          MVC   EDWK(7),M0001       load the ED pattern
          ED    EDWK(7),EDSRC
          MVC   D0027(6),EDWK+1     the edited result
-T0022    DS    0H
+T0026    DS    0H
 * MOVE AGE -> E-AGE
          PACK  PWK1(16),D0016(3)   zoned -> packed
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0002       load the ED pattern
          ED    EDWK(4),EDSRC
          MVC   D0028(3),EDWK+1     the edited result
-T0023    DS    0H
+T0027    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(5),S0006
          MVC   DSPBUF+5(6),D0027+0
@@ -208,10 +236,10 @@ T0023    DS    0H
          LA    1,PARM0006
          L     15,VDISP
          BALR  14,15
-T0024    DS    0H
+T0028    DS    0H
 * MOVE 99 -> AGE
          MVC   D0003(2),S0007      numeric literal as zoned digits
-T0025    DS    0H
+T0029    DS    0H
 * COMPUTE AGE ROUNDED = ... (ON SIZE ERROR)
          MVI   SZFLG,X'00'         no size error yet
          PACK  WK0+13(3),D0016(3)  zoned -> packed
@@ -220,7 +248,7 @@ T0025    DS    0H
          ZAP   PWK1(16),WK0+13(3)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0001+13(3)  against 10 ** digits
+         CP    WK1(16),K0003+13(3)  against 10 ** digits
          BL    L0002               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0003
@@ -232,7 +260,7 @@ L0002    DS    0H
          OI    D0016+2,X'F0'       unsigned: force an F zone
 L0003    DS    0H
          DROP  8
-T0026    DS    0H
+T0030    DS    0H
 * COMPUTE ZIP ROUNDED = ... (ON SIZE ERROR)
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -242,7 +270,7 @@ T0026    DS    0H
          ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0002+12(4)  against 10 ** digits
+         CP    WK1(16),K0004+12(4)  against 10 ** digits
          BL    L0004               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0005
@@ -254,7 +282,7 @@ L0004    DS    0H
          OI    D0018+4,X'F0'       unsigned: force an F zone
 L0005    DS    0H
          DROP  8
-T0027    DS    0H
+T0031    DS    0H
 * COMPUTE AMT ROUNDED = ... (ON SIZE ERROR)
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -264,7 +292,7 @@ T0027    DS    0H
          ZAP   PWK1(16),WK0+12(4)
          ZAP   WK1(16),PWK1(16)
          OI    WK1+15,X'0F'        magnitude
-         CP    WK1(16),K0002+12(4)  against 10 ** digits
+         CP    WK1(16),K0004+12(4)  against 10 ** digits
          BL    L0006               fits
          MVI   SZFLG,X'01'         size error: the item is left alone
          B     L0007
@@ -278,14 +306,14 @@ L0007    DS    0H
          DROP  8
          CLI   SZFLG,X'00'         any size error in the series?
          BE    L0001               none: past the imperative statements
-T0028    DS    0H
+T0032    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(4),S0008
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 L0001    DS    0H
-T0029    DS    0H
+T0033    DS    0H
 * MOVE AGE -> E-AGE
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -294,7 +322,7 @@ T0029    DS    0H
          MVC   EDWK(4),M0002       load the ED pattern
          ED    EDWK(4),EDSRC
          MVC   D0028(3),EDWK+1     the edited result
-T0030    DS    0H
+T0034    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(7),S0009
          MVC   DSPBUF+7(3),D0028+0
@@ -302,7 +330,7 @@ T0030    DS    0H
          LA    1,PARM0008
          L     15,VDISP
          BALR  14,15
-T0031    DS    0H
+T0035    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -354,9 +382,13 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    EQU   *-13                numeric constants, as long as used
+K0001    EQU   *-15                numeric constants, as long as used
+         DC    PL1'7'
+K0002    EQU   *-15
+         DC    PL1'1'
+K0003    EQU   *-13
          DC    PL3'1000'
-K0002    EQU   *-12
+K0004    EQU   *-12
          DC    PL4'100000'
 M0001    DC    XL7'402021204B2020'  ED patterns
 M0002    DC    XL4'40202120'
@@ -424,7 +456,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'32'               statements in the table
+SPIENUM  DC    H'36'               statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -441,36 +473,40 @@ CB0001   DC    A(B0001)            a code block's base
 SPIELTB  DS    0F
          DC    A(T0000-COBBEG),AL2(42,0)
          DC    A(T0001-COBBEG),AL2(42,0)
-         DC    A(T0002-COBBEG),AL2(42,0)
-         DC    A(T0003-COBBEG),AL2(42,0)
-         DC    A(T0004-COBBEG),AL2(42,0)
-         DC    A(T0005-COBBEG),AL2(42,0)
-         DC    A(T0006-COBBEG),AL2(43,0)
+         DC    A(T0002-COBBEG),AL2(43,0)
+         DC    A(T0003-COBBEG),AL2(43,0)
+         DC    A(T0004-COBBEG),AL2(44,0)
+         DC    A(T0005-COBBEG),AL2(44,0)
+         DC    A(T0006-COBBEG),AL2(44,0)
          DC    A(T0007-COBBEG),AL2(44,0)
-         DC    A(T0008-COBBEG),AL2(46,0)
-         DC    A(T0009-COBBEG),AL2(47,0)
-         DC    A(T0010-COBBEG),AL2(48,0)
-         DC    A(T0011-COBBEG),AL2(49,0)
-         DC    A(T0012-COBBEG),AL2(50,0)
-         DC    A(T0013-COBBEG),AL2(50,0)
+         DC    A(T0008-COBBEG),AL2(44,0)
+         DC    A(T0009-COBBEG),AL2(44,0)
+         DC    A(T0010-COBBEG),AL2(45,0)
+         DC    A(T0011-COBBEG),AL2(46,0)
+         DC    A(T0012-COBBEG),AL2(48,0)
+         DC    A(T0013-COBBEG),AL2(49,0)
          DC    A(T0014-COBBEG),AL2(50,0)
          DC    A(T0015-COBBEG),AL2(51,0)
          DC    A(T0016-COBBEG),AL2(52,0)
-         DC    A(T0017-COBBEG),AL2(53,0)
-         DC    A(T0018-COBBEG),AL2(54,0)
-         DC    A(T0019-COBBEG),AL2(54,0)
+         DC    A(T0017-COBBEG),AL2(52,0)
+         DC    A(T0018-COBBEG),AL2(52,0)
+         DC    A(T0019-COBBEG),AL2(53,0)
          DC    A(T0020-COBBEG),AL2(54,0)
          DC    A(T0021-COBBEG),AL2(55,0)
          DC    A(T0022-COBBEG),AL2(56,0)
-         DC    A(T0023-COBBEG),AL2(57,0)
-         DC    A(T0024-COBBEG),AL2(58,0)
-         DC    A(T0025-COBBEG),AL2(60,0)
-         DC    A(T0026-COBBEG),AL2(60,0)
-         DC    A(T0027-COBBEG),AL2(60,0)
+         DC    A(T0023-COBBEG),AL2(56,0)
+         DC    A(T0024-COBBEG),AL2(56,0)
+         DC    A(T0025-COBBEG),AL2(57,0)
+         DC    A(T0026-COBBEG),AL2(58,0)
+         DC    A(T0027-COBBEG),AL2(59,0)
          DC    A(T0028-COBBEG),AL2(60,0)
-         DC    A(T0029-COBBEG),AL2(61,0)
+         DC    A(T0029-COBBEG),AL2(62,0)
          DC    A(T0030-COBBEG),AL2(62,0)
-         DC    A(T0031-COBBEG),AL2(63,0)
+         DC    A(T0031-COBBEG),AL2(62,0)
+         DC    A(T0032-COBBEG),AL2(62,0)
+         DC    A(T0033-COBBEG),AL2(63,0)
+         DC    A(T0034-COBBEG),AL2(64,0)
+         DC    A(T0035-COBBEG),AL2(65,0)
          CSECT                     WORKING-STORAGE: private code, one p
 COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins
@@ -486,7 +522,7 @@ D0007    DC    CL3'XYZ'            EXTRA PIC X(3)
 D0008    DC    CL5'01234'          AMT PIC 9(5)v2 DISP
 D0009    DC    CL3'SRC'            ONLY-SRC PIC X(3)
 D0010    DS    0CL2                TBL (05 group)
-D0011    DC    2CL1'7'             TE PIC 9(1)v0 DISP table
+D0011    DC    2CL1'0'             TE PIC 9(1)v0 DISP table
 D0012    DC    CL1'K'              KIND PIC X(1)
          DS    XL6                 reserve the rest of a table
 D0013    DS    0CL37               DST-REC (01 group)
@@ -500,7 +536,7 @@ D0020    DC    CL3'OTH'            OTHR PIC X(3)
 D0021    DC    CL5'10000'          AMT PIC 9(5)v2 DISP
 D0022    DC    CL3'DST'            ONLY-DST PIC X(3)
 D0023    DS    0CL2                TBL (05 group)
-D0024    DC    2CL1'1'             TE PIC 9(1)v0 DISP table
+D0024    DC    2CL1'0'             TE PIC 9(1)v0 DISP table
 D0025    DC    CL1'D'              KIND PIC X(1)
 D0026    EQU   COBWS+76            KIND-R REDEFINES
          DS    XL3                 reserve the rest of a table
