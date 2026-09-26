@@ -29,7 +29,7 @@ element against the standard's own lists:
 | Indexed I-O | **Level 2, complete** (alternate keys read under `OPEN INPUT`; see below) |
 | Segmentation | Level 1 |
 | Report Writer | **Level 1, complete** (its only level) |
-| Sort-Merge | `SORT`, `RELEASE`, `RETURN` through the system sort, as IKFCBL00 does it; not `MERGE` |
+| Sort-Merge | `SORT`, `RELEASE`, `RETURN` through the system sort, as IKFCBL00 does it; `MERGE` by the compiler itself, since the system sort merges only from JCL; not `COLLATING SEQUENCE` |
 | Debug, Communication | not implemented -- each has a null level, which conforms |
 
 `docs/COBOL74-CONFORMANCE.md` is the element-by-element map;
@@ -69,8 +69,8 @@ What is deliberately not there, each refused with a message that says so:
   INPUT` -- two opens, or two programs. The roadmap records the probes.
 - `COMP` past nine digits -- doubleword binary on a machine with no 64-bit
   arithmetic. Everything else computes in packed decimal to 18 digits.
-- `MERGE` (IKFCBL00 has none to check it against); Debug, Communication; and
-  every COBOL-85 spelling.
+- `COLLATING SEQUENCE` on SORT and MERGE; Debug, Communication; and every
+  COBOL-85 spelling.
 
 ## When a program checks
 

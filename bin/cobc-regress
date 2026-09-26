@@ -17,7 +17,7 @@ mkdir -p "$WORK"
 
 ( cd "$CC" && make cobc370 >/dev/null ) || die "cobc370 will not build"
 
-ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptraw rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 inspect3 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam ksdsboth ksdsrnd2 copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec bigpara cobxref subsmul perfnest condlit cpyrepx remaindr compunsg lvl88grp editfix signmove signval rptdate powfix opennodd linreopn fallend float1 float2 float3 cobcal74 parmmain iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
+ALL="bigidx bigtab searchz copyrep2 mp16 cdcopy bwzdisp dline dup88 gusage movelit nextsent pgroup sub2dif ucomp vrec aixnatl aixnat aixnatu aixnatr rptuse rptcode rptsum rptsumm rptraw rptctl rptfoot rptnext rptpage exprsize compadd pgmchk godep currsign figlit condgrp arithgrp strings corresp inspect2 inspect3 perfaft renames accdisp search2 odo seqlvl2 datetest bigdig grpredef litcont sections fdrecs advance sequpd declar setindex subs2d num2aln blkchar signclau justif wide18 pscale alnedit classcnd addser inspect alterst accept upsisw litmove ksdsnatl ksdsnat ksdsnats ksdsnatx ksdsnatu ksdsnatr esdsnatl esdsnatr esdsnatu esdsnata rrdsnatl rrdsnatr rrdsnats rrdsnatd rrdsdisp usevsam ksdsboth ksdsrnd2 copytest copyent dispcomp examine godep10 sortug sortproc sortret sortsize samerec merge2 merge3 mergemt srtmrg bigpara cobxref subsmul perfnest condlit cpyrepx remaindr compunsg lvl88grp editfix signmove signval rptdate powfix opennodd linreopn fallend float1 float2 float3 cobcal74 parmmain iddiv listctl retcode isamseq isamrnd figmove figval redef commatok qualify giving signcond intofrom srchall misc2 fltsign perftest rpttest edtest occmin stoprun hello arith compute grpperf iftest bigws filetest occtest"
 TESTS=${*:-$ALL}
 
 # The VSAM tests share a cluster and depend on the one that loads it: asking
@@ -143,7 +143,7 @@ for t in $TESTS; do
         case "$t" in rrdsnatl|rrdsnatr|rrdsnatd|rrdsnats|rrdsdisp|usevsam)
             printf '//GO.RRDSF01 DD  DSN=VSTEST.RRDS.CLUSTER,DISP=OLD\n' ;;
         esac
-        case "$t" in sortug|sortproc|sortret|sortsize)
+        case "$t" in sortug|sortproc|sortret|sortsize|srtmrg)
             # The system sort, LINKed with its statements in the parameter
             # list: its own modules, and work space it may or may not use.
             printf '//GO.SORTLIB  DD  DSN=SYS1.SORTLIB,DISP=SHR\n'
@@ -169,6 +169,40 @@ for t in $TESTS; do
             printf '//GO.SORTWK01 DD  UNIT=SYSDA,SPACE=(CYL,(5,1))\n'
             printf '//GO.SORTWK02 DD  UNIT=SYSDA,SPACE=(CYL,(5,1))\n'
             printf '//GO.SORTWK03 DD  UNIT=SYSDA,SPACE=(CYL,(5,1))\n'
+        fi
+        if [ "$t" = merge2 ]; then
+            # MERGE: the two USING files instream, the GIVING file scratch.
+            printf '//GO.OUTFILE  DD  UNIT=SYSDA,SPACE=(TRK,(5,5)),DISP=(NEW,DELETE),\n'
+            printf '//            DCB=(RECFM=FB,LRECL=80,BLKSIZE=800)\n'
+            printf '//GO.INFILE1  DD  *\n'
+            cat "$TDIR/merge2a.data"
+            printf '/*\n'
+            printf '//GO.INFILE2  DD  *\n'
+            cat "$TDIR/merge2b.data"
+            printf '/*\n'
+        fi
+        if [ "$t" = merge3 ] || [ "$t" = mergemt ]; then
+            # The program writes its own USING files, then merges them.
+            for n in 1 2 3; do
+                printf '//GO.MRGIN%s   DD  UNIT=SYSDA,SPACE=(TRK,(1,1)),DISP=(NEW,DELETE),\n' $n
+                printf '//            DCB=(RECFM=FB,LRECL=%s,BLKSIZE=%s)\n' \
+                    $([ "$t" = merge3 ] && echo 20 || echo 10) $([ "$t" = merge3 ] && echo 200 || echo 100)
+            done
+            if [ "$t" = mergemt ]; then
+                printf '//GO.OUTFILE  DD  UNIT=SYSDA,SPACE=(TRK,(1,1)),DISP=(NEW,DELETE),\n'
+                printf '//            DCB=(RECFM=FB,LRECL=10,BLKSIZE=100)\n'
+            fi
+        fi
+        if [ "$t" = srtmrg ]; then
+            # SORT USING/GIVING, then MERGE of that with a second file.
+            printf '//GO.W1FILE   DD  UNIT=SYSDA,SPACE=(TRK,(5,5)),DISP=(NEW,DELETE),\n'
+            printf '//            DCB=(RECFM=FB,LRECL=80,BLKSIZE=800)\n'
+            printf '//GO.INFILE   DD  *\n'
+            cat "$TDIR/srtmrg.data"
+            printf '/*\n'
+            printf '//GO.INFILE2  DD  *\n'
+            cat "$TDIR/srtmrg2.data"
+            printf '/*\n'
         fi
         if [ "$t" = sortug ]; then
             printf '//GO.OUTFILE  DD  UNIT=SYSDA,SPACE=(TRK,(5,5)),DISP=(NEW,DELETE),\n'
@@ -355,9 +389,11 @@ import sys
 import re
 # The program-check message carries the interrupt offset in hex. That is the
 # one thing in any oracle that legitimately moves whenever code generation
-# changes, so it is masked on both sides rather than frozen.
+# changes, so it is masked on both sides rather than frozen. The sort's
+# IER000I banner carries the time of day, masked for the same reason.
 def norm(l):
-    return re.sub(r'OFFSET [0-9A-F]{6}', 'OFFSET ......', l.rstrip())
+    l = re.sub(r'OFFSET [0-9A-F]{6}', 'OFFSET ......', l.rstrip())
+    return re.sub(r'(IER000I .*) - \d\d:\d\d:\d\d on .*', r'\1 - <time>', l)
 exp = [norm(l) for l in open(sys.argv[1], errors="replace").read().splitlines() if l.strip()]
 # An empty oracle matches everything -- any(got[i:i+0] == []) is true at every
 # offset -- so a truncated or half-written .expected would turn into a silent

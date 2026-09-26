@@ -50,8 +50,8 @@ Writer Level 2" to aspire to. The whole module is `1 RPW 0,1` or nothing.
 The short version, as of 2026-08-29: **Level 2 of the Nucleus, Table
 Handling, Sequential I-O, Relative I-O, Inter-Program Communication and
 Library and Indexed I-O; Segmentation at Level 1; the Report Writer at its
-one level, complete since 2026-08-30; `SORT`, `RELEASE` and `RETURN` from
-Sort-Merge since 2026-09-25; and the null level of Debug and Communication.** Each module's
+one level, complete since 2026-08-30; Sort-Merge since 2026-09-25, its `MERGE`
+since 2026-09-26; and the null level of Debug and Communication.** Each module's
 section below says what is there and what is not, and the dates.
 
 When this map was first drawn the compiler did not sit at a level at all. It
@@ -304,7 +304,7 @@ IKFCBL00 does on MVS 3.8j (checked there, with `LIB`); `tests/copyent`
 records its output. A member that opens with clauses rather than a level
 number is inserted as plain text, as before.
 
-### Sort-Merge — SORT, RELEASE and RETURN
+### Sort-Merge — SORT, MERGE, RELEASE and RETURN
 
 Added on 2026-09-25, because COBXREF sorts. `SD`; `SORT file ON ASCENDING/
 DESCENDING KEY ...` with `INPUT PROCEDURE` or `USING` and `OUTPUT PROCEDURE`
@@ -338,8 +338,43 @@ refuses records too short for its work files (`IER059A`, reason 01, for a
 14-byte record); that is the sort's limit, and a program meets it the same
 way under either compiler.
 
-Not implemented: `MERGE`, which IKFCBL00 does not have -- there is nothing
-on this system to check it against -- and `COLLATING SEQUENCE`. A key with
+**`MERGE`, added 2026-09-26, is the compiler's own.** IKFCBL00 has no MERGE
+(`IKF3001I-E MERGE NOT DEFINED`), and the system sort on MVS 3.8 merges only
+when JCL starts it: its guide says "a merge operation can only be initiated
+by control statements in the Operating System input stream", and there is no
+E32 exit through which a program could hand it the input. So a program
+cannot LINK to it for a merge the way SORT does, and the choice was to merge
+in the program or not at all. The compiler writes the merge: `MERGE sd ON
+ASCENDING/DESCENDING KEY ... USING f1 f2 ... [f16]` with `OUTPUT PROCEDURE`
+or `GIVING`. Each USING file is opened and read by code the compiler
+writes, as `SORT ... USING` already is; a compare routine for the statement
+takes the current records of the files not yet at end and picks the one
+that comes first by the keys, with the same formats the sort is given --
+characters compared as they are (`CLC`), DISPLAY numerics packed and
+compared (`PACK`, `CP`), COMP-3 as packed, COMP as signed binary -- and when
+two are equal on every key it keeps the earlier file's, which is the 1974
+standard's rule for MERGE (records with equal keys come out in the order of
+the files in USING). The winner is moved into the SD's record and its file
+is read again. `RETURN` in the output procedure calls that step instead of
+yielding to a sort, through a cell that says which MERGE is running (a
+`SORT` clears it while it runs, so the two nest either way); `GIVING` is
+the loop the compiler writes for `SORT ... GIVING`. No SORTLIB, no SORTWK,
+no sort at all, which is right for a merge. `SORT-RETURN` is zero after it.
+
+There is no second compiler to record the expected output from, so the
+four tests check the standard's rules directly: `merge2` (two files, a
+DISPLAY key descending and a character key ascending, equal keys across
+and within files), `merge3` (three files the program writes itself, COMP-3
+ascending, COMP descending and signed DISPLAY ascending with negative
+values in each, an output procedure with `RETURN INTO`, and the MERGE run
+twice), `mergemt` (one file empty, then every file empty, when the first
+`RETURN` takes `AT END`), and `srtmrg` (a SORT, a MERGE of its output with
+another file, and a SORT again through the same output procedure). Refused
+by name: `INPUT PROCEDURE` on a MERGE, fewer than two USING files, a key
+that lies past the end of a USING file's record, a key of more than 16
+DISPLAY digits, and `RELEASE` in a MERGE's output procedure.
+
+Not implemented: `COLLATING SEQUENCE` on either statement. A key with
 `SIGN LEADING` or `SEPARATE` is refused by name.
 
 ### Null — nothing implemented

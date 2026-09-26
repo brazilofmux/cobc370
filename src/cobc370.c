@@ -1044,7 +1044,7 @@ enum { ST_DISPLAY_LIT, ST_DISPLAY_ID, ST_MOVE, ST_ADD, ST_SUB, ST_COMPUTE,
        ST_OPEN, ST_READ, ST_WRITE, ST_CLOSE, ST_GOTO, ST_GODEP, ST_STRING, ST_UNSTRING, ST_CANCEL, ST_EXITPGM,
        ST_INITIATE, ST_GENERATE, ST_TERMINATE, ST_SUPPRESS, ST_CALL, ST_SEARCH,
        ST_REWRITE, ST_DELETE, ST_START,
-       ST_SORT, ST_RELEASE, ST_RETURN, ST_SRTEND };
+       ST_SORT, ST_RELEASE, ST_RETURN, ST_SRTEND, ST_MERGE };
 
 /* DISPLAY operands, CALL arguments, GO TO DEPENDING names and SORT keys.
  * Most statements have none, so they live in a side table the statement
@@ -1426,6 +1426,24 @@ static void make_tod(int *cursor);
 static int sortret_sym = -1, sortsize_sym = -1;
 static void make_sortregs(int *cursor);
 static int use_sort;
+
+/* MERGE. The system sort on MVS 3.8 merges only when JCL starts it -- "a
+ * merge operation can only be initiated by control statements in the
+ * Operating System input stream" -- so a program cannot LINK to it for one.
+ * The compiler does the merge itself: the USING files are opened and read
+ * by code it writes, a compare routine picks the lowest current record by
+ * the keys, with ties to the file named first (the 1974 standard's rule),
+ * the winner goes into the SD's record and that file is read again. RETURN
+ * in the output procedure calls that step instead of yielding to a sort;
+ * GIVING is the same loop the compiler writes for SORT. */
+#define MAXMERGE 16
+#define MAXMRGIN 16
+typedef struct {
+    int sd, n, f[MAXMRGIN], lab_rd[MAXMRGIN], lab_step, sti;
+    const char *osect, *othru;      /* OUTPUT PROCEDURE, for the RELEASE check */
+} Merge;
+static Merge merges[MAXMERGE];
+static int nmerge, use_merge;
 
 static int need_sym(const char *n)
 {
@@ -4023,7 +4041,7 @@ static int starts_statement(void)
         "READ", "WRITE", "OPEN", "CLOSE", "INITIATE", "GENERATE",
         "TERMINATE", "SET", "ACCEPT", "NEXT", "WHEN", "SEARCH", "CALL",
         "REWRITE", "DELETE", "START", "ENTER", "ALTER", "INSPECT", "EXAMINE",
-        "SORT", "RELEASE", "RETURN",
+        "SORT", "RELEASE", "RETURN", "MERGE",
         "STRING", "UNSTRING", "CANCEL", "SUPPRESS", 0
     };
     if (tok.literal) return 0;             /* a quoted literal is an operand */
@@ -4546,6 +4564,46 @@ static int record_of(int k)
     return k;
 }
 
+/* The KEY phrases of SORT and MERGE, onto the statement's operand list:
+ * the item, and litlen 1 for DESCENDING. */
+static void parse_sort_keys(int sd, int sti, const char *verb)
+{
+    char m[128];
+    while (is("ON") || is("ASCENDING") || is("DESCENDING")) {
+        if (is("ON")) next();
+        int desc = is("DESCENDING");
+        if (!desc && !is("ASCENDING")) {
+            snprintf(m, sizeof m, "%s wants ASCENDING or DESCENDING KEY", verb); die(m);
+        }
+        next();
+        if (is("KEY")) next();
+        while (!tok.eof && !is(".") && !is("ON") && !is("ASCENDING") && !is("DESCENDING")
+               && !is("INPUT") && !is("USING") && !is("OUTPUT") && !is("GIVING")
+               && !is("COLLATING") && !is("WITH") && !is("DUPLICATES")) {
+            int k = consume_sym();
+            const Sym *ks = &syms[k];
+            if (ks->fd_file != sd && syms[record_of(k)].fd_file != sd) {
+                snprintf(m, sizeof m, "a %s key must be an item in the sort file's record", verb); die(m);
+            }
+            if (ks->occ_depth) { snprintf(m, sizeof m, "a %s key may not be in a table -- it has one position", verb); die(m); }
+            if (ks->is_88) { snprintf(m, sizeof m, "a %s key is a data item, not a condition-name", verb); die(m); }
+            if (ks->is_index) { snprintf(m, sizeof m, "a %s key may not be an index item", verb); die(m); }
+            if (IS_FLOAT(ks)) { snprintf(m, sizeof m, "a %s key may not be COMP-1 or COMP-2", verb); die(m); }
+            if (ks->usage == U_DISPLAY && !ks->is_alpha && !ks->is_group && !ks->edited
+                && (ks->sgn_lead || ks->sgn_sep)) {
+                snprintf(m, sizeof m, "a %s key with SIGN LEADING or SEPARATE is not implemented yet", verb); die(m);
+            }
+            Stmt *s2 = &stmts[sti];
+            dop_add(s2);
+            s2->dop[s2->ndop].sym = k;
+            s2->dop[s2->ndop].litlen = desc;
+            s2->dop[s2->ndop].lit = "";
+            s2->ndop++;
+        }
+    }
+    if (!stmts[sti].ndop) { snprintf(m, sizeof m, "%s needs at least one KEY", verb); die(m); }
+}
+
 static void parse_sort(void)
 {
     next();
@@ -4557,34 +4615,7 @@ static void parse_sort(void)
     Stmt *st = new_stmt(ST_SORT);
     st->dst = sd;
     int sti = (int)(st - stmts);
-    while (is("ON") || is("ASCENDING") || is("DESCENDING")) {
-        if (is("ON")) next();
-        int desc = is("DESCENDING");
-        if (!desc && !is("ASCENDING")) die("SORT wants ASCENDING or DESCENDING KEY");
-        next();
-        if (is("KEY")) next();
-        while (!tok.eof && !is(".") && !is("ON") && !is("ASCENDING") && !is("DESCENDING")
-               && !is("INPUT") && !is("USING") && !is("OUTPUT") && !is("GIVING")
-               && !is("COLLATING") && !is("WITH") && !is("DUPLICATES")) {
-            int k = consume_sym();
-            const Sym *ks = &syms[k];
-            if (ks->fd_file != sd && syms[record_of(k)].fd_file != sd)
-                die("a SORT key must be an item in the sort file's record");
-            if (ks->occ_depth) die("a SORT key may not be in a table -- it has one position");
-            if (ks->is_88) die("a SORT key is a data item, not a condition-name");
-            if (ks->is_index) die("a SORT key may not be an index item");
-            if (ks->usage == U_DISPLAY && !ks->is_alpha && !ks->is_group && !ks->edited
-                && (ks->sgn_lead || ks->sgn_sep))
-                die("a SORT key with SIGN LEADING or SEPARATE is not implemented yet");
-            Stmt *s2 = &stmts[sti];
-            dop_add(s2);
-            s2->dop[s2->ndop].sym = k;
-            s2->dop[s2->ndop].litlen = desc;
-            s2->dop[s2->ndop].lit = "";
-            s2->ndop++;
-        }
-    }
-    if (!stmts[sti].ndop) die("SORT needs at least one KEY");
+    parse_sort_keys(sd, sti, "SORT");
     if (is("WITH") || is("DUPLICATES")) die("WITH DUPLICATES IN ORDER is COBOL-85, not COBOL-74");
     if (is("COLLATING")) die("SORT ... COLLATING SEQUENCE is not implemented yet");
     int lin = ++nlabel, lout = ++nlabel, lend = ++nlabel;
@@ -4617,6 +4648,100 @@ static void parse_sort(void)
     } else die("SORT wants OUTPUT PROCEDURE or GIVING");
     new_stmt(ST_SRTEND)->src = 35;
     new_stmt(ST_LABEL)->dst = lend;
+    eat_period();
+}
+
+/* MERGE sd ON ASCENDING/DESCENDING KEY ... USING f1 f2 ... {OUTPUT PROCEDURE
+ * | GIVING f}. The statement becomes: ST_MERGE 0 (the setup); an OPEN of each
+ * USING file and a first READ of each through ST_MERGE 1; the output part,
+ * a PERFORM or the GIVING loop; a CLOSE of each file and ST_MERGE 5; then,
+ * branched around: each file's READ block, entered with a return address in
+ * MRGRET (its AT END marks the file done, ST_MERGE 3; both ends return
+ * through ST_MERGE 2), and the step routine, ST_MERGE 4, which RETURN calls
+ * through MRGNXT while the merge runs. */
+static void parse_merge(void)
+{
+    next();
+    int sd = file_index(tok.text);
+    if (sd < 0 || !files[sd].sort) die("MERGE names something that is not an SD file");
+    next();
+    if (nmerge >= MAXMERGE) die("too many MERGE statements");
+    use_sort = 1; use_merge = 1;
+    { int cur = wslen; make_sortregs(&cur); }
+    Merge *mg = &merges[nmerge];
+    memset(mg, 0, sizeof *mg);
+    mg->sd = sd;
+    Stmt *st = new_stmt(ST_MERGE);
+    st->dst = nmerge; st->imm = 0; st->src = sd;
+    int sti = (int)(st - stmts);
+    mg->sti = sti;
+    parse_sort_keys(sd, sti, "MERGE");
+    if (is("WITH") || is("DUPLICATES")) die("WITH DUPLICATES IN ORDER is COBOL-85, not COBOL-74");
+    if (is("COLLATING")) die("MERGE ... COLLATING SEQUENCE is not implemented yet");
+    if (is("INPUT")) die("MERGE has no INPUT PROCEDURE: its input is the USING files, already in order");
+    if (!is("USING")) die("MERGE wants USING");
+    next();
+    const Sym *rec = &syms[files[sd].rec_sym];
+    for (int k = 0; k < stmts[sti].ndop; k++) {
+        const Sym *ks = &syms[stmts[sti].dop[k].sym];
+        if (ks->usage == U_DISPLAY && !ks->is_alpha && !ks->is_group && !ks->edited && ks->bytes > 16)
+            die("a MERGE key of more than 16 DISPLAY digits is not implemented");
+    }
+    while (!tok.eof && !is(".") && !is("OUTPUT") && !is("GIVING")) {
+        int f = file_index(tok.text);
+        if (f < 0) die("MERGE ... USING names something that is not a file");
+        if (files[f].sort) die("MERGE ... USING names a sort file");
+        if (files[f].rec_sym < 0) die("MERGE ... USING: the file has no record description");
+        if (mg->n >= MAXMRGIN) die("MERGE ... USING takes at most 16 files");
+        for (int j = 0; j < mg->n; j++) if (mg->f[j] == f) die("MERGE ... USING names a file twice");
+        for (int k = 0; k < stmts[sti].ndop; k++) {
+            const Sym *ks = &syms[stmts[sti].dop[k].sym];
+            if (ks->offset - rec->offset + ks->bytes > files[f].reclen)
+                die("a MERGE key lies past the end of a USING file's record");
+        }
+        mg->f[mg->n++] = f;
+        next();
+    }
+    if (mg->n < 2) die("MERGE ... USING needs at least two files");
+    int lend = ++nlabel;
+    mg->lab_step = ++nlabel;
+    for (int i = 0; i < mg->n; i++) mg->lab_rd[i] = ++nlabel;
+    for (int i = 0; i < mg->n; i++) {
+        files[mg->f[i]].opened_input = 1;
+        Stmt *o = new_stmt(ST_OPEN); o->dst = mg->f[i]; o->src = 1;
+    }
+    for (int i = 0; i < mg->n; i++) {
+        Stmt *c = new_stmt(ST_MERGE); c->dst = nmerge; c->imm = 1; c->src = i; c->lab1 = ++nlabel;
+    }
+    if (is("OUTPUT")) {
+        next(); expect("PROCEDURE");
+        int p0 = nstmt;
+        sort_perform();
+        mg->osect = stmts[p0].para; mg->othru = stmts[p0].thru;
+    } else if (is("GIVING")) {
+        next();
+        int f = file_index(tok.text);
+        if (f < 0) die("MERGE ... GIVING names something that is not a file");
+        next();
+        sort_giving(sd, f);
+        if (!is(".") && !starts_statement() && file_index(tok.text) >= 0)
+            die("MERGE ... GIVING takes one file in COBOL-74");
+    } else die("MERGE wants OUTPUT PROCEDURE or GIVING");
+    for (int i = 0; i < mg->n; i++) new_stmt(ST_CLOSE)->dst = mg->f[i];
+    { Stmt *e = new_stmt(ST_MERGE); e->dst = nmerge; e->imm = 5; }
+    new_stmt(ST_BRANCH)->dst = lend;
+    for (int i = 0; i < mg->n; i++) {
+        new_stmt(ST_LABEL)->dst = mg->lab_rd[i];
+        Stmt *r = new_stmt(ST_READ);
+        r->dst = mg->f[i]; r->lab1 = ++nlabel; r->lab2 = ++nlabel; r->had_atend = 1;
+        Stmt *d = new_stmt(ST_MERGE); d->dst = nmerge; d->imm = 3; d->src = i;
+        Stmt *b1 = new_stmt(ST_MERGE); b1->dst = nmerge; b1->imm = 2;
+        new_stmt(ST_LABEL)->dst = r->lab2;
+        Stmt *b2 = new_stmt(ST_MERGE); b2->dst = nmerge; b2->imm = 2;
+    }
+    { Stmt *s4 = new_stmt(ST_MERGE); s4->dst = nmerge; s4->imm = 4; }
+    new_stmt(ST_LABEL)->dst = lend;
+    nmerge++;
     eat_period();
 }
 
@@ -6006,6 +6131,10 @@ static void parse_one_statement_body(void)
         parse_sort();
         return;
     }
+    if (is("MERGE")) {
+        parse_merge();
+        return;
+    }
 
     if (is("RELEASE")) {
         /* RELEASE record [FROM identifier]: FROM is a MOVE first, as WRITE
@@ -6292,6 +6421,20 @@ static void parse_procedure(void)
         if (paras[b].is_section) b = section_end(b);
         stmts[i].dst = a; stmts[i].src = b;
         paras[b].is_range_end = 1;
+    }
+    /* A merge takes no records from the program: RELEASE in its output
+     * procedure has nowhere to go. */
+    for (int m = 0; m < nmerge; m++) {
+        if (!merges[m].osect) continue;
+        int a = para_index(merges[m].osect), b = para_index(merges[m].othru);
+        if (a < 0 || b < 0) continue;            /* the PERFORM check has said so */
+        if (paras[b].is_section) b = section_end(b);
+        int cur = -1;
+        for (int i = 0; i < nstmt; i++) {
+            if (stmts[i].op == ST_PARA) cur = stmts[i].dst;
+            else if (stmts[i].op == ST_RELEASE && cur >= a && cur <= b)
+                die("RELEASE in a MERGE's output procedure: a merge takes no records from the program");
+        }
     }
     /* Syntax rule 1 on II-57: an altered paragraph holds a single sentence that
      * is a GO TO without DEPENDING. Finding that GO TO is also how its original
@@ -12411,6 +12554,10 @@ static void generate(void)
             snprintf(lb, sizeof lb, "%sP", sl);
             pend(lb, "DC", b, "R1 -> this");
 
+            if (use_merge) {
+                asm_line("", "MVC", "MRGSV2(4),MRGNXT", "no MERGE while the sort runs");
+                asm_line("", "XC", "MRGNXT(4),MRGNXT", "");
+            }
             asm_line("", "STM", "2,12,SRTBAS", "the registers the exits resume with");
             asm_line("", "ST", "12,SRTR12", "and the code block, with each resume point");
             snprintf(b, sizeof b, "15,L%04d", st->lab1);
@@ -12447,6 +12594,7 @@ static void generate(void)
             asm_line("", "LA", b, "");
             asm_line("", "LINK", "EP=SORT", "");
             asm_line("", "L", "13,4(,13)", "");
+            if (use_merge) asm_line("", "MVC", "MRGNXT(4),MRGSV2", "");
             reset_bases();
             {
                 const Sym *rs = &syms[sortret_sym];
@@ -12486,6 +12634,25 @@ static void generate(void)
             snprintf(lt, sizeof lt, "L%04d", ++genlabel);
             snprintf(b, sizeof b, " RETURN %s", files[st->dst].name);
             asm_comment(b);
+            char lsort[16], lgot[16];
+            if (use_merge) {
+                /* A MERGE running: its step puts the next record into the
+                 * SD's area itself, or says there is none. */
+                snprintf(lsort, sizeof lsort, "L%04d", ++genlabel);
+                snprintf(lgot, sizeof lgot, "L%04d", ++genlabel);
+                asm_line("", "L", "15,MRGNXT", "a MERGE running?");
+                asm_line("", "LTR", "15,15", "");
+                asm_line("", "BZ", lsort, "no: the sort's record");
+                asm_line("", "ST", "12,MRGRSV", "");
+                asm_line("", "L", "12,MRGR12", "the MERGE's code block");
+                asm_line("", "BALR", "14,15", "its next record");
+                asm_line("", "L", "12,MRGRSV", "");
+                asm_line("", "L", "1,SRTREC", "");
+                asm_line("", "LTR", "1,1", "zero: no more");
+                asm_line("", "BZ", le, "");
+                asm_line("", "B", lgot, "it is in the SD's record");
+                asm_line(lsort, "DS", "0H", "");
+            }
             asm_line("", "CLI", "SRTHAVE,1", "a record the sort handed over?");
             asm_line("", "BE", lt, "");
             snprintf(b, sizeof b, "14,%s", lr); asm_line("", "LA", b, "");
@@ -12507,6 +12674,7 @@ static void generate(void)
                 snprintf(b, sizeof b, "%s+%d(%d),%d(1)", fr, off, n, off);
                 asm_line("", "MVC", b, off ? "" : "into the SD's record");
             }
+            if (use_merge) { asm_line(lgot, "DS", "0H", ""); reset_bases(); }
             if (st->src >= 0) {
                 asm_comment("  INTO: only reached when a record was returned");
                 emit_move(&syms[st->src], st->ssub, rec, NULL);
@@ -12527,6 +12695,187 @@ static void generate(void)
             asm_line("", "B", "SRTYLD", "");
             reset_bases();
             break;
+        case ST_MERGE: {
+            Merge *mg = &merges[st->dst];
+            const File *sf = &files[mg->sd];
+            const Sym *rec = &syms[sf->rec_sym];
+            char mf[16], ma[16], mt[16], fr[64], l[16];
+            snprintf(mf, sizeof mf, "MRGF%03d", st->dst);
+            snprintf(ma, sizeof ma, "MRGA%03d", st->dst);
+            snprintf(mt, sizeof mt, "MRGT%03d", st->dst);
+            switch (st->imm) {
+            case 0: {
+                /* The setup: the cells of this MERGE, no file at end yet, the
+                 * address of each file's record area, and the step routine
+                 * as what RETURN calls. */
+                snprintf(b, sizeof b, " MERGE %s", sf->name);
+                asm_comment(b);
+                pend(mf, "DS", "XL16", "MERGE: which USING files are at end");
+                pend(ma, "DS", "16F", "each file's record area");
+                { char t[256]; int n = snprintf(t, sizeof t, "A(");
+                  for (int i = 0; i < mg->n; i++)
+                      n += snprintf(t + n, sizeof t - n, "%sL%04d", i ? "," : "", mg->lab_rd[i]);
+                  snprintf(t + n, sizeof t - n, ")");
+                  pend(mt, "DC", t, "each file's READ"); }
+                snprintf(b, sizeof b, "%s(16),%s", mf, mf);
+                asm_line("", "XC", b, "no file at end");
+                for (int i = 0; i < mg->n; i++) {
+                    const Sym *ri = &syms[files[mg->f[i]].rec_sym];
+                    field_ref_m(ri, NULL, FR_SS_NOLEN, ri->bytes, 6, fr, sizeof fr);
+                    snprintf(b, sizeof b, "1,%s", fr); asm_line("", "LA", b, files[mg->f[i]].name);
+                    snprintf(b, sizeof b, "1,%s+%d", ma, 4 * i); asm_line("", "ST", b, "");
+                }
+                reset_bases();
+                asm_line("", "ST", "12,MRGR12", "the step's code block");
+                snprintf(b, sizeof b, "15,L%04d", mg->lab_step); asm_line("", "LA", b, "");
+                asm_line("", "ST", "15,MRGNXT", "RETURN calls the step while this runs");
+                break;
+            }
+            case 1:
+                /* The first READ of a file: through its READ block and back. */
+                snprintf(b, sizeof b, "14,L%04d", st->lab1); asm_line("", "LA", b, "");
+                asm_line("", "ST", "14,MRGRET", "");
+                snprintf(b, sizeof b, "L%04d", mg->lab_rd[st->src]); asm_line("", "B", b, "the file's first record");
+                snprintf(l, sizeof l, "L%04d", st->lab1); asm_line(l, "DS", "0H", "");
+                reset_bases();
+                break;
+            case 2:
+                asm_line("", "L", "14,MRGRET", "");
+                asm_line("", "BR", "14", "back to whoever asked for the READ");
+                reset_bases();
+                break;
+            case 3:
+                snprintf(b, sizeof b, "%s+%d,1", mf, st->src); asm_line("", "MVI", b, "that file is at end");
+                break;
+            case 4: {
+                /* The step: among the files not at end, the one whose current
+                 * record comes first by the keys, the first-named file when
+                 * they are equal. Its record into the SD's area, that file
+                 * read again, and SRTREC says a record is there -- or is zero
+                 * when every file is at end. R4 is the best record so far,
+                 * R5 the candidate; the compare routine says in R15 whether
+                 * the candidate comes first. */
+                char lnone[16], lback[16], lcmp[16], lyes[16], lno[16];
+                snprintf(lnone, sizeof lnone, "L%04d", ++genlabel);
+                snprintf(lback, sizeof lback, "L%04d", ++genlabel);
+                snprintf(lcmp, sizeof lcmp, "L%04d", ++genlabel);
+                snprintf(lyes, sizeof lyes, "L%04d", ++genlabel);
+                snprintf(lno, sizeof lno, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, " MERGE %s: the next record", sf->name);
+                asm_comment(b);
+                snprintf(l, sizeof l, "L%04d", mg->lab_step);
+                asm_line(l, "DS", "0H", "");
+                reset_bases();
+                asm_line("", "ST", "14,MRGRT", "");
+                asm_line("", "SR", "4,4", "no record yet");
+                for (int i = 0; i < mg->n; i++) {
+                    char lskip[16], ltake[16];
+                    snprintf(lskip, sizeof lskip, "L%04d", ++genlabel);
+                    snprintf(ltake, sizeof ltake, "L%04d", ++genlabel);
+                    snprintf(b, sizeof b, "%s+%d,0", mf, i); asm_line("", "CLI", b, files[mg->f[i]].name);
+                    asm_line("", "BNE", lskip, "at end");
+                    snprintf(b, sizeof b, "5,%s+%d", ma, 4 * i); asm_line("", "L", b, "its record");
+                    asm_line("", "LTR", "4,4", "");
+                    asm_line("", "BZ", ltake, "the first candidate");
+                    snprintf(b, sizeof b, "14,%s", lcmp); asm_line("", "BAL", b, "compare");
+                    asm_line("", "LTR", "15,15", "");
+                    asm_line("", "BZ", lskip, "the best so far stays");
+                    asm_line(ltake, "DS", "0H", "");
+                    asm_line("", "LR", "4,5", "");
+                    snprintf(b, sizeof b, "5,%d", i); asm_line("", "LA", b, "");
+                    asm_line("", "ST", "5,MRGBST", "the file it came from");
+                    asm_line(lskip, "DS", "0H", "");
+                }
+                asm_line("", "LTR", "4,4", "");
+                asm_line("", "BZ", lnone, "every file at end");
+                need_sym_base(rec);
+                for (int off = 0; off < rec->bytes; off += 256) {
+                    int n = rec->bytes - off < 256 ? rec->bytes - off : 256;
+                    field_ref_m(rec, NULL, FR_SS_NOLEN, rec->bytes, 6, fr, sizeof fr);
+                    snprintf(b, sizeof b, "%s+%d(%d),%d(4)", fr, off, n, off);
+                    asm_line("", "MVC", b, off ? "" : "into the SD's record");
+                }
+                reset_bases();
+                asm_line("", "L", "15,MRGBST", "");
+                asm_line("", "SLL", "15,2", "");
+                snprintf(b, sizeof b, "15,%s(15)", mt); asm_line("", "L", b, "that file's READ");
+                snprintf(b, sizeof b, "14,%s", lback); asm_line("", "LA", b, "");
+                asm_line("", "ST", "14,MRGRET", "");
+                asm_line("", "BR", "15", "read it again");
+                asm_line(lback, "DS", "0H", "");
+                reset_bases();
+                field_ref_m(rec, NULL, FR_SS_NOLEN, rec->bytes, 6, fr, sizeof fr);
+                snprintf(b, sizeof b, "1,%s", fr); asm_line("", "LA", b, "");
+                asm_line("", "ST", "1,SRTREC", "a record, in the SD's area");
+                reset_bases();
+                asm_line("", "L", "14,MRGRT", "");
+                asm_line("", "BR", "14", "");
+                asm_line(lnone, "DS", "0H", "");
+                asm_line("", "SR", "1,1", "");
+                asm_line("", "ST", "1,SRTREC", "no more");
+                asm_line("", "L", "14,MRGRT", "");
+                asm_line("", "BR", "14", "");
+                /* The compare: R4 -> the best so far, R5 -> the candidate;
+                 * R15 = 1 when the candidate comes first. Each key in turn,
+                 * with the sort's formats: characters as they are, DISPLAY
+                 * numerics packed first, COMP-3 as packed, COMP as signed
+                 * binary. Equal on every key: the best stays. */
+                asm_line(lcmp, "DS", "0H", "candidate before the best?");
+                const Stmt *ks0 = &stmts[mg->sti];
+                for (int k = 0; k < ks0->ndop; k++) {
+                    const Sym *ks = &syms[ks0->dop[k].sym];
+                    int desc = ks0->dop[k].litlen;
+                    int off = ks->offset - rec->offset, len = ks->bytes;
+                    if (ks->is_alpha || ks->is_group || ks->edited) {
+                        snprintf(b, sizeof b, "%d(%d,4),%d(5)", off, len, off);
+                        asm_line("", "CLC", b, ks->name);
+                    } else if (ks->usage == U_COMP3) {
+                        snprintf(b, sizeof b, "%d(%d,4),%d(%d,5)", off, len, off, len);
+                        asm_line("", "CP", b, ks->name);
+                    } else if (ks->usage == U_COMP) {
+                        const char *ld = len == 2 ? "LH" : "L";
+                        snprintf(b, sizeof b, "2,%d(,4)", off); asm_line("", ld, b, ks->name);
+                        snprintf(b, sizeof b, "3,%d(,5)", off); asm_line("", ld, b, "");
+                        asm_line("", "CR", "2,3", "");
+                        if (len == 8) {
+                            char ldw[16]; snprintf(ldw, sizeof ldw, "L%04d", ++genlabel);
+                            asm_line("", "BNE", ldw, "");
+                            snprintf(b, sizeof b, "2,%d(,4)", off + 4); asm_line("", "L", b, "the low words");
+                            snprintf(b, sizeof b, "3,%d(,5)", off + 4); asm_line("", "L", b, "");
+                            asm_line("", "CLR", "2,3", "");
+                            asm_line(ldw, "DS", "0H", "");
+                        }
+                    } else {
+                        snprintf(b, sizeof b, "PWK1(16),%d(%d,4)", off, len); asm_line("", "PACK", b, ks->name);
+                        snprintf(b, sizeof b, "PWK2(16),%d(%d,5)", off, len); asm_line("", "PACK", b, "");
+                        asm_line("", "CP", "PWK1(16),PWK2(16)", "");
+                    }
+                    asm_line("", desc ? "BL" : "BH", lyes, desc ? "DESCENDING" : "ASCENDING");
+                    asm_line("", desc ? "BH" : "BL", lno, "");
+                }
+                asm_line(lno, "DS", "0H", "equal: the first-named file's");
+                asm_line("", "SR", "15,15", "");
+                asm_line("", "BR", "14", "");
+                asm_line(lyes, "DS", "0H", "");
+                asm_line("", "LA", "15,1", "");
+                asm_line("", "BR", "14", "");
+                reset_bases();
+                break;
+            }
+            case 5: {
+                /* The end: no MERGE running, and SORT-RETURN is zero, as after
+                 * a sort that went well. */
+                asm_line("", "SR", "1,1", "");
+                asm_line("", "ST", "1,MRGNXT", "the MERGE is over");
+                const Sym *rs = &syms[sortret_sym];
+                field_ref_m(rs, NULL, FR_RX, 2, 6, fr, sizeof fr);
+                snprintf(b, sizeof b, "1,%s", fr); asm_line("", "STH", b, "SORT-RETURN");
+                reset_bases();
+                break;
+            }
+            }
+            break;
+        }
         case ST_ACCEPT: {
             const Sym *d = &syms[st->dst];
             int n = st->dsub ? d->elem : d->bytes;
@@ -14072,6 +14421,15 @@ static void generate(void)
             asm_line("SRTRES", "DS", "F", "where the procedure resumes");
             asm_line("SRTREC", "DS", "F", "E35: the record, or 0 at the end");
             asm_line("SRTHAVE", "DS", "X", "E35 handed a record not yet returned");
+        }
+        if (use_merge) {
+            asm_line("MRGNXT", "DS", "F", "the running MERGE's step, 0 when none");
+            asm_line("MRGR12", "DS", "F", "its code block");
+            asm_line("MRGRSV", "DS", "F", "RETURN's own code block, while it calls");
+            asm_line("MRGRT", "DS", "F", "where the step returns to");
+            asm_line("MRGRET", "DS", "F", "where a file's READ returns to");
+            asm_line("MRGBST", "DS", "F", "the file whose record was taken");
+            asm_line("MRGSV2", "DS", "F", "MRGNXT across a SORT");
         }
         if (use_wto) {
             asm_line("VWTO", "DC", "V(COBWTO)", "");

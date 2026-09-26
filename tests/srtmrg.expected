@@ -1,0 +1,24 @@
+MERGE
+RET K01   IN-B
+RET K02   IN2-A
+RET K03   IN-A
+RET K03   IN2-B
+RET K05   IN-C
+RET K09   IN2-C
+SORT DESCENDING
+IER000I 360S-SM-023 OS/360 Sort/Merge for MVS 3.8 Version 1.05 - 14:21:00 on 26 Sep 2026
+IER070I Control Stmts from Program Parameter List
+IER070I Control Stmts  SORT FIELDS=(0001,005,CH,D)
+IER070I Control Stmts  RECORD TYPE=F,LENGTH=(00080)
+IER036I Blocking =   349
+IER037I Records in RSA =  5343
+IER038I Estimated maximum records =       20242
+IER045I End of Sort Phase
+IER049I Skip Merge Phase
+RET K05   IN-C
+RET K03   IN-A
+RET K01   IN-B
+IER055I Records Inserted           3,Records Deleted           3
+IER054I Records In           0,Records Out           0
+IER052I End of Sort
+END
