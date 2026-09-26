@@ -1303,6 +1303,7 @@ typedef struct {
     int is_range_end, is_section;
     int altered;        /* an ALTER names it, so its GO TO is compiled indirect */
     int alter_to;       /* the target that GO TO had when the program was written */
+    int segno;          /* the segment-number of its section, 0 when none */
 } Para;
 
 /* A declarative section and what calls it. General rule 1 on IV-32: the
@@ -1444,6 +1445,16 @@ typedef struct {
 } Merge;
 static Merge merges[MAXMERGE];
 static int nmerge, use_merge;
+
+/* Segmentation (XII). An independent segment -- segment-number 50 to 99 --
+ * is in its initial state whenever control reaches it from another
+ * segment, and the only state a program can see is an altered GO TO. So
+ * when some independent segment holds an altered paragraph, SEGCUR holds
+ * the segment control is in: every paragraph sets it, a PERFORM's return
+ * puts back the performer's, and a paragraph of such a segment entered
+ * from elsewhere first puts that segment's altered GO TOs back as written.
+ * Measured on IKFCBL00 with a real overlay link (seglimit). */
+static int cur_segno, use_segs, gen_segno;
 
 static int need_sym(const char *n)
 {
@@ -3612,6 +3623,27 @@ static void parse_environment(void)
         if (is("CONFIGURATION")) {
             next(); expect("SECTION"); expect(".");
             while (!tok.eof && !is("INPUT-OUTPUT") && !is("DATA") && !is("PROCEDURE")) {
+                if (is("SEGMENT-LIMIT")) {
+                    /* OBJECT-COMPUTER ... SEGMENT-LIMIT IS n (XII-6). It
+                     * says which segments below 50 are permanent and which
+                     * fixed overlayable, and a fixed overlayable segment
+                     * behaves as if it were never overlaid -- measured on
+                     * IKFCBL00 with a real overlay link, an ALTER in one
+                     * survives. Everything here is resident, so the value
+                     * changes nothing but must be 1 to 49; IKFCBL00 refuses
+                     * 0, 50 and 99 (IKF1004I-E, then IKF1148I-W). */
+                    next();
+                    if (is("IS")) next();
+                    int n = 0, ok = !tok.literal && tok.len > 0 && tok.len <= 2;
+                    for (int k = 0; ok && k < tok.len; k++) {
+                        if (!isdigit((unsigned char)tok.text[k])) ok = 0;
+                        else n = n * 10 + (tok.text[k] - '0');
+                    }
+                    if (!ok || n < 1 || n > 49)
+                        die("SEGMENT-LIMIT must be an integer from 1 to 49");
+                    next();
+                    continue;
+                }
                 if (!is("SPECIAL-NAMES")) { next(); continue; }
                 next(); expect(".");
                 parse_special_names();
@@ -6241,15 +6273,21 @@ static void parse_one_statement_body(void)
         int a_section = 0;
         if (is("SECTION")) {
             next();
-            /* A segment-number is accepted and ignored. Segmentation has a null
-             * level in the standard, and the only thing a program can observe
-             * of it -- an independent segment back in its initial state -- is
-             * carried by ALTER, which this compiler does not implement. With
-             * every section resident and no altered GO TO to reset, the number
-             * says nothing about what the program does. */
+            /* A segment-number. Every section stays resident; what a program
+             * can observe of segmentation -- an independent segment (50 to 99)
+             * back in its initial state, its altered GO TOs as written -- is
+             * done through SEGCUR (see use_segs). */
+            cur_segno = 0;
             if (!is(".")) {
                 if (tok.literal || !is_numeric_literal(tok.text))
                     die("a SECTION header takes only an optional segment-number");
+                int v = 0;
+                for (int k = 0; k < tok.len; k++) {
+                    if (!isdigit((unsigned char)tok.text[k])) die("a segment-number is an integer from 0 to 99");
+                    v = v * 10 + (tok.text[k] - '0');
+                    if (v > 99) die("a segment-number is an integer from 0 to 99");
+                }
+                cur_segno = v;
                 next();
             }
             a_section = 1;
@@ -6262,6 +6300,7 @@ static void parse_one_statement_body(void)
             snprintf(paras[npara].name, sizeof paras[npara].name, "%s", nm);
             paras[npara].is_range_end = 0;
             paras[npara].is_section = a_section;
+            paras[npara].segno = cur_segno;
             Stmt *st = new_stmt(ST_PARA);
             st->para = pool_str(nm, (int)strlen(nm));
             st->dst = npara++;
@@ -6465,6 +6504,9 @@ static void parse_procedure(void)
         }
         paras[a].alter_to = found;
     }
+
+    for (int a = 0; a < npara; a++)
+        if (paras[a].altered && paras[a].segno >= 50) use_segs = 1;
 
     /* A bare GO TO is legal only inside a paragraph some ALTER names. */
     {
@@ -10237,6 +10279,10 @@ static void perform_return(const char *x, int r)
     char b[48];
     snprintf(b, sizeof b, "15,SV%04d", r);  asm_line("", "L", b, "what the cell held before");
     snprintf(b, sizeof b, "15,%s", x);      asm_line("", "ST", b, "");
+    if (use_segs) {
+        snprintf(b, sizeof b, "SEGCUR,%d", gen_segno);
+        asm_line("", "MVI", b, "back in the performer's segment");
+    }
 }
 
 static void start_block(const char *why)
@@ -11698,6 +11744,25 @@ static void generate(void)
             start_block("this paragraph's code base");
             para_block[st->dst] = cur_block;
             cur_para = st->dst;
+            gen_segno = paras[st->dst].segno;
+            if (use_segs) {
+                int sg = gen_segno, any = 0;
+                for (int k = 0; k < npara; k++)
+                    if (paras[k].altered && paras[k].segno == sg && sg >= 50) any = 1;
+                char sk[16];
+                if (any) {
+                    snprintf(sk, sizeof sk, "L%04d", ++genlabel);
+                    snprintf(b, sizeof b, "SEGCUR,%d", sg); asm_line("", "CLI", b, "from another segment?");
+                    asm_line("", "BE", sk, "");
+                    for (int k = 0; k < npara; k++) {
+                        if (!paras[k].altered || paras[k].segno != sg) continue;
+                        snprintf(b, sizeof b, "AL%04d(4),AI%04d", k, k);
+                        asm_line("", "MVC", b, "independent: its GO TO as written");
+                    }
+                    asm_line(sk, "DS", "0H", "");
+                }
+                snprintf(b, sizeof b, "SEGCUR,%d", sg); asm_line("", "MVI", b, "the segment control is in");
+            }
             break;
         }
         case ST_EXIT:
@@ -14338,7 +14403,12 @@ static void generate(void)
         if (paras[i].alter_to >= 0) snprintf(b, sizeof b, "A(P%04d)", paras[i].alter_to);
         else snprintf(b, sizeof b, "A(0)");
         asm_line(x, "DC", b, paras[i].alter_to >= 0 ? paras[i].name : "bare GO TO: undefined until ALTERed");
+        if (use_segs && paras[i].segno >= 50) {
+            snprintf(x, sizeof x, "AI%04d", i);
+            asm_line(x, "DC", b, "as written: an independent segment's reset");
+        }
     }
+    if (use_segs) asm_line("SEGCUR", "DC", "X'00'", "the segment control is in");
     for (int i = 0; i < npara; i++) {
         if (!paras[i].is_range_end) continue;
         char x[16], f[16];

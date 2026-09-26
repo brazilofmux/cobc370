@@ -49,7 +49,7 @@ Writer Level 2" to aspire to. The whole module is `1 RPW 0,1` or nothing.
 
 The short version, as of 2026-08-29: **Level 2 of the Nucleus, Table
 Handling, Sequential I-O, Relative I-O, Inter-Program Communication and
-Library and Indexed I-O; Segmentation at Level 1; the Report Writer at its
+Library, Indexed I-O and Segmentation; the Report Writer at its
 one level, complete since 2026-08-30; Sort-Merge since 2026-09-25, its `MERGE`
 since 2026-09-26; and the null level of Debug and Communication.** Each module's
 section below says what is there and what is not, and the dates.
@@ -285,10 +285,31 @@ both compilers:
   every CALL; it now checks that the caller's items survive, and that the
   return code comes back.
 
-### Segmentation — Level 1
+### Segmentation — Level 2, complete (2026-09-26)
 
-Segment-numbers on sections are accepted, and `ALTER` respects them. Level 2
-adds `SEGMENT-LIMIT`, which is not.
+Segment-numbers on sections and `SEGMENT-LIMIT` in OBJECT-COMPUTER are
+accepted; every section stays resident. What a program can observe of
+segmentation is the state of an independent segment (numbers 50 to 99):
+whenever control reaches one from another segment -- by PERFORM, GO TO or
+falling into it -- its altered GO TOs are back as written. Segments below
+50 keep theirs, whether permanent or fixed overlayable, so `SEGMENT-LIMIT`
+changes where IBM's code lives but nothing a program does; it is
+range-checked (1 to 49) and otherwise has no effect.
+
+Measured on IKFCBL00 with a real overlay link (`seglimit`: sections 10, 30
+and 60 under `SEGMENT-LIMIT IS 20`, each ALTERing its own GO TO and
+performed repeatedly). IBM's compiler writes INSERT and OVERLAY statements
+for the linkage editor, which then needs `PARM='OVLY'`; section 30 really
+is overlaid by section 60 there and still keeps its ALTER, while section
+60 is fresh on every entry. IKFCBL00 refuses a limit of 0, 50 or 99
+(IKF1004I-E, then IKF1148I-W "FIFTY ASSUMED"), and so does cobc370
+(`bad-seglimit`).
+
+Until this date the independent-segment reset was missing: segment-numbers
+were accepted and then ignored, from before `ALTER` was implemented, so an
+ALTER in a section numbered 50 or above survived where IBM's is reset. The
+reset is generated only for a program that ALTERs a paragraph in such a
+segment, so no other program's code changed.
 
 ### Library — Level 2, complete
 
@@ -1095,6 +1116,8 @@ of it -- an independent segment back in its initial state -- is carried by
 `ALTER`, which this compiler does not implement. With every section resident
 and no altered `GO TO` to reset, the number says nothing about what the program
 does. `tests/sections.cbl` carries a `SECTION 50` header for that reason.
+(Superseded 2026-09-26: `ALTER` came later, and the reset it makes
+observable is now implemented -- see *Segmentation* above.)
 
 ### Literal continuation
 

@@ -27,7 +27,7 @@ element against the standard's own lists:
 | Nucleus, Table Handling, Sequential I-O | **Level 2, complete** |
 | Relative I-O, Inter-Program Communication, Library | **Level 2, complete** |
 | Indexed I-O | **Level 2, complete** (alternate keys read under `OPEN INPUT`; see below) |
-| Segmentation | Level 1 |
+| Segmentation | **Level 2, complete** |
 | Report Writer | **Level 1, complete** (its only level) |
 | Sort-Merge | `SORT`, `RELEASE`, `RETURN` through the system sort, as IKFCBL00 does it; `MERGE` by the compiler itself, since the system sort merges only from JCL; not `COLLATING SEQUENCE` |
 | Debug, Communication | not implemented -- each has a null level, which conforms |

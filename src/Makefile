@@ -67,7 +67,8 @@ test: cobc370
 	@# stale because the next slice implemented the very thing it tested.
 	@for t in bad-undeclared bad-verb bad-duplicate bad-ambiguous bad-vspace \
 	         bad-valoccurs bad-occurs01 bad-addlit \
-	         bad-mergein bad-merge1 bad-mergerel bad-mergekey; do \
+	         bad-mergein bad-merge1 bad-mergerel bad-mergekey \
+	         bad-seglimit; do \
 	   if ./cobc370 $(T)/$$t.cbl -o /dev/null >/dev/null 2>&1; then \
 	     echo "  $$t ACCEPTED -- it should have been rejected"; exit 1; \
 	   else echo "  $$t rejected"; fi; \
