@@ -8,11 +8,14 @@
  * expand inline.
  *
  * The halves are put together through a union, not "(UDW)hi << 32 | lo":
- * cc370 (2c40eb3) emits SLDA, the arithmetic double shift, for a 64-bit
- * shift left, and SLDA keeps the sign bit where it is, so a high word
- * with its top bit set came out as X'7FFFFFFF...' -- every negative
- * product was 2**63 too big, found on TK5 on 2026-09-25. S/370 is
- * big-endian: the high word is the first.
+ * cc370 up to 2c40eb3 emitted SLDA, the arithmetic double shift, for a
+ * 64-bit shift left, and SLDA keeps the sign bit where it is, so a high
+ * word with its top bit set came out as X'7FFFFFFF...' -- every negative
+ * product was 2**63 too big, found on TK5 on 2026-09-25. Reported as
+ * mvslovers/cc370#468 and fixed upstream the next day (335e7d0, SLDL).
+ * The union stays: it is right under either compiler, so this module does
+ * not depend on which cc370 built it. S/370 is big-endian: the high word
+ * is the first.
  */
 
 

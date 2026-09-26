@@ -1261,7 +1261,12 @@ compiler's own 64-bit millicode recombined a product's halves with such a
 shift and lost bit 63 of every negative product. The millicode now joins
 the halves through a union, and the literal fold works in decimal digits
 with no 64-bit arithmetic at all; cc370's runtime has no 64-bit divide
-either, so none is used.
+either, so none is used. cc370 fixed the shift the next day (335e7d0,
+`SLDL`); the union stays, since it is right under either compiler. The
+only other 64-bit shift left in the compiler's own code is the multiply
+by ten that reads an exponent's digits, which never sets bit 63, so a
+module built by the fixed cc370 differs by that one instruction and
+behaves the same.
 
 `VALUE` in an entry with `OCCURS`, or under one, is refused: the 1974
 VALUE clause forbids it (COBOL-85 is where it became legal) and IKFCBL00
