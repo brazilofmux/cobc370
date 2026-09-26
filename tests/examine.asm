@@ -46,22 +46,42 @@ T0001    DS    0H
          ST    2,D0005
 T0002    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         SR    4,4                 the tally
-L0001    CH    5,H0001             room for the string?
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0001    CR    3,5                 at the end?
+         BNL   L0002
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0003
+         C     3,INSRLO+0          in its range yet?
          BL    L0003
-         CLC   0(1,3),S0001
-         BNE   L0002
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0003
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0003
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0001
+L0003    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
          B     L0001
 L0002    DS    0H
-         LA    3,1(3)
-         BCT   5,L0001
-L0003    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -104,22 +124,46 @@ T0005    DS    0H
          ST    2,D0005
 T0006    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         SR    4,4                 the tally
-L0004    CH    5,H0001             room for the string?
-         BL    L0006
-         CLC   0(1,3),S0001
-         BNE   L0006
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0004
-L0005    DS    0H
-         LA    3,1(3)
-         BCT   5,L0004
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0005    CR    3,5                 at the end?
+         BNL   L0006
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0007
+         C     3,INSRLO+0          in its range yet?
+         BL    L0007
+         C     3,INSNXT+0          LEADING: still contiguous?
+         BNE   L0008
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0008
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0008
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         ST    3,INSNXT+0          contiguous so far
+         B     L0005
+L0008    MVI   INSFLG+0,X'00'      LEADING: a break ends it
+L0007    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0005
 L0006    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -159,27 +203,58 @@ T0009    DS    0H
          ST    2,D0005
 T0010    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         LR    7,3                 the field's start
-L0007    CH    5,H0001             room for the bounding string?
-         BL    L0009
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LR    3,7
+L0009    LR    4,5
+         SR    4,3                 what is left
+         CH    4,H0001             room for the bounding string?
+         BL    L0011
          CLC   0(1,3),S0002        INITIAL
-         BE    L0008
+         BE    L0010
          LA    3,1(3)
-         BCT   5,L0007
-L0009    DS    0H                  not found
+         B     L0009
+L0011    DS    0H                  not found
+         LR    3,7                 BEFORE: the whole field
+         LR    4,5
+         B     L0012
+L0010    DS    0H                  found
+         LR    4,3                 BEFORE: up to it
          LR    3,7
-         LA    5,12                BEFORE: the whole field
-         B     L0010
-L0008    DS    0H                  found
-         LR    5,3
-         SR    5,7                 BEFORE: up to it
-         LR    3,7
-L0010    DS    0H
-         LR    2,5                 CHARACTERS: every position in range
-         CVD   2,DWK
+L0012    DS    0H
+         ST    3,INSRLO+0          the range
+         ST    4,INSRHI+0
+         ST    3,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0013    CR    3,5                 at the end?
+         BNL   L0014
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0015
+         C     3,INSRLO+0          in its range yet?
+         BL    L0015
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0015
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0013
+L0015    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0013
+L0014    DS    0H
+         DROP  8
+         L     4,INSTLY+0
+         CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   PWK2(16),DWK(8)
@@ -190,11 +265,8 @@ L0010    DS    0H
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
-         DROP  8
 T0011    DS    0H
 * MOVE TALLY -> T
-         L     8,BL0000            base locator
-         USING WSC0000,8
          L     2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
@@ -218,27 +290,58 @@ T0013    DS    0H
          ST    2,D0005
 T0014    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         LR    7,3                 the field's start
-L0011    CH    5,H0001             room for the bounding string?
-         BL    L0013
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LR    3,7
+L0017    LR    4,5
+         SR    4,3                 what is left
+         CH    4,H0001             room for the bounding string?
+         BL    L0019
          CLC   0(1,3),S0003        INITIAL
-         BE    L0012
+         BE    L0018
          LA    3,1(3)
-         BCT   5,L0011
-L0013    DS    0H                  not found
+         B     L0017
+L0019    DS    0H                  not found
+         LR    3,7                 BEFORE: the whole field
+         LR    4,5
+         B     L0020
+L0018    DS    0H                  found
+         LR    4,3                 BEFORE: up to it
          LR    3,7
-         LA    5,12                BEFORE: the whole field
-         B     L0014
-L0012    DS    0H                  found
-         LR    5,3
-         SR    5,7                 BEFORE: up to it
-         LR    3,7
-L0014    DS    0H
-         LR    2,5                 CHARACTERS: every position in range
-         CVD   2,DWK
+L0020    DS    0H
+         ST    3,INSRLO+0          the range
+         ST    4,INSRHI+0
+         ST    3,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0021    CR    3,5                 at the end?
+         BNL   L0022
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0023
+         C     3,INSRLO+0          in its range yet?
+         BL    L0023
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0023
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0021
+L0023    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0021
+L0022    DS    0H
+         DROP  8
+         L     4,INSTLY+0
+         CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   PWK2(16),DWK(8)
@@ -249,11 +352,8 @@ L0014    DS    0H
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
-         DROP  8
 T0015    DS    0H
 * MOVE TALLY -> T
-         L     8,BL0000            base locator
-         USING WSC0000,8
          L     2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
@@ -277,22 +377,42 @@ T0017    DS    0H
          ST    2,D0005
 T0018    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         SR    4,4                 the tally
-L0015    CH    5,H0001             room for the string?
-         BL    L0017
-         CLC   0(1,3),S0001
-         BNE   L0016
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0015
-L0016    DS    0H
-         LA    3,1(3)
-         BCT   5,L0015
-L0017    DS    0H
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0025    CR    3,5                 at the end?
+         BNL   L0026
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0027
+         C     3,INSRLO+0          in its range yet?
+         BL    L0027
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0027
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0027
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0025
+L0027    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0025
+L0026    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -307,20 +427,40 @@ L0017    DS    0H
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
-         LA    3,D0000             the field
-         LA    5,12                its length
-L0018    CH    5,H0001             room for the string?
-         BL    L0020
-         CLC   0(1,3),S0001
-         BNE   L0019
-         MVC   0(1,3),S0004        replace
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0018
-L0019    DS    0H
-         LA    3,1(3)
-         BCT   5,L0018
-L0020    DS    0H
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0004             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0029    CR    3,5                 at the end?
+         BNL   L0030
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0031
+         C     3,INSRLO+0          in its range yet?
+         BL    L0031
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0031
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0031
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         B     L0029
+L0031    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0029
+L0030    DS    0H
          DROP  8
 T0019    DS    0H
 * MOVE TALLY -> T
@@ -355,22 +495,46 @@ T0022    DS    0H
          ST    2,D0005
 T0023    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         SR    4,4                 the tally
-L0021    CH    5,H0001             room for the string?
-         BL    L0023
-         CLC   0(1,3),S0001
-         BNE   L0023
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0021
-L0022    DS    0H
-         LA    3,1(3)
-         BCT   5,L0021
-L0023    DS    0H
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0033    CR    3,5                 at the end?
+         BNL   L0034
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0035
+         C     3,INSRLO+0          in its range yet?
+         BL    L0035
+         C     3,INSNXT+0          LEADING: still contiguous?
+         BNE   L0036
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0036
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0036
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         ST    3,INSNXT+0          contiguous so far
+         B     L0033
+L0036    MVI   INSFLG+0,X'00'      LEADING: a break ends it
+L0035    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0033
+L0034    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -385,21 +549,48 @@ L0023    DS    0H
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
-         LA    3,D0000             the field
-         LA    5,12                its length
-L0024    CH    5,H0001             room for the string?
-         BL    L0026
-         CLC   0(1,3),S0001
-         BNE   L0026
-         MVC   0(1,3),S0005        replace
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0024
-L0025    DS    0H
-         LA    3,1(3)
-         BCT   5,L0024
-L0026    DS    0H
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0005             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0037    CR    3,5                 at the end?
+         BNL   L0038
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0039
+         C     3,INSRLO+0          in its range yet?
+         BL    L0039
+         C     3,INSNXT+0          LEADING: still contiguous?
+         BNE   L0040
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0040
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0040
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         ST    3,INSNXT+0          contiguous so far
+         B     L0037
+L0040    MVI   INSFLG+0,X'00'      LEADING: a break ends it
+L0039    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0037
+L0038    DS    0H
          DROP  8
+         BALR  12,0                a new code block: the paragraph is l
+B0001    EQU   *
+         USING B0001,12
 T0024    DS    0H
 * MOVE TALLY -> T
          L     8,BL0000            base locator
@@ -433,27 +624,58 @@ T0027    DS    0H
          ST    2,D0005
 T0028    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         LR    7,3                 the field's start
-L0027    CH    5,H0001             room for the bounding string?
-         BL    L0029
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LR    3,7
+L0041    LR    4,5
+         SR    4,3                 what is left
+         CH    4,H0001             room for the bounding string?
+         BL    L0043
          CLC   0(1,3),S0002        INITIAL
-         BE    L0028
+         BE    L0042
          LA    3,1(3)
-         BCT   5,L0027
-L0029    DS    0H                  not found
+         B     L0041
+L0043    DS    0H                  not found
+         LR    3,7                 BEFORE: the whole field
+         LR    4,5
+         B     L0044
+L0042    DS    0H                  found
+         LR    4,3                 BEFORE: up to it
          LR    3,7
-         LA    5,12                BEFORE: the whole field
-         B     L0030
-L0028    DS    0H                  found
-         LR    5,3
-         SR    5,7                 BEFORE: up to it
-         LR    3,7
-L0030    DS    0H
-         LR    2,5                 CHARACTERS: every position in range
-         CVD   2,DWK
+L0044    DS    0H
+         ST    3,INSRLO+0          the range
+         ST    4,INSRHI+0
+         ST    3,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0045    CR    3,5                 at the end?
+         BNL   L0046
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0047
+         C     3,INSRLO+0          in its range yet?
+         BL    L0047
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0047
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0045
+L0047    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0045
+L0046    DS    0H
+         DROP  8
+         L     4,INSTLY+0
+         CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   PWK2(16),DWK(8)
@@ -464,37 +686,52 @@ L0030    DS    0H
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
-         DROP  8
-         L     8,BL0000            base locator
-         USING WSC0000,8
-         LA    3,D0000             the field
-         LA    5,12                its length
-         LR    7,3                 the field's start
-L0031    CH    5,H0001             room for the bounding string?
-         BL    L0033
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0006             the replacement
+         ST    4,INSOPB+0
+         LR    3,7
+L0049    LR    4,5
+         SR    4,3                 what is left
+         CH    4,H0001             room for the bounding string?
+         BL    L0051
          CLC   0(1,3),S0002        INITIAL
-         BE    L0032
+         BE    L0050
          LA    3,1(3)
-         BCT   5,L0031
-L0033    DS    0H                  not found
-         LR    3,7
-         LA    5,12                BEFORE: the whole field
-         B     L0034
-L0032    DS    0H                  found
-         LR    5,3
-         SR    5,7                 BEFORE: up to it
-         LR    3,7
-L0034    DS    0H
-         LTR   5,5
-         BZ    L0035               nothing in range
-         MVC   0(1,3),S0006        CHARACTERS BY: the first
+         B     L0049
+L0051    DS    0H                  not found
+         LR    3,7                 BEFORE: the whole field
          LR    4,5
-         BCTR  4,0
-         LTR   4,4
-         BZ    L0035
-         BCTR  4,0
-         EX    4,INSPROP           and propagate
-L0035    DS    0H
+         B     L0052
+L0050    DS    0H                  found
+         LR    4,3                 BEFORE: up to it
+         LR    3,7
+L0052    DS    0H
+         ST    3,INSRLO+0          the range
+         ST    4,INSRHI+0
+         ST    3,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0053    CR    3,5                 at the end?
+         BNL   L0054
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0055
+         C     3,INSRLO+0          in its range yet?
+         BL    L0055
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0055
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         B     L0053
+L0055    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0053
+L0054    DS    0H
          DROP  8
 T0029    DS    0H
 * MOVE TALLY -> T
@@ -505,9 +742,6 @@ T0029    DS    0H
          ZAP   PWK1(16),DWK(8)
          UNPK  D0004(5),PWK1(16)   packed -> zoned
          OI    D0004+4,X'F0'       unsigned: force an F zone
-         BALR  12,0                a new code block: the paragraph is l
-B0001    EQU   *
-         USING B0001,12
 T0030    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(20),S0022
@@ -523,20 +757,40 @@ T0031    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0032    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-L0036    CH    5,H0001             room for the string?
-         BL    L0038
-         CLC   0(1,3),S0001
-         BNE   L0037
-         MVC   0(1,3),S0007        replace
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0036
-L0037    DS    0H
-         LA    3,1(3)
-         BCT   5,L0036
-L0038    DS    0H
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0007             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0057    CR    3,5                 at the end?
+         BNL   L0058
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0059
+         C     3,INSRLO+0          in its range yet?
+         BL    L0059
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0059
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0059
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         B     L0057
+L0059    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0057
+L0058    DS    0H
          DROP  8
 T0033    DS    0H
 * DISPLAY
@@ -553,20 +807,44 @@ T0034    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0035    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-L0039    CH    5,H0001             room for the string?
-         BL    L0041
-         CLC   0(1,3),S0001
-         BNE   L0041
-         MVC   0(1,3),S0007        replace
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0039
-L0040    DS    0H
-         LA    3,1(3)
-         BCT   5,L0039
-L0041    DS    0H
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0007             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0061    CR    3,5                 at the end?
+         BNL   L0062
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0063
+         C     3,INSRLO+0          in its range yet?
+         BL    L0063
+         C     3,INSNXT+0          LEADING: still contiguous?
+         BNE   L0064
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0064
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0064
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         ST    3,INSNXT+0          contiguous so far
+         B     L0061
+L0064    MVI   INSFLG+0,X'00'      LEADING: a break ends it
+L0063    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0061
+L0062    DS    0H
          DROP  8
 T0036    DS    0H
 * DISPLAY
@@ -583,21 +861,41 @@ T0037    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0038    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-L0042    CH    5,H0001             room for the string?
-         BL    L0044
-         CLC   0(1,3),S0002
-         BNE   L0043
-         MVC   0(1,3),S0007        replace
-         B     L0044               FIRST: done
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0042
-L0043    DS    0H
-         LA    3,1(3)
-         BCT   5,L0042
-L0044    DS    0H
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0002             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0007             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0065    CR    3,5                 at the end?
+         BNL   L0066
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0067
+         C     3,INSRLO+0          in its range yet?
+         BL    L0067
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0067
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0067
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         MVI   INSFLG+0,X'00'      FIRST: done
+         LA    3,1(,3)             past it
+         B     L0065
+L0067    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0065
+L0066    DS    0H
          DROP  8
 T0039    DS    0H
 * DISPLAY
@@ -614,34 +912,52 @@ T0040    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0041    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         LR    7,3                 the field's start
-L0045    CH    5,H0001             room for the bounding string?
-         BL    L0047
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0007             the replacement
+         ST    4,INSOPB+0
+         LR    3,7
+L0069    LR    4,5
+         SR    4,3                 what is left
+         CH    4,H0001             room for the bounding string?
+         BL    L0071
          CLC   0(1,3),S0002        INITIAL
-         BE    L0046
+         BE    L0070
          LA    3,1(3)
-         BCT   5,L0045
-L0047    DS    0H                  not found
-         LR    3,7
-         LA    5,12                BEFORE: the whole field
-         B     L0048
-L0046    DS    0H                  found
-         LR    5,3
-         SR    5,7                 BEFORE: up to it
-         LR    3,7
-L0048    DS    0H
-         LTR   5,5
-         BZ    L0049               nothing in range
-         MVC   0(1,3),S0007        CHARACTERS BY: the first
+         B     L0069
+L0071    DS    0H                  not found
+         LR    3,7                 BEFORE: the whole field
          LR    4,5
-         BCTR  4,0
-         LTR   4,4
-         BZ    L0049
-         BCTR  4,0
-         EX    4,INSPROP           and propagate
-L0049    DS    0H
+         B     L0072
+L0070    DS    0H                  found
+         LR    4,3                 BEFORE: up to it
+         LR    3,7
+L0072    DS    0H
+         ST    3,INSRLO+0          the range
+         ST    4,INSRHI+0
+         ST    3,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0073    CR    3,5                 at the end?
+         BNL   L0074
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0075
+         C     3,INSRLO+0          in its range yet?
+         BL    L0075
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0075
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         B     L0073
+L0075    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0073
+L0074    DS    0H
          DROP  8
 T0042    DS    0H
 * DISPLAY
@@ -658,21 +974,41 @@ T0043    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0044    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-L0050    CH    5,H0001             room for the string?
-         BL    L0052
-         CLC   0(1,3),S0003
-         BNE   L0051
-         MVC   0(1,3),S0007        replace
-         B     L0052               FIRST: done
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0050
-L0051    DS    0H
-         LA    3,1(3)
-         BCT   5,L0050
-L0052    DS    0H
+*  REPLACING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0003             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0007             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0077    CR    3,5                 at the end?
+         BNL   L0078
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0079
+         C     3,INSRLO+0          in its range yet?
+         BL    L0079
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0079
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0079
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         MVI   INSFLG+0,X'00'      FIRST: done
+         LA    3,1(,3)             past it
+         B     L0077
+L0079    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0077
+L0078    DS    0H
          DROP  8
 T0045    DS    0H
 * DISPLAY
@@ -698,22 +1034,42 @@ T0047    DS    0H
          ST    2,D0005
 T0048    DS    0H
 * INSPECT N
-         LA    3,D0001             the field
-         LA    5,6                 its length
-         SR    4,4                 the tally
-L0053    CH    5,H0001             room for the string?
-         BL    L0055
-         CLC   0(1,3),S0008
-         BNE   L0054
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0053
-L0054    DS    0H
-         LA    3,1(3)
-         BCT   5,L0053
-L0055    DS    0H
+*  TALLYING pass
+         LA    7,D0001             the field
+         L     5,FC002             its length
+         AR    5,7                 its end
+         LA    4,S0008             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0081    CR    3,5                 at the end?
+         BNL   L0082
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0083
+         C     3,INSRLO+0          in its range yet?
+         BL    L0083
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0083
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0083
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0081
+L0083    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0081
+L0082    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -744,20 +1100,40 @@ T0050    DS    0H
          BALR  14,15
 T0051    DS    0H
 * INSPECT N
-         LA    3,D0001             the field
-         LA    5,6                 its length
-L0056    CH    5,H0001             room for the string?
-         BL    L0058
-         CLC   0(1,3),S0008
-         BNE   L0057
-         MVC   0(1,3),S0009        replace
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0056
-L0057    DS    0H
-         LA    3,1(3)
-         BCT   5,L0056
-L0058    DS    0H
+*  REPLACING pass
+         LA    7,D0001             the field
+         L     5,FC002             its length
+         AR    5,7                 its end
+         LA    4,S0008             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0009             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0085    CR    3,5                 at the end?
+         BNL   L0086
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0087
+         C     3,INSRLO+0          in its range yet?
+         BL    L0087
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0087
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0087
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         B     L0085
+L0087    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0085
+L0086    DS    0H
          DROP  8
 T0052    DS    0H
 * DISPLAY
@@ -784,22 +1160,42 @@ T0054    DS    0H
          ST    2,D0005
 T0055    DS    0H
 * INSPECT S
-         LA    3,D0002             the field
-         LA    5,4                 its length
-         SR    4,4                 the tally
-L0059    CH    5,H0001             room for the string?
-         BL    L0061
-         CLC   0(1,3),S0008
-         BNE   L0060
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0059
-L0060    DS    0H
-         LA    3,1(3)
-         BCT   5,L0059
-L0061    DS    0H
+*  TALLYING pass
+         LA    7,D0002             the field
+         L     5,FC003             its length
+         AR    5,7                 its end
+         LA    4,S0008             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0089    CR    3,5                 at the end?
+         BNL   L0090
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0091
+         C     3,INSRLO+0          in its range yet?
+         BL    L0091
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0091
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0091
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0089
+L0091    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0089
+L0090    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -814,6 +1210,9 @@ L0061    DS    0H
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          ST    2,D0005
+         BALR  12,0                a new code block: the paragraph is l
+B0002    EQU   *
+         USING B0002,12
 T0056    DS    0H
 * MOVE TALLY -> T
          L     2,D0005
@@ -830,20 +1229,40 @@ T0057    DS    0H
          BALR  14,15
 T0058    DS    0H
 * INSPECT S
-         LA    3,D0002             the field
-         LA    5,4                 its length
-L0062    CH    5,H0001             room for the string?
-         BL    L0064
-         CLC   0(1,3),S0008
-         BNE   L0063
-         MVC   0(1,3),S0010        replace
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0062
-L0063    DS    0H
-         LA    3,1(3)
-         BCT   5,L0062
-L0064    DS    0H
+*  REPLACING pass
+         LA    7,D0002             the field
+         L     5,FC003             its length
+         AR    5,7                 its end
+         LA    4,S0008             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0010             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0093    CR    3,5                 at the end?
+         BNL   L0094
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0095
+         C     3,INSRLO+0          in its range yet?
+         BL    L0095
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0095
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0095
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         B     L0093
+L0095    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0093
+L0094    DS    0H
          DROP  8
 T0059    DS    0H
 * DISPLAY
@@ -865,20 +1284,40 @@ T0060    DS    0H
          MVC   D0003(10),EDWK+2    the edited result
 T0061    DS    0H
 * INSPECT ED
-         LA    3,D0003             the field
-         LA    5,10                its length
-L0065    CH    5,H0001             room for the string?
-         BL    L0067
-         CLC   0(1,3),S0011
-         BNE   L0066
-         MVC   0(1,3),S0012        replace
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0065
-L0066    DS    0H
-         LA    3,1(3)
-         BCT   5,L0065
-L0067    DS    0H
+*  REPLACING pass
+         LA    7,D0003             the field
+         L     5,FC004             its length
+         AR    5,7                 its end
+         LA    4,S0011             the string looked for
+         ST    4,INSOPA+0
+         LA    4,S0012             the replacement
+         ST    4,INSOPB+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         LR    3,7                 the position
+L0097    CR    3,5                 at the end?
+         BNL   L0098
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0099
+         C     3,INSRLO+0          in its range yet?
+         BL    L0099
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0099
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0099
+         L     4,INSOPB+0
+         MVC   0(1,3),0(4)         replace
+         LA    3,1(,3)             past it
+         B     L0097
+L0099    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0097
+L0098    DS    0H
          DROP  8
 T0062    DS    0H
 * DISPLAY
@@ -904,22 +1343,42 @@ T0064    DS    0H
          ST    2,D0005
 T0065    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         SR    4,4                 the tally
-L0068    CH    5,H0001             room for the string?
-         BL    L0070
-         CLC   0(1,3),S0011
-         BNE   L0069
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0068
-L0069    DS    0H
-         LA    3,1(3)
-         BCT   5,L0068
-L0070    DS    0H
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0011             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0101    CR    3,5                 at the end?
+         BNL   L0102
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0103
+         C     3,INSRLO+0          in its range yet?
+         BL    L0103
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0103
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0103
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0101
+L0103    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0101
+L0102    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -985,9 +1444,9 @@ T0072    DS    0H
          ZAP   PWK1(16),DWK(8)
          UNPK  ZWK(5),PWK1(16)     DISPLAY: the digits, zoned
          TM    ZWK+4,X'10'         a D (or B) zone is negative
-         BO    L0071               keep it overpunched
+         BO    L0105               keep it overpunched
          OI    ZWK+4,X'F0'         otherwise a plain digit
-L0071    DS    0H
+L0105    DS    0H
          MVC   DSPBUF+19(5),ZWK+0
          LA    1,PARM0020
          L     15,VDISP
@@ -1006,22 +1465,42 @@ T0074    DS    0H
          ST    2,D0005
 T0075    DS    0H
 * INSPECT W
-         LA    3,D0000             the field
-         LA    5,12                its length
-         SR    4,4                 the tally
-L0072    CH    5,H0001             room for the string?
-         BL    L0074
-         CLC   0(1,3),S0001
-         BNE   L0073
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
-         B     L0072
-L0073    DS    0H
-         LA    3,1(3)
-         BCT   5,L0072
-L0074    DS    0H
+*  TALLYING pass
+         LA    7,D0000             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0106    CR    3,5                 at the end?
+         BNL   L0107
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0108
+         C     3,INSRLO+0          in its range yet?
+         BL    L0108
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0108
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0108
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0106
+L0108    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0106
+L0107    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -1044,9 +1523,9 @@ T0076    DS    0H
          ZAP   PWK1(16),DWK(8)
          UNPK  ZWK(5),PWK1(16)     DISPLAY: the digits, zoned
          TM    ZWK+4,X'10'         a D (or B) zone is negative
-         BO    L0075               keep it overpunched
+         BO    L0110               keep it overpunched
          OI    ZWK+4,X'F0'         otherwise a plain digit
-L0075    DS    0H
+L0110    DS    0H
          MVC   DSPBUF+15(5),ZWK+0
          LA    1,PARM0021
          L     15,VDISP
@@ -1136,7 +1615,13 @@ PARM0021 DC    A(DSPBUF)
 LEN0021  DC    H'20'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
-INSPROP  MVC   1(0,3),0(3)         executed: INSPECT CHARACTERS propaga
+INSRLO   DS    1F                  INSPECT: each operand's range
+INSRHI   DS    1F
+INSNXT   DS    1F                  where a LEADING operand must match n
+INSTLY   DS    1F                  each operand's tally
+INSOPA   DS    1F                  the strings looked for
+INSOPB   DS    1F                  the replacements
+INSFLG   DS    XL1                 live flags
 PWK1     DS    PL16
 PWK2     DS    PL16
 EDSRC    DS    PL16                ED source, sized to the selectors
@@ -1160,6 +1645,10 @@ K0004    EQU   *-14
          DC    PL2'42'
 M0001    DC    XL12'402120202020402020402020'  ED patterns
 H0001    DC    H'1'                element sizes
+FC001    DC    F'12'               binary literals
+FC002    DC    F'6'
+FC003    DC    F'4'
+FC004    DC    F'10'
 S0001    DC    CL1'A'              nonnumeric constants
 S0002    DC    CL1'C'
 S0003    DC    CL1'Q'
@@ -1266,6 +1755,7 @@ SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
          DS    0F
 CB0000   DC    A(B0000)            a code block's base
 CB0001   DC    A(B0001)            a code block's base
+CB0002   DC    A(B0002)            a code block's base
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

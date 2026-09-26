@@ -1,0 +1,50 @@
+000100 IDENTIFICATION DIVISION.
+000200 PROGRAM-ID. INSPECT3.
+000300* Several operands in one INSPECT phrase: one pass over the field,
+000400* left to right, the operands tried in the order written at each
+000500* position, the first match taking it (II-68 to II-70). The
+000600* operations once ran one after another over the whole field, so
+000700* a later operand saw what an earlier one had replaced (#32). By
+000800* the standard's text: IKFCBL00 has EXAMINE, not INSPECT.
+000900 ENVIRONMENT DIVISION.
+001000 DATA DIVISION.
+001100 WORKING-STORAGE SECTION.
+001200 01  S   PIC X(12).
+001300 01  C1  PIC 99.
+001400 01  C2  PIC 99.
+001500 01  C3  PIC 99.
+001600 PROCEDURE DIVISION.
+001700 MAIN-PARA.
+001800     MOVE 'ABABABXYZAAB' TO S.
+001900     INSPECT S REPLACING ALL 'A' BY 'B' 'B' BY 'C'.
+002000     DISPLAY 'R1 [' S ']'.
+002100     MOVE 'ABABABXYZAAB' TO S.
+002200     INSPECT S REPLACING ALL 'AB' BY 'XY' 'A' BY 'Q'.
+002300     DISPLAY 'R2 [' S ']'.
+002400     MOVE 'AAABAAAXAAAA' TO S.
+002500     MOVE 0 TO C1 C2 C3.
+002600     INSPECT S TALLYING C1 FOR LEADING 'A'
+002700                        C2 FOR ALL 'A'
+002800                        C3 FOR CHARACTERS.
+002900     DISPLAY 'T1 ' C1 ' ' C2 ' ' C3.
+003000     MOVE 'AAABAAAXAAAA' TO S.
+003100     MOVE 0 TO C1 C2 C3.
+003200     INSPECT S TALLYING C1 FOR ALL 'A' BEFORE INITIAL 'X'
+003300                        C2 FOR ALL 'A' AFTER INITIAL 'B'
+003400                        C3 FOR CHARACTERS AFTER INITIAL 'X'.
+003500     DISPLAY 'T2 ' C1 ' ' C2 ' ' C3.
+003600     MOVE 'AAABAAAXAAAA' TO S.
+003700     INSPECT S REPLACING LEADING 'A' BY 'L'
+003800                         FIRST 'A' BY 'F'
+003900                         ALL 'A' BY 'Z' AFTER INITIAL 'X'.
+004000     DISPLAY 'R3 [' S ']'.
+004100     MOVE 'ABCABCABCABC' TO S.
+004200     INSPECT S REPLACING CHARACTERS BY 'X' BEFORE INITIAL 'C'
+004300                         ALL 'C' BY 'Y'.
+004400     DISPLAY 'R4 [' S ']'.
+004500     MOVE 'ABABABXYZAAB' TO S.
+004600     MOVE 0 TO C1.
+004700     INSPECT S TALLYING C1 FOR ALL 'AB'
+004800               REPLACING ALL 'AB' BY 'CD'.
+004900     DISPLAY 'TR [' S '] ' C1.
+005000     STOP RUN.

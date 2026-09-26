@@ -1216,7 +1216,15 @@ compiled. The rest of #39 stays as recorded there: parity with IKFCBL00
 (STOP RUN inside a sort exit), better than it (the 18-digit ADD), or
 harmless on a legal program.
 
-Not done: single-pass multi-operand `INSPECT` (#32). `OCCURS DEPENDING ON` in a file record is still
+`INSPECT` with several operands in a phrase (#32) is now one pass over the
+field per phrase, as II-68 to II-70 describe it: the operands are tried in
+the order written at each position, the first that matches tallies or
+replaces and the scan steps past its string, a LEADING operand stays live
+only while its matches are contiguous from the start of its range, a FIRST
+operand until its one replacement, and every BEFORE/AFTER range is found
+before anything is replaced. The operations used to run one after another
+over the whole field. IKFCBL00 has EXAMINE and no INSPECT, so `inspect3`
+is checked against the standard's text. `OCCURS DEPENDING ON` in a file record is still
 refused, so the variable-length `WRITE` in #38 cannot arise; the RDW code is
 right for it when it is allowed.
 

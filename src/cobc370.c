@@ -7521,7 +7521,7 @@ static void gen_rescale_t(const char *wk, int len, int from, int to, int round)
  * the work areas, where the permanent base covers them. */
 static struct { const char *lab, *op, *opd, *cmt; } pend_dc[MAXSOP * 4];
 static int npend_dc;
-static int use_str, use_uns, use_insprop, use_wto, use_wtor, use_adt, use_mvl, use_devtype, use_dcal;
+static int use_str, use_uns, use_inspect, max_insops, use_wto, use_wtor, use_adt, use_mvl, use_devtype, use_dcal;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
     if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
@@ -11875,162 +11875,180 @@ static void generate(void)
             break;
         }
         case ST_INSPECT: {
+            /* One left-to-right pass per phrase, as II-68 to II-70 have it:
+             * at each position the operands are tried in the order written,
+             * the first that matches tallies or replaces and the scan steps
+             * past its string; none matching steps one character. TALLYING
+             * and REPLACING in one statement are two such passes. Before
+             * either, each operand's BEFORE/AFTER range is found in the
+             * field as it stands, so no replacement moves a boundary; and a
+             * LEADING operand stays live only while its matches have been
+             * contiguous from the start of its range, a FIRST operand until
+             * its one replacement. The operations used to run one after
+             * another over the whole field, so a later operand saw what an
+             * earlier one had replaced (#32).
+             *
+             * R7 is the field's start, R5 its end, R3 the position, R4
+             * scratch. Everything per operand lives in cells -- the range,
+             * the next-contiguous position, a live flag, a tally, the
+             * operand addresses -- so nothing inside the loop needs a base
+             * register loaded. */
             const Sym *sy = &syms[st->dst];
             int n = st->dsub ? sy->elem : sy->bytes;
             char f[64], g[64];
             snprintf(b, sizeof b, " INSPECT %s", sy->name);
             asm_comment(b);
-            for (int k = 0; k < st->ins_n; k++) {
-                const InsOp *o = &insops[st->ins_first + k];
-                int tallying = (o->kind <= INS_T_CHARS);
-                /* R3 walks the field and R5 counts what is left of the range;
-                 * R7 keeps the field's start, R4 tallies. Nothing else is
-                 * live in them. */
+            for (int pass = 0; pass < 2; pass++) {
+                int ops[16], nops = 0;
+                for (int k = 0; k < st->ins_n; k++) {
+                    const InsOp *o = &insops[st->ins_first + k];
+                    int tallying = (o->kind <= INS_T_CHARS);
+                    if (tallying != (pass == 0)) continue;
+                    if (nops >= 16) die("an INSPECT phrase takes at most 16 operands here");
+                    ops[nops++] = st->ins_first + k;
+                }
+                if (!nops) continue;
+                use_inspect = 1;
+                if (nops > max_insops) max_insops = nops;
+                asm_comment(pass == 0 ? "  TALLYING pass" : "  REPLACING pass");
                 need_sym_base(sy);
                 field_ref_m(sy, st->dsub, FR_SS_NOLEN, n, 6, f, sizeof f);
-                snprintf(b, sizeof b, "3,%s", f);
+                snprintf(b, sizeof b, "7,%s", f);
                 asm_line("", "LA", b, "the field");
-                snprintf(b, sizeof b, "5,%d", n);
-                asm_line("", "LA", b, "its length");
-                if (o->bf_len) {
-                    /* BEFORE/AFTER INITIAL: find the first occurrence of the
-                     * bounding string. BEFORE scans up to it, or the whole
-                     * field if absent; AFTER scans from just past it, or
-                     * nothing if absent. */
-                    int ls = ++genlabel, lf = ++genlabel, lnf = ++genlabel, lgo = ++genlabel;
-                    char lls[16], llf[16], llnf[16], llgo[16];
-                    snprintf(lls, sizeof lls, "L%04d", ls);  snprintf(llf, sizeof llf, "L%04d", lf);
-                    snprintf(llnf, sizeof llnf, "L%04d", lnf); snprintf(llgo, sizeof llgo, "L%04d", lgo);
-                    asm_line("", "LR", "7,3", "the field's start");
-                    if (o->bf_sym >= 0) {
-                        need_sym_base(&syms[o->bf_sym]);
-                        field_ref_m(&syms[o->bf_sym], NULL, FR_SS_NOLEN, o->bf_len, 6, g, sizeof g);
-                    } else snprintf(g, sizeof g, "%s", o->bf_lab);
-                    snprintf(b, sizeof b, "5,%s", intern_half(o->bf_len));
-                    asm_line(lls, "CH", b, "room for the bounding string?");
-                    asm_line("", "BL", llnf, "");
-                    snprintf(b, sizeof b, "0(%d,3),%s", o->bf_len, g);
-                    asm_line("", "CLC", b, "INITIAL");
-                    asm_line("", "BE", llf, "");
-                    asm_line("", "LA", "3,1(3)", "");
-                    snprintf(b, sizeof b, "5,%s", lls);
-                    asm_line("", "BCT", b, "");
-                    asm_line(llnf, "DS", "0H", "not found");
-                    if (o->bf_after) asm_line("", "SR", "5,5", "AFTER: nothing to scan");
-                    else { asm_line("", "LR", "3,7", ""); snprintf(b, sizeof b, "5,%d", n); asm_line("", "LA", b, "BEFORE: the whole field"); }
-                    asm_line("", "B", llgo, "");
-                    asm_line(llf, "DS", "0H", "found");
-                    if (o->bf_after) {
-                        snprintf(b, sizeof b, "3,%d(3)", o->bf_len);
-                        asm_line("", "LA", b, "AFTER: from just past it");
-                        snprintf(b, sizeof b, "5,%s", intern_half(o->bf_len));
-                        asm_line("", "SH", b, "");
-                    } else {
-                        asm_line("", "LR", "5,3", "");
-                        asm_line("", "SR", "5,7", "BEFORE: up to it");
+                snprintf(b, sizeof b, "5,%s", intern_full(n));
+                asm_line("", "L", b, "its length");
+                asm_line("", "AR", "5,7", "its end");
+                for (int j = 0; j < nops; j++) {
+                    const InsOp *o = &insops[ops[j]];
+                    int chars = (o->kind == INS_T_CHARS || o->kind == INS_R_CHARS);
+                    if (!chars) {
+                        if (o->c_len > 4095) die("an INSPECT operand longer than 4095 bytes is not implemented");
+                        if (o->c_sym >= 0) {
+                            need_sym_base(&syms[o->c_sym]);
+                            field_ref_m(&syms[o->c_sym], NULL, FR_SS_NOLEN, o->c_len, 2, g, sizeof g);
+                        } else snprintf(g, sizeof g, "%s", o->c_lab);
+                        snprintf(b, sizeof b, "4,%s", g); asm_line("", "LA", b, "the string looked for");
+                        snprintf(b, sizeof b, "4,INSOPA+%d", 4 * j); asm_line("", "ST", b, "");
+                    }
+                    if (pass == 1) {
+                        if (o->by_sym >= 0) {
+                            need_sym_base(&syms[o->by_sym]);
+                            field_ref_m(&syms[o->by_sym], NULL, FR_SS_NOLEN, o->by_len, 2, g, sizeof g);
+                        } else snprintf(g, sizeof g, "%s", o->by_lab);
+                        snprintf(b, sizeof b, "4,%s", g); asm_line("", "LA", b, "the replacement");
+                        snprintf(b, sizeof b, "4,INSOPB+%d", 4 * j); asm_line("", "ST", b, "");
+                    }
+                    if (o->bf_len) {
+                        /* BEFORE/AFTER INITIAL: the first occurrence of the
+                         * bounding string. BEFORE ranges up to it, or over the
+                         * whole field when absent; AFTER from just past it, or
+                         * over nothing. */
+                        char lls[16], llf[16], llnf[16], llgo[16];
+                        snprintf(lls, sizeof lls, "L%04d", ++genlabel);  snprintf(llf, sizeof llf, "L%04d", ++genlabel);
+                        snprintf(llnf, sizeof llnf, "L%04d", ++genlabel); snprintf(llgo, sizeof llgo, "L%04d", ++genlabel);
+                        if (o->bf_sym >= 0) {
+                            need_sym_base(&syms[o->bf_sym]);
+                            field_ref_m(&syms[o->bf_sym], NULL, FR_SS_NOLEN, o->bf_len, 2, g, sizeof g);
+                        } else snprintf(g, sizeof g, "%s", o->bf_lab);
                         asm_line("", "LR", "3,7", "");
+                        asm_line(lls, "LR", "4,5", "");
+                        asm_line("", "SR", "4,3", "what is left");
+                        snprintf(b, sizeof b, "4,%s", intern_half(o->bf_len));
+                        asm_line("", "CH", b, "room for the bounding string?");
+                        asm_line("", "BL", llnf, "");
+                        snprintf(b, sizeof b, "0(%d,3),%s", o->bf_len, g);
+                        asm_line("", "CLC", b, "INITIAL");
+                        asm_line("", "BE", llf, "");
+                        asm_line("", "LA", "3,1(3)", "");
+                        asm_line("", "B", lls, "");
+                        asm_line(llnf, "DS", "0H", "not found");
+                        if (o->bf_after) { asm_line("", "LR", "3,5", "AFTER: nothing"); asm_line("", "LR", "4,5", ""); }
+                        else { asm_line("", "LR", "3,7", "BEFORE: the whole field"); asm_line("", "LR", "4,5", ""); }
+                        asm_line("", "B", llgo, "");
+                        asm_line(llf, "DS", "0H", "found");
+                        if (o->bf_after) {
+                            snprintf(b, sizeof b, "3,%d(3)", o->bf_len);
+                            asm_line("", "LA", b, "AFTER: from just past it");
+                            asm_line("", "LR", "4,5", "");
+                        } else { asm_line("", "LR", "4,3", "BEFORE: up to it"); asm_line("", "LR", "3,7", ""); }
+                        asm_line(llgo, "DS", "0H", "");
+                        snprintf(b, sizeof b, "3,INSRLO+%d", 4 * j); asm_line("", "ST", b, "the range");
+                        snprintf(b, sizeof b, "4,INSRHI+%d", 4 * j); asm_line("", "ST", b, "");
+                        snprintf(b, sizeof b, "3,INSNXT+%d", 4 * j); asm_line("", "ST", b, "");
+                    } else {
+                        snprintf(b, sizeof b, "7,INSRLO+%d", 4 * j); asm_line("", "ST", b, "the whole field");
+                        snprintf(b, sizeof b, "5,INSRHI+%d", 4 * j); asm_line("", "ST", b, "");
+                        snprintf(b, sizeof b, "7,INSNXT+%d", 4 * j); asm_line("", "ST", b, "");
                     }
-                    asm_line(llgo, "DS", "0H", "");
-                }
-                if (o->kind == INS_T_CHARS) {
-                    asm_line("", "LR", "2,5", "CHARACTERS: every position in range");
-                    asm_line("", "CVD", "2,DWK", "");
-                    asm_line("", "ZAP", "PWK1(16),DWK(8)", "");
-                    gen_load(&syms[o->tally], NULL, "PWK2");
-                    asm_line("", "AP", "PWK1(16),PWK2(16)", "TALLYING adds");
-                    gen_store(&syms[o->tally], NULL, "PWK1");
-                    reset_bases();
-                    continue;
-                }
-                if (o->kind == INS_R_CHARS) {
-                    /* Every position in range is replaced: set the first byte
-                     * and let an overlapping MVC carry it, its length known
-                     * only at run time when a range is in play. */
-                    int ld = ++genlabel; char lld[16]; snprintf(lld, sizeof lld, "L%04d", ld);
-                    if (o->by_sym >= 0) {
-                        need_sym_base(&syms[o->by_sym]);
-                        field_ref_m(&syms[o->by_sym], NULL, FR_SS_NOLEN, 1, 7, g, sizeof g);
-                    } else snprintf(g, sizeof g, "%s", o->by_lab);
-                    asm_line("", "LTR", "5,5", "");
-                    asm_line("", "BZ", lld, "nothing in range");
-                    snprintf(b, sizeof b, "0(1,3),%s", g);
-                    asm_line("", "MVC", b, "CHARACTERS BY: the first");
-                    asm_line("", "LR", "4,5", "");
-                    asm_line("", "BCTR", "4,0", "");
-                    if (n > 256) {
-                        /* EX takes eight bits of the length: 256 bytes at a
-                         * time first, the propagation carrying across each
-                         * chunk from its last byte (#32). */
-                        char lch[16]; snprintf(lch, sizeof lch, "L%04d", ++genlabel);
-                        char lgo[16]; snprintf(lgo, sizeof lgo, "L%04d", ++genlabel);
-                        asm_line(lch, "DS", "0H", "");
-                        snprintf(b, sizeof b, "4,%s", intern_full(256));
-                        asm_line("", "C", b, "more than a chunk left?");
-                        asm_line("", "BL", lgo, "");
-                        asm_line("", "MVC", "1(256,3),0(3)", "propagate a chunk");
-                        asm_line("", "LA", "3,256(,3)", "");
-                        snprintf(b, sizeof b, "4,%s", intern_full(256));
-                        asm_line("", "S", b, "");
-                        asm_line("", "B", lch, "");
-                        asm_line(lgo, "DS", "0H", "");
+                    snprintf(b, sizeof b, "INSFLG+%d,X'01'", j); asm_line("", "MVI", b, "live");
+                    if (pass == 0) {
+                        snprintf(b, sizeof b, "INSTLY+%d(4),INSTLY+%d", 4 * j, 4 * j);
+                        asm_line("", "XC", b, "its tally");
                     }
-                    asm_line("", "LTR", "4,4", "");
-                    asm_line("", "BZ", lld, "");
-                    asm_line("", "BCTR", "4,0", "");
-                    use_insprop = 1;
-                    asm_line("", "EX", "4,INSPROP", "and propagate");
-                    asm_line(lld, "DS", "0H", "");
-                    reset_bases();
-                    continue;
                 }
-                /* A scan down the range: at each position, is the string
-                 * here? A match tallies or replaces and steps past the whole
-                 * string; a miss steps one byte, or ends a LEADING scan. */
-                int lp = ++genlabel, nx = ++genlabel, dn = ++genlabel;
-                char llp[16], lnx[16], ldn[16];
-                snprintf(llp, sizeof llp, "L%04d", lp);
-                snprintf(lnx, sizeof lnx, "L%04d", nx);
-                snprintf(ldn, sizeof ldn, "L%04d", dn);
-                if (tallying) asm_line("", "SR", "4,4", "the tally");
-                if (o->c_sym >= 0) {
-                    need_sym_base(&syms[o->c_sym]);
-                    field_ref_m(&syms[o->c_sym], NULL, FR_SS_NOLEN, o->c_len, 7, g, sizeof g);
-                } else snprintf(g, sizeof g, "%s", o->c_lab);
-                snprintf(b, sizeof b, "5,%s", intern_half(o->c_len));
-                asm_line(llp, "CH", b, "room for the string?");
-                asm_line("", "BL", ldn, "");
-                snprintf(b, sizeof b, "0(%d,3),%s", o->c_len, g);
-                asm_line("", "CLC", b, "");
-                int stop_on_miss = (o->kind == INS_T_LEAD || o->kind == INS_R_LEAD);
-                asm_line("", "BNE", stop_on_miss ? ldn : lnx, "");
-                if (tallying) asm_line("", "LA", "4,1(4)", "one more");
-                else {
-                    char h[64];
-                    if (o->by_sym >= 0) {
-                        need_sym_base(&syms[o->by_sym]);
-                        field_ref_m(&syms[o->by_sym], NULL, FR_SS_NOLEN, o->by_len, 7, h, sizeof h);
-                    } else snprintf(h, sizeof h, "%s", o->by_lab);
-                    snprintf(b, sizeof b, "0(%d,3),%s", o->by_len, h);
-                    asm_line("", "MVC", b, "replace");
-                    if (o->kind == INS_R_FIRST) asm_line("", "B", ldn, "FIRST: done");
+                char lpos[16], ldone[16];
+                snprintf(lpos, sizeof lpos, "L%04d", ++genlabel);
+                snprintf(ldone, sizeof ldone, "L%04d", ++genlabel);
+                asm_line("", "LR", "3,7", "the position");
+                asm_line(lpos, "CR", "3,5", "at the end?");
+                asm_line("", "BNL", ldone, "");
+                for (int j = 0; j < nops; j++) {
+                    const InsOp *o = &insops[ops[j]];
+                    int chars = (o->kind == INS_T_CHARS || o->kind == INS_R_CHARS);
+                    int leading = (o->kind == INS_T_LEAD || o->kind == INS_R_LEAD);
+                    int len = chars ? 1 : o->c_len;
+                    char lnext[16], lkill[16];
+                    snprintf(lnext, sizeof lnext, "L%04d", ++genlabel);
+                    snprintf(lkill, sizeof lkill, "L%04d", ++genlabel);
+                    snprintf(b, sizeof b, " operand %d", j + 1); asm_comment(b);
+                    snprintf(b, sizeof b, "INSFLG+%d,X'00'", j); asm_line("", "CLI", b, "still live?");
+                    asm_line("", "BE", lnext, "");
+                    snprintf(b, sizeof b, "3,INSRLO+%d", 4 * j); asm_line("", "C", b, "in its range yet?");
+                    asm_line("", "BL", lnext, "");
+                    if (leading) {
+                        snprintf(b, sizeof b, "3,INSNXT+%d", 4 * j); asm_line("", "C", b, "LEADING: still contiguous?");
+                        asm_line("", "BNE", lkill, "");
+                    }
+                    snprintf(b, sizeof b, "4,%d(,3)", len); asm_line("", "LA", b, "");
+                    snprintf(b, sizeof b, "4,INSRHI+%d", 4 * j); asm_line("", "C", b, "room within its range?");
+                    asm_line("", "BH", leading ? lkill : lnext, "");
+                    if (!chars) {
+                        snprintf(b, sizeof b, "4,INSOPA+%d", 4 * j); asm_line("", "L", b, "");
+                        snprintf(b, sizeof b, "0(%d,3),0(4)", len); asm_line("", "CLC", b, "the string?");
+                        asm_line("", "BNE", leading ? lkill : lnext, "");
+                    }
+                    if (pass == 0) {
+                        snprintf(b, sizeof b, "4,INSTLY+%d", 4 * j); asm_line("", "L", b, "one more");
+                        asm_line("", "LA", "4,1(4)", "");
+                        snprintf(b, sizeof b, "4,INSTLY+%d", 4 * j); asm_line("", "ST", b, "");
+                    } else {
+                        snprintf(b, sizeof b, "4,INSOPB+%d", 4 * j); asm_line("", "L", b, "");
+                        snprintf(b, sizeof b, "0(%d,3),0(4)", o->by_len); asm_line("", "MVC", b, "replace");
+                        if (o->kind == INS_R_FIRST) { snprintf(b, sizeof b, "INSFLG+%d,X'00'", j); asm_line("", "MVI", b, "FIRST: done"); }
+                    }
+                    snprintf(b, sizeof b, "3,%d(,3)", len); asm_line("", "LA", b, "past it");
+                    if (leading) { snprintf(b, sizeof b, "3,INSNXT+%d", 4 * j); asm_line("", "ST", b, "contiguous so far"); }
+                    asm_line("", "B", lpos, "");
+                    if (leading) {
+                        snprintf(b, sizeof b, "INSFLG+%d,X'00'", j);
+                        asm_line(lkill, "MVI", b, "LEADING: a break ends it");
+                    }
+                    asm_line(lnext, "DS", "0H", "");
                 }
-                snprintf(b, sizeof b, "3,%d(3)", o->c_len);
-                asm_line("", "LA", b, "past the string");
-                snprintf(b, sizeof b, "5,%s", intern_half(o->c_len));
-                asm_line("", "SH", b, "");
-                asm_line("", "B", llp, "");
-                asm_line(lnx, "DS", "0H", "");
-                asm_line("", "LA", "3,1(3)", "");
-                snprintf(b, sizeof b, "5,%s", llp);
-                asm_line("", "BCT", b, "");
-                asm_line(ldn, "DS", "0H", "");
+                asm_line("", "LA", "3,1(3)", "nothing matched here: the next character");
+                asm_line("", "B", lpos, "");
+                asm_line(ldone, "DS", "0H", "");
                 reset_bases();
-                if (tallying) {
-                    asm_line("", "CVD", "4,DWK", "");
-                    asm_line("", "ZAP", "PWK1(16),DWK(8)", "");
-                    gen_load(&syms[o->tally], NULL, "PWK2");
-                    asm_line("", "AP", "PWK1(16),PWK2(16)", "TALLYING adds");
-                    gen_store(&syms[o->tally], NULL, "PWK1");
+                if (pass == 0) {
+                    for (int j = 0; j < nops; j++) {
+                        const InsOp *o = &insops[ops[j]];
+                        snprintf(b, sizeof b, "4,INSTLY+%d", 4 * j); asm_line("", "L", b, "");
+                        asm_line("", "CVD", "4,DWK", "");
+                        asm_line("", "ZAP", "PWK1(16),DWK(8)", "");
+                        gen_load(&syms[o->tally], NULL, "PWK2");
+                        asm_line("", "AP", "PWK1(16),PWK2(16)", "TALLYING adds");
+                        gen_store(&syms[o->tally], NULL, "PWK1");
+                    }
                 }
             }
             break;
@@ -13128,7 +13146,20 @@ static void generate(void)
         if (use_szflg) asm_line("SZFLG", "DS", "X", "ON SIZE ERROR: set by any receiver of a series");
         if (use_str) asm_line("VSTR", "DC", "V(COBSTR)", "");
         if (use_uns) asm_line("VUNS", "DC", "V(COBUNS)", "");
-        if (use_insprop) asm_line("INSPROP", "MVC", "1(0,3),0(3)", "executed: INSPECT CHARACTERS propagation");
+        if (use_inspect) {
+            /* Sized to the widest phrase in the program: the constants region
+             * is 8K, and COBXREF's was within 400 bytes of it. */
+            char nf[12], nx[12];
+            snprintf(nf, sizeof nf, "%dF", max_insops);
+            snprintf(nx, sizeof nx, "XL%d", max_insops);
+            asm_line("INSRLO", "DS", nf, "INSPECT: each operand's range");
+            asm_line("INSRHI", "DS", nf, "");
+            asm_line("INSNXT", "DS", nf, "where a LEADING operand must match next");
+            asm_line("INSTLY", "DS", nf, "each operand's tally");
+            asm_line("INSOPA", "DS", nf, "the strings looked for");
+            asm_line("INSOPB", "DS", nf, "the replacements");
+            asm_line("INSFLG", "DS", nx, "live flags");
+        }
         if (use_sort) {
             asm_line("SRTSAVE", "DS", "18F", "the save area the sort is called with");
             asm_line("SRTR13", "DS", "F", "the sort's save area, inside an exit");

@@ -231,22 +231,46 @@ T0023    DS    0H
          ST    2,D0259
 T0024    DS    0H
 * INSPECT SV3PROGRAMID
-         LA    3,D0132             the field
-         LA    5,61                its length
-         SR    4,4                 the tally
-L0247    CH    5,H0001             room for the string?
+*  TALLYING pass
+         LA    7,D0132             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LA    4,S0001             the string looked for
+         ST    4,INSOPA+0
+         ST    7,INSRLO+0          the whole field
+         ST    5,INSRHI+0
+         ST    7,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0247    CR    3,5                 at the end?
+         BNL   L0248
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0249
+         C     3,INSRLO+0          in its range yet?
          BL    L0249
-         CLC   0(1,3),S0001
-         BNE   L0249
-         LA    4,1(4)              one more
-         LA    3,1(3)              past the string
-         SH    5,H0001
+         C     3,INSNXT+0          LEADING: still contiguous?
+         BNE   L0250
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0250
+         L     4,INSOPA+0
+         CLC   0(1,3),0(4)         the string?
+         BNE   L0250
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         ST    3,INSNXT+0          contiguous so far
+         B     L0247
+L0250    MVI   INSFLG+0,X'00'      LEADING: a break ends it
+L0249    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
          B     L0247
 L0248    DS    0H
-         LA    3,1(3)
-         BCT   5,L0247
-L0249    DS    0H
          DROP  8
+         L     4,INSTLY+0
          CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
          L     8,BL0000            base locator
@@ -498,10 +522,10 @@ T0051    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0262
+         BE    L0263
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0009
-L0262    DS    0H
+L0263    DS    0H
 T0052    DS    0H
 * GO TO READLOOP2
          B     B0007
@@ -564,10 +588,10 @@ T0058    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0269
+         BE    L0270
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0011
-L0269    DS    0H
+L0270    DS    0H
 T0059    DS    0H
 * GO TO READLOOP3
          B     B0008
@@ -828,15 +852,15 @@ T0100    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0080(1),D0059      alphanumeric compare
-         BNE   L0275
+         BNE   L0276
          CLC   D0081(1),S0001      alphanumeric compare
-         BE    L0274
-L0275    DS    0H
+         BE    L0275
+L0276    DS    0H
          CLC   D0081(1),S0028      alphanumeric compare
-         BE    L0274
+         BE    L0275
          CLC   D0081(1),S0029      alphanumeric compare
          BNE   L0022
-L0274    DS    0H
+L0275    DS    0H
 T0101    DS    0H
 * MOVE SPACES -> THEDIGIT
          LA    1,D0081             SPACES
@@ -854,10 +878,10 @@ T0103    DS    0H
 T0104    DS    0H
 * IF
          CLC   D0081(1),S0028      alphanumeric compare
-         BE    L0276
+         BE    L0277
          CLC   D0081(1),S0029      alphanumeric compare
          BNE   L0023
-L0276    DS    0H
+L0277    DS    0H
 T0105    DS    0H
 * MOVE SPACES -> THEDIGIT
          LA    1,D0081             SPACES
@@ -869,10 +893,10 @@ T0106    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0001      alphanumeric compare
-         BE    L0277
+         BE    L0278
          CLC   D0081(1),S0002      alphanumeric compare
          BNE   L0024
-L0277    DS    0H
+L0278    DS    0H
 T0107    DS    0H
 * MOVE YES -> IGNORELEADSPACES
          MVC   D0080(1),D0059      alphanumeric move
@@ -1010,14 +1034,14 @@ T0123    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0030      alphanumeric compare
-         BE    L0284
+         BE    L0285
          CLC   D0154(3),S0031      alphanumeric compare
-         BE    L0284
+         BE    L0285
          CLC   D0154(3),S0032      alphanumeric compare
-         BE    L0284
+         BE    L0285
          CLC   D0154(3),S0033      alphanumeric compare
          BNE   L0029
-L0284    DS    0H
+L0285    DS    0H
 T0124    DS    0H
 * GO TO RL3ISLEVEL
          L     15,PA0015
@@ -1041,12 +1065,12 @@ T0127    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0035      alphanumeric compare
-         BE    L0285
+         BE    L0286
          CLC   D0154(3),S0036      alphanumeric compare
-         BE    L0285
+         BE    L0286
          CLC   D0154(3),S0037      alphanumeric compare
          BNE   L0031
-L0285    DS    0H
+L0286    DS    0H
 T0128    DS    0H
 * GO TO RL3ISLEVEL
          L     15,PA0015
@@ -1131,10 +1155,10 @@ T0139    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0039      alphanumeric compare
-         BE    L0288
+         BE    L0289
          CLC   D0150(7),S0040      alphanumeric compare
          BNE   L0033
-L0288    DS    0H
+L0289    DS    0H
 T0140    DS    0H
 * GO TO RL3CLEARTOPERIOD
          L     15,PA0018
@@ -1205,27 +1229,58 @@ T0149    DS    0H
          ST    2,D0259
 T0150    DS    0H
 * INSPECT SV3PROGRAMID
-         LA    3,D0132             the field
-         LA    5,61                its length
-         LR    7,3                 the field's start
-L0289    CH    5,H0001             room for the bounding string?
-         BL    L0291
+*  TALLYING pass
+         LA    7,D0132             the field
+         L     5,FC001             its length
+         AR    5,7                 its end
+         LR    3,7
+L0290    LR    4,5
+         SR    4,3                 what is left
+         CH    4,H0001             room for the bounding string?
+         BL    L0292
          CLC   0(1,3),S0002        INITIAL
-         BE    L0290
+         BE    L0291
          LA    3,1(3)
-         BCT   5,L0289
-L0291    DS    0H                  not found
+         B     L0290
+L0292    DS    0H                  not found
+         LR    3,7                 BEFORE: the whole field
+         LR    4,5
+         B     L0293
+L0291    DS    0H                  found
+         LR    4,3                 BEFORE: up to it
          LR    3,7
-         LA    5,61                BEFORE: the whole field
-         B     L0292
-L0290    DS    0H                  found
-         LR    5,3
-         SR    5,7                 BEFORE: up to it
-         LR    3,7
-L0292    DS    0H
-         LR    2,5                 CHARACTERS: every position in range
-         CVD   2,DWK
+L0293    DS    0H
+         ST    3,INSRLO+0          the range
+         ST    4,INSRHI+0
+         ST    3,INSNXT+0
+         MVI   INSFLG+0,X'01'      live
+         XC    INSTLY+0(4),INSTLY+0  its tally
+         LR    3,7                 the position
+L0294    CR    3,5                 at the end?
+         BNL   L0295
+* operand 1
+         CLI   INSFLG+0,X'00'      still live?
+         BE    L0296
+         C     3,INSRLO+0          in its range yet?
+         BL    L0296
+         LA    4,1(,3)
+         C     4,INSRHI+0          room within its range?
+         BH    L0296
+         L     4,INSTLY+0          one more
+         LA    4,1(4)
+         ST    4,INSTLY+0
+         LA    3,1(,3)             past it
+         B     L0294
+L0296    DS    0H
+         LA    3,1(3)              nothing matched here: the next chara
+         B     L0294
+L0295    DS    0H
+         DROP  8
+         L     4,INSTLY+0
+         CVD   4,DWK
          ZAP   PWK1(16),DWK(8)
+         L     8,BL0000            base locator
+         USING WSC0000,8
          L     2,D0259
          CVD   2,DWK               binary -> packed
          ZAP   PWK2(16),DWK(8)
@@ -1236,11 +1291,8 @@ L0292    DS    0H
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          ST    2,D0259
-         DROP  8
 T0151    DS    0H
 * MOVE TALLY -> Q
-         L     8,BL0000            base locator
-         USING WSC0000,8
          L     2,D0259
          ST    2,D0052
 T0152    DS    0H
@@ -1537,10 +1589,10 @@ T0192    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0303
+         BE    L0308
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0042
-L0303    DS    0H
+L0308    DS    0H
 T0193    DS    0H
 * GO TO READALINE
          B     B0024
@@ -1668,10 +1720,10 @@ T0215    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0028      alphanumeric compare
-         BE    L0306
+         BE    L0311
          CLC   D0081(1),S0029      alphanumeric compare
          BNE   L0049
-L0306    DS    0H
+L0311    DS    0H
 T0216    DS    0H
 * MOVE SPACES -> THEDIGIT
          LA    1,D0081             SPACES
@@ -1741,10 +1793,10 @@ T0224    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0002      alphanumeric compare
-         BE    L0311
+         BE    L0316
          CLC   D0071(1),S0002      alphanumeric compare
          BNE   L0052
-L0311    DS    0H
+L0316    DS    0H
 T0225    DS    0H
 * MOVE YES -> FOUNDPERIOD
          MVC   D0084(1),D0059      alphanumeric move
@@ -2073,10 +2125,10 @@ T0264    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0077(1),D0060      alphanumeric compare
-         BE    L0332
+         BE    L0337
          CLC   D0077(1),D0061      alphanumeric compare
          BNE   L0063
-L0332    DS    0H
+L0337    DS    0H
          CLC   D0081(1),S0045      alphanumeric compare
          BNE   L0063
 T0265    DS    0H
@@ -2101,10 +2153,10 @@ T0268    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0077(1),D0061      alphanumeric compare
-         BE    L0333
+         BE    L0338
          CLC   D0077(1),D0060      alphanumeric compare
          BNE   L0065
-L0333    DS    0H
+L0338    DS    0H
          CLC   D0081(1),S0043      alphanumeric compare
          BNE   L0065
 T0269    DS    0H
@@ -2351,10 +2403,10 @@ T0307    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0045      alphanumeric compare
-         BE    L0334
+         BE    L0339
          CLC   D0081(1),S0043      alphanumeric compare
          BNE   L0078
-L0334    DS    0H
+L0339    DS    0H
 T0308    DS    0H
 * GO TO GETINPUTDIGIT
          L     15,PA0026
@@ -2606,7 +2658,7 @@ T0344    DS    0H
          USING WSC0000,8
          TRT   D0156(1),CLSNUM     every byte a digit?
          BZ    L0087
-L0343    DS    0H
+L0348    DS    0H
          DROP  8
 T0345    DS    0H
 * MOVE NOS -> NUMERIC-PARAGRAPH-SWITCH
@@ -2751,20 +2803,20 @@ T0370    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0046      alphanumeric compare
-         BE    L0344
+         BE    L0349
          CLC   D0150(7),S0047      alphanumeric compare
-         BE    L0344
+         BE    L0349
          CLC   D0150(7),S0048      alphanumeric compare
-         BE    L0344
+         BE    L0349
          CLC   D0150(7),S0049      alphanumeric compare
-         BE    L0344
+         BE    L0349
          CLC   D0150(7),S0050      alphanumeric compare
-         BE    L0344
+         BE    L0349
          CLC   D0150(7),S0051      alphanumeric compare
-         BE    L0344
+         BE    L0349
          CLC   D0150(7),S0052      alphanumeric compare
          BNE   L0095
-L0344    DS    0H
+L0349    DS    0H
 T0371    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -2836,12 +2888,12 @@ T0379    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0108(4),S0041      alphanumeric compare
-         BE    L0351
+         BE    L0356
          CLC   D0107(1),S0008      alphanumeric compare
-         BE    L0351
+         BE    L0356
          CLC   D0107(1),S0009      alphanumeric compare
          BNE   L0097
-L0351    DS    0H
+L0356    DS    0H
 T0380    DS    0H
 * GO TO DELETENOTE
          B     B0039
@@ -2956,10 +3008,10 @@ T0398    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0144(13),S0054     alphanumeric compare
-         BE    L0352
+         BE    L0357
          CLC   D0144(13),S0055     alphanumeric compare
          BNE   L0101
-L0352    DS    0H
+L0357    DS    0H
 T0399    DS    0H
 * MOVE NOS -> ISPARSEC
          MVC   D0079(1),D0060      alphanumeric move
@@ -2974,10 +3026,10 @@ T0401    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0056      alphanumeric compare
-         BE    L0353
+         BE    L0358
          CLC   D0152(5),S0057      alphanumeric compare
          BNE   L0102
-L0353    DS    0H
+L0358    DS    0H
 T0402    DS    0H
 * GO TO KILLWORD
          L     15,PA0048
@@ -3417,10 +3469,10 @@ T0473    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0058      alphanumeric compare
-         BE    L0360
+         BE    L0365
          CLC   D0154(3),S0059      alphanumeric compare
          BNE   L0123
-L0360    DS    0H
+L0365    DS    0H
 T0474    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3432,32 +3484,32 @@ T0475    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0060      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0061      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0062      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0063      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0064      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0065      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0066      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0067      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0068      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0069      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0070      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0071      alphanumeric compare
-         BE    L0361
+         BE    L0366
          CLC   D0154(3),S0072      alphanumeric compare
          BNE   L0124
-L0361    DS    0H
+L0366    DS    0H
 T0476    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3480,10 +3532,10 @@ T0479    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0074      alphanumeric compare
-         BE    L0362
+         BE    L0367
          CLC   D0154(3),S0073      alphanumeric compare
          BNE   L0126
-L0362    DS    0H
+L0367    DS    0H
 T0480    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3495,12 +3547,12 @@ T0481    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0154(3),S0075      alphanumeric compare
-         BE    L0363
+         BE    L0368
          CLC   D0154(3),S0076      alphanumeric compare
-         BE    L0363
+         BE    L0368
          CLC   D0154(3),S0077      alphanumeric compare
          BNE   L0127
-L0363    DS    0H
+L0368    DS    0H
 T0482    DS    0H
 * GO TO KILLWORD
          L     15,PA0048
@@ -3514,15 +3566,15 @@ T0483    DS    0H
          LA    6,D0154             the left item
          LA    7,D0060             the right item
          CLC   0(1,6),0(7)         the common length
-         BNE   L0365
+         BNE   L0370
          CLC   1(2,6),SPCS         the longer one's tail against spaces
-L0365    DS    0H
-         BE    L0364
+L0370    DS    0H
+         BE    L0369
          CLC   D0154(3),S0078      alphanumeric compare
-         BE    L0364
+         BE    L0369
          CLC   D0154(3),S0079      alphanumeric compare
          BNE   L0128
-L0364    DS    0H
+L0369    DS    0H
 T0484    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3599,12 +3651,12 @@ T0494    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0084      alphanumeric compare
-         BE    L0366
+         BE    L0371
          CLC   D0153(4),S0085      alphanumeric compare
-         BE    L0366
+         BE    L0371
          CLC   D0153(4),S0086      alphanumeric compare
          BNE   L0133
-L0366    DS    0H
+L0371    DS    0H
 T0495    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3616,20 +3668,20 @@ T0496    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0087      alphanumeric compare
-         BE    L0367
+         BE    L0372
          CLC   D0153(4),S0088      alphanumeric compare
-         BE    L0367
+         BE    L0372
          CLC   D0153(4),S0089      alphanumeric compare
-         BE    L0367
+         BE    L0372
          CLC   D0153(4),S0090      alphanumeric compare
-         BE    L0367
+         BE    L0372
          CLC   D0153(4),S0091      alphanumeric compare
-         BE    L0367
+         BE    L0372
          CLC   D0153(4),S0092      alphanumeric compare
-         BE    L0367
+         BE    L0372
          CLC   D0153(4),S0093      alphanumeric compare
          BNE   L0134
-L0367    DS    0H
+L0372    DS    0H
 T0497    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3641,10 +3693,10 @@ T0498    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0153(4),S0056      alphanumeric compare
-         BE    L0368
+         BE    L0373
          CLC   D0153(4),S0094      alphanumeric compare
          BNE   L0135
-L0368    DS    0H
+L0373    DS    0H
 T0499    DS    0H
 * GO TO BREAKWORD
          L     15,PA0089
@@ -3670,26 +3722,26 @@ T0501    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0095      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0096      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0097      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0098      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0099      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0100      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0101      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0102      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0103      alphanumeric compare
-         BE    L0369
+         BE    L0374
          CLC   D0152(5),S0104      alphanumeric compare
          BNE   L0136
-L0369    DS    0H
+L0374    DS    0H
 T0502    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3701,30 +3753,30 @@ T0503    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0105      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0106      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0107      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0108      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0109      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0110      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0111      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0112      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0113      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0114      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0115      alphanumeric compare
-         BE    L0370
+         BE    L0375
          CLC   D0152(5),S0116      alphanumeric compare
          BNE   L0137
-L0370    DS    0H
+L0375    DS    0H
 T0504    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3736,10 +3788,10 @@ T0505    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0117      alphanumeric compare
-         BE    L0371
+         BE    L0376
          CLC   D0152(5),S0118      alphanumeric compare
          BNE   L0138
-L0371    DS    0H
+L0376    DS    0H
 T0506    DS    0H
 * GO TO BREAKWORD
          L     15,PA0089
@@ -3751,14 +3803,14 @@ T0507    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0152(5),S0119      alphanumeric compare
-         BE    L0372
+         BE    L0377
          CLC   D0152(5),S0120      alphanumeric compare
-         BE    L0372
+         BE    L0377
          CLC   D0152(5),S0121      alphanumeric compare
-         BE    L0372
+         BE    L0377
          CLC   D0152(5),S0122      alphanumeric compare
          BNE   L0139
-L0372    DS    0H
+L0377    DS    0H
 T0508    DS    0H
 * GO TO KILLWORD
          L     15,PA0048
@@ -3795,24 +3847,24 @@ T0512    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0123      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0124      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0125      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0126      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0127      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0128      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0129      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0130      alphanumeric compare
-         BE    L0373
+         BE    L0378
          CLC   D0151(6),S0131      alphanumeric compare
          BNE   L0141
-L0373    DS    0H
+L0378    DS    0H
 T0513    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3824,18 +3876,18 @@ T0514    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0132      alphanumeric compare
-         BE    L0374
+         BE    L0379
          CLC   D0151(6),S0133      alphanumeric compare
-         BE    L0374
+         BE    L0379
          CLC   D0151(6),S0134      alphanumeric compare
-         BE    L0374
+         BE    L0379
          CLC   D0151(6),S0135      alphanumeric compare
-         BE    L0374
+         BE    L0379
          CLC   D0151(6),S0136      alphanumeric compare
-         BE    L0374
+         BE    L0379
          CLC   D0151(6),S0137      alphanumeric compare
          BNE   L0142
-L0374    DS    0H
+L0379    DS    0H
 T0515    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3847,18 +3899,18 @@ T0516    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0138      alphanumeric compare
-         BE    L0375
+         BE    L0380
          CLC   D0151(6),S0139      alphanumeric compare
-         BE    L0375
+         BE    L0380
          CLC   D0151(6),S0140      alphanumeric compare
-         BE    L0375
+         BE    L0380
          CLC   D0151(6),S0141      alphanumeric compare
-         BE    L0375
+         BE    L0380
          CLC   D0151(6),S0142      alphanumeric compare
-         BE    L0375
+         BE    L0380
          CLC   D0151(6),S0143      alphanumeric compare
          BNE   L0143
-L0375    DS    0H
+L0380    DS    0H
 T0517    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3870,22 +3922,22 @@ T0518    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0151(6),S0144      alphanumeric compare
-         BE    L0376
+         BE    L0381
          CLC   D0151(6),S0145      alphanumeric compare
-         BE    L0376
+         BE    L0381
          CLC   D0151(6),S0146      alphanumeric compare
-         BE    L0376
+         BE    L0381
          CLC   D0151(6),S0147      alphanumeric compare
-         BE    L0376
+         BE    L0381
          CLC   D0151(6),S0148      alphanumeric compare
-         BE    L0376
+         BE    L0381
          CLC   D0151(6),S0149      alphanumeric compare
-         BE    L0376
+         BE    L0381
          CLC   D0151(6),S0150      alphanumeric compare
-         BE    L0376
+         BE    L0381
          CLC   D0151(6),S0130      alphanumeric compare
          BNE   L0144
-L0376    DS    0H
+L0381    DS    0H
 T0519    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3911,14 +3963,14 @@ T0521    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0151      alphanumeric compare
-         BE    L0377
+         BE    L0382
          CLC   D0150(7),S0152      alphanumeric compare
-         BE    L0377
+         BE    L0382
          CLC   D0150(7),S0153      alphanumeric compare
-         BE    L0377
+         BE    L0382
          CLC   D0150(7),S0154      alphanumeric compare
          BNE   L0145
-L0377    DS    0H
+L0382    DS    0H
 T0522    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -3930,24 +3982,24 @@ T0523    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0150(7),S0155      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0156      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0157      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0158      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0159      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0160      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0052      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0161      alphanumeric compare
-         BE    L0378
+         BE    L0383
          CLC   D0150(7),S0162      alphanumeric compare
          BNE   L0146
-L0378    DS    0H
+L0383    DS    0H
 T0524    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -3996,18 +4048,18 @@ T0530    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0149(8),S0165      alphanumeric compare
-         BE    L0379
+         BE    L0384
          CLC   D0149(8),S0164      alphanumeric compare
-         BE    L0379
+         BE    L0384
          CLC   D0149(8),S0166      alphanumeric compare
-         BE    L0379
+         BE    L0384
          CLC   D0149(8),S0167      alphanumeric compare
-         BE    L0379
+         BE    L0384
          CLC   D0149(8),S0168      alphanumeric compare
-         BE    L0379
+         BE    L0384
          CLC   D0149(8),S0169      alphanumeric compare
          BNE   L0149
-L0379    DS    0H
+L0384    DS    0H
 T0531    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -4019,28 +4071,28 @@ T0532    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0149(8),S0170      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0171      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0172      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0173      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0174      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0175      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0176      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0177      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0178      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0179      alphanumeric compare
-         BE    L0380
+         BE    L0385
          CLC   D0149(8),S0180      alphanumeric compare
          BNE   L0150
-L0380    DS    0H
+L0385    DS    0H
 T0533    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4078,14 +4130,14 @@ T0537    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0148(9),S0182      alphanumeric compare
-         BE    L0381
+         BE    L0386
          CLC   D0148(9),S0183      alphanumeric compare
-         BE    L0381
+         BE    L0386
          CLC   D0148(9),S0184      alphanumeric compare
-         BE    L0381
+         BE    L0386
          CLC   D0148(9),S0185      alphanumeric compare
          BNE   L0152
-L0381    DS    0H
+L0386    DS    0H
 T0538    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -4109,18 +4161,18 @@ T0541    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0148(9),S0187      alphanumeric compare
-         BE    L0382
+         BE    L0387
          CLC   D0148(9),S0188      alphanumeric compare
-         BE    L0382
+         BE    L0387
          CLC   D0148(9),S0189      alphanumeric compare
-         BE    L0382
+         BE    L0387
          CLC   D0148(9),S0190      alphanumeric compare
-         BE    L0382
+         BE    L0387
          CLC   D0148(9),S0191      alphanumeric compare
-         BE    L0382
+         BE    L0387
          CLC   D0148(9),S0192      alphanumeric compare
          BNE   L0154
-L0382    DS    0H
+L0387    DS    0H
 T0542    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4146,10 +4198,10 @@ T0544    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0147(10),S0193     alphanumeric compare
-         BE    L0383
+         BE    L0388
          CLC   D0147(10),S0194     alphanumeric compare
          BNE   L0155
-L0383    DS    0H
+L0388    DS    0H
 T0545    DS    0H
 * GO TO YESVERB
          L     15,PA0086
@@ -4161,24 +4213,24 @@ T0546    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0147(10),S0195     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0196     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0197     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0198     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0199     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0200     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0201     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0202     alphanumeric compare
-         BE    L0384
+         BE    L0389
          CLC   D0147(10),S0203     alphanumeric compare
          BNE   L0156
-L0384    DS    0H
+L0389    DS    0H
 T0547    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4219,16 +4271,16 @@ T0552    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0146(11),S0205     alphanumeric compare
-         BE    L0385
+         BE    L0390
          CLC   D0146(11),S0206     alphanumeric compare
-         BE    L0385
+         BE    L0390
          CLC   D0146(11),S0207     alphanumeric compare
-         BE    L0385
+         BE    L0390
          CLC   D0146(11),S0208     alphanumeric compare
-         BE    L0385
+         BE    L0390
          CLC   D0146(11),S0209     alphanumeric compare
          BNE   L0158
-L0385    DS    0H
+L0390    DS    0H
 T0553    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4254,12 +4306,12 @@ T0555    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0145(12),S0210     alphanumeric compare
-         BE    L0386
+         BE    L0391
          CLC   D0145(12),S0211     alphanumeric compare
-         BE    L0386
+         BE    L0391
          CLC   D0145(12),S0212     alphanumeric compare
          BNE   L0159
-L0386    DS    0H
+L0391    DS    0H
 T0556    DS    0H
 * GO TO STOREWORD
          L     15,PA0047
@@ -4446,10 +4498,10 @@ T0580    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0215      alphanumeric compare
-         BE    L0387
+         BE    L0392
          CLC   D0081(1),S0042      alphanumeric compare
          BNE   L0165
-L0387    DS    0H
+L0392    DS    0H
 T0581    DS    0H
 * GO TO SFD0
          L     15,PA0081
@@ -4502,18 +4554,18 @@ T0588    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          TRT   D0081(1),CLSNUM     every byte a digit?
-         BZ    L0388
-L0389    DS    0H
+         BZ    L0393
+L0394    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0081(1),S0002      alphanumeric compare
-         BE    L0388
+         BE    L0393
          CLC   D0081(1),S0215      alphanumeric compare
-         BE    L0388
+         BE    L0393
          CLC   D0081(1),S0042      alphanumeric compare
          BNE   L0169
-L0388    DS    0H
+L0393    DS    0H
 T0589    DS    0H
 * MOVE YES -> ISNUMERICLITERAL
          MVC   D0078(1),D0059      alphanumeric move
@@ -4967,13 +5019,13 @@ T0647    DS    0H
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BNH   L0393
+         BNH   L0398
          CLC   D0255(1),S0217      alphanumeric compare
-         BE    L0392
-L0393    DS    0H
+         BE    L0397
+L0398    DS    0H
          CLC   D0255(1),S0218      alphanumeric compare
          BNE   L0182
-L0392    DS    0H
+L0397    DS    0H
 T0648    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(21),S0219
@@ -5044,12 +5096,12 @@ T0659    DS    0H
 * OPEN INPUT SOURCEINPUT
          OPEN  (FD004,INPUT)
          TM    FD004+48,X'10'      DCBOFLGS: did it open?
-         BO    L0394
+         BO    L0399
          WTO   'COBC370: OPEN FAILED, DD SOURCE',ROUTCDE=11
          ABEND 35
-         B     L0395
-L0394    DS    0H
-L0395    DS    0H
+         B     L0400
+L0399    DS    0H
+L0400    DS    0H
 T0660    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -5060,13 +5112,13 @@ T0661    DS    0H
 * OPEN OUTPUT REBUILD-SOURCE
          OPEN  (FD005,OUTPUT)
          TM    FD005+48,X'10'      DCBOFLGS: did it open?
-         BO    L0396
+         BO    L0401
          WTO   'COBC370: OPEN FAILED, DD NEWSRC',ROUTCDE=11
          ABEND 35
-         B     L0397
-L0396    DS    0H
+         B     L0402
+L0401    DS    0H
          DROP  8
-L0397    DS    0H
+L0402    DS    0H
 L0187    DS    0H
 T0662    DS    0H
 * GO TO READ-EXIT
@@ -5125,15 +5177,15 @@ T0667    DS    0H
          MVI   SRTHAVE,0
          L     15,D0262            SORT-FILE-SIZE
          LTR   15,15
-         BNP   L0398
+         BNP   L0403
          CVD   15,DWK
          UNPK  SRT0951Z(7),DWK+4(4)
          OI    SRT0951Z+6,X'F0'
          LA    15,SRT0951G
-         B     L0399
-L0398    DS    0H
+         B     L0404
+L0403    DS    0H
          LA    15,SRT0951F
-L0399    DS    0H
+L0404    DS    0H
          ST    15,SRT0951E+4       the SORT statement's last byte
          DROP  8
          LA    1,SRTSAVE           a save area of its own, so the
@@ -5152,12 +5204,12 @@ T0668    DS    0H
 * OPEN INPUT SUPPLEMENTAL-PART1-OUT
          OPEN  (FD002,INPUT)
          TM    FD002+48,X'10'      DCBOFLGS: did it open?
-         BO    L0400
+         BO    L0405
          WTO   'COBC370: OPEN FAILED, DD SYSPART1',ROUTCDE=11
          ABEND 35
-         B     L0401
-L0400    DS    0H
-L0401    DS    0H
+         B     L0406
+L0405    DS    0H
+L0406    DS    0H
 L0193    DS    0H
 T0669    DS    0H
 * READ SUPPLEMENTAL-PART1-OUT
@@ -5179,13 +5231,13 @@ T0671    DS    0H
          MVC   D0040(40),D0032     alphanumeric move
 T0672    DS    0H
 * RELEASE: the record to the sort, and back here for the next
-         LA    14,L0402
+         LA    14,L0407
          ST    14,SRTRES
          ST    12,SRTR12
          LA    1,D0040             the record
          LA    15,12               E15: insert it
          B     SRTYLD
-L0402    DS    0H
+L0407    DS    0H
          DROP  8
 T0673    DS    0H
          B     L0193
@@ -5205,24 +5257,24 @@ T0676    DS    0H
 * OPEN OUTPUT SUPPLEMENTAL-PART2-IN
          OPEN  (FD001,OUTPUT)
          TM    FD001+48,X'10'      DCBOFLGS: did it open?
-         BO    L0403
+         BO    L0408
          WTO   'COBC370: OPEN FAILED, DD SYSPART2',ROUTCDE=11
          ABEND 35
-         B     L0404
-L0403    DS    0H
-L0404    DS    0H
+         B     L0409
+L0408    DS    0H
+L0409    DS    0H
 L0197    DS    0H
 T0677    DS    0H
 * RETURN SORTFILE
          CLI   SRTHAVE,1           a record the sort handed over?
-         BE    L0406
-         LA    14,L0405
+         BE    L0411
+         LA    14,L0410
          ST    14,SRTRES
          ST    12,SRTR12
          LA    15,4                E35: taken; the next one, please
          B     SRTYLD
-L0405    DS    0H
-L0406    DS    0H
+L0410    DS    0H
+L0411    DS    0H
          MVI   SRTHAVE,0
          L     1,SRTREC
          LTR   1,1                 zero: the sort has no more
@@ -5302,13 +5354,13 @@ T0690    DS    0H
 * OPEN INPUT SUPPLEMENTAL-PART2-IN
          OPEN  (FD001,INPUT)
          TM    FD001+48,X'10'      DCBOFLGS: did it open?
-         BO    L0407
+         BO    L0412
          WTO   'COBC370: OPEN FAILED, DD SYSPART2',ROUTCDE=11
          ABEND 35
-         B     L0408
-L0407    DS    0H
+         B     L0413
+L0412    DS    0H
          DROP  8
-L0408    DS    0H
+L0413    DS    0H
 T0691    DS    0H
 * READ SUPPLEMENTAL-PART2-IN
          LA    1,L0202             this READ's AT END
@@ -5454,9 +5506,9 @@ T0706    DS    0H
 T0707    DS    0H
 * IF
          CLC   D0212(6),S0224      the item's width
-         BNE   L0413
+         BNE   L0418
          CLC   SPCS(2),S0224+6     spaces against the literal's tail
-L0413    DS    0H
+L0418    DS    0H
          BE    L0208
 T0708    DS    0H
 * MOVE HD-HH -> HD2-HH
@@ -6101,7 +6153,7 @@ T0778    DS    0H
          ST    2,D0242
 T0779    DS    0H
 * PERFORM ZZ410-READ-MEMBER
-L0432    DS    0H
+L0437    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -6110,7 +6162,7 @@ L0432    DS    0H
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BNE   L0433
+         BNE   L0438
          L     14,X0117            what the exit cell holds
          ST    14,SV0060           kept for the return
          LA    15,R0060            return here
@@ -6122,8 +6174,8 @@ R0060    DS    0H
          DROP  8
          L     15,SV0060           what the cell held before
          ST    15,X0117
-         B     L0432
-L0433    DS    0H
+         B     L0437
+L0438    DS    0H
 T0780    DS    0H
 * IF
          L     8,BL0000            base locator
@@ -6472,6 +6524,13 @@ LEN0024  DC    H'41'
 DWK      DS    D                   CVD/CVB doubleword
 QVALS    DC    256X'7D'            QUOTES, for comparison
 SPCS     DC    256C' '             space padding, for comparison
+INSRLO   DS    1F                  INSPECT: each operand's range
+INSRHI   DS    1F
+INSNXT   DS    1F                  where a LEADING operand must match n
+INSTLY   DS    1F                  each operand's tally
+INSOPA   DS    1F                  the strings looked for
+INSOPB   DS    1F                  the replacements
+INSFLG   DS    XL1                 live flags
 SRTSAVE  DS    18F                 the save area the sort is called wit
 SRTR13   DS    F                   the sort's save area, inside an exit
 SRTR12   DS    F                   the code block SRTRES is in
@@ -6571,6 +6630,7 @@ H0003    DC    H'8'
 H0004    DC    H'105'
 H0005    DC    H'125'
 H0006    DC    H'7'
+FC001    DC    F'61'               binary literals
 S0001    DC    CL1' '              nonnumeric constants
 S0002    DC    CL1'.'
 S0003    DC    CL8'000000  '
