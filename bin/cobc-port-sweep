@@ -177,6 +177,12 @@ RECEIVE INDATASET('HERC01.CBLSRC.XMIT') -
         a = prov(open(f'{WORK}/ref/{m}.asm'))
         btxt = '\n'.join(got.get(m, []))
         btxt = btxt.replace('\xaa', '[').replace('\xb3', ']').replace('\xd7', '|')
+        # A caret has no stable byte on the way out (0xB3 one run, 0x9B the
+        # next), so a caret in the reference and any high byte left in the
+        # guest's text after the three above both read as a placeholder
+        # (COBCAL74 has one in a literal).
+        btxt = re.sub(r'[\x80-\xff]', '?', btxt)
+        a = [l.replace('^', '?') for l in a]
         b = btxt.split('\n')
         for i, l in enumerate(b):
             if re.match(r'^ +END\s*$', l): b = b[:i+1]; break
