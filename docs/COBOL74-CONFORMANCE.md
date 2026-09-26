@@ -1205,7 +1205,18 @@ level 01 or 77 is refused for the same reasons (IKF2043I). Four early
 tests, oracled against GnuCOBOL before IKFCBL00 was the oracle, set their
 tables in the Procedure Division now.
 
-Not done: single-pass multi-operand `INSPECT` (#32) and the notes in #39. `OCCURS DEPENDING ON` in a file record is still
+From the notes in #39, three that protect a program: falling off the end
+of the last paragraph is an implicit `STOP RUN` (IKFCBL00 ends the run
+there too, measured), and a program no longer has to contain one; `CALL
+... USING` takes 64 arguments and `PROCEDURE DIVISION USING` 64
+parameters, where the caps were 8 and 16 (`sub12` in the CALL round trip
+passes twelve); and a nonnumeric literal is refused as an arithmetic
+operand, a repeat count or an ADVANCING count, where `ADD '1' TO A` once
+compiled. The rest of #39 stays as recorded there: parity with IKFCBL00
+(STOP RUN inside a sort exit), better than it (the 18-digit ADD), or
+harmless on a legal program.
+
+Not done: single-pass multi-operand `INSPECT` (#32). `OCCURS DEPENDING ON` in a file record is still
 refused, so the variable-length `WRITE` in #38 cannot arise; the RDW code is
 right for it when it is allowed.
 

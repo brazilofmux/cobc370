@@ -68,6 +68,13 @@ T0004    DS    0H
          L     14,12(13)           caller's return address
          LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
          BR    14                  return to caller
+* end of the Procedure Division: an implicit STOP RUN
+* STOP RUN
+         LH    15,D0002            RETURN-CODE -> the step's condition
+         L     13,4(13)            restore caller's save area
+         L     14,12(13)           caller's return address
+         LM    0,12,20(13)         caller's R0-R12; R15 keeps the code
+         BR    14                  return to caller
          DROP  12
 COBCON   DS    0D                  constants, work areas, out-of-line c
 * work areas for decimal arithmetic

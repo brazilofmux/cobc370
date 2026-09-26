@@ -1283,7 +1283,7 @@ static struct { char name[31]; int table; } pend_odo[MAXIDX];
 static int npend_odo;
 static int npend_idx;
 
-#define MAXLINK 16
+#define MAXLINK 64
 static int nlinkarea;
 static int link_root[MAXLINK];      /* the 01 sym for each area */
 static int using_parm[MAXLINK];     /* PROCEDURE DIVISION USING, in order */
@@ -3716,6 +3716,22 @@ static Node *parse_unary(void)
     return parse_primary();
 }
 
+/* A nonnumeric literal in an arithmetic expression: COMPUTE A = A + '1',
+ * PERFORM P '3' TIMES. The expression parser takes strings for the sake of
+ * conditions, so the arithmetic verbs check for one here (#39). */
+static int expr_has_str(const Node *n)
+{
+    if (!n) return 0;
+    if (n->kind == N_STR) return 1;
+    return expr_has_str(n->l) || expr_has_str(n->r);
+}
+static Node *parse_arith_expr(void)
+{
+    Node *n = parse_expr();
+    if (expr_has_str(n)) die("a nonnumeric literal cannot be an arithmetic operand");
+    return n;
+}
+
 /* Exponentiation binds tighter than multiplication and associates to the
  * right, and a unary sign binds tighter still: -A ** 2 is (-A) ** 2. II-40. */
 static Node *parse_power(void)
@@ -4672,6 +4688,7 @@ static void parse_one_statement_body(void)
             return;
         }
         Stmt *st = new_stmt(sub ? ST_SUB : ST_ADD);
+        if (tok.literal) die("a nonnumeric literal cannot be an arithmetic operand");
         char save[MAXTOK];
         memcpy(save, tok.text, (size_t)tok.len + 1);
         next();
@@ -4686,7 +4703,7 @@ static void parse_one_statement_body(void)
              * the operands are added together first. */
             Node *e = operand_node(save, squal2, snq2, ssub2);
             while (!tok.eof && !is("GIVING") && !is("TO") && !is("FROM") && !is("."))
-                e = binop(N_ADD, e, parse_expr());
+                e = binop(N_ADD, e, parse_arith_expr());
             int first = (int)(st - stmts);
             if (is("GIVING")) {
                 next();
@@ -4944,14 +4961,14 @@ static void parse_one_statement_body(void)
     if (is("MULTIPLY") || is("DIVIDE")) {
         int div = is("DIVIDE");
         next();
-        Node *a = parse_expr();
+        Node *a = parse_arith_expr();
         int into = 0;
         if (div) {
             if (is("INTO")) { into = 1; next(); }
             else if (is("BY")) next();
             else die("DIVIDE wants INTO or BY");
         } else expect("BY");
-        Node *b = parse_expr();
+        Node *b = parse_arith_expr();
         Stmt *st = new_stmt(ST_COMPUTE);
         int first = (int)(st - stmts);
         /* DIVIDE a INTO b  is  b / a;  DIVIDE a BY b  is  a / b. */
@@ -5005,7 +5022,7 @@ static void parse_one_statement_body(void)
             giving_target(new_stmt(ST_COMPUTE));
         }
         if (is("EQUAL")) { next(); if (is("TO")) next(); } else expect("=");
-        Node *e = parse_expr();
+        Node *e = parse_arith_expr();
         for (int i = first; i < nstmt; i++) stmts[i].expr = e;
         parse_size_error(first);
         return;
@@ -5048,7 +5065,7 @@ static void parse_one_statement_body(void)
         else if (!is(".") && (is_numeric_literal(tok.text) || lookup(tok.text) >= 0)) {
             /* the n TIMES form; guarded so a following statement's verb is
                never mistaken for a repeat count */
-            st->times_expr = parse_expr();
+            st->times_expr = parse_arith_expr();
             expect("TIMES");
         }
         eat_period();
@@ -5233,6 +5250,7 @@ static void parse_one_statement_body(void)
             next();
             if (is("ADVANCING")) next();
             if (is("PAGE")) { next(); st->adv = -1; }
+            else if (tok.literal) die("ADVANCING takes an integer, an identifier or a mnemonic-name, not a nonnumeric literal");
             else if (is_numeric_literal(tok.text)) {
                 st->adv = atoi(tok.text);
                 if (st->adv < 0 || st->adv > 60)
@@ -5625,7 +5643,7 @@ static void parse_one_statement_body(void)
         if (is("USING")) {
             next();
             while (!tok.eof && !is(".") && !starts_statement()) {
-                if (st->ndop >= 8) die("too many CALL arguments");
+                if (st->ndop >= 64) die("too many CALL arguments: 64 is the limit here");
                 dop_add(st);
                 st->dop[st->ndop].sym = consume_sym();
                 st->dop[st->ndop].sub = opt_subscript();
@@ -5966,7 +5984,7 @@ static void parse_one_statement_body(void)
              * every section resident and no altered GO TO to reset, the number
              * says nothing about what the program does. */
             if (!is(".")) {
-                if (!is_numeric_literal(tok.text))
+                if (tok.literal || !is_numeric_literal(tok.text))
                     die("a SECTION header takes only an optional segment-number");
                 next();
             }
@@ -6098,7 +6116,7 @@ static void parse_procedure(void)
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_STOP || (is_subprogram && stmts[i].op == ST_EXITPGM))
             stopped = 1;
-    if (!stopped) die("PROCEDURE DIVISION has no STOP RUN");
+    (void)stopped;   /* no STOP RUN is fine: falling off the end is one (#39) */
     for (int i = 0; i < nstmt; i++) {
         if (stmts[i].op == ST_ALTER) {
             int a = para_index(stmts[i].para), b = para_index(stmts[i].thru);
@@ -10436,6 +10454,47 @@ static void resolve_file_use(void)
     }
 }
 
+/* STOP RUN, or GOBACK for a subprogram: the epilogue. Also what falling
+ * off the end of the last paragraph does (#39): before, control ran on into
+ * the constants region. */
+static void gen_stop_run(int has_display)
+{
+    asm_comment(is_subprogram ? " GOBACK to the caller" : " STOP RUN");
+    /* A subprogram must not close the runtime's SYSOUT: the caller may
+     * still be using it, and control is coming back here again. */
+    if (has_display && !is_subprogram) {
+        asm_line("", "L", "15,VTERM", "close anything the runtime opened");
+        asm_line("", "BALR", "14,15", "");
+    }
+    /* RETURN-CODE, if the program ever named it, is the step's
+     * condition code -- IBM passes it back in R15. It must be loaded
+     * BEFORE the registers are restored, since the restore overwrites
+     * R15's base and the halfword is addressed off it. */
+    if (retcode_sym >= 0) {
+        /* RETURN-CODE is the step's condition code, handed back in
+         * R15. Two things constrain the order. The value is addressed
+         * off a base locator, so it must be loaded while the bases
+         * still hold -- that is, before the registers are restored.
+         * And the usual LM 14,12,12(13) reloads R15 along with the
+         * rest, which would discard it. So the restore is split: R14
+         * and R0-R12 come back individually and R15 is left alone,
+         * which is what IBM's own epilogue does. */
+        char rf[96], rb[128];
+        field_ref_m(&syms[retcode_sym], NULL, FR_RX, 2, 6, rf, sizeof rf);
+        snprintf(rb, sizeof rb, "15,%s", rf);
+        asm_line("", "LH", rb, "RETURN-CODE -> the step's condition code");
+        asm_line("", "L", "13,4(13)", "restore caller's save area");
+        asm_line("", "L", "14,12(13)", "caller's return address");
+        asm_line("", "LM", "0,12,20(13)", "caller's R0-R12; R15 keeps the code");
+    } else {
+        asm_line("", "L", "13,4(13)", "restore caller's save area");
+        asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
+        asm_line("", "SR", "15,15", "return code 0");
+    }
+    asm_line("", "BR", "14", "return to caller");
+
+}
+
 static void generate(void)
 {
     char b[200], lab[24];
@@ -12456,39 +12515,7 @@ static void generate(void)
             asm_line("", "BR", "14", "return to caller");
             break;
         case ST_STOP:
-            asm_comment(is_subprogram ? " GOBACK to the caller" : " STOP RUN");
-            /* A subprogram must not close the runtime's SYSOUT: the caller may
-             * still be using it, and control is coming back here again. */
-            if (has_display && !is_subprogram) {
-                asm_line("", "L", "15,VTERM", "close anything the runtime opened");
-                asm_line("", "BALR", "14,15", "");
-            }
-            /* RETURN-CODE, if the program ever named it, is the step's
-             * condition code -- IBM passes it back in R15. It must be loaded
-             * BEFORE the registers are restored, since the restore overwrites
-             * R15's base and the halfword is addressed off it. */
-            if (retcode_sym >= 0) {
-                /* RETURN-CODE is the step's condition code, handed back in
-                 * R15. Two things constrain the order. The value is addressed
-                 * off a base locator, so it must be loaded while the bases
-                 * still hold -- that is, before the registers are restored.
-                 * And the usual LM 14,12,12(13) reloads R15 along with the
-                 * rest, which would discard it. So the restore is split: R14
-                 * and R0-R12 come back individually and R15 is left alone,
-                 * which is what IBM's own epilogue does. */
-                char rf[96], rb[128];
-                field_ref_m(&syms[retcode_sym], NULL, FR_RX, 2, 6, rf, sizeof rf);
-                snprintf(rb, sizeof rb, "15,%s", rf);
-                asm_line("", "LH", rb, "RETURN-CODE -> the step's condition code");
-                asm_line("", "L", "13,4(13)", "restore caller's save area");
-                asm_line("", "L", "14,12(13)", "caller's return address");
-                asm_line("", "LM", "0,12,20(13)", "caller's R0-R12; R15 keeps the code");
-            } else {
-                asm_line("", "L", "13,4(13)", "restore caller's save area");
-                asm_line("", "LM", "14,12,12(13)", "restore caller's registers");
-                asm_line("", "SR", "15,15", "return code 0");
-            }
-            asm_line("", "BR", "14", "return to caller");
+            gen_stop_run(has_display);
             break;
         case ST_DISPLAY_LIT: {
             int off = 0;
@@ -12897,6 +12924,8 @@ static void generate(void)
         asm_line("", "BR", "15", "");
         asm_line(f, "DS", "0H", "fall-through when not performed");
     }
+    asm_comment(" end of the Procedure Division: an implicit STOP RUN");
+    gen_stop_run(has_display);
 
     /* ---- the constants region: everything from here on is based on R11
      * and R10, set once in the prologue. Code here -- the sort exits, the

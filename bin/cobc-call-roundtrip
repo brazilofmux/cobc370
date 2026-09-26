@@ -13,6 +13,8 @@ WORK=${TMPDIR:-/tmp}/cobc-call; mkdir -p "$WORK"
 
 "$CC/cobc370" "$TDIR/subadd.cbl"   -o "$TDIR/subadd.asm"   || die "subadd did not compile"
 "$CC/cobc370" "$TDIR/maincall.cbl" -o "$TDIR/maincall.asm" || die "maincall did not compile"
+"$CC/cobc370" "$TDIR/sub12.cbl"    -o "$TDIR/sub12.asm"    || die "sub12 did not compile"
+"$CC/cobc370" "$TDIR/main12.cbl"   -o "$TDIR/main12.asm"   || die "main12 did not compile"
 
 {
 cat <<'EOF'
@@ -39,6 +41,25 @@ cat "$TDIR/maincall.asm"
 cat <<'EOF'
 /*
 //LKED.SYSIN DD  DSN=&&SUBOBJ,DISP=(OLD,DELETE)
+//GO.SYSOUT  DD  SYSOUT=Z
+//* 3. twelve parameters: CALL ... USING was capped at eight (#39).
+//S3      EXEC ASMFC,PARM.ASM='OBJ,NODECK'
+//ASM.SYSGO DD  DSN=&&SUB12,DISP=(NEW,PASS),UNIT=SYSDA,
+//             SPACE=(80,(200,50))
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/sub12.asm"
+cat <<'EOF'
+/*
+//S4      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/main12.asm"
+cat <<'EOF'
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET2(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//LKED.SYSIN DD  DSN=&&SUB12,DISP=(OLD,DELETE)
 //GO.SYSOUT  DD  SYSOUT=Z
 EOF
 } > "$WORK/calltest.jcl"
