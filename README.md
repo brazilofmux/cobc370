@@ -1,9 +1,11 @@
 # cobc370
 
-A COBOL-74 compiler for MVS 3.8j. It runs on the host, reads COBOL, and emits
-S/370 assembler for the guest to assemble and link. The generated module is
-self-contained: the runtime it needs is emitted into it, and `SYS1.COBLIB` is
-never referenced.
+A COBOL-74 compiler for MVS 3.8j that runs on MVS 3.8j. It reads COBOL and
+emits S/370 assembler, which the system's own IFOX00 assembles and IEWL links.
+The compiler is a load module on the guest, so a TK4- or TK5 system compiles,
+links and runs COBOL with no host in the loop. The same source also builds as a
+host cross-compiler. The generated module is self-contained: the runtime it
+needs is emitted into it, and `SYS1.COBLIB` is never referenced.
 
 The reason it exists is VSAM. **IBM's ANS COBOL, the compiler MVS 3.8j actually
 ships, cannot open a VSAM file at all** -- a program on that system reaches VSAM
@@ -104,6 +106,24 @@ The output assembles with `ASMFCLG` on the guest. `COPY` members are found on
 the `-I` directories or beside the program; nothing but the copied text reaches
 the guest.
 
+## Running on MVS 3.8j
+
+The compiler itself is a load module, `COBC370`, built on the host with
+[cc370](https://github.com/mvslovers/cc370) (GCC 3.4.6 for i370) against
+[libc370](https://github.com/mvslovers/libc370) and delivered as an XMIT.
+`docs/INSTALL-MVS.txt` covers receiving and installing it. On the guest it
+reads SYSIN, writes the assembler to SYSPUNCH and runs in `REGION=8192K`.
+
+`jcl/COBCCLG.jcl` is the closed loop -- COBC370, IFOX00, IEWL, GO -- with the
+COBOL source and its copybooks in one PDS:
+
+    //RUN  EXEC COBCCLG,MEM=HELLO
+
+Every test program compiles on the guest to assembler byte-identical to the
+host build's (126 of 126). `docs/PORT-PLAN.md` is the record of the port: the
+memory diet that fit the compiler in an 8MB region, the EBCDIC work, and the
+toolchain route.
+
 ## Running the tests
 
 The tests compile on the host and then *run on a real MVS 3.8j guest*, because
@@ -167,6 +187,7 @@ what each change was, are under Optimization in `docs/COBOL74-ROADMAP.md`.
     bin/     the regression harness, the three round-trip checks, and
              cobc-ccvs to run the NIST CCVS-85 corpus through the front end
     bench/   the micro-benchmarks
+    jcl/     COBCCLG, the compile-assemble-link-go proc for the guest
     docs/    COBOL74-CONFORMANCE.md -- where this compiler sits against the
              twelve modules of ANSI X3.23-1974; COBOL74-ROADMAP.md -- the plan
              that closed the language, and the optimization record; the
