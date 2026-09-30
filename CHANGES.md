@@ -7,7 +7,9 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
-## Unreleased
+## 2026-09-30 NOTRUNC
+
+`cd4fbc9`, SHA256 `ff4db3a53f9d8dc7…`, 614,560 bytes, 181 tests.
 
 - `COMP` items follow IBM's `NOTRUNC`, IKFCBL00's default on this system
   (#45): an arithmetic result or a literal stored into a `COMP` item keeps
