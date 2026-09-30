@@ -7,7 +7,9 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
-## Unreleased
+## 2026-09-29
+
+`23f935e`, SHA256 `6bf7e5568d27e6f9…`, 614,320 bytes, 180 tests.
 
 - `MOVE` of a numeric literal or `ZERO` to a halfword or fullword `COMP`
   item is one `MVC` from a binary constant, as IBM's compilers do (Harry E,
