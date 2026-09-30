@@ -7,7 +7,7 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
-## 2026-09-30 NOTRUNC
+## 2026-09-29 NOTRUNC
 
 `cd4fbc9`, SHA256 `ff4db3a53f9d8dc7…`, 614,560 bytes, 181 tests.
 

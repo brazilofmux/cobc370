@@ -661,7 +661,7 @@ divisions, resolution, code generation -- an error is still the end.
 `bad-multi` in the host test target has three mistakes and expects three
 messages.
 
-### COMP past its PICTURE: IBM's NOTRUNC (2026-09-30)
+### COMP past its PICTURE: IBM's NOTRUNC (2026-09-29)
 
 The 1974 standard bounds a numeric item's value by its PICTURE: a result
 with more integer digits loses the high-order ones. IBM's compilers made

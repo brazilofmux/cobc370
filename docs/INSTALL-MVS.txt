@@ -6,7 +6,7 @@ runs on the guest.  Nothing here needs a C compiler on MVS.  The module
 was cross-compiled on a host and this file is the finished result.
 
 These instructions do not go stale, but the figures below describe one
-particular build -- the 2026-09-30 NOTRUNC release.  Check them against
+particular build -- the 2026-09-29 NOTRUNC release.  Check them against
 whatever you actually downloaded rather than against this file.
 
   SHA256   ff4db3a53f9d8dc777af9c040b081dd7a07529ac3f43b239267d5d2353766e6a
