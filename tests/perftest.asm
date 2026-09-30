@@ -100,20 +100,10 @@ T0002    DS    0H
          BALR  14,15
 T0003    DS    0H
 * MOVE 0 -> WS-TOT
-         ZAP   PWK1(16),K0003+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),8,0          drop the digits past the picture
-         SRP   DWK(8),56,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0004
+         MVC   D0004(4),FC001      a binary constant
 T0004    DS    0H
 * MOVE 1 -> WS-IDX
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0003
+         MVC   D0003(2),FC002+2    a binary constant
 T0005    DS    0H
 * PERFORM SUM-PARA THRU SUM-EXIT
 L0004    DS    0H
@@ -133,7 +123,7 @@ L0004    DS    0H
          LH    2,0(,7)
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0004+15(1)  literal
+         ZAP   WK1+15(1),K0003+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0005
          L     14,X0004            what the exit cell holds
@@ -166,12 +156,7 @@ T0007    DS    0H
          BALR  14,15
 T0008    DS    0H
 * MOVE 0 -> WS-CNT
-         ZAP   PWK1(16),K0003+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0005
+         MVC   D0005(2),FC001+2    a binary constant
 T0009    DS    0H
 * PERFORM EOF-PARA THRU EOF-EXIT
 L0006    DS    0H
@@ -210,15 +195,10 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * MOVE 0 -> WS-CNT
-         ZAP   PWK1(16),K0003+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0005
+         MVC   D0005(2),FC001+2    a binary constant
 T0013    DS    0H
 * PERFORM BUMP-PARA THRU BUMP-EXIT
-         ZAP   WK0+15(1),K0005+15(1)  literal
+         ZAP   WK0+15(1),K0004+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
          ST    2,PT014
@@ -259,12 +239,7 @@ T0015    DS    0H
          BALR  14,15
 T0016    DS    0H
 * MOVE 0 -> WS-CNT
-         ZAP   PWK1(16),K0003+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0005
+         MVC   D0005(2),FC001+2    a binary constant
 T0017    DS    0H
 * PERFORM BUMP-PARA THRU BUMP-EXIT
 L0010    DS    0H
@@ -274,7 +249,7 @@ L0010    DS    0H
          LH    2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0003+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BE    L0011
          L     14,X0008            what the exit cell holds
@@ -487,15 +462,17 @@ K0001    EQU   *-15                numeric constants, as long as used
 K0002    EQU   *-15
          DC    PL1'5'
 K0003    EQU   *-15
-         DC    PL1'0'
-K0004    EQU   *-15
          DC    PL1'3'
-K0005    EQU   *-15
+K0004    EQU   *-15
          DC    PL1'4'
+K0005    EQU   *-15
+         DC    PL1'0'
 K0006    EQU   *-15
          DC    PL1'2'
 H0001    DC    H'2'                element sizes
 H0002    DC    H'1'
+FC001    DC    F'0'                binary literals
+FC002    DC    F'1'
 S0001    DC    CL1'Y'              nonnumeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)

@@ -276,13 +276,7 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * MOVE 1 -> RR-NUM
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0008
+         MVC   D0008(4),FC001      a binary constant
 T0010    DS    0H
 * READ RRDS-FILE
          GET   RPL=FD001R          VSAM retrieval by key
@@ -386,13 +380,7 @@ T0011    DS    0H
          BALR  14,15
 T0012    DS    0H
 * MOVE 99999 -> RR-NUM
-         ZAP   PWK1(16),K0002+13(3)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0008
+         MVC   D0008(4),FC002      a binary constant
 T0013    DS    0H
 * READ RRDS-FILE
          GET   RPL=FD001R          VSAM retrieval by key
@@ -707,8 +695,8 @@ FD001R   RPL   ACB=FD001,AREA=D0005,                                   X
 FD001S   DS    CL80                the record area, across a REWRITE's
 K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
-K0002    EQU   *-13
-         DC    PL3'99999'
+FC001    DC    F'1'                binary literals
+FC002    DC    F'99999'
 S0001    DC    CL17'KSDS USE: STATUS '  nonnumeric constants
 S0002    DC    CL17'RRDS USE: STATUS '
 S0003    DC    CL1'Z'

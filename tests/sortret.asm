@@ -160,14 +160,9 @@ L0012    DS    0H
          DROP  8
 T0011    DS    0H
 * MOVE 16 -> SORT-RETURN
-         ZAP   PWK1(16),K0001+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0005
+         MVC   D0005(2),FC001+2    a binary constant
 T0012    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(14),S0004
@@ -279,12 +274,7 @@ T0024    DS    0H
          BALR  14,15
 T0025    DS    0H
 * MOVE 16 -> SORT-RETURN
-         ZAP   PWK1(16),K0001+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0005
+         MVC   D0005(2),FC001+2    a binary constant
 T0026    DS    0H
 * GO TO O1
          B     B0005
@@ -390,8 +380,7 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
-K0001    EQU   *-14                numeric constants, as long as used
-         DC    PL2'16'
+FC001    DC    F'16'               binary literals
 S0001    DC    CL15'AFTER THE SORT '  nonnumeric constants
 S0002    DC    CL2'03'
 S0003    DC    CL38'THREE                                 '

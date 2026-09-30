@@ -137,15 +137,9 @@ B0004    EQU   *
          USING B0004,12
 T0007    DS    0H
 * MOVE 21 -> WS-RRN
-         ZAP   PWK1(16),K0001+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0002
+         MVC   D0002(4),FC001      a binary constant
 T0008    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(21),S0005
@@ -259,15 +253,9 @@ R0002    DS    0H
          ST    15,X0006
 T0013    DS    0H
 * MOVE 51 -> WS-RRN
-         ZAP   PWK1(16),K0002+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0002
+         MVC   D0002(4),FC002      a binary constant
 T0014    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(21),S0007
@@ -384,15 +372,9 @@ R0003    DS    0H
          ST    15,X0006
 T0019    DS    0H
 * MOVE 81 -> WS-RRN
-         ZAP   PWK1(16),K0003+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0002
+         MVC   D0002(4),FC003      a binary constant
 T0020    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(37),S0008
@@ -506,15 +488,9 @@ R0004    DS    0H
          ST    15,X0006
 T0025    DS    0H
 * MOVE 111 -> WS-RRN
-         ZAP   PWK1(16),K0004+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0002
+         MVC   D0002(4),FC004      a binary constant
 T0026    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(38),S0009
@@ -712,7 +688,7 @@ T0038    DS    0H
          UNPK  D0009(8),PWK1(16)   packed -> zoned
 T0039    DS    0H
 * MOVE 0 -> RECORD-COUNTER
-         ZAP   PWK1(16),K0005+15(1)  literal
+         ZAP   PWK1(16),K0001+15(1)  literal
          UNPK  D0008(8),PWK1(16)   packed -> zoned
 T0040    DS    0H
 * PERFORM 130-READ-AND-DISPLAY THRU 139-EXIT
@@ -723,7 +699,7 @@ L0034    DS    0H
          CLC   D0004(1),S0004      alphanumeric compare
          BE    L0035
          PACK  WK0+11(5),D0008(8)  zoned -> packed
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+11(5),WK1+15(1)  numeric compare
          BH    L0035
          L     14,X0010            what the exit cell holds
@@ -859,7 +835,7 @@ T0047    DS    0H
 T0048    DS    0H
 * ADD 1 -> SLOT-COUNTER
          PACK  PWK1(16),D0009(8)   zoned -> packed
-         ZAP   PWK2(16),K0007+15(1)  literal
+         ZAP   PWK2(16),K0003+15(1)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0009(8),PWK1(16)   packed -> zoned
          DROP  8
@@ -869,7 +845,7 @@ T0049    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0008(8)   zoned -> packed
-         ZAP   PWK2(16),K0007+15(1)  literal
+         ZAP   PWK2(16),K0003+15(1)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0008(8),PWK1(16)   packed -> zoned
          DROP  8
@@ -947,21 +923,17 @@ FD000    ACB   DDNAME=RRDSF01,MACRF=(KEY,SEQ,IN)  VSAM access method co
 FD000RA  DC    F'0'                has carried a request
 FD000R   RPL   ACB=FD000,AREA=D0001,                                   X
                AREALEN=80,RECLEN=80,ARG=D0002,OPTCD=(KEY,SEQ,NUP,MVE)
-K0001    EQU   *-14                numeric constants, as long as used
-         DC    PL2'21'
-K0002    EQU   *-14
-         DC    PL2'51'
-K0003    EQU   *-14
-         DC    PL2'81'
-K0004    EQU   *-14
-         DC    PL2'111'
-K0005    EQU   *-15
+K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'0'
-K0006    EQU   *-15
+K0002    EQU   *-15
          DC    PL1'4'
-K0007    EQU   *-15
+K0003    EQU   *-15
          DC    PL1'1'
 M0001    DC    XL12'402020206B2020206B202120'  ED patterns
+FC001    DC    F'21'               binary literals
+FC002    DC    F'51'
+FC003    DC    F'81'
+FC004    DC    F'111'
 S0001    DC    CL42'RRDSSSEQ: READ RRDS SEQUENTIALLY (W/START)'  nonnum
 S0002    DC    CL42'------------------------------------------'
 S0003    DC    CL1' '

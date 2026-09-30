@@ -37,14 +37,9 @@ B0001    EQU   *
          USING B0001,12
 T0000    DS    0H
 * MOVE 1 -> WS-I
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0012
+         MVC   D0012(2),FC001+2    a binary constant
 T0001    DS    0H
 * PERFORM SHOW-PARA
 L0001    DS    0H
@@ -54,7 +49,7 @@ L0001    DS    0H
          LH    2,D0012
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0002+15(1)  literal
+         ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BH    L0002
          L     14,X0001            what the exit cell holds
@@ -186,11 +181,10 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'1'
-K0002    EQU   *-15
          DC    PL1'3'
 H0001    DC    H'14'               element sizes
 H0002    DC    H'1'
+FC001    DC    F'1'                binary literals
 S0001    DC    CL7'YEAR  ['        nonnumeric constants
 S0002    DC    CL1']'
 S0003    DC    CL7'YEAR1 ['

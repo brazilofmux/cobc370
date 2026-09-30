@@ -72,29 +72,19 @@ T0004    DS    0H
          BNE   L0001
 T0005    DS    0H
 * MOVE 3 -> RETURN-CODE
-         ZAP   PWK1(16),K0002+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0006
+         MVC   D0006(2),FC001+2    a binary constant
 T0006    DS    0H
          B     L0002
          DROP  8,9
 L0001    DS    0H
 T0007    DS    0H
 * MOVE 0 -> RETURN-CODE
-         ZAP   PWK1(16),K0003+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0006
+         MVC   D0006(2),FC002+2    a binary constant
          DROP  8
 L0002    DS    0H
 T0008    DS    0H
@@ -132,11 +122,9 @@ WK4      DS    PL16
 WK5      DS    PL16
 K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'7'
-K0002    EQU   *-15
-         DC    PL1'3'
-K0003    EQU   *-15
-         DC    PL1'0'
 H0001    DC    H'1000'             element sizes
+FC001    DC    F'3'                binary literals
+FC002    DC    F'0'
 S0001    DC    CL4'DONE'           nonnumeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)

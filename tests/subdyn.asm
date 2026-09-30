@@ -55,12 +55,7 @@ T0002    DS    0H
          BR    14                  return to caller
 T0003    DS    0H
 * MOVE -1 -> OUT-CALLS
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0002
+         MVC   D0002(2),FC001+2    a binary constant
 T0004    DS    0H
 * GOBACK to the caller
          L     13,4(13)            restore caller's save area
@@ -90,9 +85,8 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'-1'
 H0001    DC    H'1'                element sizes
+FC001    DC    F'-1'               binary literals
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 * one cell per LINKAGE 01, filled in from the parameter list

@@ -37,30 +37,15 @@ B0001    EQU   *
          USING B0001,12
 T0000    DS    0H
 * MOVE 7 -> A
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0000
+         MVC   D0000(4),FC001      a binary constant
 T0001    DS    0H
 * MOVE 7 -> B
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0001
+         MVC   D0001(4),FC001      a binary constant
 T0002    DS    0H
 * MOVE 7 -> C
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0002
+         MVC   D0002(4),FC001      a binary constant
 T0003    DS    0H
 * MOVE A -> SA
          L     2,D0000
@@ -185,8 +170,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'7'
+FC001    DC    F'7'                binary literals
 S0001    DC    CL6'MULTI '         nonnumeric constants
 S0002    DC    CL1' '
 S0003    DC    CL7'GROUP ['

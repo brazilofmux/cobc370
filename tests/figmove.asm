@@ -106,13 +106,7 @@ T0009    DS    0H
          OI    D0004+2,X'0F'       unsigned: force an F sign
 T0010    DS    0H
 * MOVE 0 -> WS-BIN
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         STH   2,D0005
+         MVC   D0005(2),FC001+2    a binary constant
 T0011    DS    0H
 * MOVE SPACES -> WS-GRP
          LA    1,D0008             SPACES
@@ -267,6 +261,7 @@ WK4      DS    PL16
 WK5      DS    PL16
 K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'0'
+FC001    DC    F'0'                binary literals
 S0001    DC    CL8'BEFORE ['       nonnumeric constants
 S0002    DC    CL2']['
 S0003    DC    CL1']'

@@ -62,14 +62,9 @@ T0001    DS    0H
          DROP  8
 T0002    DS    0H
 * MOVE 0 -> WS-IDX
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0004
+         MVC   D0004(2),FC001+2    a binary constant
          DROP  8
 * LOOP-PARA.
 P0001    DS    0H
@@ -88,7 +83,7 @@ T0004    DS    0H
          LH    2,D0004
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+14(2),K0002+14(2)  literal
+         ZAP   WK1+14(2),K0001+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
          BNH   L0001
 T0005    DS    0H
@@ -108,7 +103,7 @@ T0007    DS    0H
          LH    2,D0004
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         MP    WK0+10(6),K0003+13(3)  scale becomes the sum of the scal
+         MP    WK0+10(6),K0002+13(3)  scale becomes the sum of the scal
          SRP   WK0+10(6),2,0       align scale (left)
          ZAP   D0003(5),WK0+10(6)
 T0008    DS    0H
@@ -194,8 +189,8 @@ RG001    ST    14,RGS001           save the return
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0006             LINE-COUNTER
-         A     2,FC001             plus every LINE integer
-         C     2,FC002             against the lower limit
+         A     2,FC002             plus every LINE integer
+         C     2,FC003             against the lower limit
          BNH   L0007               fits
          BAL   14,RADV000          page advance processing
          DROP  8
@@ -209,7 +204,7 @@ L0008    DS    0H
          SR    3,3
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
-         C     2,FC002             against the lower limit
+         C     2,FC003             against the lower limit
          BNH   L0007               fits
          BAL   14,RADV000          page advance processing
          DROP  8
@@ -222,7 +217,7 @@ L0007    DS    0H
          LA    2,1(2)              LINE PLUS n
          B     L0010
 L0009    DS    0H
-         C     2,FC003             the heading ran past FIRST DETAIL?
+         C     2,FC004             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
          B     L0010
@@ -333,17 +328,16 @@ WK5      DS    PL16
 * file control blocks
 FD000    DCB   DDNAME=PROUT,DSORG=PS,MACRF=(PM),RECFM=FA,              X
                LRECL=133,BLKSIZE=133
-K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'0'
-K0002    EQU   *-14
+K0001    EQU   *-14                numeric constants, as long as used
          DC    PL2'10'
-K0003    EQU   *-13
+K0002    EQU   *-13
          DC    PL3'1000'
 M0001    DC    XL16'40204020206B2020206B2021204B2020'  ED patterns
 H0001    DC    H'1'                element sizes
-FC001    DC    F'1'                binary literals
-FC002    DC    F'10'
-FC003    DC    F'4'
+FC001    DC    F'0'                binary literals
+FC002    DC    F'1'
+FC003    DC    F'10'
+FC004    DC    F'4'
 S0001    DC    CL11'TEST REPORT'   nonnumeric constants
 S0002    DC    CL3'NUM'
 S0003    DC    CL6'AMOUNT'

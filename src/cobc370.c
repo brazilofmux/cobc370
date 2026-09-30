@@ -6909,14 +6909,16 @@ static const char *intern_half(int v)
 }
 
 /* Fullword constants: binary literals too wide for AH. */
-static struct { char label[16]; long v; } fconsts[64];
+#define MAXFCONST 1024
+static struct { char label[16]; long v; } fconsts[MAXFCONST];
 static int nfconst;
 
 static const char *intern_full(long v)
 {
     for (int i = 0; i < nfconst; i++) if (fconsts[i].v == v) return fconsts[i].label;
-    if (nfconst >= 64) die("too many fullword constants");
-    snprintf(fconsts[nfconst].label, sizeof fconsts[nfconst].label, "FC%03d", nfconst + 1);
+    if (nfconst >= MAXFCONST) die("too many fullword constants");
+    snprintf(fconsts[nfconst].label, sizeof fconsts[nfconst].label,
+             nfconst < 999 ? "FC%03d" : "FC%04d", nfconst + 1);
     fconsts[nfconst].v = v;
     return fconsts[nfconst++].label;
 }
@@ -7328,6 +7330,23 @@ static int display_converts(const Sym *sy)
  * high-order digits, shifted a nibble right by MVO to sit before a sign. */
 static void gen_fload_sym(const Sym *sy, Node *sub);
 static int use_float;
+/* A number into a register. LA reaches 4095; above that the number is
+ * built from its 4K multiple and the rest, still without a literal, since a
+ * paragraph's code block cannot count on reaching the literal pool. A MOVE
+ * of a 4096-byte item assembled to IFO208 before this (Harry E, H390-MVS). */
+static void load_int(int reg, long n, const char *cmt)
+{
+    char b[64];
+    if (n < 0 || n >= 16L * 1024 * 1024) die("internal: a length beyond 24 bits");
+    if (n <= 4095) {
+        snprintf(b, sizeof b, "%d,%ld", reg, n); asm_line("", "LA", b, cmt);
+        return;
+    }
+    snprintf(b, sizeof b, "%d,%ld", reg, n >> 12); asm_line("", "LA", b, cmt);
+    snprintf(b, sizeof b, "%d,12", reg);            asm_line("", "SLL", b, "4K multiples");
+    if (n & 0xFFF) { snprintf(b, sizeof b, "%d,%ld(,%d)", reg, n & 0xFFF, reg); asm_line("", "LA", b, "and the rest"); }
+}
+
 static void gen_display_digits(const Sym *sy, Node *sub)
 {
     char b[96], lk[16];
@@ -8804,9 +8823,9 @@ static void gen_move_alpha(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
          * runtime moves it, however long, and space fills the rest. */
         if (d->edited || d->just) die("a MOVE to an edited or JUSTIFIED item longer than 256 bytes, or of run-time length, is not implemented");
         use_mvl = 1;
-        if (var_len(d) && !dsub) gen_var_len(d, 2); else { snprintf(b, sizeof b, "2,%d", dn); asm_line("", "LA", b, "receiver length"); }
+        if (var_len(d) && !dsub) gen_var_len(d, 2); else load_int(2, dn, "receiver length");
         asm_line("", "STH", "2,MVLLEN", "");
-        if (var_len(sv) && !ssub) gen_var_len(sv, 2); else { snprintf(b, sizeof b, "2,%d", sn); asm_line("", "LA", b, "sender length"); }
+        if (var_len(sv) && !ssub) gen_var_len(sv, 2); else load_int(2, sn, "sender length");
         asm_line("", "STH", "2,MVLLEN+2", "");
         need_sym_base(d);
         field_ref_m(d, dsub, FR_RX, dn, 6, fd, sizeof fd);
@@ -13219,8 +13238,7 @@ static void generate(void)
             snprintf(b, sizeof b, "1,%s", fd);
             asm_line("", "LA", b, "A(item)");
             asm_line("", "ST", "1,ACCPARM", "");
-            snprintf(b, sizeof b, "1,%d", n);
-            asm_line("", "LA", b, "");
+            load_int(1, n, "");
             asm_line("", "STH", "1,ACCLEN", "its length");
             asm_line("", "LA", "1,ACCLEN", "");
             asm_line("", "ST", "1,ACCPARM+4", "");
@@ -14407,6 +14425,32 @@ static void generate(void)
                 gen_fexpr(&opn, 0);
                 if (IS_FLOAT(d)) gen_fstore_sym(d, st->dsub);
                 else { gen_fpk("PWK1", d->scale); gen_store(d, st->dsub, "PWK1"); }
+                break;
+            }
+            if (st->op == ST_MOVE && d->usage == U_COMP && !d->is_index && d->scale >= 0
+                && (d->bytes == 2 || d->bytes == 4)
+                && (st->imm == 1 || st->fig == FIG_ZERO)) {
+                /* A literal or ZERO into a halfword or fullword binary item:
+                 * the value is known here, so one MVC from a binary constant,
+                 * as IBM's compilers do (Harry E, H390-MVS), rather than
+                 * packing it and converting at run time. The digits past the
+                 * PICTURE are dropped, as the general path drops them. */
+                long v = 0; int neg = 0;
+                if (st->imm == 1) {
+                    const char *q = st->immdigits;
+                    if (*q == '-') { neg = 1; q++; } else if (*q == '+') q++;
+                    size_t nd = strlen(q);
+                    if ((int)nd > d->digits) q += nd - (size_t)d->digits;
+                    for (; *q; q++) v = v * 10 + (*q - '0');
+                    if (neg && d->is_signed) v = -v;
+                }
+                const char *kc = intern_full(v);
+                char fd[64], ks[32];
+                need_sym_base(d);
+                field_ref_m(d, st->dsub, FR_SS_NOLEN, d->bytes, 6, fd, sizeof fd);
+                snprintf(ks, sizeof ks, "%s%s", kc, d->bytes == 2 ? "+2" : "");
+                snprintf(b, sizeof b, "%s(%d),%s", fd, d->bytes, ks);
+                asm_line("", "MVC", b, "a binary constant");
                 break;
             }
             if (st->op == ST_MOVE && IS_FLOAT(d)) {
@@ -15940,6 +15984,20 @@ int main(int argc, char **argv)
     }
     generate();
 
-    if (out != stdout) fclose(out);
+    /* A write that failed must fail the step. libc370 since 1.0.6 turns an
+     * out-of-space SYSPUNCH into ferror() and ENOSPC instead of an SD37, and
+     * since 1.0.7 reports a failure writing the last block at fclose(); with
+     * neither checked, a deck cut off mid-program ended RC 0 and COBCCLG
+     * assembled it (#44, from mvslovers' Mike Grossmann). RC 2 as for the
+     * other I/O failures here, so COND=(0,NE) skips the assembly. */
+    {
+        int bad = ferror(out);
+        if (out != stdout) { if (fclose(out) != 0) bad = 1; }
+        else if (fflush(out) != 0) bad = 1;
+        if (bad) {
+            perror(outname ? outname : "output");
+            return 2;
+        }
+    }
     return 0;
 }

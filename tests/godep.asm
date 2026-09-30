@@ -127,14 +127,9 @@ R0005    DS    0H
          ST    15,X0005
 T0010    DS    0H
 * MOVE 2 -> SELC
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0001
+         MVC   D0001(2),FC001+2    a binary constant
 T0011    DS    0H
 * PERFORM TRYC THRU TRYC-X
          L     14,X0009            what the exit cell holds
@@ -150,7 +145,7 @@ R0006    DS    0H
          ST    15,X0009
 T0012    DS    0H
 * MOVE 1 -> TV
-         ZAP   PWK1(16),K0002+15(1)  literal
+         ZAP   PWK1(16),K0001+15(1)  literal
          LA    6,0                 subscript-1
          MH    6,H0001             times element size
          L     8,BL0000            base locator
@@ -160,7 +155,7 @@ T0012    DS    0H
          OI    1(6),X'F0'          unsigned: force an F zone
 T0013    DS    0H
 * MOVE 3 -> TV
-         ZAP   PWK1(16),K0003+15(1)  literal
+         ZAP   PWK1(16),K0002+15(1)  literal
          LA    6,1                 subscript-1
          MH    6,H0001             times element size
          LA    6,D0003(6)          element address
@@ -517,13 +512,12 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'2'
-K0002    EQU   *-15
          DC    PL1'1'
-K0003    EQU   *-15
+K0002    EQU   *-15
          DC    PL1'3'
 H0001    DC    H'2'                element sizes
 H0002    DC    H'3'
+FC001    DC    F'2'                binary literals
 S0001    DC    CL1'0'              nonnumeric constants
 S0002    DC    CL1'1'
 S0003    DC    CL1'2'

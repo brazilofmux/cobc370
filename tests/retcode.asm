@@ -38,14 +38,9 @@ T0000    DS    0H
          BALR  14,15
 T0001    DS    0H
 * MOVE 8 -> RETURN-CODE
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0000
+         MVC   D0000(2),FC001+2    a binary constant
 T0002    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
@@ -86,8 +81,7 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'8'
+FC001    DC    F'8'                binary literals
 S0001    DC    CL24'SETTING RETURN-CODE TO 8'  nonnumeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)

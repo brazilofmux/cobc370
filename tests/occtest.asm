@@ -37,14 +37,9 @@ B0001    EQU   *
          USING B0001,12
 T0000    DS    0H
 * MOVE 1 -> WS-IDX
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0006
+         MVC   D0006(2),FC001+2    a binary constant
          DROP  8
 * FILL-LOOP.
 P0001    DS    0H
@@ -58,7 +53,7 @@ T0001    DS    0H
          LH    2,D0006
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0002+15(1)  literal
+         ZAP   WK1+15(1),K0001+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNH   L0001
 T0002    DS    0H
@@ -74,7 +69,7 @@ T0003    DS    0H
          LH    2,D0006
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         MP    WK0+10(6),K0003+14(2)  scale becomes the sum of the scal
+         MP    WK0+10(6),K0002+14(2)  scale becomes the sum of the scal
          SRP   WK0+10(6),2,0       align scale (left)
          LH    6,D0006             subscript
          BCTR  6,0                 subscript-1
@@ -86,7 +81,7 @@ T0004    DS    0H
          LH    2,D0006
          CVD   2,DWK               binary -> packed
          ZAP   WK0+11(5),DWK(8)
-         MP    WK0+11(5),K0004+14(2)  scale becomes the sum of the scal
+         MP    WK0+11(5),K0003+14(2)  scale becomes the sum of the scal
          SRP   WK0+11(5),2,0       align scale (left)
          LH    6,D0006             subscript
          BCTR  6,0                 subscript-1
@@ -109,14 +104,9 @@ B0003    EQU   *
          USING B0003,12
 T0007    DS    0H
 * MOVE 3 -> WS-IDX
-         ZAP   PWK1(16),K0005+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0006
+         MVC   D0006(2),FC002+2    a binary constant
 T0008    DS    0H
 * MOVE YT-DEBITS -> OUT-NUM
          LH    7,D0006             subscript
@@ -181,7 +171,7 @@ T0015    DS    0H
          BALR  14,15
 T0016    DS    0H
 * MOVE 12 -> MD-ENTRY
-         ZAP   PWK1(16),K0006+14(2)  literal
+         ZAP   PWK1(16),K0004+14(2)  literal
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),13,0         drop the digits past the picture
          SRP   DWK(8),51,0
@@ -193,7 +183,7 @@ T0016    DS    0H
          STH   2,0(,6)
 T0017    DS    0H
 * MOVE 31 -> MD-ENTRY
-         ZAP   PWK1(16),K0007+14(2)  literal
+         ZAP   PWK1(16),K0005+14(2)  literal
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),13,0         drop the digits past the picture
          SRP   DWK(8),51,0
@@ -270,22 +260,20 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'1'
-K0002    EQU   *-15
          DC    PL1'5'
-K0003    EQU   *-14
+K0002    EQU   *-14
          DC    PL2'100'
-K0004    EQU   *-14
+K0003    EQU   *-14
          DC    PL2'10'
-K0005    EQU   *-15
-         DC    PL1'3'
-K0006    EQU   *-14
+K0004    EQU   *-14
          DC    PL2'12'
-K0007    EQU   *-14
+K0005    EQU   *-14
          DC    PL2'31'
 H0001    DC    H'10'               element sizes
 H0002    DC    H'1'
 H0003    DC    H'2'
+FC001    DC    F'1'                binary literals
+FC002    DC    F'3'
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)
 DSPBUF   DS    CL121               DISPLAY line

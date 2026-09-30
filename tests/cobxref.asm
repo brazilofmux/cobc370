@@ -170,14 +170,9 @@ T0015    DS    0H
 L0002    DS    0H
 T0016    DS    0H
 * MOVE 0 -> WBUCKET
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0051
+         MVC   D0051(2),FC001+2    a binary constant
 T0017    DS    0H
 * MOVE SPACES -> SV3DPROG
          LA    1,D0130             SPACES
@@ -211,29 +206,17 @@ T0021    DS    0H
 L0003    DS    0H
 T0022    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0259
+         MVC   D0259(4),FC001      a binary constant
 T0023    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0259
+         MVC   D0259(4),FC001      a binary constant
 T0024    DS    0H
 * INSPECT SV3PROGRAMID
 *  TALLYING pass
          LA    7,D0132             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -294,7 +277,7 @@ T0026    DS    0H
          L     2,D0052
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         ZAP   WK1+14(2),K0002+14(2)  literal
+         ZAP   WK1+14(2),K0001+14(2)  literal
          CP    WK0+10(6),WK1+14(2)  numeric compare
          BNH   L0004
 T0027    DS    0H
@@ -384,7 +367,7 @@ T0036    DS    0H
          LH    2,D0051
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+14(2),K0003+14(2)  literal
+         ZAP   WK1+14(2),K0002+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
          BH    L0006
 T0037    DS    0H
@@ -399,14 +382,9 @@ B0005    EQU   *
          USING B0005,12
 T0038    DS    0H
 * MOVE 0 -> WBUCKET
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0051
+         MVC   D0051(2),FC001+2    a binary constant
 T0039    DS    0H
 * MOVE SV3DPROG -> HOLDID
          MVC   D0099(11),D0130     alphanumeric move
@@ -436,7 +414,7 @@ T0042    DS    0H
 T0043    DS    0H
 * ADD 100 -> COBOLREFNO
          PACK  PWK1(16),D0047(6)   zoned -> packed
-         ZAP   PWK2(16),K0004+14(2)  literal
+         ZAP   PWK2(16),K0003+14(2)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0047(6),PWK1(16)   packed -> zoned
          OI    D0047+5,X'F0'       unsigned: force an F zone
@@ -449,7 +427,7 @@ T0045    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0047(6)   zoned -> packed
-         ZAP   PWK2(16),K0003+14(2)  literal
+         ZAP   PWK2(16),K0002+14(2)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0047(6),PWK1(16)   packed -> zoned
          OI    D0047+5,X'F0'       unsigned: force an F zone
@@ -460,14 +438,14 @@ T0046    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          PACK  PWK1(16),D0048(6)   zoned -> packed
-         ZAP   PWK2(16),K0005+15(1)  literal
+         ZAP   PWK2(16),K0004+15(1)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0048(6),PWK1(16)   packed -> zoned
          OI    D0048+5,X'F0'       unsigned: force an F zone
 T0047    DS    0H
 * ADD 1 -> GEN-REFNO2
          PACK  PWK1(16),D0049(6)   zoned -> packed
-         ZAP   PWK2(16),K0005+15(1)  literal
+         ZAP   PWK2(16),K0004+15(1)  literal
          AP    PWK1(16),PWK2(16)
          UNPK  D0049(6),PWK1(16)   packed -> zoned
          OI    D0049+5,X'F0'       unsigned: force an F zone
@@ -723,38 +701,18 @@ B0009    EQU   *
          USING B0009,12
 T0086    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0053
+         MVC   D0053(2),FC001+2    a binary constant
 T0087    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0054
+         MVC   D0054(2),FC001+2    a binary constant
 T0088    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0089    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0056
+         MVC   D0056(2),FC001+2    a binary constant
 T0090    DS    0H
 * MOVE SPACES -> WS8FOUND
          LA    1,D0137             SPACES
@@ -785,7 +743,7 @@ T0093    DS    0H
          LH    2,D0053
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0020
 T0094    DS    0H
@@ -818,17 +776,12 @@ T0096    DS    0H
          LH    2,D0054
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0021
 T0097    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0054
+         MVC   D0054(2),FC001+2    a binary constant
 T0098    DS    0H
 * GO TO RL3GETGROUP
          L     15,PA0009
@@ -918,17 +871,12 @@ T0109    DS    0H
          LH    2,D0055
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0025
 T0110    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0111    DS    0H
 * GO TO RL3STOREGROUP
          L     15,PA0012
@@ -963,7 +911,7 @@ T0114    DS    0H
          LH    2,D0056
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0007+15(1)  literal
+         ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0026
 T0115    DS    0H
@@ -1101,20 +1049,10 @@ T0131    DS    0H
          MVC   D0095(1),S0013      literal move, space padded
 T0132    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0133    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0056
+         MVC   D0056(2),FC001+2    a binary constant
 T0134    DS    0H
 * MOVE SPACES -> WS8FOUND
          LA    1,D0137             SPACES
@@ -1209,29 +1147,17 @@ B0019    EQU   *
          USING B0019,12
 T0148    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0259
+         MVC   D0259(4),FC001      a binary constant
 T0149    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0259
+         MVC   D0259(4),FC001      a binary constant
 T0150    DS    0H
 * INSPECT SV3PROGRAMID
 *  TALLYING pass
          LA    7,D0132             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LR    3,7
 L0290    LR    4,5
@@ -1300,7 +1226,7 @@ T0152    DS    0H
          L     2,D0052
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         ZAP   WK1+14(2),K0008+14(2)  literal
+         ZAP   WK1+14(2),K0007+14(2)  literal
          CP    WK0+10(6),WK1+14(2)  numeric compare
          BNH   L0036
 T0153    DS    0H
@@ -1327,7 +1253,7 @@ T0155    DS    0H
          L     2,D0052
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         ZAP   WK1+14(2),K0009+14(2)  literal
+         ZAP   WK1+14(2),K0008+14(2)  literal
          CP    WK0+10(6),WK1+14(2)  numeric compare
          BNH   L0037
 T0156    DS    0H
@@ -1488,44 +1414,19 @@ T0181    DS    0H
          MVI   0(1),C' '
 T0182    DS    0H
 * MOVE 0 -> WITHINPARENS-COUNT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0044
+         MVC   D0044(2),FC001+2    a binary constant
 T0183    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0053
+         MVC   D0053(2),FC001+2    a binary constant
 T0184    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0054
+         MVC   D0054(2),FC001+2    a binary constant
 T0185    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0186    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0056
+         MVC   D0056(2),FC001+2    a binary constant
 T0187    DS    0H
 * MOVE YES -> IGNORELEADSPACES
          MVC   D0080(1),D0059      alphanumeric move
@@ -1907,17 +1808,12 @@ T0238    DS    0H
          LH    2,D0055
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0010+15(1)  literal
+         ZAP   WK1+15(1),K0009+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0055
 T0239    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0240    DS    0H
 * PERFORM STOREFOUNDGROUP THRU SFGEND
          L     14,X0084            what the exit cell holds
@@ -1972,17 +1868,12 @@ T0244    DS    0H
          LH    2,D0053
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0056
 T0245    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0053
+         MVC   D0053(2),FC001+2    a binary constant
 T0246    DS    0H
 * MOVE SV2-65 -> HOLDOVERLAPDIGIT
          MVC   D0071(1),D0127      alphanumeric move
@@ -2033,17 +1924,12 @@ T0251    DS    0H
          LH    2,D0054
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0058
 T0252    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0054
+         MVC   D0054(2),FC001+2    a binary constant
 T0253    DS    0H
 * GO TO GETINPUTGROUP
          L     15,PA0025
@@ -2186,7 +2072,7 @@ T0272    DS    0H
          LH    2,D0044
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0005+15(1)  literal
+         ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0066
 T0273    DS    0H
@@ -2201,7 +2087,7 @@ T0274    DS    0H
          LH    2,D0044
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0005+15(1)  literal
+         ZAP   WK1+15(1),K0004+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0067
          CLC   D0070(1),D0062      alphanumeric compare
@@ -2244,7 +2130,7 @@ T0280    DS    0H
          LH    2,D0044
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0069
 T0281    DS    0H
@@ -2444,17 +2330,12 @@ T0313    DS    0H
          LH    2,D0055
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0080
 T0314    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0315    DS    0H
 * GO TO STOREOUTGROUP
          L     15,PA0033
@@ -2533,17 +2414,12 @@ T0325    DS    0H
          LH    2,D0056
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0007+15(1)  literal
+         ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0082
 T0326    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0056
+         MVC   D0056(2),FC001+2    a binary constant
 T0327    DS    0H
 * PERFORM SFWEND
          L     14,X0085            what the exit cell holds
@@ -2902,38 +2778,18 @@ T0380    DS    0H
 L0097    DS    0H
 T0381    DS    0H
 * MOVE 0 -> COUNTSOURCEGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0053
+         MVC   D0053(2),FC001+2    a binary constant
 T0382    DS    0H
 * MOVE 0 -> COUNTSOURCEDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0054
+         MVC   D0054(2),FC001+2    a binary constant
 T0383    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0384    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0056
+         MVC   D0056(2),FC001+2    a binary constant
 T0385    DS    0H
 * MOVE SPACES -> WS8FOUND
          LA    1,D0137             SPACES
@@ -4677,20 +4533,10 @@ T0600    DS    0H
          MVC   1(7,1),0(1)         propagate across the item
 T0601    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0602    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0056
+         MVC   D0056(2),FC001+2    a binary constant
 * end of a PERFORM range: return through its cell
          L     15,X0085
          BR    15
@@ -4772,22 +4618,12 @@ B0092    EQU   *
          USING B0092,12
 T0612    DS    0H
 * MOVE 0 -> COUNTFOUNDDIGIT
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0055
+         MVC   D0055(2),FC001+2    a binary constant
 T0613    DS    0H
 * MOVE 0 -> COUNTFOUNDGROUP
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0056
+         MVC   D0056(2),FC001+2    a binary constant
 T0614    DS    0H
 * MOVE SPACES -> WSFOUNDWORD
          LA    1,D0139             SPACES
@@ -4865,12 +4701,7 @@ T0625    DS    0H
          BALR  14,15
 T0626    DS    0H
 * MOVE 8 -> RETURN-CODE
-         ZAP   PWK1(16),K0006+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0260
+         MVC   D0260(2),FC003+2    a binary constant
 T0627    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
@@ -5021,7 +4852,7 @@ T0647    DS    0H
          LH    2,D0254
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNH   L0398
          CLC   D0255(1),S0217      alphanumeric compare
@@ -5322,7 +5153,7 @@ T0684    DS    0H
          LH    2,D0261
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BE    L0201
 T0685    DS    0H
@@ -5342,13 +5173,7 @@ T0687    DS    0H
          MVC   D0066(1),S0216      literal move, space padded
 T0688    DS    0H
 * MOVE 70 -> LCONB
-         ZAP   PWK1(16),K0012+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         STH   2,D0057
+         MVC   D0057(2),FC004+2    a binary constant
 T0689    DS    0H
 * MOVE SPACES -> SAVESKADATANAME
          LA    1,D0089             SPACES
@@ -5403,14 +5228,9 @@ R0049    DS    0H
          ST    15,X0105
 T0695    DS    0H
 * MOVE 0 -> Q
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0052
+         MVC   D0052(4),FC001      a binary constant
 T0696    DS    0H
 * GO TO ISX
          L     15,PA0103
@@ -5481,7 +5301,7 @@ T0703    DS    0H
          LH    2,D0057
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+14(2),K0009+14(2)  literal
+         ZAP   WK1+14(2),K0008+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
          BNL   L0207
 T0704    DS    0H
@@ -5550,15 +5370,9 @@ T0713    DS    0H
 L0210    DS    0H
 T0714    DS    0H
 * MOVE 1 -> LCONB
-         ZAP   PWK1(16),K0005+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),13,0         drop the digits past the picture
-         SRP   DWK(8),51,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0057
+         MVC   D0057(2),FC005+2    a binary constant
 T0715    DS    0H
 * IF
          CLC   D0066(1),S0007      alphanumeric compare
@@ -5663,17 +5477,12 @@ T0725    DS    0H
          L     2,D0052
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+10(6),WK1+15(1)  numeric compare
          BNE   L0217
 T0726    DS    0H
 * MOVE 1 -> Q
-         ZAP   PWK1(16),K0005+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0052
+         MVC   D0052(4),FC005      a binary constant
          DROP  8
 L0217    DS    0H
 T0727    DS    0H
@@ -5683,7 +5492,7 @@ T0727    DS    0H
          L     2,D0052
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+10(6),WK1+15(1)  numeric compare
          BNH   L0218
 T0728    DS    0H
@@ -5707,12 +5516,7 @@ T0729    DS    0H
          STH   2,D0057
 T0730    DS    0H
 * MOVE 0 -> Q
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0052
+         MVC   D0052(4),FC001      a binary constant
 T0731    DS    0H
 * PERFORM WRITEHDB THRU HDB-EXIT
          L     14,X0105            what the exit cell holds
@@ -5782,7 +5586,7 @@ T0738    DS    0H
          L     2,D0052
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
-         ZAP   WK1+15(1),K0013+15(1)  literal
+         ZAP   WK1+15(1),K0012+15(1)  literal
          CP    WK0+10(6),WK1+15(1)  numeric compare
          BNH   L0221
 T0739    DS    0H
@@ -5984,7 +5788,7 @@ T0759    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0223
 T0760    DS    0H
@@ -6002,7 +5806,7 @@ T0761    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0007+15(1)  literal
+         ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0224
 T0762    DS    0H
@@ -6020,7 +5824,7 @@ T0763    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0225
 T0764    DS    0H
@@ -6084,7 +5888,7 @@ T0770    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0226
 T0771    DS    0H
@@ -6102,7 +5906,7 @@ T0772    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0007+15(1)  literal
+         ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0227
 T0773    DS    0H
@@ -6120,7 +5924,7 @@ T0774    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0228
 T0775    DS    0H
@@ -6170,7 +5974,7 @@ L0437    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0438
          L     14,X0117            what the exit cell holds
@@ -6193,7 +5997,7 @@ T0780    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0007+15(1)  literal
+         ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0229
 T0781    DS    0H
@@ -6211,7 +6015,7 @@ T0782    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0230
 T0783    DS    0H
@@ -6238,7 +6042,7 @@ T0785    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNH   L0231
 T0786    DS    0H
@@ -6284,7 +6088,7 @@ T0789    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0001+15(1)  literal
+         ZAP   WK1+15(1),K0010+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0232
 T0790    DS    0H
@@ -6337,7 +6141,7 @@ T0794    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0007+15(1)  literal
+         ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0233
 T0795    DS    0H
@@ -6355,7 +6159,7 @@ T0796    DS    0H
          LH    2,D0260
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0005+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNE   L0234
 T0797    DS    0H
@@ -6610,31 +6414,29 @@ CLSNUM   DC    256X'FF'
          ORG   CLSNUM+X'F0'
          DC    10X'00'             0-9
          ORG   CLSNUM+256
-K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'0'
-K0002    EQU   *-14
+K0001    EQU   *-14                numeric constants, as long as used
          DC    PL2'58'
-K0003    EQU   *-14
+K0002    EQU   *-14
          DC    PL2'10'
-K0004    EQU   *-14
+K0003    EQU   *-14
          DC    PL2'100'
-K0005    EQU   *-15
+K0004    EQU   *-15
          DC    PL1'1'
-K0006    EQU   *-15
+K0005    EQU   *-15
          DC    PL1'8'
-K0007    EQU   *-15
+K0006    EQU   *-15
          DC    PL1'4'
-K0008    EQU   *-14
+K0007    EQU   *-14
          DC    PL2'60'
-K0009    EQU   *-14
+K0008    EQU   *-14
          DC    PL2'59'
-K0010    EQU   *-15
+K0009    EQU   *-15
          DC    PL1'9'
+K0010    EQU   *-15
+         DC    PL1'0'
 K0011    EQU   *-15
          DC    PL1'3'
-K0012    EQU   *-14
-         DC    PL2'70'
-K0013    EQU   *-15
+K0012    EQU   *-15
          DC    PL1'7'
 M0001    DC    XL9'402020202020212040'  ED patterns
 M0002    DC    XL6'402020202120'
@@ -6644,7 +6446,11 @@ H0003    DC    H'8'
 H0004    DC    H'105'
 H0005    DC    H'125'
 H0006    DC    H'7'
-FC001    DC    F'61'               binary literals
+FC001    DC    F'0'                binary literals
+FC002    DC    F'61'
+FC003    DC    F'8'
+FC004    DC    F'70'
+FC005    DC    F'1'
 S0001    DC    CL1' '              nonnumeric constants
 S0002    DC    CL1'.'
 S0003    DC    CL8'000000  '

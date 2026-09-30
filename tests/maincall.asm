@@ -37,14 +37,9 @@ B0001    EQU   *
          USING B0001,12
 T0000    DS    0H
 * MOVE 42 -> IN-VAL
-         ZAP   PWK1(16),K0001+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0001
+         MVC   D0001(4),FC001      a binary constant
 T0001    DS    0H
 * CALL 'SUBADD'
          LA    0,D0000             MB-IN
@@ -90,12 +85,7 @@ L0001    DS    0H
          BALR  14,15
 T0005    DS    0H
 * MOVE 7 -> IN-VAL
-         ZAP   PWK1(16),K0002+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0001
+         MVC   D0001(4),FC002      a binary constant
 T0006    DS    0H
 * CALL 'SUBADD'
          LA    0,D0000             MB-IN
@@ -206,10 +196,8 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    EQU   *-14                numeric constants, as long as used
-         DC    PL2'42'
-K0002    EQU   *-15
-         DC    PL1'7'
+FC001    DC    F'42'               binary literals
+FC002    DC    F'7'
 S0001    DC    CL7'RESULT '        nonnumeric constants
 S0002    DC    CL6' TAG ['
 S0003    DC    CL1']'

@@ -37,14 +37,9 @@ B0001    EQU   *
          USING B0001,12
 T0000    DS    0H
 * MOVE 1333 -> SORT-FILE-SIZE
-         ZAP   PWK1(16),K0001+13(3)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         ST    2,D0011
+         MVC   D0011(4),FC001      a binary constant
 T0001    DS    0H
 * SORT SORT-FILE
          STM   2,12,SRTBAS         the registers the exits resume with
@@ -257,8 +252,7 @@ WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
 * file control blocks
-K0001    EQU   *-13                numeric constants, as long as used
-         DC    PL3'1333'
+FC001    DC    F'1333'             binary literals
 S0001    DC    CL14'NOTHING SORTED'  nonnumeric constants
 * base locator cells, one per 4096 bytes of COBWS
 BL0000   DC    A(WSC0000)

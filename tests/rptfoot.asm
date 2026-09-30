@@ -182,14 +182,9 @@ R0004    DS    0H
          ST    15,X0003
 T0006    DS    0H
 * MOVE 9 -> WS-IDX
-         ZAP   PWK1(16),K0005+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0001
+         MVC   D0001(2),FC001+2    a binary constant
 T0007    DS    0H
 * PERFORM SPACED-PARA
          L     14,X0001            what the exit cell holds
@@ -399,8 +394,8 @@ RG002    ST    14,RGS002           save the return
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0005             LINE-COUNTER
-         A     2,FC001             plus every LINE integer
-         C     2,FC002             against the lower limit
+         A     2,FC002             plus every LINE integer
+         C     2,FC003             against the lower limit
          BNH   L0022               fits
          BAL   14,RADV000          page advance processing
          DROP  8
@@ -414,7 +409,7 @@ L0023    DS    0H
          SR    3,3
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
-         C     2,FC002             against the lower limit
+         C     2,FC003             against the lower limit
          BNH   L0022               fits
          BAL   14,RADV000          page advance processing
          DROP  8
@@ -427,7 +422,7 @@ L0022    DS    0H
          LA    2,1(2)              LINE PLUS n
          B     L0025
 L0024    DS    0H
-         C     2,FC003             the heading ran past FIRST DETAIL?
+         C     2,FC004             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
          B     L0025
@@ -450,7 +445,7 @@ L0025    DS    0H
          USING WSC0000,8
          L     2,D0005             the last line printed
          LA    2,1(2)              plus NEXT GROUP's integer
-         C     2,FC004
+         C     2,FC005
          BL    L0026
          LA    2,13                FOOTING at most
 L0026    DS    0H
@@ -467,8 +462,8 @@ RG003    ST    14,RGS003           save the return
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0005             LINE-COUNTER
-         A     2,FC001             plus every LINE integer
-         C     2,FC002             against the lower limit
+         A     2,FC002             plus every LINE integer
+         C     2,FC003             against the lower limit
          BNH   L0027               fits
          BAL   14,RADV000          page advance processing
          DROP  8
@@ -482,7 +477,7 @@ L0028    DS    0H
          SR    3,3
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
-         C     2,FC002             against the lower limit
+         C     2,FC003             against the lower limit
          BNH   L0027               fits
          BAL   14,RADV000          page advance processing
          DROP  8
@@ -495,7 +490,7 @@ L0027    DS    0H
          LA    2,1(2)              LINE PLUS n
          B     L0030
 L0029    DS    0H
-         C     2,FC003             the heading ran past FIRST DETAIL?
+         C     2,FC004             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,4                 no: the first line is FIRST DETAIL
          B     L0030
@@ -517,7 +512,7 @@ L0030    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0005             the last line printed
-         C     2,FC005             before NEXT GROUP's line?
+         C     2,FC006             before NEXT GROUP's line?
          BNL   L0031
          LA    2,10                then that is LINE-COUNTER
          B     L0032
@@ -702,14 +697,13 @@ K0003    EQU   *-15
          DC    PL1'7'
 K0004    EQU   *-15
          DC    PL1'8'
-K0005    EQU   *-15
-         DC    PL1'9'
 M0001    DC    XL4'40202120'       ED patterns
-FC001    DC    F'1'                binary literals
-FC002    DC    F'11'
-FC003    DC    F'4'
-FC004    DC    F'13'
-FC005    DC    F'10'
+FC001    DC    F'9'                binary literals
+FC002    DC    F'1'
+FC003    DC    F'11'
+FC004    DC    F'4'
+FC005    DC    F'13'
+FC006    DC    F'10'
 S0001    DC    CL17'LINE-COUNTER NOW '  nonnumeric constants
 S0002    DC    CL15'** THE TITLE **'
 S0003    DC    CL13'FOOTED REPORT'

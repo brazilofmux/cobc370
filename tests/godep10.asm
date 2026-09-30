@@ -75,14 +75,9 @@ L0002    DS    0H
          DROP  8
 T0001    DS    0H
 * MOVE -1 -> SEL
-         ZAP   PWK1(16),K0003+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0000
+         MVC   D0000(2),FC001+2    a binary constant
 T0002    DS    0H
 * PERFORM DISPATCH THRU DISPATCH-EXIT
          L     14,X0013            what the exit cell holds
@@ -424,10 +419,9 @@ K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
 K0002    EQU   *-15
          DC    PL1'5'
-K0003    EQU   *-15
-         DC    PL1'-1'
 H0001    DC    H'2'                element sizes
 H0002    DC    H'10'
+FC001    DC    F'-1'               binary literals
 S0001    DC    CL13'FELL THROUGH '  nonnumeric constants
 S0002    DC    CL12'LANDED IN P1'
 S0003    DC    CL12'LANDED IN P2'

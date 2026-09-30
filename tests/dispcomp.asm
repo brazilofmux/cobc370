@@ -32,14 +32,9 @@ PRO001   L     11,PROCON           the constants region
 SPIEARMD DS    0H
 T0000    DS    0H
 * MOVE 12 -> H-S4
-         ZAP   PWK1(16),K0001+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
          L     8,BL0000            base locator
          USING WSC0000,8
-         STH   2,D0000
+         MVC   D0000(2),FC001+2    a binary constant
 T0001    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0001
@@ -58,12 +53,7 @@ L0001    DS    0H
          BALR  14,15
 T0002    DS    0H
 * MOVE -12 -> H-S4
-         ZAP   PWK1(16),K0002+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         MVC   D0000(2),FC002+2    a binary constant
 T0003    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0003
@@ -82,12 +72,7 @@ L0002    DS    0H
          BALR  14,15
 T0004    DS    0H
 * MOVE 0 -> H-S4
-         ZAP   PWK1(16),K0003+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0000
+         MVC   D0000(2),FC003+2    a binary constant
 T0005    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(11),S0004
@@ -106,13 +91,7 @@ L0003    DS    0H
          BALR  14,15
 T0006    DS    0H
 * MOVE 1234 -> H-U4
-         ZAP   PWK1(16),K0004+13(3)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         STH   2,D0001
+         MVC   D0001(2),FC004+2    a binary constant
 T0007    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(6),S0005
@@ -131,12 +110,7 @@ L0004    DS    0H
          BALR  14,15
 T0008    DS    0H
 * MOVE -123456789 -> F-S9
-         ZAP   PWK1(16),K0005+11(5)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),6,0          drop the digits past the picture
-         SRP   DWK(8),58,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0002
+         MVC   D0002(4),FC005      a binary constant
 T0009    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0006
@@ -155,12 +129,7 @@ L0005    DS    0H
          BALR  14,15
 T0010    DS    0H
 * MOVE 987654321 -> F-S9
-         ZAP   PWK1(16),K0006+11(5)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),6,0          drop the digits past the picture
-         SRP   DWK(8),58,0
-         CVB   2,DWK               packed -> binary
-         ST    2,D0002
+         MVC   D0002(4),FC006      a binary constant
 T0011    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(10),S0007
@@ -179,12 +148,7 @@ L0006    DS    0H
          BALR  14,15
 T0012    DS    0H
 * MOVE -1234 -> H-S2V2
-         ZAP   PWK1(16),K0007+13(3)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
-         CVB   2,DWK               packed -> binary
-         STH   2,D0003
+         MVC   D0003(2),FC007+2    a binary constant
 T0013    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(12),S0008
@@ -203,7 +167,7 @@ L0007    DS    0H
          BALR  14,15
 T0014    DS    0H
 * MOVE 12345 -> P-S5
-         ZAP   PWK1(16),K0008+13(3)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          ZAP   D0004(3),PWK1(16)
 T0015    DS    0H
 * DISPLAY
@@ -221,7 +185,7 @@ L0008    DS    0H
          BALR  14,15
 T0016    DS    0H
 * MOVE -12345 -> P-S5
-         ZAP   PWK1(16),K0009+13(3)  literal
+         ZAP   PWK1(16),K0002+13(3)  literal
          ZAP   D0004(3),PWK1(16)
 T0017    DS    0H
 * DISPLAY
@@ -239,7 +203,7 @@ L0009    DS    0H
          BALR  14,15
 T0018    DS    0H
 * MOVE 543 -> P-U5
-         ZAP   PWK1(16),K0010+14(2)  literal
+         ZAP   PWK1(16),K0003+14(2)  literal
          ZAP   D0005(3),PWK1(16)
          OI    D0005+2,X'0F'       unsigned: force an F sign
 T0019    DS    0H
@@ -258,7 +222,7 @@ L0010    DS    0H
          BALR  14,15
 T0020    DS    0H
 * MOVE -150 -> P-S3V2
-         ZAP   PWK1(16),K0011+14(2)  literal
+         ZAP   PWK1(16),K0004+14(2)  literal
          ZAP   D0006(3),PWK1(16)
 T0021    DS    0H
 * DISPLAY
@@ -276,7 +240,7 @@ L0011    DS    0H
          BALR  14,15
 T0022    DS    0H
 * MOVE -7 -> P-S4
-         ZAP   PWK1(16),K0012+15(1)  literal
+         ZAP   PWK1(16),K0005+15(1)  literal
          ZAP   D0007(3),PWK1(16)
 T0023    DS    0H
 * DISPLAY
@@ -294,7 +258,7 @@ L0012    DS    0H
          BALR  14,15
 T0024    DS    0H
 * MOVE -7 -> Z-S4
-         ZAP   PWK1(16),K0012+15(1)  literal
+         ZAP   PWK1(16),K0005+15(1)  literal
          UNPK  D0008(4),PWK1(16)   packed -> zoned
 T0025    DS    0H
 * DISPLAY
@@ -306,7 +270,7 @@ T0025    DS    0H
          BALR  14,15
 T0026    DS    0H
 * MOVE 7 -> Z-S4
-         ZAP   PWK1(16),K0013+15(1)  literal
+         ZAP   PWK1(16),K0006+15(1)  literal
          UNPK  D0008(4),PWK1(16)   packed -> zoned
 T0027    DS    0H
 * DISPLAY
@@ -341,7 +305,7 @@ L0014    DS    0H
          BALR  14,15
 T0029    DS    0H
 * MOVE -123456789012345678 -> P-S18
-         ZAP   PWK1(16),K0014+6(10)  literal
+         ZAP   PWK1(16),K0007+6(10)  literal
          ZAP   D0009(10),PWK1(16)
 T0030    DS    0H
 * DISPLAY
@@ -362,7 +326,7 @@ L0015    DS    0H
          BALR  14,15
 T0031    DS    0H
 * MOVE 1 -> P-S18
-         ZAP   PWK1(16),K0015+15(1)  literal
+         ZAP   PWK1(16),K0008+15(1)  literal
          ZAP   D0009(10),PWK1(16)
 T0032    DS    0H
 * DISPLAY
@@ -383,7 +347,7 @@ L0016    DS    0H
          BALR  14,15
 T0033    DS    0H
 * MOVE 11 -> T-H
-         ZAP   PWK1(16),K0016+14(2)  literal
+         ZAP   PWK1(16),K0009+14(2)  literal
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),11,0         drop the digits past the picture
          SRP   DWK(8),53,0
@@ -394,7 +358,7 @@ T0033    DS    0H
          STH   2,0(,6)
 T0034    DS    0H
 * MOVE -22 -> T-H
-         ZAP   PWK1(16),K0017+14(2)  literal
+         ZAP   PWK1(16),K0010+14(2)  literal
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),11,0         drop the digits past the picture
          SRP   DWK(8),53,0
@@ -405,7 +369,7 @@ T0034    DS    0H
          STH   2,0(,6)
 T0035    DS    0H
 * MOVE 33 -> T-H
-         ZAP   PWK1(16),K0018+14(2)  literal
+         ZAP   PWK1(16),K0011+14(2)  literal
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),11,0         drop the digits past the picture
          SRP   DWK(8),53,0
@@ -461,9 +425,6 @@ L0019    DS    0H
          LA    1,PARM0018
          L     15,VDISP
          BALR  14,15
-         BALR  12,0                a new code block: the paragraph is l
-B0001    EQU   *
-         USING B0001,12
 T0037    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
@@ -553,43 +514,36 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    EQU   *-14                numeric constants, as long as used
-         DC    PL2'12'
-K0002    EQU   *-14
-         DC    PL2'-12'
-K0003    EQU   *-15
-         DC    PL1'0'
-K0004    EQU   *-13
-         DC    PL3'1234'
-K0005    EQU   *-11
-         DC    PL5'-123456789'
-K0006    EQU   *-11
-         DC    PL5'987654321'
-K0007    EQU   *-13
-         DC    PL3'-1234'
-K0008    EQU   *-13
+K0001    EQU   *-13                numeric constants, as long as used
          DC    PL3'12345'
-K0009    EQU   *-13
+K0002    EQU   *-13
          DC    PL3'-12345'
-K0010    EQU   *-14
+K0003    EQU   *-14
          DC    PL2'543'
-K0011    EQU   *-14
+K0004    EQU   *-14
          DC    PL2'-150'
-K0012    EQU   *-15
+K0005    EQU   *-15
          DC    PL1'-7'
-K0013    EQU   *-15
+K0006    EQU   *-15
          DC    PL1'7'
-K0014    EQU   *-6
+K0007    EQU   *-6
          DC    PL10'-123456789012345678'
-K0015    EQU   *-15
+K0008    EQU   *-15
          DC    PL1'1'
-K0016    EQU   *-14
+K0009    EQU   *-14
          DC    PL2'11'
-K0017    EQU   *-14
+K0010    EQU   *-14
          DC    PL2'-22'
-K0018    EQU   *-14
+K0011    EQU   *-14
          DC    PL2'33'
 H0001    DC    H'2'                element sizes
+FC001    DC    F'12'               binary literals
+FC002    DC    F'-12'
+FC003    DC    F'0'
+FC004    DC    F'1234'
+FC005    DC    F'-123456789'
+FC006    DC    F'987654321'
+FC007    DC    F'-1234'
 S0001    DC    CL10'H-S4 POS ['    nonnumeric constants
 S0002    DC    CL1']'
 S0003    DC    CL10'H-S4 NEG ['
@@ -677,7 +631,6 @@ SPIELINE EQU   SPIEWTO+36,5        the line number, likewise
 SPIEOFF  EQU   SPIEWTO+49,7        the offset from COBBEG, in hex
          DS    0F
 CB0000   DC    A(B0000)            a code block's base
-CB0001   DC    A(B0001)            a code block's base
          LTORG
 * statement offsets, ascending, paired with source lines
 SPIELTB  DS    0F

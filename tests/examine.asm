@@ -37,18 +37,12 @@ T0000    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0001    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0002    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -115,18 +109,12 @@ T0004    DS    0H
          BALR  14,15
 T0005    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0006    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -194,18 +182,12 @@ T0008    DS    0H
          BALR  14,15
 T0009    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0010    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LR    3,7
 L0009    LR    4,5
@@ -281,18 +263,12 @@ T0012    DS    0H
          BALR  14,15
 T0013    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0014    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LR    3,7
 L0017    LR    4,5
@@ -368,18 +344,12 @@ T0016    DS    0H
          BALR  14,15
 T0017    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0018    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -429,7 +399,7 @@ L0026    DS    0H
          ST    2,D0005
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -486,18 +456,12 @@ T0021    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0022    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0023    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -551,7 +515,7 @@ L0034    DS    0H
          ST    2,D0005
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -615,18 +579,12 @@ T0026    DS    0H
          MVC   D0000(12),S0013     literal move, space padded
 T0027    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0028    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LR    3,7
 L0041    LR    4,5
@@ -688,7 +646,7 @@ L0046    DS    0H
          ST    2,D0005
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0006             the replacement
          ST    4,INSOPB+0
@@ -759,7 +717,7 @@ T0032    DS    0H
 * INSPECT W
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -809,7 +767,7 @@ T0035    DS    0H
 * INSPECT W
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -863,7 +821,7 @@ T0038    DS    0H
 * INSPECT W
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0002             the string looked for
          ST    4,INSOPA+0
@@ -914,7 +872,7 @@ T0041    DS    0H
 * INSPECT W
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0007             the replacement
          ST    4,INSOPB+0
@@ -976,7 +934,7 @@ T0044    DS    0H
 * INSPECT W
 *  REPLACING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0003             the string looked for
          ST    4,INSOPA+0
@@ -1025,18 +983,12 @@ T0046    DS    0H
          MVC   D0001(6),S0028      numeric literal as zoned digits
 T0047    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0048    DS    0H
 * INSPECT N
 *  TALLYING pass
          LA    7,D0001             the field
-         L     5,FC002             its length
+         L     5,FC003             its length
          AR    5,7                 its end
          LA    4,S0008             the string looked for
          ST    4,INSOPA+0
@@ -1102,7 +1054,7 @@ T0051    DS    0H
 * INSPECT N
 *  REPLACING pass
          LA    7,D0001             the field
-         L     5,FC002             its length
+         L     5,FC003             its length
          AR    5,7                 its end
          LA    4,S0008             the string looked for
          ST    4,INSOPA+0
@@ -1147,22 +1099,16 @@ T0052    DS    0H
          BALR  14,15
 T0053    DS    0H
 * MOVE -1020 -> S
-         ZAP   PWK1(16),K0002+13(3)  literal
+         ZAP   PWK1(16),K0001+13(3)  literal
          UNPK  D0002(4),PWK1(16)   packed -> zoned
 T0054    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0055    DS    0H
 * INSPECT S
 *  TALLYING pass
          LA    7,D0002             the field
-         L     5,FC003             its length
+         L     5,FC004             its length
          AR    5,7                 its end
          LA    4,S0008             the string looked for
          ST    4,INSOPA+0
@@ -1231,7 +1177,7 @@ T0058    DS    0H
 * INSPECT S
 *  REPLACING pass
          LA    7,D0002             the field
-         L     5,FC003             its length
+         L     5,FC004             its length
          AR    5,7                 its end
          LA    4,S0008             the string looked for
          ST    4,INSOPA+0
@@ -1276,7 +1222,7 @@ T0059    DS    0H
          BALR  14,15
 T0060    DS    0H
 * MOVE 19990102 -> ED
-         ZAP   PWK1(16),K0003+11(5)  literal
+         ZAP   PWK1(16),K0002+11(5)  literal
          ZAP   EDSRC(5),PWK1(16)   source, sized to the selector count
          NI    EDSRC,X'0F'         truncate to the picture: the spare d
          MVC   EDWK(12),M0001      load the ED pattern
@@ -1286,7 +1232,7 @@ T0061    DS    0H
 * INSPECT ED
 *  REPLACING pass
          LA    7,D0003             the field
-         L     5,FC004             its length
+         L     5,FC005             its length
          AR    5,7                 its end
          LA    4,S0011             the string looked for
          ST    4,INSOPA+0
@@ -1334,18 +1280,12 @@ T0063    DS    0H
          MVC   D0000(12),S0034     literal move, space padded
 T0064    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0065    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0011             the string looked for
          ST    4,INSOPA+0
@@ -1409,13 +1349,7 @@ T0067    DS    0H
          BALR  14,15
 T0068    DS    0H
 * MOVE 42 -> TALLY
-         ZAP   PWK1(16),K0004+14(2)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC006      a binary constant
 T0069    DS    0H
 * MOVE TALLY -> T
          L     2,D0005
@@ -1456,18 +1390,12 @@ T0073    DS    0H
          MVC   D0000(12),S0038     literal move, space padded
 T0074    DS    0H
 * MOVE 0 -> TALLY
-         ZAP   PWK1(16),K0001+15(1)  literal
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),10,0         drop the digits past the picture
-         SRP   DWK(8),54,0
-         CVB   2,DWK               packed -> binary
-         LPR   2,2                 unsigned: the magnitude
-         ST    2,D0005
+         MVC   D0005(4),FC001      a binary constant
 T0075    DS    0H
 * INSPECT W
 *  TALLYING pass
          LA    7,D0000             the field
-         L     5,FC001             its length
+         L     5,FC002             its length
          AR    5,7                 its end
          LA    4,S0001             the string looked for
          ST    4,INSOPA+0
@@ -1635,20 +1563,18 @@ WK2      DS    PL16
 WK3      DS    PL16
 WK4      DS    PL16
 WK5      DS    PL16
-K0001    EQU   *-15                numeric constants, as long as used
-         DC    PL1'0'
-K0002    EQU   *-13
+K0001    EQU   *-13                numeric constants, as long as used
          DC    PL3'-1020'
-K0003    EQU   *-11
+K0002    EQU   *-11
          DC    PL5'19990102'
-K0004    EQU   *-14
-         DC    PL2'42'
 M0001    DC    XL12'402120202020402020402020'  ED patterns
 H0001    DC    H'1'                element sizes
-FC001    DC    F'12'               binary literals
-FC002    DC    F'6'
-FC003    DC    F'4'
-FC004    DC    F'10'
+FC001    DC    F'0'                binary literals
+FC002    DC    F'12'
+FC003    DC    F'6'
+FC004    DC    F'4'
+FC005    DC    F'10'
+FC006    DC    F'42'
 S0001    DC    CL1'A'              nonnumeric constants
 S0002    DC    CL1'C'
 S0003    DC    CL1'Q'
