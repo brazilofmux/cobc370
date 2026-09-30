@@ -121,10 +121,21 @@ R0001    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0003+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0004+10(6)
+         BNH   L0006
+         SP    DWK(8),K0003+10(6)  into the signed range
+L0006    DS    0H
+         CP    DWK(8),K0005+10(6)
+         BNL   L0007
+         AP    DWK(8),K0003+10(6)
+L0007    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0001
          B     L0004
 L0005    DS    0H
@@ -149,23 +160,23 @@ T0007    DS    0H
          BALR  14,15
 T0008    DS    0H
 * PERFORM ONE-PARA
-         ZAP   WK0+15(1),K0003+15(1)  literal
+         ZAP   WK0+15(1),K0006+15(1)  literal
          ZAP   PWK1(16),WK0+15(1)
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),11,0         drop the digits past the picture
          SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0001
-L0006    DS    0H
+L0008    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0004+15(1)  literal
+         ZAP   WK1+15(1),K0007+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BH    L0007
+         BH    L0009
          L     14,X0002            what the exit cell holds
          ST    14,SV0002           kept for the return
          LA    15,R0002            return here
@@ -185,28 +196,39 @@ R0002    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0003+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0004+10(6)
+         BNH   L0010
+         SP    DWK(8),K0003+10(6)  into the signed range
+L0010    DS    0H
+         CP    DWK(8),K0005+10(6)
+         BNL   L0011
+         AP    DWK(8),K0003+10(6)
+L0011    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0001
-         B     L0006
-L0007    DS    0H
+         B     L0008
+L0009    DS    0H
          DROP  8
 T0009    DS    0H
 * GENERATE FIXED-LINER
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0008
+         BNE   L0012
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
          L     12,CB0001           this block's base again
-L0008    DS    0H
-L0009    DS    0H
+L0012    DS    0H
+L0013    DS    0H
          BAL   14,RG003
          L     12,CB0001           this block's base again
 T0010    DS    0H
 * PERFORM ONE-PARA
-         ZAP   WK0+14(2),K0005+14(2)  literal
+         ZAP   WK0+14(2),K0008+14(2)  literal
          ZAP   PWK1(16),WK0+14(2)
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),11,0         drop the digits past the picture
@@ -215,16 +237,16 @@ T0010    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          STH   2,D0001
-L0010    DS    0H
+L0014    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+14(2),K0006+14(2)  literal
+         ZAP   WK1+14(2),K0009+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
-         BH    L0011
+         BH    L0015
          L     14,X0002            what the exit cell holds
          ST    14,SV0003           kept for the return
          LA    15,R0003            return here
@@ -244,13 +266,24 @@ R0003    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0003+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0004+10(6)
+         BNH   L0016
+         SP    DWK(8),K0003+10(6)  into the signed range
+L0016    DS    0H
+         CP    DWK(8),K0005+10(6)
+         BNL   L0017
+         AP    DWK(8),K0003+10(6)
+L0017    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0001
-         B     L0010
-L0011    DS    0H
+         B     L0014
+L0015    DS    0H
          DROP  8
 T0011    DS    0H
 * MOVE 100 -> PAGE-COUNTER
@@ -259,23 +292,23 @@ T0011    DS    0H
          MVC   D0009(4),FC001      a binary constant
 T0012    DS    0H
 * PERFORM TWO-PARA
-         ZAP   WK0+14(2),K0007+14(2)  literal
+         ZAP   WK0+14(2),K0010+14(2)  literal
          ZAP   PWK1(16),WK0+14(2)
          ZAP   DWK(8),PWK1(16)
          SRP   DWK(8),11,0         drop the digits past the picture
          SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,D0001
-L0012    DS    0H
+L0018    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    2,D0001
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+14(2),K0008+14(2)  literal
+         ZAP   WK1+14(2),K0011+14(2)  literal
          CP    WK0+13(3),WK1+14(2)  numeric compare
-         BH    L0013
+         BH    L0019
          L     14,X0001            what the exit cell holds
          ST    14,SV0004           kept for the return
          LA    15,R0004            return here
@@ -295,19 +328,30 @@ R0004    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0003+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0004+10(6)
+         BNH   L0020
+         SP    DWK(8),K0003+10(6)  into the signed range
+L0020    DS    0H
+         CP    DWK(8),K0005+10(6)
+         BNL   L0021
+         AP    DWK(8),K0003+10(6)
+L0021    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0001
-         B     L0012
-L0013    DS    0H
+         B     L0018
+L0019    DS    0H
          DROP  8
 T0013    DS    0H
 * TERMINATE PAGED-RPT
          CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
-         BE    L0014               no: nothing to do
-L0014    DS    0H
+         BE    L0022               no: nothing to do
+L0022    DS    0H
 T0014    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -343,7 +387,7 @@ T0017    DS    0H
 T0018    DS    0H
 * IF
          PACK  WK0+15(1),D0006(1)  zoned -> packed
-         ZAP   WK1+15(1),K0009+15(1)  literal
+         ZAP   WK1+15(1),K0012+15(1)  literal
          CP    WK0+15(1),WK1+15(1)  numeric compare
          BNH   L0001
 T0019    DS    0H
@@ -354,12 +398,12 @@ L0001    DS    0H
 T0020    DS    0H
 * GENERATE TWO-LINER
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0015
+         BNE   L0023
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
          L     12,CB0002           this block's base again
-L0015    DS    0H
-L0016    DS    0H
+L0023    DS    0H
+L0024    DS    0H
          BAL   14,RG001
          L     12,CB0002           this block's base again
 * end of a PERFORM range: return through its cell
@@ -384,12 +428,12 @@ T0022    DS    0H
 * GENERATE ONE-LINER
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0017
+         BNE   L0025
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
          L     12,CB0003           this block's base again
-L0017    DS    0H
-L0018    DS    0H
+L0025    DS    0H
+L0026    DS    0H
          BAL   14,RG002
          L     12,CB0003           this block's base again
 * end of a PERFORM range: return through its cell
@@ -450,19 +494,19 @@ RG000    ST    14,RGS000           save the return
 * report group TWO-LINER
 RG001    ST    14,RGS001           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0020
+         BE    L0028
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0008             LINE-COUNTER
          A     2,FC002             plus every LINE integer
          C     2,FC003             against the lower limit
-         BNH   L0019               fits
+         BNH   L0027               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0020    DS    0H
+L0028    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0019               none: the first group on a page fits
+         BZ    L0027               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0008             into LINE-COUNTER
@@ -470,24 +514,24 @@ L0020    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,2(2)              plus one, plus the later LINE intege
          C     2,FC003             against the lower limit
-         BNH   L0019               fits
+         BNH   L0027               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0019    DS    0H
+L0027    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0008             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0021
+         BE    L0029
          LA    2,1(2)              LINE PLUS n
-         B     L0022
-L0021    DS    0H
+         B     L0030
+L0029    DS    0H
          C     2,FC004             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,5                 no: the first line is FIRST DETAIL
-         B     L0022
+         B     L0030
          LA    2,1(2)              yes: the line after it
-L0022    DS    0H
+L0030    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -529,19 +573,19 @@ L0022    DS    0H
 * report group ONE-LINER
 RG002    ST    14,RGS002           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0024
+         BE    L0032
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0008             LINE-COUNTER
          A     2,FC005             plus every LINE integer
          C     2,FC003             against the lower limit
-         BNH   L0023               fits
+         BNH   L0031               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0024    DS    0H
+L0032    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0023               none: the first group on a page fits
+         BZ    L0031               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0008             into LINE-COUNTER
@@ -549,24 +593,24 @@ L0024    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC003             against the lower limit
-         BNH   L0023               fits
+         BNH   L0031               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0023    DS    0H
+L0031    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0008             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0025
+         BE    L0033
          LA    2,1(2)              LINE PLUS n
-         B     L0026
-L0025    DS    0H
+         B     L0034
+L0033    DS    0H
          C     2,FC004             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,5                 no: the first line is FIRST DETAIL
-         B     L0026
+         B     L0034
          LA    2,1(2)              yes: the line after it
-L0026    DS    0H
+L0034    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -590,22 +634,22 @@ RG003    ST    14,RGS003           save the return
          USING WSC0000,8
          L     2,D0008             LINE-COUNTER
          C     2,FC006             below the group's first line?
-         BL    L0027               fits
+         BL    L0035               fits
          BAL   14,RADV000          page advance processing
          DROP  8
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0027               none: the first group on a page fits
+         BZ    L0035               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0008             into LINE-COUNTER
          SR    3,3
          ST    3,RSNG000           and cleared
          C     2,FC006             below the group's first line?
-         BL    L0027               fits
+         BL    L0035               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0027    DS    0H
+L0035    DS    0H
          LA    2,10                LINE n
          ST    2,RTGT
          MVI   RBUF+1,C' '
@@ -702,6 +746,7 @@ EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
 MULT8    DS    PL8                 ** multiplier
 QTMP     DS    PL16                DP quotient
+NTWK     DS    PL16                NOTRUNC: a COMP result modulo 2**32
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -715,19 +760,25 @@ K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
 K0002    EQU   *-15
          DC    PL1'5'
-K0003    EQU   *-15
+K0003    EQU   *-10
+         DC    PL6'4294967296'
+K0004    EQU   *-10
+         DC    PL6'2147483647'
+K0005    EQU   *-10
+         DC    PL6'-2147483648'
+K0006    EQU   *-15
          DC    PL1'6'
-K0004    EQU   *-15
+K0007    EQU   *-15
          DC    PL1'9'
-K0005    EQU   *-14
-         DC    PL2'10'
-K0006    EQU   *-14
-         DC    PL2'12'
-K0007    EQU   *-14
-         DC    PL2'13'
 K0008    EQU   *-14
+         DC    PL2'10'
+K0009    EQU   *-14
+         DC    PL2'12'
+K0010    EQU   *-14
+         DC    PL2'13'
+K0011    EQU   *-14
          DC    PL2'16'
-K0009    EQU   *-15
+K0012    EQU   *-15
          DC    PL1'3'
 M0001    DC    XL4'40202120'       ED patterns
 H0001    DC    H'6'                element sizes

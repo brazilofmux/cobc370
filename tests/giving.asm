@@ -44,10 +44,21 @@ T0000    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1+10(6),DWK(8)
          AP    WK0+10(6),WK1+10(6)
-         ZAP   DWK(8),WK0+10(6)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+10(6)  NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0001
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0001    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0002
+         AP    DWK(8),K0002+10(6)
+L0002    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0001    DS    0H
 * MOVE C -> S
@@ -72,10 +83,21 @@ T0003    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1+10(6),DWK(8)
          AP    WK0+10(6),WK1+10(6)
-         ZAP   DWK(8),WK0+10(6)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+10(6)  NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0003
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0003    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0004
+         AP    DWK(8),K0002+10(6)
+L0004    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0004    DS    0H
 * MOVE C -> S
@@ -97,10 +119,21 @@ T0006    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK0+10(6),DWK(8)
          SP    WK0+10(6),K0001+15(1)
-         ZAP   DWK(8),WK0+10(6)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+10(6)  NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0005
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0005    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0006
+         AP    DWK(8),K0002+10(6)
+L0006    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0007    DS    0H
 * MOVE C -> S
@@ -125,10 +158,21 @@ T0009    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1+10(6),DWK(8)
          SP    WK0+10(6),WK1+10(6)
-         ZAP   DWK(8),WK0+10(6)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+10(6)  NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0007
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0007    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0008
+         AP    DWK(8),K0002+10(6)
+L0008    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0010    DS    0H
 * MOVE C -> S
@@ -153,10 +197,21 @@ T0012    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1+10(6),DWK(8)
          MP    WK0+4(12),WK1+10(6)  scale becomes the sum of the scales
-         ZAP   DWK(8),WK0+4(12)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+4(12)  NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0009
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0009    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0010
+         AP    DWK(8),K0002+10(6)
+L0010    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0013    DS    0H
 * MOVE C -> S
@@ -185,10 +240,21 @@ T0015    DS    0H
          ZAP   QTMP(8),WK0+2(8)    the quotient on its own
          ZAP   WK0+8(8),QTMP(8)    drop the remainder
          SRP   WK0+8(8),60,0       align scale (right)
-         ZAP   DWK(8),WK0+8(8)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+8(8)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0011
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0011    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0012
+         AP    DWK(8),K0002+10(6)
+L0012    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0016    DS    0H
 * MOVE C -> S
@@ -217,10 +283,21 @@ T0018    DS    0H
          ZAP   QTMP(8),WK0+2(8)    the quotient on its own
          ZAP   WK0+8(8),QTMP(8)    drop the remainder
          SRP   WK0+8(8),60,0       align scale (right)
-         ZAP   DWK(8),WK0+8(8)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+8(8)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0013
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0013    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0014
+         AP    DWK(8),K0002+10(6)
+L0014    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0019    DS    0H
 * MOVE C -> S
@@ -247,10 +324,21 @@ T0021    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   WK1+10(6),DWK(8)
          AP    WK0+9(7),WK1+10(6)
-         ZAP   DWK(8),WK0+9(7)
-         SRP   DWK(8),7,0          drop the digits past the picture
-         SRP   DWK(8),57,0
+         ZAP   NTWK(16),WK0+9(7)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0002+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0003+10(6)
+         BNH   L0015
+         SP    DWK(8),K0002+10(6)  into the signed range
+L0015    DS    0H
+         CP    DWK(8),K0004+10(6)
+         BNL   L0016
+         AP    DWK(8),K0002+10(6)
+L0016    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          ST    2,D0002
 T0022    DS    0H
 * MOVE C -> S
@@ -319,6 +407,7 @@ EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
 MULT8    DS    PL8                 ** multiplier
 QTMP     DS    PL16                DP quotient
+NTWK     DS    PL16                NOTRUNC: a COMP result modulo 2**32
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -327,6 +416,12 @@ WK4      DS    PL16
 WK5      DS    PL16
 K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
+K0002    EQU   *-10
+         DC    PL6'4294967296'
+K0003    EQU   *-10
+         DC    PL6'2147483647'
+K0004    EQU   *-10
+         DC    PL6'-2147483648'
 S0001    DC    CL7'ADD2   '        nonnumeric constants
 S0002    DC    CL7'ADDTO  '
 S0003    DC    CL7'SUB    '

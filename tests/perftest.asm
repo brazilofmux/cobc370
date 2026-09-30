@@ -75,10 +75,21 @@ R0001    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0003+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0004+10(6)
+         BNH   L0004
+         SP    DWK(8),K0003+10(6)  into the signed range
+L0004    DS    0H
+         CP    DWK(8),K0005+10(6)
+         BNL   L0005
+         AP    DWK(8),K0003+10(6)
+L0005    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0003
          B     L0002
 L0003    DS    0H
@@ -106,7 +117,7 @@ T0004    DS    0H
          MVC   D0003(2),FC002+2    a binary constant
 T0005    DS    0H
 * PERFORM SUM-PARA THRU SUM-EXIT
-L0004    DS    0H
+L0006    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -115,7 +126,7 @@ L0004    DS    0H
          ZAP   WK0+13(3),DWK(8)
          ZAP   WK1+15(1),K0002+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BH    L0005
+         BH    L0007
          LH    7,D0003             subscript
          BCTR  7,0                 subscript-1
          MH    7,H0001             times element size
@@ -123,9 +134,9 @@ L0004    DS    0H
          LH    2,0(,7)
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0003+15(1)  literal
+         ZAP   WK1+15(1),K0006+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BH    L0005
+         BH    L0007
          L     14,X0004            what the exit cell holds
          ST    14,SV0002           kept for the return
          LA    15,R0002            return here
@@ -137,8 +148,8 @@ R0002    DS    0H
          DROP  8
          L     15,SV0002           what the cell held before
          ST    15,X0004
-         B     L0004
-L0005    DS    0H
+         B     L0006
+L0007    DS    0H
 T0006    DS    0H
 * MOVE WS-TOT -> OUT-NUM
          L     8,BL0000            base locator
@@ -159,12 +170,12 @@ T0008    DS    0H
          MVC   D0005(2),FC001+2    a binary constant
 T0009    DS    0H
 * PERFORM EOF-PARA THRU EOF-EXIT
-L0006    DS    0H
+L0008    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0006(1),S0001      alphanumeric compare
-         BE    L0007
+         BE    L0009
          L     14,X0006            what the exit cell holds
          ST    14,SV0003           kept for the return
          LA    15,R0003            return here
@@ -176,8 +187,8 @@ R0003    DS    0H
          DROP  8
          L     15,SV0003           what the cell held before
          ST    15,X0006
-         B     L0006
-L0007    DS    0H
+         B     L0008
+L0009    DS    0H
 T0010    DS    0H
 * MOVE WS-CNT -> OUT-NUM
          L     8,BL0000            base locator
@@ -198,15 +209,15 @@ T0012    DS    0H
          MVC   D0005(2),FC001+2    a binary constant
 T0013    DS    0H
 * PERFORM BUMP-PARA THRU BUMP-EXIT
-         ZAP   WK0+15(1),K0004+15(1)  literal
+         ZAP   WK0+15(1),K0007+15(1)  literal
          ZAP   DWK(8),WK0+15(1)
          CVB   2,DWK               repeat count
          ST    2,PT014
-L0008    DS    0H
+L0010    DS    0H
          DROP  8
          L     2,PT014
          LTR   2,2
-         BNP   L0009
+         BNP   L0011
          L     14,X0008            what the exit cell holds
          ST    14,SV0004           kept for the return
          LA    15,R0004            return here
@@ -220,8 +231,8 @@ R0004    DS    0H
          L     2,PT014
          BCTR  2,0
          ST    2,PT014
-         B     L0008
-L0009    DS    0H
+         B     L0010
+L0011    DS    0H
 T0014    DS    0H
 * MOVE WS-CNT -> OUT-NUM
          L     8,BL0000            base locator
@@ -242,16 +253,16 @@ T0016    DS    0H
          MVC   D0005(2),FC001+2    a binary constant
 T0017    DS    0H
 * PERFORM BUMP-PARA THRU BUMP-EXIT
-L0010    DS    0H
+L0012    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          LH    2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0005+15(1)  literal
+         ZAP   WK1+15(1),K0008+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
-         BE    L0011
+         BE    L0013
          L     14,X0008            what the exit cell holds
          ST    14,SV0005           kept for the return
          LA    15,R0005            return here
@@ -263,8 +274,8 @@ R0005    DS    0H
          DROP  8
          L     15,SV0005           what the cell held before
          ST    15,X0008
-         B     L0010
-L0011    DS    0H
+         B     L0012
+L0013    DS    0H
 T0018    DS    0H
 * MOVE WS-CNT -> OUT-NUM
          L     8,BL0000            base locator
@@ -366,7 +377,7 @@ T0027    DS    0H
          LH    2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   WK0+13(3),DWK(8)
-         ZAP   WK1+15(1),K0006+15(1)  literal
+         ZAP   WK1+15(1),K0009+15(1)  literal
          CP    WK0+13(3),WK1+15(1)  numeric compare
          BNH   L0001
 T0028    DS    0H
@@ -451,6 +462,7 @@ EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
 MULT8    DS    PL8                 ** multiplier
 QTMP     DS    PL16                DP quotient
+NTWK     DS    PL16                NOTRUNC: a COMP result modulo 2**32
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -461,13 +473,19 @@ K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
 K0002    EQU   *-15
          DC    PL1'5'
-K0003    EQU   *-15
-         DC    PL1'3'
-K0004    EQU   *-15
-         DC    PL1'4'
-K0005    EQU   *-15
-         DC    PL1'0'
+K0003    EQU   *-10
+         DC    PL6'4294967296'
+K0004    EQU   *-10
+         DC    PL6'2147483647'
+K0005    EQU   *-10
+         DC    PL6'-2147483648'
 K0006    EQU   *-15
+         DC    PL1'3'
+K0007    EQU   *-15
+         DC    PL1'4'
+K0008    EQU   *-15
+         DC    PL1'0'
+K0009    EQU   *-15
          DC    PL1'2'
 H0001    DC    H'2'                element sizes
 H0002    DC    H'1'

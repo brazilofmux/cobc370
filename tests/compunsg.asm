@@ -91,8 +91,6 @@ T0007    DS    0H
          ZAP   WK0+14(2),K0002+15(1)  literal
          SP    WK0+14(2),K0003+15(1)
          ZAP   DWK(8),WK0+14(2)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          LPR   2,2                 unsigned: the magnitude
          L     8,BL0000            base locator

@@ -7,6 +7,15 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
+## Unreleased
+
+- `COMP` items follow IBM's `NOTRUNC`, IKFCBL00's default on this system
+  (#45): an arithmetic result or a literal stored into a `COMP` item keeps
+  its binary value past the PICTURE, wrapping at 16 or 32 bits; `ON SIZE
+  ERROR` still tests the PICTURE; `MOVE` of an item still truncates to the
+  receiving PICTURE. Measured on IKFCBL00 case by case (`notrunc`). Before,
+  cobc370 truncated to the PICTURE everywhere but the binary `ADD`.
+
 ## 2026-09-29
 
 `23f935e`, SHA256 `6bf7e5568d27e6f9…`, 614,320 bytes, 180 tests.
@@ -14,7 +23,7 @@ to the host compiler, which is what the port sweep checks.
 - `MOVE` of a numeric literal or `ZERO` to a halfword or fullword `COMP`
   item is one `MVC` from a binary constant, as IBM's compilers do (Harry E,
   H390-MVS). IBM's default `NOTRUNC` keeps what fits the binary item where
-  cobc370 truncates to the PICTURE: recorded as #45, to decide separately.
+  cobc370 then truncated to the PICTURE: recorded as #45.
 - `MOVE` of an item of 4096 bytes or more assembled to IFO208: its length
   was loaded with `LA`, whose reach is 4095 (Harry E). Fixed, with a test.
 - An output error, such as SYSPUNCH out of space, now ends the compile with

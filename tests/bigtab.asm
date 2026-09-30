@@ -72,10 +72,21 @@ R0001    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0003+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0004+10(6)
+         BNH   L0007
+         SP    DWK(8),K0003+10(6)  into the signed range
+L0007    DS    0H
+         CP    DWK(8),K0005+10(6)
+         BNL   L0008
+         AP    DWK(8),K0003+10(6)
+L0008    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0024            base locator
+         USING WSC0024,8
          STH   2,D0005
          B     L0005
 L0006    DS    0H
@@ -134,7 +145,7 @@ SP006    DS    0H
          USING WSC0000,9
          LA    7,D0002(7)          element address
          PACK  WK0+13(3),0(5,7)    zoned -> packed
-         ZAP   WK1+13(3),K0003+13(3)  literal
+         ZAP   WK1+13(3),K0006+13(3)  literal
          CP    WK0+13(3),WK1+13(3)  numeric compare
          BE    L0002
          L     7,D0007             subscript
@@ -142,7 +153,7 @@ SP006    DS    0H
          MH    7,H0001             times element size
          LA    7,D0002(7)          element address
          PACK  WK0+13(3),0(5,7)    zoned -> packed
-         ZAP   WK1+13(3),K0003+13(3)  literal
+         ZAP   WK1+13(3),K0006+13(3)  literal
          CP    WK0+13(3),WK1+13(3)  numeric compare
          BL    L0004
          L     1,D0007
@@ -276,6 +287,7 @@ EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
 MULT8    DS    PL8                 ** multiplier
 QTMP     DS    PL16                DP quotient
+NTWK     DS    PL16                NOTRUNC: a COMP result modulo 2**32
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -286,7 +298,13 @@ K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
 K0002    EQU   *-13
          DC    PL3'5000'
-K0003    EQU   *-13
+K0003    EQU   *-10
+         DC    PL6'4294967296'
+K0004    EQU   *-10
+         DC    PL6'2147483647'
+K0005    EQU   *-10
+         DC    PL6'-2147483648'
+K0006    EQU   *-13
          DC    PL3'4321'
 H0001    DC    H'20'               element sizes
 FC001    DC    F'4999'             binary literals

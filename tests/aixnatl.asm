@@ -106,10 +106,21 @@ R0001    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0003+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0004+10(6)
+         BNH   L0005
+         SP    DWK(8),K0003+10(6)  into the signed range
+L0005    DS    0H
+         CP    DWK(8),K0005+10(6)
+         BNL   L0006
+         AP    DWK(8),K0003+10(6)
+L0006    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0008
          B     L0003
 L0004    DS    0H
@@ -117,12 +128,12 @@ L0004    DS    0H
 T0003    DS    0H
 * CLOSE AIX-FILE
          CLI   FD000V,X'01'        paths open?
-         BNE   L0005
+         BNE   L0007
          CLOSE (FD000,,FD000P1,,FD000P2)  the base and its paths
-         B     L0006
-L0005    DS    0H
+         B     L0008
+L0007    DS    0H
          CLOSE (FD000)
-L0006    DS    0H
+L0008    DS    0H
          LTR   15,15               VSAM request succeeded?
          BZ    G0004
          L     8,BL0000            base locator
@@ -229,10 +240,10 @@ G0013    DS    0H
          B     G0008
 G0012    DS    0H
          CLI   FD000RA,X'00'       ever used?
-         BE    L0007
+         BE    L0009
          ENDREQ RPL=FD000R         the failed request is over
          MVI   FD000RA,X'00'
-L0007    DS    0H
+L0009    DS    0H
 G0008    DS    0H
          B     L0002
 L0001    DS    0H                  INVALID KEY
@@ -276,10 +287,10 @@ G0014    DS    0H
 G0019    DS    0H
          DROP  8
          CLI   FD000RA,X'00'       ever used?
-         BE    L0008
+         BE    L0010
          ENDREQ RPL=FD000R         the failed request is over
          MVI   FD000RA,X'00'
-L0008    DS    0H
+L0010    DS    0H
 G0015    DS    0H
 L0002    DS    0H
 T0010    DS    0H
@@ -328,6 +339,7 @@ EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
 MULT8    DS    PL8                 ** multiplier
 QTMP     DS    PL16                DP quotient
+NTWK     DS    PL16                NOTRUNC: a COMP result modulo 2**32
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -355,6 +367,12 @@ K0001    EQU   *-15                numeric constants, as long as used
          DC    PL1'1'
 K0002    EQU   *-15
          DC    PL1'6'
+K0003    EQU   *-10
+         DC    PL6'4294967296'
+K0004    EQU   *-10
+         DC    PL6'2147483647'
+K0005    EQU   *-10
+         DC    PL6'-2147483648'
 H0001    DC    H'20'               element sizes
 S0001    DC    CL12'OPEN OUTPUT '  nonnumeric constants
 S0002    DC    CL6'CLOSE '

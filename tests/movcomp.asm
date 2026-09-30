@@ -93,12 +93,12 @@ L0003    DS    0H
          L     15,VDISP
          BALR  14,15
 T0007    DS    0H
-* MOVE -7 -> H2
-         MVC   D0004(2),FC005+2    a binary constant
+* MOVE 123456 -> H1
+         MVC   D0003(2),FC005+2    a binary constant
 T0008    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0004
-         LH    2,D0004
+         MVC   DSPBUF+0(3),S0003
+         LH    2,D0003
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          UNPK  ZWK(4),PWK1(16)     DISPLAY: the digits, zoned
@@ -111,7 +111,7 @@ L0004    DS    0H
          L     15,VDISP
          BALR  14,15
 T0009    DS    0H
-* MOVE 32767 -> H2
+* MOVE -7 -> H2
          MVC   D0004(2),FC006+2    a binary constant
 T0010    DS    0H
 * DISPLAY
@@ -129,25 +129,25 @@ L0005    DS    0H
          L     15,VDISP
          BALR  14,15
 T0011    DS    0H
-* MOVE -999999999 -> F1
-         MVC   D0005(4),FC007      a binary constant
+* MOVE 32767 -> H2
+         MVC   D0004(2),FC007+2    a binary constant
 T0012    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0005
-         L     2,D0005
+         MVC   DSPBUF+0(3),S0004
+         LH    2,D0004
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  ZWK(9),PWK1(16)     DISPLAY: the digits, zoned
-         TM    ZWK+8,X'10'         a D (or B) zone is negative
+         UNPK  ZWK(4),PWK1(16)     DISPLAY: the digits, zoned
+         TM    ZWK+3,X'10'         a D (or B) zone is negative
          BO    L0006               keep it overpunched
-         OI    ZWK+8,X'F0'         otherwise a plain digit
+         OI    ZWK+3,X'F0'         otherwise a plain digit
 L0006    DS    0H
-         MVC   DSPBUF+3(9),ZWK+0
+         MVC   DSPBUF+3(4),ZWK+0
          LA    1,PARM0005
          L     15,VDISP
          BALR  14,15
 T0013    DS    0H
-* MOVE 1234567890 -> F1
+* MOVE -999999999 -> F1
          MVC   D0005(4),FC008      a binary constant
 T0014    DS    0H
 * DISPLAY
@@ -165,26 +165,26 @@ L0007    DS    0H
          L     15,VDISP
          BALR  14,15
 T0015    DS    0H
-* MOVE 150 -> SC
-         MVC   D0006(4),FC009      a binary constant
+* MOVE 1234567890 -> F1
+         MVC   D0005(4),FC009      a binary constant
 T0016    DS    0H
 * DISPLAY
-         MVC   DSPBUF+0(3),S0006
-         L     2,D0006
+         MVC   DSPBUF+0(3),S0005
+         L     2,D0005
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
-         UNPK  ZWK(5),PWK1(16)     DISPLAY: the digits, zoned
-         TM    ZWK+4,X'10'         a D (or B) zone is negative
+         UNPK  ZWK(9),PWK1(16)     DISPLAY: the digits, zoned
+         TM    ZWK+8,X'10'         a D (or B) zone is negative
          BO    L0008               keep it overpunched
-         OI    ZWK+4,X'F0'         otherwise a plain digit
+         OI    ZWK+8,X'F0'         otherwise a plain digit
 L0008    DS    0H
-         MVC   DSPBUF+3(5),ZWK+0
+         MVC   DSPBUF+3(9),ZWK+0
          LA    1,PARM0007
          L     15,VDISP
          BALR  14,15
 T0017    DS    0H
-* MOVE -1234 -> SC
-         MVC   D0006(4),FC004      a binary constant
+* MOVE 150 -> SC
+         MVC   D0006(4),FC010      a binary constant
 T0018    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(3),S0006
@@ -201,8 +201,8 @@ L0009    DS    0H
          L     15,VDISP
          BALR  14,15
 T0019    DS    0H
-* MOVE 000 -> SC
-         MVC   D0006(4),FC002      a binary constant
+* MOVE -1234 -> SC
+         MVC   D0006(4),FC004      a binary constant
 T0020    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(3),S0006
@@ -219,6 +219,24 @@ L0010    DS    0H
          L     15,VDISP
          BALR  14,15
 T0021    DS    0H
+* MOVE 000 -> SC
+         MVC   D0006(4),FC002      a binary constant
+T0022    DS    0H
+* DISPLAY
+         MVC   DSPBUF+0(3),S0006
+         L     2,D0006
+         CVD   2,DWK               binary -> packed
+         ZAP   PWK1(16),DWK(8)
+         UNPK  ZWK(5),PWK1(16)     DISPLAY: the digits, zoned
+         TM    ZWK+4,X'10'         a D (or B) zone is negative
+         BO    L0011               keep it overpunched
+         OI    ZWK+4,X'F0'         otherwise a plain digit
+L0011    DS    0H
+         MVC   DSPBUF+3(5),ZWK+0
+         LA    1,PARM0010
+         L     15,VDISP
+         BALR  14,15
+T0023    DS    0H
 * MOVE 11 -> T
          ZAP   PWK1(16),K0001+14(2)  literal
          ZAP   DWK(8),PWK1(16)
@@ -229,7 +247,7 @@ T0021    DS    0H
          MH    6,H0001             times element size
          LA    6,D0008(6)          element address
          STH   2,0(,6)
-T0022    DS    0H
+T0024    DS    0H
 * MOVE 22 -> T
          ZAP   PWK1(16),K0002+14(2)  literal
          ZAP   DWK(8),PWK1(16)
@@ -242,7 +260,7 @@ T0022    DS    0H
          MH    6,H0001             times element size
          LA    6,D0008(6)          element address
          STH   2,0(,6)
-T0023    DS    0H
+T0025    DS    0H
 * MOVE -33 -> T
          ZAP   PWK1(16),K0003+14(2)  literal
          ZAP   DWK(8),PWK1(16)
@@ -253,7 +271,7 @@ T0023    DS    0H
          MH    6,H0001             times element size
          LA    6,D0008(6)          element address
          STH   2,0(,6)
-T0024    DS    0H
+T0026    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(2),S0007
          LA    7,0                 subscript-1
@@ -264,9 +282,9 @@ T0024    DS    0H
          ZAP   PWK1(16),DWK(8)
          UNPK  ZWK(4),PWK1(16)     DISPLAY: the digits, zoned
          TM    ZWK+3,X'10'         a D (or B) zone is negative
-         BO    L0011               keep it overpunched
+         BO    L0012               keep it overpunched
          OI    ZWK+3,X'F0'         otherwise a plain digit
-L0011    DS    0H
+L0012    DS    0H
          MVC   DSPBUF+2(4),ZWK+0
          MVC   DSPBUF+6(1),S0008
          LA    7,1                 subscript-1
@@ -277,9 +295,9 @@ L0011    DS    0H
          ZAP   PWK1(16),DWK(8)
          UNPK  ZWK(4),PWK1(16)     DISPLAY: the digits, zoned
          TM    ZWK+3,X'10'         a D (or B) zone is negative
-         BO    L0012               keep it overpunched
+         BO    L0013               keep it overpunched
          OI    ZWK+3,X'F0'         otherwise a plain digit
-L0012    DS    0H
+L0013    DS    0H
          MVC   DSPBUF+7(4),ZWK+0
          MVC   DSPBUF+11(1),S0008
          LA    7,2                 subscript-1
@@ -290,14 +308,14 @@ L0012    DS    0H
          ZAP   PWK1(16),DWK(8)
          UNPK  ZWK(4),PWK1(16)     DISPLAY: the digits, zoned
          TM    ZWK+3,X'10'         a D (or B) zone is negative
-         BO    L0013               keep it overpunched
+         BO    L0014               keep it overpunched
          OI    ZWK+3,X'F0'         otherwise a plain digit
-L0013    DS    0H
+L0014    DS    0H
          MVC   DSPBUF+12(4),ZWK+0
-         LA    1,PARM0010
+         LA    1,PARM0011
          L     15,VDISP
          BALR  14,15
-T0025    DS    0H
+T0027    DS    0H
 * STOP RUN
          L     15,VTERM            close anything the runtime opened
          BALR  14,15
@@ -331,13 +349,13 @@ PARM0004 DC    A(DSPBUF)
 LEN0004  DC    H'7'
 PARM0005 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0005)  last parameter
-LEN0005  DC    H'12'
+LEN0005  DC    H'7'
 PARM0006 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0006)  last parameter
 LEN0006  DC    H'12'
 PARM0007 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0007)  last parameter
-LEN0007  DC    H'8'
+LEN0007  DC    H'12'
 PARM0008 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0008)  last parameter
 LEN0008  DC    H'8'
@@ -346,7 +364,10 @@ PARM0009 DC    A(DSPBUF)
 LEN0009  DC    H'8'
 PARM0010 DC    A(DSPBUF)
          DC    X'80',AL3(LEN0010)  last parameter
-LEN0010  DC    H'16'
+LEN0010  DC    H'8'
+PARM0011 DC    A(DSPBUF)
+         DC    X'80',AL3(LEN0011)  last parameter
+LEN0011  DC    H'16'
 * work areas for decimal arithmetic
 DWK      DS    D                   CVD/CVB doubleword
 PWK1     DS    PL16
@@ -373,11 +394,12 @@ FC001    DC    F'5'                binary literals
 FC002    DC    F'0'
 FC003    DC    F'1'
 FC004    DC    F'-1234'
-FC005    DC    F'7'
-FC006    DC    F'2767'
-FC007    DC    F'-999999999'
-FC008    DC    F'234567890'
-FC009    DC    F'150'
+FC005    DC    F'123456'
+FC006    DC    F'7'
+FC007    DC    F'32767'
+FC008    DC    F'-999999999'
+FC009    DC    F'1234567890'
+FC010    DC    F'150'
 S0001    DC    CL3'F4 '            nonnumeric constants
 S0002    DC    CL4' F5 '
 S0003    DC    CL3'H1 '
@@ -441,7 +463,7 @@ SPIE3000 DC    F'3000'
 SPIEADR  DC    X'00FFFFFF'
 SPIEBEG  DC    A(COBBEG)
 SPIETAB  DC    A(SPIELTB)
-SPIENUM  DC    H'26'               statements in the table
+SPIENUM  DC    H'28'               statements in the table
 SPIEREGS DS    15F
 SPIEDONE DC    X'00'               1 once this module's SPIE is armed
 SPIEDW   DS    D
@@ -478,10 +500,12 @@ SPIELTB  DS    0F
          DC    A(T0019-COBBEG),AL2(41,0)
          DC    A(T0020-COBBEG),AL2(42,0)
          DC    A(T0021-COBBEG),AL2(43,0)
-         DC    A(T0022-COBBEG),AL2(43,0)
-         DC    A(T0023-COBBEG),AL2(43,0)
-         DC    A(T0024-COBBEG),AL2(44,0)
+         DC    A(T0022-COBBEG),AL2(44,0)
+         DC    A(T0023-COBBEG),AL2(45,0)
+         DC    A(T0024-COBBEG),AL2(45,0)
          DC    A(T0025-COBBEG),AL2(45,0)
+         DC    A(T0026-COBBEG),AL2(46,0)
+         DC    A(T0027-COBBEG),AL2(47,0)
          CSECT                     WORKING-STORAGE: private code, one p
 COBWS    DS    0D
 WSC0000  EQU   COBWS               chunk origins

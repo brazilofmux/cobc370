@@ -517,8 +517,6 @@ T0047    DS    0H
          ZAP   WK1+13(3),DWK(8)
          SP    WK0+12(4),WK1+13(3)
          ZAP   DWK(8),WK0+12(4)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
          CVB   2,DWK               packed -> binary
          STH   2,DWK
          MVC   D0018(2),DWK        COMP, not on its boundary

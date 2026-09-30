@@ -276,10 +276,21 @@ R0001    DS    0H
          CVD   2,DWK               binary -> packed
          ZAP   PWK1(16),DWK(8)
          AP    PWK1(16),PWK2(16)
-         ZAP   DWK(8),PWK1(16)
-         SRP   DWK(8),11,0         drop the digits past the picture
-         SRP   DWK(8),53,0
+         ZAP   NTWK(16),PWK1(16)   NOTRUNC: modulo 2**32
+         DP    NTWK(16),K0007+10(6)
+         ZAP   DWK(8),NTWK+10(6)   the remainder
+         CP    DWK(8),K0008+10(6)
+         BNH   L0006
+         SP    DWK(8),K0007+10(6)  into the signed range
+L0006    DS    0H
+         CP    DWK(8),K0009+10(6)
+         BNL   L0007
+         AP    DWK(8),K0007+10(6)
+L0007    DS    0H
+         DROP  8
          CVB   2,DWK               packed -> binary
+         L     8,BL0000            base locator
+         USING WSC0000,8
          STH   2,D0001
          B     L0004
 L0005    DS    0H
@@ -287,10 +298,10 @@ L0005    DS    0H
 T0022    DS    0H
 * TERMINATE USE-RPT
          CLI   RFGEN000,X'00'      any GENERATE since INITIATE?
-         BE    L0006               no: nothing to do
+         BE    L0008               no: nothing to do
          MVI   RBRK000,X'01'       a break at the most major level
          CLI   RBRK000,2           the break is at least this major?
-         BH    L0007               no: this level did not break
+         BH    L0009               no: this level did not break
 * rolling forward
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -306,9 +317,9 @@ T0022    DS    0H
          USING WSC0000,8
          ZAP   D0023(3),K0001+15(1)  DEPT-TOT
          DROP  8
-L0007    DS    0H
+L0009    DS    0H
          CLI   RBRK000,1           the break is at least this major?
-         BH    L0008               no: this level did not break
+         BH    L0010               no: this level did not break
          BAL   14,RG003            CONTROL FOOTING
          L     12,CB0006           this block's base again
 * sum counters reset at this level
@@ -316,8 +327,8 @@ L0007    DS    0H
          USING WSC0000,8
          ZAP   D0027(3),K0001+15(1)  *SUM
          DROP  8
+L0010    DS    0H
 L0008    DS    0H
-L0006    DS    0H
 T0023    DS    0H
 * CLOSE PRINT-FILE
          CLOSE (FD000)
@@ -339,9 +350,9 @@ T0025    DS    0H
          ED    EDWK(4),EDSRC
          MVC   D0010(3),EDWK+1     the edited result
          CP    PWK1(16),K0001+15(1)  BLANK WHEN ZERO: is it zero?
-         BNE   L0009
+         BNE   L0011
          MVC   D0010(3),S0006      then spaces
-L0009    DS    0H
+L0011    DS    0H
 T0026    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(18),S0007
@@ -352,15 +363,15 @@ T0026    DS    0H
          BALR  14,15
 T0027    DS    0H
 * MOVE 42 -> WS-BWZ
-         ZAP   PWK1(16),K0007+14(2)  literal
+         ZAP   PWK1(16),K0010+14(2)  literal
          ZAP   EDSRC(2),PWK1(16)   source, sized to the selector count
          MVC   EDWK(4),M0001       load the ED pattern
          ED    EDWK(4),EDSRC
          MVC   D0010(3),EDWK+1     the edited result
          CP    PWK1(16),K0001+15(1)  BLANK WHEN ZERO: is it zero?
-         BNE   L0010
+         BNE   L0012
          MVC   D0010(3),S0006      then spaces
-L0010    DS    0H
+L0012    DS    0H
 T0028    DS    0H
 * DISPLAY
          MVC   DSPBUF+0(18),S0007
@@ -405,7 +416,7 @@ T0032    DS    0H
 * GENERATE DETAIL-LINE
          DROP  8
          CLI   RFGEN000,X'00'      the first GENERATE?
-         BNE   L0011
+         BNE   L0013
          MVI   RFGEN000,X'01'
          BAL   14,RG000            the first page heading
          L     12,CB0007           this block's base again
@@ -414,21 +425,21 @@ T0032    DS    0H
          MVC   D0014(2),D0006      DEPT
          DROP  8
          MVI   RBRK000,X'01'       every level, for the headings
-         B     L0012
-L0011    DS    0H
+         B     L0014
+L0013    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          CLC   D0006(2),D0014      DEPT
-         BE    L0014               unchanged
+         BE    L0016               unchanged
          MVI   RBRK000,2           a control break at this level
-         B     L0013
-L0014    DS    0H
+         B     L0015
+L0016    DS    0H
          DROP  8
-         B     L0012               no control break
-L0013    DS    0H
+         B     L0014               no control break
+L0015    DS    0H
          MVI   RGI001,X'01'        GROUP INDICATE items show next time
          CLI   RBRK000,2           the break is at least this major?
-         BH    L0015               no: this level did not break
+         BH    L0017               no: this level did not break
 * rolling forward
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -444,9 +455,9 @@ L0013    DS    0H
          USING WSC0000,8
          ZAP   D0023(3),K0001+15(1)  DEPT-TOT
          DROP  8
-L0015    DS    0H
+L0017    DS    0H
          CLI   RBRK000,1           the break is at least this major?
-         BH    L0016               no: this level did not break
+         BH    L0018               no: this level did not break
          BAL   14,RG003            CONTROL FOOTING
          L     12,CB0007           this block's base again
 * sum counters reset at this level
@@ -454,12 +465,12 @@ L0015    DS    0H
          USING WSC0000,8
          ZAP   D0027(3),K0001+15(1)  *SUM
          DROP  8
-L0016    DS    0H
+L0018    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   D0014(2),D0006      DEPT
          DROP  8
-L0012    DS    0H
+L0014    DS    0H
 * subtotalling
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -510,21 +521,21 @@ R9001    DS    0H
          L     15,SV9001           what the cell held before
          ST    15,X0003
          CLI   RSUPPR,X'01'        SUPPRESS PRINTING?
-         BE    L0017
-         CLI   RBODY000,X'00'      a body group on this page yet?
          BE    L0019
+         CLI   RBODY000,X'00'      a body group on this page yet?
+         BE    L0021
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0012             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC002             against the lower limit
-         BNH   L0018               fits
+         BNH   L0020               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0019    DS    0H
+L0021    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0018               none: the first group on a page fits
+         BZ    L0020               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0012             into LINE-COUNTER
@@ -532,35 +543,35 @@ L0019    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC002             against the lower limit
-         BNH   L0018               fits
+         BNH   L0020               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0018    DS    0H
+L0020    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0012             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0020
+         BE    L0022
          LA    2,1(2)              LINE PLUS n
-         B     L0021
-L0020    DS    0H
+         B     L0023
+L0022    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,3                 no: the first line is FIRST DETAIL
-         B     L0021
+         B     L0023
          LA    2,1(2)              yes: the line after it
-L0021    DS    0H
+L0023    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
          CLI   RGI001,X'00'        GROUP INDICATE: the first time since
-         BE    L0022               no: spaces
+         BE    L0024               no: spaces
          MVC   D0018(2),D0006      alphanumeric move
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
          MVC   RBUF+1(2),D0018     COLUMN placement
-L0022    DS    0H
+L0024    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -577,9 +588,9 @@ L0022    DS    0H
          ED    EDWK(4),EDSRC
          MVC   D0020(3),EDWK+1     the edited result
          CP    PWK1(16),K0001+15(1)  BLANK WHEN ZERO: is it zero?
-         BNE   L0023
+         BNE   L0025
          MVC   D0020(3),S0006      then spaces
-L0023    DS    0H
+L0025    DS    0H
          DROP  8
          L     8,BL0000            base locator
          USING WSC0000,8
@@ -590,7 +601,7 @@ L0023    DS    0H
          DROP  8
          MVI   RGI001,X'00'        GROUP INDICATE items shown; not agai
          MVI   RBODY000,X'01'      a body group is on this page
-L0017    DS    0H
+L0019    DS    0H
          MVI   RSUPPR,X'00'
          L     14,RGS001
          BR    14
@@ -607,21 +618,21 @@ R9002    DS    0H
          L     15,SV9002           what the cell held before
          ST    15,X0001
          CLI   RSUPPR,X'01'        SUPPRESS PRINTING?
-         BE    L0024
-         CLI   RBODY000,X'00'      a body group on this page yet?
          BE    L0026
+         CLI   RBODY000,X'00'      a body group on this page yet?
+         BE    L0028
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0012             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC004             against the lower limit
-         BNH   L0025               fits
+         BNH   L0027               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0026    DS    0H
+L0028    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0025               none: the first group on a page fits
+         BZ    L0027               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0012             into LINE-COUNTER
@@ -629,24 +640,24 @@ L0026    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC004             against the lower limit
-         BNH   L0025               fits
+         BNH   L0027               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0025    DS    0H
+L0027    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0012             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0027
+         BE    L0029
          LA    2,1(2)              LINE PLUS n
-         B     L0028
-L0027    DS    0H
+         B     L0030
+L0029    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,3                 no: the first line is FIRST DETAIL
-         B     L0028
+         B     L0030
          LA    2,1(2)              yes: the line after it
-L0028    DS    0H
+L0030    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -666,26 +677,26 @@ L0028    DS    0H
          BALR  14,15
          DROP  8
          MVI   RBODY000,X'01'      a body group is on this page
-L0024    DS    0H
+L0026    DS    0H
          MVI   RSUPPR,X'00'
          L     14,RGS002
          BR    14
 * report group FINAL-FOOT
 RG003    ST    14,RGS003           save the return
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0030
+         BE    L0032
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0012             LINE-COUNTER
          A     2,FC001             plus every LINE integer
          C     2,FC004             against the lower limit
-         BNH   L0029               fits
+         BNH   L0031               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0030    DS    0H
+L0032    DS    0H
          L     2,RSNG000           the saved next group integer
          LTR   2,2
-         BZ    L0029               none: the first group on a page fits
+         BZ    L0031               none: the first group on a page fits
          L     8,BL0000            base locator
          USING WSC0000,8
          ST    2,D0012             into LINE-COUNTER
@@ -693,24 +704,24 @@ L0030    DS    0H
          ST    3,RSNG000           and cleared
          LA    2,1(2)              plus one, plus the later LINE intege
          C     2,FC004             against the lower limit
-         BNH   L0029               fits
+         BNH   L0031               fits
          BAL   14,RADV000          page advance processing
          DROP  8
-L0029    DS    0H
+L0031    DS    0H
          L     8,BL0000            base locator
          USING WSC0000,8
          L     2,D0012             LINE-COUNTER
          CLI   RBODY000,X'00'      a body group on this page yet?
-         BE    L0031
+         BE    L0033
          LA    2,1(2)              LINE PLUS n
-         B     L0032
-L0031    DS    0H
+         B     L0034
+L0033    DS    0H
          C     2,FC003             the heading ran past FIRST DETAIL?
          BNL   *+12
          LA    2,3                 no: the first line is FIRST DETAIL
-         B     L0032
+         B     L0034
          LA    2,1(2)              yes: the line after it
-L0032    DS    0H
+L0034    DS    0H
          ST    2,RTGT
          MVI   RBUF+1,C' '
          MVC   RBUF+2(133),RBUF+1  blank the line
@@ -826,6 +837,7 @@ EDWK     DS    CL64                ED pattern and result
 ZWK      DS    CL24                zoned work area
 MULT8    DS    PL8                 ** multiplier
 QTMP     DS    PL16                DP quotient
+NTWK     DS    PL16                NOTRUNC: a COMP result modulo 2**32
 WK0      DS    PL16                expression stack
 WK1      DS    PL16
 WK2      DS    PL16
@@ -847,7 +859,13 @@ K0005    EQU   *-15
          DC    PL1'7'
 K0006    EQU   *-15
          DC    PL1'8'
-K0007    EQU   *-14
+K0007    EQU   *-10
+         DC    PL6'4294967296'
+K0008    EQU   *-10
+         DC    PL6'2147483647'
+K0009    EQU   *-10
+         DC    PL6'-2147483648'
+K0010    EQU   *-14
          DC    PL2'42'
 M0001    DC    XL4'40202120'       ED patterns
 M0002    DC    XL6'402020202120'

@@ -1469,6 +1469,16 @@ static int cur_segno, use_segs, gen_segno;
  * measured there: EXHIBIT, TRANSFORM, ON, READY/RESET TRACE and NOTE. */
 static int use_exhibit, use_trace, use_transform;
 
+/* NOTRUNC (#45). IKFCBL00's default on this system: an arithmetic result
+ * stored into a COMP item keeps its full binary value -- 9999 + 1 in a
+ * S9(4) COMP is 10000, 30000 + 30000 wraps to -5536 -- where the PICTURE
+ * would drop the high digits. MOVE still truncates to the receiving
+ * PICTURE, as IBM's does (a literal MOVE past the PICTURE is the one place
+ * IBM wraps instead; that is its compile-time accident, warned about, and
+ * not copied). ON SIZE ERROR still tests the PICTURE, as IBM's does.
+ * store_arith says which kind of store gen_store_op is doing. */
+static int store_arith, use_ntwk;
+
 static int need_sym(const char *n)
 {
     int i = lookup(n);
@@ -7971,6 +7981,42 @@ static void gen_store_op(const Sym *sy, Node *sub, const char *op)
         }
         break;
     case U_COMP:
+        if (store_arith) {
+            /* NOTRUNC: the value as the halfword or fullword holds it. CVB
+             * takes at most 31 bits, so a result that might be larger is
+             * first reduced modulo 2**32 into the signed range, which is what
+             * IBM's binary arithmetic leaves (2E9 + 2E9 is -294967296). STH
+             * then keeps the low halfword, as IBM's does. */
+            const char *lp = strrchr(op, '(');
+            int olen = lp ? atoi(lp + 1) : 16;
+            if (2 * olen - 1 <= 9) {
+                snprintf(b, sizeof b, "DWK(8),%s", op);
+                asm_line("", "ZAP", b, "");
+            } else {
+                char k32[48], kmax[48], kmin[48], l1[16], l2[16];
+                use_ntwk = 1;
+                const_ref("4294967296", k32, sizeof k32);
+                const_ref("2147483647", kmax, sizeof kmax);
+                const_ref("-2147483648", kmin, sizeof kmin);
+                snprintf(l1, sizeof l1, "L%04d", ++genlabel);
+                snprintf(l2, sizeof l2, "L%04d", ++genlabel);
+                snprintf(b, sizeof b, "NTWK(16),%s", op); asm_line("", "ZAP", b, "NOTRUNC: modulo 2**32");
+                snprintf(b, sizeof b, "NTWK(16),%s", k32); asm_line("", "DP", b, "");
+                snprintf(b, sizeof b, "DWK(8),NTWK+%d(%d)", 16 - 6, 6); asm_line("", "ZAP", b, "the remainder");
+                snprintf(b, sizeof b, "DWK(8),%s", kmax); asm_line("", "CP", b, "");
+                asm_line("", "BNH", l1, "");
+                snprintf(b, sizeof b, "DWK(8),%s", k32); asm_line("", "SP", b, "into the signed range");
+                asm_line(l1, "DS", "0H", "");
+                snprintf(b, sizeof b, "DWK(8),%s", kmin); asm_line("", "CP", b, "");
+                asm_line("", "BNL", l2, "");
+                snprintf(b, sizeof b, "DWK(8),%s", k32); asm_line("", "AP", b, "");
+                asm_line(l2, "DS", "0H", "");
+                reset_bases();
+            }
+            asm_line("", "CVB", "2,DWK", "packed -> binary");
+            gen_comp_store_r(sy, sub, 2);
+            break;
+        }
         snprintf(b, sizeof b, "DWK(8),%s", op);
         asm_line("", "ZAP", b, "");
         if (sy->digits < 15) {
@@ -11054,7 +11100,7 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
         return;
     }
     if (sv->usage == U_COMP && d->usage == U_COMP && sv->scale == d->scale
-        && !d->edited) {
+        && !d->edited && d->digits >= sv->digits) {
         /* Binary to binary at the same scale is a copy. The general path spends
          * CVD, a ZAP into a 16-byte work area, a ZAP back out and CVB -- six
          * instructions and two decimal operations to move a fullword.
@@ -11063,7 +11109,10 @@ static void emit_move(const Sym *d, Node *dsub, const Sym *sv, Node *ssub)
          * into a register and STH, which keeps the low halfword; a direct L and
          * STH keeps the same low halfword. Neither path forces a sign on an
          * unsigned receiver or truncates to the declared digit count, so the
-         * stored bytes agree in every case. */
+         * stored bytes agree in every case. Into fewer digits IBM's goes
+         * through decimal and truncates to the receiving PICTURE (12340 into
+         * a S9(3) COMP is 340, measured), so that case takes the general
+         * path. */
         gen_comp_load_r(sv, ssub, 2);
         gen_comp_store_r(d, dsub, 2);
         return;
@@ -11453,7 +11502,9 @@ static void emit_sum_add(int dst, int src, Node *sub)
     gen_rescale("PWK2", o->scale, ws);
     asm_line("", "AP", "PWK1(16),PWK2(16)", o->name);
     gen_rescale("PWK1", ws, d->scale);
+    store_arith = 1;
     need_sym_base(d); gen_store(d, NULL, "PWK1");
+    store_arith = 0;
     reset_bases();
 }
 
@@ -11687,7 +11738,9 @@ static void emit_set_from_expr(const Sym *d, Node *e, int add)
         snprintf(b, sizeof b, "PWK1(16),%s", top);
         asm_line("", "ZAP", b, "");
     }
+    store_arith = add;
     gen_store(d, NULL, "PWK1");
+    store_arith = 0;
 }
 
 /* Checks that need to know how a file is USED, not just how it is declared.
@@ -14389,7 +14442,9 @@ static void generate(void)
                 asm_line("", "B", lskip, "");
                 asm_line(lok, "DS", "0H", "");
                 reset_bases();
+                store_arith = 1;
                 gen_store(d, st->dsub, "PWK1");
+                store_arith = 0;
                 asm_line(lskip, "DS", "0H", "");
                 reset_bases();
                 gen_size_skip[0] = 0;
@@ -14398,7 +14453,7 @@ static void generate(void)
                     asm_line("", "CLI", "SZFLG,X'00'", "any size error in the series?");
                     asm_line("", "BE", b, "none: past the imperative statements");
                 }
-            } else gen_store_op(d, st->dsub, top);
+            } else { store_arith = 1; gen_store_op(d, st->dsub, top); store_arith = 0; }
             break;
         }
         case ST_MOVE:
@@ -14424,7 +14479,7 @@ static void generate(void)
                 if (st->size_err) die("ON SIZE ERROR with a floating-point ADD or SUBTRACT is not implemented; use COMPUTE");
                 gen_fexpr(&opn, 0);
                 if (IS_FLOAT(d)) gen_fstore_sym(d, st->dsub);
-                else { gen_fpk("PWK1", d->scale); gen_store(d, st->dsub, "PWK1"); }
+                else { gen_fpk("PWK1", d->scale); store_arith = 1; gen_store(d, st->dsub, "PWK1"); store_arith = 0; }
                 break;
             }
             if (st->op == ST_MOVE && d->usage == U_COMP && !d->is_index && d->scale >= 0
@@ -14433,17 +14488,21 @@ static void generate(void)
                 /* A literal or ZERO into a halfword or fullword binary item:
                  * the value is known here, so one MVC from a binary constant,
                  * as IBM's compilers do (Harry E, H390-MVS), rather than
-                 * packing it and converting at run time. The digits past the
-                 * PICTURE are dropped, as the general path drops them. */
-                long v = 0; int neg = 0;
+                 * packing it and converting at run time. NOTRUNC (#45): the
+                 * literal's binary value, not its PICTURE digits, and the
+                 * low-order 16 or 32 bits of it -- MOVE 30000 to a S9(4) COMP
+                 * is 30000, and MOVE 123456 is -7616, both measured on
+                 * IKFCBL00. An unsigned receiver takes the magnitude. */
+                unsigned long long m = 0; int neg = 0;
                 if (st->imm == 1) {
                     const char *q = st->immdigits;
                     if (*q == '-') { neg = 1; q++; } else if (*q == '+') q++;
-                    size_t nd = strlen(q);
-                    if ((int)nd > d->digits) q += nd - (size_t)d->digits;
-                    for (; *q; q++) v = v * 10 + (*q - '0');
-                    if (neg && d->is_signed) v = -v;
+                    /* modulo 2**32 digit by digit: no 64-bit divide on MVS */
+                    for (; *q; q++) m = ((m * 10) + (unsigned)(*q - '0')) & 0xFFFFFFFFULL;
                 }
+                unsigned long w32 = (unsigned long)(m & 0xFFFFFFFFULL);
+                if (neg && d->is_signed) w32 = (unsigned long)((0x100000000ULL - w32) & 0xFFFFFFFFULL);
+                long v = (w32 & 0x80000000UL) ? -(long)(0xFFFFFFFFUL - w32) - 1 : (long)w32;
                 const char *kc = intern_full(v);
                 char fd[64], ks[32];
                 need_sym_base(d);
@@ -14742,7 +14801,9 @@ static void generate(void)
                 gen_rescale("PWK2", ss, ws);
                 asm_line("", st->op == ST_ADD ? "AP" : "SP", "PWK1(16),PWK2(16)", "");
                 gen_rescale("PWK1", ws, d->scale);
+                store_arith = 1;
                 gen_store(d, st->dsub, "PWK1");
+                store_arith = 0;
             }
             break;
         }
@@ -15084,6 +15145,7 @@ static void generate(void)
         asm_line("ZWK", "DS", "CL24", "zoned work area");
         asm_line("MULT8", "DS", "PL8", "** multiplier");
         asm_line("QTMP", "DS", "PL16", "DP quotient");
+        if (use_ntwk) asm_line("NTWK", "DS", "PL16", "NOTRUNC: a COMP result modulo 2**32");
         for (int i = 0; i < 6; i++) {
             char w[8]; snprintf(w, sizeof w, "WK%d", i);
             asm_line(w, "DS", "PL16", i == 0 ? "expression stack" : "");

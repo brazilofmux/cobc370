@@ -661,6 +661,46 @@ divisions, resolution, code generation -- an error is still the end.
 `bad-multi` in the host test target has three mistakes and expects three
 messages.
 
+### COMP past its PICTURE: IBM's NOTRUNC (2026-09-30)
+
+The 1974 standard bounds a numeric item's value by its PICTURE: a result
+with more integer digits loses the high-order ones. IBM's compilers made
+that an option, `TRUNC`, and IKFCBL00's default on this system is
+`NOTRUNC` (a direct `EXEC PGM=IKFCBL00` with no TRUNC in PARM lists it), under
+which a `COMP` item holds whatever its halfword or fullword holds. Real
+programs lean on that -- a `PIC S9(4) COMP` as "a halfword", with lengths
+and counts past 9999 in it -- and `TRUNC` would lose their digits silently,
+so cobc370 follows `NOTRUNC` (#45). Measured on IKFCBL00, and `notrunc`
+holds IBM's output:
+
+- An arithmetic result stored into a `COMP` item keeps its binary value:
+  9999 + 1 in a `S9(4) COMP` is 10000, 20000 + 5 is 20005, 1234 * 10 is
+  12340; past the halfword or fullword it wraps (30000 + 30000 is -5536;
+  5,000,000,000 into a fullword is 705,032,704). An unsigned receiver takes
+  the magnitude. The same for `ADD`, `SUBTRACT`, `MULTIPLY`, `DIVIDE`,
+  `COMPUTE`, `GIVING`, a `PERFORM VARYING` step and a `SUM` counter.
+- A literal `MOVE`d to a `COMP` item is its binary value too, low-order bits
+  kept: `MOVE 30000` to a `S9(4) COMP` is 30000, `MOVE 123456` is -7616.
+- `ON SIZE ERROR` still tests the PICTURE, and leaves the receiver alone.
+- Comparisons see the full value (20000 in a `S9(4) COMP` is `> 9999`), as
+  do `ADD` and a `COMP` moved to a `COMP` of as many digits or more.
+- `MOVE` of an item into any other receiver truncates to the receiving
+  PICTURE, as before; a `COMP` into a `COMP` of fewer digits too (12340
+  into a `S9(3) COMP` is 340). `DISPLAY` shows the PICTURE's digits.
+
+One difference is left on purpose. IKFCBL00 reads an overflowed `COMP` item
+into a decimal operand through a packed field sized for the item's own
+PICTURE, which keeps 2 x bytes - 1 digits -- but only for some verbs:
+with a `S9(5) COMP` holding 1234567, `ADD F5 TO W` sees 1234567 while `MOVE
+F5 TO W` and `COMPUTE W = F5` see 34567. The same item giving two answers
+is an accident of its code generation, not a rule, and cobc370 reads the
+full value everywhere. It shows only for items holding more digits than
+their PICTURE's packed width: none for a `S9(4)` halfword, whose largest
+value has five.
+
+Before this, cobc370 truncated to the PICTURE everywhere except the
+binary `ADD`/`SUBTRACT` path, which already wrapped -- neither rule.
+
 ### COMP-1 and COMP-2: IBM's floating point
 
 Not in the 1974 standard at all; IBM's, in every compiler of the line,
