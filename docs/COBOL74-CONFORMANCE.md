@@ -1208,18 +1208,34 @@ Fixed: the scanner now applies the standard's own rule inside a picture, where
 a period is a separator only when a space follows it. Every existing test's
 generated assembler is byte-identical across the change.
 
-**CCVS-74 itself: identified, not obtained.** Reported catalogue identifiers
-are NTIS `AD/A-036 173` / DTIC `ADA036173`, "COBOL Compiler Validation System,
-1974. Version 3.0" — audit routines plus an executive routine that resolved
-implementor-defined names and generated the JCL, distributed on 9-track tape.
-*These identifiers are second-hand and not verified here:* DTIC returns 403 to
-scripted fetches and the search results do not surface the record directly.
-What is confirmed is the shape — NTIS catalogues sibling items such as
-`ADA024914`, "HYPO-COBOL Compiler Validation System (HCCVS) - Population File
-(Tape)", as tape products rather than reports.
+**CCVS-74 itself: identified, not obtained.** Confirmed 2026-09-30 from
+DTIC documents on the Internet Archive:
 
-If it is ever wanted, the realistic routes are the vintage mainframe
-preservation community and a direct NTIS media request, not a download.
+- The suite was the U.S. Navy's, from its Federal COBOL Compiler Testing
+  Service: audit routines, their data, and an executive routine (the
+  VP-routine) that resolved implementor names and generated the job
+  control. It covers every 1974 module except Communication, and leaves out
+  the Nucleus's `ENTER` and arithmetic expressions "due to the lack of
+  definition as to their use and results".
+- The last version found is **3.0, October 1977**, sold by NTIS as a source
+  tape, "most standard 7 or 9 track recording modes", report number
+  **FCCTS/CCVS74-77/19**; its User's Guide is **FCCTS/CCVS74-77/20**. The
+  NTIS catalogue sheet for the tape is DTIC ADA046600
+  (<https://archive.org/details/DTIC_ADA046600>); the User's Guide,
+  implementation documentation, 210 pages, is DTIC ADA046601
+  (<https://archive.org/details/DTIC_ADA046601>).
+- The 1974 preliminary documentation ran to 14 volumes of test
+  specifications; one, the Indexed I-O module's, is DTIC ADA007554
+  (<https://archive.org/details/DTIC_ADA007554>). It describes the tests;
+  it does not contain them.
+- The CBT tape collection (cbttape.org) has no copy.
+
+The earlier note's `AD/A-036 173` was second-hand and is not confirmed.
+If the tape is ever wanted, the routes are someone who kept one -- the
+H390-MVS group has been asked -- or NTIS by its report number. A tape
+read off 1977 media would need its character set and the VP-routine's
+mnemonics resolved for this system before the first audit routine
+compiled.
 
 ### IBM spellings of the era
 
