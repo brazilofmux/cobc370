@@ -46,7 +46,7 @@ aggregate on the measurement in `docs/MEASUREMENTS.md`, a third on the later
 full build -- and, after the optimization pass, the CPU time of the COBOL steps
 is at IBM's (0.6s either way, at the noise floor of the step accounting).
 
-116 regression tests, all green, every one diffed against an oracle -- and
+181 regression tests, all green, every one diffed against an oracle -- and
 for the Report Writer the oracle is the 1974 text itself, hand-derived from
 its presentation-rule tables, with IBM's own compiler run on the same
 source wherever its 1968-vintage Report Writer reaches.
@@ -61,6 +61,24 @@ source wherever its 1968-vintage Report Writer reaches.
 | **VSAM ESDS** | read, load, update in place, extend |
 | **VSAM RRDS** | read, load, read/write/delete by record number, `START` |
 | reports | Report Writer entire: `RD` with `CONTROL`, `PAGE` and `CODE`; all seven group `TYPE`s; `LINE` (absolute, `PLUS`, `NEXT PAGE`), `NEXT GROUP`, `COLUMN`, `SOURCE`, `VALUE`, `SUM ... UPON ... RESET`, `GROUP INDICATE`, `JUSTIFIED`, `BLANK WHEN ZERO`; `LINE-COUNTER`/`PAGE-COUNTER`; `INITIATE`, `GENERATE` (detail or summary), `TERMINATE`, `USE BEFORE REPORTING`, `SUPPRESS`; presented by the standard's tables, not an approximation of them |
+
+Beyond the compiler TK5 ships. IBM's ANS COBOL on this system (IKFCBL00)
+is a 1968-standard compiler; each of these was measured against it:
+
+- `FILE STATUS`, on QSAM files as on VSAM, ISAM and relative files. IKFCBL00
+  refuses the clause (IKF1017I-E).
+- Large items. A PICTURE repetition count may have more than five digits
+  and an `OCCURS` may pass 32,768; IKFCBL00 cuts both (IKF2021I-C,
+  IKF1140I-E). WORKING-STORAGE is limited by the region, not by the
+  compiler: Harry E ran a one-million-byte item and a `PIC X(10) OCCURS
+  100000` table on TK5. (The constants region -- literals, file control
+  blocks, work areas -- is a separate 8K, or 12K when WORKING-STORAGE fits
+  in 4K, and the compiler says so if a program outgrows it.)
+- VSAM KSDS, ESDS and RRDS natively, which IKFCBL00 cannot do at all.
+- The 1974 standard's `INSPECT`, `MERGE`, `LINAGE` and `SIGN` clause, which
+  IKFCBL00 does not have, beside IBM's own `EXAMINE`, `TRANSFORM`,
+  `EXHIBIT`, `ON` and `TRACE`.
+- Every error in a compile reported in one listing.
 
 What is deliberately not there, each refused with a message that says so:
 
