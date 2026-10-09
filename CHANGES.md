@@ -7,6 +7,19 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
+## Unreleased
+
+Since `cd4fbc9`; not yet packaged. 167 tests.
+
+- `MOVE` of a literal or `ZERO` to a halfword or fullword `COMP` item that
+  sits under a group `OCCURS`, with a data-name subscript, assembled to
+  IFO178: the one-`MVC` path (2026-09-29) built the receiver as `0(6)(4)`
+  -- a no-length reference with the length appended -- which is only a
+  valid form for an unsubscripted item. Now `0(4,6)`. Found by GL040 in the
+  production corpus (`MOVE 0 TO YT-LINEAR-DATE (WS-IDX)`), which the sweep
+  had no example of; `complsub` pins it. A `COMP` item that itself carries
+  the `OCCURS` never took this path, because its width is the table's.
+
 ## 2026-09-29 NOTRUNC
 
 `cd4fbc9`, SHA256 `ff4db3a53f9d8dc7…`, 614,560 bytes, 181 tests.

@@ -14506,9 +14506,13 @@ static void generate(void)
                 const char *kc = intern_full(v);
                 char fd[64], ks[32];
                 need_sym_base(d);
-                field_ref_m(d, st->dsub, FR_SS_NOLEN, d->bytes, 6, fd, sizeof fd);
+                /* FR_SS_LEN carries the length inside the reference, which is
+                 * the only form that is right for a subscripted receiver:
+                 * 0(4,6), not 0(6)(4). The NOLEN form with a length appended
+                 * assembled for plain items only, and GL040 found it. */
+                field_ref_m(d, st->dsub, FR_SS_LEN, d->bytes, 6, fd, sizeof fd);
                 snprintf(ks, sizeof ks, "%s%s", kc, d->bytes == 2 ? "+2" : "");
-                snprintf(b, sizeof b, "%s(%d),%s", fd, d->bytes, ks);
+                snprintf(b, sizeof b, "%s,%s", fd, ks);
                 asm_line("", "MVC", b, "a binary constant");
                 break;
             }
