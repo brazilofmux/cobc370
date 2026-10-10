@@ -7,9 +7,9 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
-## Unreleased
+## 2026-10-09
 
-Since `cd4fbc9`; not yet packaged. 167 tests.
+`3a0e09b`, SHA256 `b51dda9d95bf64e1…`, 614,560 bytes, 182 tests.
 
 - `MOVE` of a literal or `ZERO` to a halfword or fullword `COMP` item that
   sits under a group `OCCURS`, with a data-name subscript, assembled to
