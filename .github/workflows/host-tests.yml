@@ -56,7 +56,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.plat }}
-          path: cobc370-*.*
+          path: |
+            cobc370-*.tar.gz
+            cobc370-*.zip
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: host
