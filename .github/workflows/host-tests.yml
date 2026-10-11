@@ -76,5 +76,8 @@ jobs:
           git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           git for-each-ref "refs/tags/$GITHUB_REF_NAME" --format='%(contents)' > notes.txt
           (cd dist && sha256sum * > SHA256SUMS)
-          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
+          # A tag with -test in its name makes a draft, seen only by the
+          # owner: a dry run of this job that publishes nothing.
+          draft=; case $GITHUB_REF_NAME in *-test*) draft=--draft ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag $draft \
             --title "cobc370 $GITHUB_REF_NAME" --notes-file notes.txt
