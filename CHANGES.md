@@ -7,6 +7,22 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
+## Unreleased
+
+- `-MMD`, with `-MF`, `-MT` and `-MP` as GCC spells them: a make rule naming
+  the source and every copybook a compile opened, for incremental builds
+  (mvslovers' mbt, #46).
+- `COPY` on a case-sensitive filesystem: the text-name, upper case by then,
+  is also tried in lower case, so a copybook stored as `cpyws.cpy` is found
+  on Linux; it had resolved only because macOS ignores case (#46). Measured
+  in a Linux container: three of the tests failed before.
+- `make check-asm`: every test program compiles to exactly its committed
+  assembler; a GitHub Actions job runs it, with the host checks, on Linux
+  and macOS.
+- Two COBOL programs that both carry the runtime, linked into one module:
+  the linkage editor keeps one `COBRT` and drops the other. Now in the CALL
+  round trip (`subdsp`, `maindsp`).
+
 ## 2026-10-09
 
 `3a0e09b`, SHA256 `b51dda9d95bf64e1…`, 614,560 bytes, 182 tests.

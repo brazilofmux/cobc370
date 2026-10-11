@@ -1,0 +1,25 @@
+# The host side of cobc370 on Linux and macOS: the compiler builds, every test
+# program compiles to exactly the assembler committed beside it, and the host
+# checks pass. Linux matters most: its filesystem is case-sensitive, and a
+# COPY that resolved only because macOS ignores case broke a build there
+# (#46). The guest side -- running the programs on MVS 3.8j -- needs TK5 and
+# stays bin/cobc-regress.
+name: host tests
+on:
+  push:
+  pull_request:
+jobs:
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: make -C src cobc370
+      - name: every test program compiles to its committed assembler
+        run: make -C src check-asm
+      - name: host checks
+        run: make -C src test

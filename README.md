@@ -121,8 +121,16 @@ No dependencies beyond a C compiler. Ragel is needed only to regenerate
     src/cobc370 program.cbl -o program.asm -I copybooks
 
 The output assembles with `ASMFCLG` on the guest. `COPY` members are found on
-the `-I` directories or beside the program; nothing but the copied text reaches
-the guest.
+the `-I` directories or beside the program, under the name as written or in
+lower case, with or without a `.cpy`, `.cob`, `.cbl` or `.txt` suffix; nothing
+but the copied text reaches the guest.
+
+For a build tool, `-MMD` writes a make rule naming the source and every
+copybook the compile opened, as GCC does: `-MF` names the file (the default is
+the output with `.d`), `-MT` the target, and `-MP` adds an empty rule per
+copybook so that deleting one does not break the build.
+
+    src/cobc370 program.cbl -o program.asm -I copybooks -MMD -MP
 
 ## Running on MVS 3.8j
 

@@ -15,6 +15,8 @@ WORK=${TMPDIR:-/tmp}/cobc-call; mkdir -p "$WORK"
 "$CC/cobc370" "$TDIR/maincall.cbl" -o "$TDIR/maincall.asm" || die "maincall did not compile"
 "$CC/cobc370" "$TDIR/sub12.cbl"    -o "$TDIR/sub12.asm"    || die "sub12 did not compile"
 "$CC/cobc370" "$TDIR/main12.cbl"   -o "$TDIR/main12.asm"   || die "main12 did not compile"
+"$CC/cobc370" "$TDIR/subdsp.cbl"   -o "$TDIR/subdsp.asm"   || die "subdsp did not compile"
+"$CC/cobc370" "$TDIR/maindsp.cbl"  -o "$TDIR/maindsp.asm"  || die "maindsp did not compile"
 
 {
 cat <<'EOF'
@@ -60,6 +62,27 @@ cat <<'EOF'
 //LKED.SYSLMOD DD DSN=&&GOSET2(GO),UNIT=SYSDA,
 //             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
 //LKED.SYSIN DD  DSN=&&SUB12,DISP=(OLD,DELETE)
+//GO.SYSOUT  DD  SYSOUT=Z
+//* 5. two programs that both DISPLAY, so both objects carry COBRT: the
+//*    linkage editor keeps the first copy of the CSECT and drops the
+//*    second (#46).
+//S5      EXEC ASMFC,PARM.ASM='OBJ,NODECK'
+//ASM.SYSGO DD  DSN=&&SUBDSP,DISP=(NEW,PASS),UNIT=SYSDA,
+//             SPACE=(80,(400,100))
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/subdsp.asm"
+cat <<'EOF'
+/*
+//S6      EXEC ASMFCLG
+//ASM.SYSIN DD  *
+EOF
+cat "$TDIR/maindsp.asm"
+cat <<'EOF'
+/*
+//LKED.SYSLMOD DD DSN=&&GOSET3(GO),UNIT=SYSDA,
+//             SPACE=(1024,(50,20,1)),DISP=(MOD,PASS)
+//LKED.SYSIN DD  DSN=&&SUBDSP,DISP=(OLD,DELETE)
 //GO.SYSOUT  DD  SYSOUT=Z
 EOF
 } > "$WORK/calltest.jcl"

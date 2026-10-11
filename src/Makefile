@@ -78,6 +78,26 @@ test: cobc370
 	 if [ "$$n" -ne 3 ]; then echo "  bad-multi: expected 3 messages, got $$n"; \
 	   ./cobc370 $(T)/bad-multi.cbl -o /dev/null; exit 1; \
 	 else echo "  bad-multi: 3 messages, then a stop"; fi
+	@echo "--- -MMD names the copybooks a compile opened ---"
+	@d=$$(./cobc370 $(T)/copytest.cbl -I $(T) -o /dev/null -MMD -MF /dev/stdout -MT copytest.asm); \
+	 for c in cpyws cpyrec cpyproc; do \
+	   echo "$$d" | grep -qi "/$$c\.cpy" || { echo "  -MMD: $$c missing from:"; echo "$$d"; exit 1; }; \
+	 done; echo "  -MMD: copytest.asm depends on its three copybooks"
+
+# Every test program compiles, and to exactly the assembler committed beside
+# it. Run on a case-sensitive filesystem (Linux CI) this is also what catches
+# a COPY that only resolves because macOS ignores case (#46).
+check-asm: cobc370
+	@fail=0; n=0; tmp=$$(mktemp -d); \
+	 for f in $(T)/*.cbl; do \
+	   b=$$(basename $$f .cbl); case $$b in bad-*) continue;; esac; \
+	   [ -f $(T)/$$b.asm ] || continue; n=$$((n+1)); \
+	   if ! ./cobc370 $$f -I $(T) -o $$tmp/$$b.asm 2>$$tmp/err; then \
+	     echo "  $$b: does not compile: $$(head -1 $$tmp/err)"; fail=$$((fail+1)); \
+	   elif ! cmp -s $$tmp/$$b.asm $(T)/$$b.asm; then \
+	     echo "  $$b: assembler differs from the committed copy"; fail=$$((fail+1)); fi; \
+	 done; rm -rf $$tmp; \
+	 echo "check-asm: $$n programs, $$fail failing"; [ $$fail -eq 0 ]
 
 # GnuCOBOL is not authoritative everywhere. DISPLAY of a signed DISPLAY item is
 # one place it diverges: -std=mvs renders PIC S9(5) VALUE 12345 as "12345+",
@@ -104,4 +124,4 @@ oracle:
 clean:
 	rm -f cobc370 ../tests/*.asm
 
-.PHONY: test oracle ragel clean
+.PHONY: test check-asm oracle ragel clean

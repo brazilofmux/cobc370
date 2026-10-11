@@ -1636,6 +1636,19 @@ static int consume_sym(void)
 
 /* Open text-name from the copy directories: as given, then with the usual
  * suffixes; under a library subdirectory when OF/IN names one. */
+/* -MMD: the copybooks a compile actually opened, for a build tool's
+ * incremental rebuilds -- found by the real -I search, so a tool need not
+ * second-guess it (mvslovers' mbt, #46). */
+#define MAXDEPS 256
+static char *dep_files[MAXDEPS];
+static int ndeps;
+
+static void dep_note(const char *path)
+{
+    for (int i = 0; i < ndeps; i++) if (!strcmp(dep_files[i], path)) return;
+    if (ndeps < MAXDEPS) dep_files[ndeps++] = strdup(path);
+}
+
 static FILE *copy_open(const char *name, const char *lib, char *path, size_t pn)
 {
 #ifdef MVS370
@@ -1652,13 +1665,26 @@ static FILE *copy_open(const char *name, const char *lib, char *path, size_t pn)
     for (int i = 0; i < ncopy_dirs; i++) dirs[nd++] = copy_dirs[i];
     if (src_dir[0]) dirs[nd++] = src_dir;
     dirs[nd++] = ".";
+    /* The text-name as written is upper case by the time it gets here, and
+     * so is a library-name; copybooks on a host are as often lower case.
+     * Try both: a case-insensitive filesystem (macOS) found either, and a
+     * case-sensitive one (Linux, where a build tool's CI runs) found only
+     * the upper-case name (#46). */
+    char lname[64], llib[64];
+    snprintf(lname, sizeof lname, "%s", name);
+    for (char *q = lname; *q; q++) *q = (char)tolower((unsigned char)*q);
+    snprintf(llib, sizeof llib, "%s", lib ? lib : "");
+    for (char *q = llib; *q; q++) *q = (char)tolower((unsigned char)*q);
     for (int d = 0; d < nd; d++)
-        for (int k = 0; sfx[k]; k++) {
-            if (lib && *lib) snprintf(path, pn, "%s/%s/%s%s", dirs[d], lib, name, sfx[k]);
-            else snprintf(path, pn, "%s/%s%s", dirs[d], name, sfx[k]);
-            FILE *fp = fopen(path, "r");
-            if (fp) return fp;
-        }
+        for (int c = 0; c < 2; c++)
+            for (int k = 0; sfx[k]; k++) {
+                const char *nm = c ? lname : name, *lb = c ? llib : lib;
+                if (c && !strcmp(lname, name) && !strcmp(llib, lib ? lib : "")) break;
+                if (lb && *lb) snprintf(path, pn, "%s/%s/%s%s", dirs[d], lb, nm, sfx[k]);
+                else snprintf(path, pn, "%s/%s%s", dirs[d], nm, sfx[k]);
+                FILE *fp = fopen(path, "r");
+                if (fp) return fp;
+            }
     return NULL;
 #endif
 }
@@ -1741,6 +1767,7 @@ static void copy_statement(void)
         snprintf(m, sizeof m, "COPY %s: no copybook found on the -I directories or beside the program", name);
         die(m);
     }
+    dep_note(path);
     copy_stack[copy_depth++] = src;
     cb.fp = fp; cb.p = NULL; cb.line = 0;
     cb.name = strdup(path);
@@ -16006,11 +16033,45 @@ static void generate(void)
     asm_line("", "END", "", "");
 }
 
+/* A path in a make rule: a space or # escaped with a backslash, $ doubled. */
+static void dep_put(FILE *f, const char *p)
+{
+    for (; *p; p++) {
+        if (*p == ' ' || *p == '#') fputc('\\', f);
+        if (*p == '$') fputc('$', f);
+        fputc(*p, f);
+    }
+}
+
+/* -MMD [-MF file] [-MT target] [-MP], as GCC spells them: a make rule
+ * naming the source and every copybook opened. The file defaults to the
+ * output's name with .d for its extension, and the target to the output. */
+static int write_deps(const char *df, const char *target, const char *in, int phony)
+{
+    FILE *f = fopen(df, "w");
+    if (!f) { perror(df); return 2; }
+    dep_put(f, target); fputs(":", f);
+    fputs(" ", f); dep_put(f, in);
+    for (int i = 0; i < ndeps; i++) { fputs(" \\\n ", f); dep_put(f, dep_files[i]); }
+    fputs("\n", f);
+    if (phony)
+        for (int i = 0; i < ndeps; i++) { fputs("\n", f); dep_put(f, dep_files[i]); fputs(":\n", f); }
+    int bad = ferror(f);
+    if (fclose(f) != 0 || bad) { perror(df); return 2; }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *in = NULL, *outname = NULL;
+    const char *dep_file = NULL, *dep_target = NULL;
+    int want_deps = 0, dep_phony = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) outname = argv[++i];
+        else if (!strcmp(argv[i], "-MMD") || !strcmp(argv[i], "-MD")) want_deps = 1;
+        else if (!strcmp(argv[i], "-MF") && i + 1 < argc) { dep_file = argv[++i]; want_deps = 1; }
+        else if (!strcmp(argv[i], "-MT") && i + 1 < argc) dep_target = argv[++i];
+        else if (!strcmp(argv[i], "-MP")) dep_phony = 1;
         else if (!strcmp(argv[i], "-s")) gen_lines = 0;
         else if (!strcmp(argv[i], "-I") && i + 1 < argc) { if (ncopy_dirs < 16) copy_dirs[ncopy_dirs++] = argv[++i]; }
         else if (!strncmp(argv[i], "-I", 2) && argv[i][2]) { if (ncopy_dirs < 16) copy_dirs[ncopy_dirs++] = argv[i] + 2; }
@@ -16027,9 +16088,12 @@ int main(int argc, char **argv)
         const char *sl = strrchr(in, '/');
         if (sl) snprintf(src_dir, sizeof src_dir, "%.*s", (int)(sl - in), in);
     }
-    if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s] [-I dir]...\n"
+    if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s] [-I dir]... [-MMD [-MF f] [-MT t] [-MP]]\n"
                        "  -s      strip the line table and program-check exit\n"
-                       "  -I dir  a directory to find COPY text in (repeatable)\n"); return 2; }
+                       "  -I dir  a directory to find COPY text in (repeatable)\n"
+                       "  -MMD    write a make rule: the output depends on the source and the\n"
+                       "          copybooks it opened; -MF names the file (default: the output\n"
+                       "          with .d), -MT the target, -MP adds an empty rule per copybook\n"); return 2; }
 #endif
 
     src.fp = fopen(in, "r");
@@ -16065,5 +16129,31 @@ int main(int argc, char **argv)
             return 2;
         }
     }
+#ifndef MVS370
+    if (want_deps) {
+        char dfb[600], tgb[600];
+        const char *target = dep_target;
+        if (!target) {
+            if (outname) target = outname;
+            else {
+                /* to standard output: name the target as -o would have */
+                const char *b = strrchr(in, '/'); b = b ? b + 1 : in;
+                const char *dot = strrchr(b, '.');
+                snprintf(tgb, sizeof tgb, "%.*s.asm", dot ? (int)(dot - b) : (int)strlen(b), b);
+                target = tgb;
+            }
+        }
+        if (!dep_file) {
+            const char *base = outname ? outname : target;
+            const char *sl = strrchr(base, '/'), *dot = strrchr(base, '.');
+            int stem = (dot && (!sl || dot > sl)) ? (int)(dot - base) : (int)strlen(base);
+            snprintf(dfb, sizeof dfb, "%.*s.d", stem, base);
+            dep_file = dfb;
+        }
+        if (write_deps(dep_file, target, in, dep_phony)) return 2;
+    }
+#else
+    (void)want_deps; (void)dep_file; (void)dep_target; (void)dep_phony;
+#endif
     return 0;
 }
