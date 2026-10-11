@@ -1,0 +1,4 @@
+# Every file exactly as committed, on every platform: the test programs must
+# compile to the committed assembler byte for byte, and a checkout on Windows
+# would otherwise turn LF into CR LF.
+* -text

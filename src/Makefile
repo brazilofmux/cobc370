@@ -5,7 +5,7 @@ CFLAGS = -O2 -Wall -Wextra
 # picture_scan.c is generated but committed, so the compiler builds without
 # ragel installed. Regenerate with `make ragel` after editing picture.rl.
 cobc370: cobc370.c picture.c picture_scan.c picture.h
-	$(CC) $(CFLAGS) -I. -o $@ cobc370.c picture.c picture_scan.c
+	$(CC) $(CFLAGS) -I. -o $@ cobc370.c picture.c picture_scan.c $(LDFLAGS)
 
 ragel: picture.rl
 	ragel -G2 -o picture_scan.c picture.rl

@@ -1,9 +1,13 @@
-# The host side of cobc370 on Linux and macOS: the compiler builds, every test
-# program compiles to exactly the assembler committed beside it, and the host
-# checks pass. Linux matters most: its filesystem is case-sensitive, and a
-# COPY that resolved only because macOS ignores case broke a build there
-# (#46). The guest side -- running the programs on MVS 3.8j -- needs TK5 and
-# stays bin/cobc-regress.
+# The host side of cobc370: the compiler builds, every test program compiles
+# to exactly the assembler committed beside it, and the host checks pass, on
+# each platform a release ships for. Linux matters most: its filesystem is
+# case-sensitive, and a COPY that resolved only because macOS ignores case
+# broke a build there (#46). The guest side -- running the programs on MVS
+# 3.8j -- needs TK5 and stays bin/cobc-regress.
+#
+# A tag v* also publishes a release: the binaries that passed those checks,
+# each on its own platform, with the tag's message as the notes. Nothing is
+# built for a release that was not tested here first.
 name: host tests
 on:
   push:
@@ -13,13 +17,64 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - { os: ubuntu-24.04,     plat: linux-x86_64,  ldflags: -static }
+          - { os: ubuntu-24.04-arm, plat: linux-arm64,   ldflags: -static }
+          - { os: macos-15,         plat: macos-arm64 }
+          - { os: macos-15-intel,   plat: macos-x86_64 }
+          - { os: windows-latest,   plat: windows-x86_64, ldflags: -static }
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'msys2 {0}' || 'bash' }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
       - uses: actions/checkout@v4
+      - if: startsWith(matrix.os, 'windows')
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make diffutils mingw-w64-ucrt-x86_64-gcc
       - name: build
-        run: make -C src cobc370
+        run: make -C src cobc370 LDFLAGS='${{ matrix.ldflags }}'
       - name: every test program compiles to its committed assembler
         run: make -C src check-asm
       - name: host checks
         run: make -C src test
+      - name: package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          d=cobc370-${GITHUB_REF_NAME}-${{ matrix.plat }}
+          mkdir $d
+          cp src/cobc370$(test -f src/cobc370.exe && echo .exe) LICENSE README.md CHANGES.md $d/
+          case ${{ matrix.plat }} in
+            windows-*) 7z a -tzip $d.zip $d >/dev/null ;;
+            *) tar czf $d.tar.gz $d ;;
+          esac
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plat }}
+          path: cobc370-*.*
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: host
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git for-each-ref "refs/tags/$GITHUB_REF_NAME" --format='%(contents)' > notes.txt
+          (cd dist && sha256sum * > SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
+            --title "cobc370 $GITHUB_REF_NAME" --notes-file notes.txt

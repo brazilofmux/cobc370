@@ -16048,7 +16048,7 @@ static void dep_put(FILE *f, const char *p)
  * output's name with .d for its extension, and the target to the output. */
 static int write_deps(const char *df, const char *target, const char *in, int phony)
 {
-    FILE *f = fopen(df, "w");
+    FILE *f = fopen(df, "wb");
     if (!f) { perror(df); return 2; }
     dep_put(f, target); fputs(":", f);
     fputs(" ", f); dep_put(f, in);
@@ -16086,6 +16086,10 @@ int main(int argc, char **argv)
 #else
     if (in) {
         const char *sl = strrchr(in, '/');
+#ifdef _WIN32
+        const char *bs = strrchr(in, '\\');
+        if (bs && (!sl || bs > sl)) sl = bs;
+#endif
         if (sl) snprintf(src_dir, sizeof src_dir, "%.*s", (int)(sl - in), in);
     }
     if (!in) { fprintf(stderr, "usage: cobc370 prog.cbl [-o prog.asm] [-s] [-I dir]... [-MMD [-MF f] [-MT t] [-MP]]\n"
@@ -16100,7 +16104,14 @@ int main(int argc, char **argv)
     if (!src.fp) { perror(in); return 2; }
     src.name = in; src.p = NULL; src.line = 0;
 
+#ifdef MVS370
     out = outname ? fopen(outname, "w") : stdout;
+#else
+    /* Binary on a host, so the assembler is the same bytes everywhere: in
+     * text mode Windows would end every line with CR LF. On MVS the text
+     * mode is what turns each line into a card. */
+    out = outname ? fopen(outname, "wb") : stdout;
+#endif
     if (!out) { perror(outname); return 2; }
 
     next();
