@@ -110,6 +110,11 @@ explains why it is not S0C7 and what was tried.
 
 ## Building
 
+Each dated release carries host binaries for Linux, macOS and Windows,
+built and checked by CI on their own platforms. The Linux and Windows
+ones are static. The macOS one is unsigned: if it came through a browser,
+`xattr -d com.apple.quarantine cobc370` lets it run. To build from source:
+
     cd src && make cobc370
 
 No dependencies beyond a C compiler. Ragel is needed only to regenerate

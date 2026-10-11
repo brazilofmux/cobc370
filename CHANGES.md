@@ -22,6 +22,11 @@ to the host compiler, which is what the port sweep checks.
 - Two COBOL programs that both carry the runtime, linked into one module:
   the linkage editor keeps one `COBRT` and drops the other. Now in the CALL
   round trip (`subdsp`, `maindsp`).
+- Host binaries. CI now builds and checks Linux (x86_64, arm64), macOS
+  (arm64, x86_64) and Windows (x86_64), and a date tag publishes a GitHub
+  release of the binaries that passed, each on its own platform. On a host
+  the assembler is written in binary mode, so Windows produces the same
+  bytes as the others; a source path there may use backslashes.
 
 ## 2026-10-09
 
