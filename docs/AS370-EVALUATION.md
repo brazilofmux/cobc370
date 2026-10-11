@@ -321,3 +321,29 @@ Filed as cc370 #61, with all 96 decks:
 Nothing here has broken a build. `ld370` links these modules and they run. It
 matters because "byte-identical" was a claim about an oracle, and at corpus
 scale the oracle disagrees.
+
+## The whole corpus, again: identical (2026-10-11)
+
+Mike Großmann re-ran the comparison on #46 over the 184-program corpus at
+c531019: as370 1.5.0 on the host, IFOX00 on MVS/CE, the same 39
+SYS1.MACLIB members for both.
+
+- ESD and TXT identical in all 184, every P-type constant included (106
+  programs, 801 DC/DS statements). `ksdsnatr`, `litmove` and `arith` --
+  the cases above -- are identical; the CSECT alignment of #61 is gone.
+- 177 of 184 decks identical apart from the END card's translator id.
+- The other 7 differed in one RLD item each, a real as370 bug: `A(name)`,
+  where `name` is also reached through `V(name)` and is a label in the same
+  deck, got its RLD pointed at the ER instead of the CSECT, so the linkage
+  editor added the address twice. COBRT's `A(COBDATE)` and `A(COBFPK)` are
+  that form, in cdcopy, datetest, cobxref, cobcal74 and float1-3. Linked,
+  cdcopy got `X'00001404'` at x'1684' where IFOX00 gives `X'00000A02'` -- a
+  wrong address at run time. Fixed in cc370 #919; with it, **184 of 184
+  are identical to IFOX00 apart from the END card.** Modules assembled by
+  as370 1.5.0 or earlier with that form should be reassembled.
+
+`ld370`, given two objects that each carry COBRT (`maindsp`/`subdsp`, both
+link orders), does what IEWL does: keeps the first, drops the second with a
+note, RC 0, and both callers resolve to the kept copy.
+
+So the "byte-identical" claim now holds over this corpus.
