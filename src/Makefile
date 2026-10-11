@@ -79,7 +79,8 @@ test: cobc370
 	   ./cobc370 $(T)/bad-multi.cbl -o /dev/null; exit 1; \
 	 else echo "  bad-multi: 3 messages, then a stop"; fi
 	@echo "--- -MMD names the copybooks a compile opened ---"
-	@d=$$(./cobc370 $(T)/copytest.cbl -I $(T) -o /dev/null -MMD -MF /dev/stdout -MT copytest.asm); \
+	@f=$$(mktemp); ./cobc370 $(T)/copytest.cbl -I $(T) -o /dev/null -MMD -MF $$f -MT copytest.asm; \
+	 d=$$(cat $$f); rm -f $$f; \
 	 for c in cpyws cpyrec cpyproc; do \
 	   echo "$$d" | grep -qi "/$$c\.cpy" || { echo "  -MMD: $$c missing from:"; echo "$$d"; exit 1; }; \
 	 done; echo "  -MMD: copytest.asm depends on its three copybooks"
