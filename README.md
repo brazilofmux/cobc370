@@ -92,6 +92,37 @@ What is deliberately not there, each refused with a message that says so:
 - `COLLATING SEQUENCE` on SORT and MERGE; Debug, Communication; and every
   COBOL-85 spelling.
 
+## Why not just...
+
+Each of these is real, and each was looked at before this compiler was
+written or while it was checked.
+
+- **...call VSAMIO?** Jay Moseley's assembler routine works. It is how an
+  IKFCBL00 program reaches VSAM. The program fills in a parameter block,
+  CALLs the routine and checks a return code itself. Here VSAM is a
+  `SELECT`, an `FD` and `READ`/`WRITE`/`START`/`REWRITE`/`DELETE`, with
+  `FILE STATUS`, alternate keys, and ESDS and RRDS as well as KSDS. VSAMIO
+  was the reference: Jay's own test programs, rewritten for native VSAM,
+  produce byte-identical output (`docs/VSAM-PLAN.md`).
+- **...use `AMP=AMORG`?** The ISAM interface lets an ISAM program run
+  against a KSDS. The program is still an ISAM program: one key, so no
+  alternate indexes; KSDS only; a load in ascending key order; and no
+  `FILE STATUS`, which IKFCBL00 refuses on every file. Its source is
+  IBM's ISAM dialect (`NOMINAL KEY`, `DA-I-` names), not the
+  `ORGANIZATION IS INDEXED`/`RECORD KEY` form later compilers use for
+  VSAM. cobc370 also compiles that ISAM dialect natively, checked against
+  IKFCBL00.
+- **...use a later IBM compiler?** VS COBOL II and its successors are
+  licensed IBM products. They cannot be distributed with the public-domain
+  MVS 3.8j that TK4- and TK5 are built on.
+- **...use GnuCOBOL?** It is a host compiler for COBOL-85 and later, not a
+  compiler for MVS 3.8j. It serves here as a second oracle where a
+  construct is portable, and the 1974 standard decides where the two
+  disagree (`docs/COBOL74-ROADMAP.md`).
+- **...support COBOL-85?** That is not this compiler's purpose. It matches
+  the system's own era. COBOL-85's new reserved words break 1974
+  programs, and 24-bit addressing makes code size matter.
+
 ## When a program checks
 
 A program that hits bad packed data abends S0C7 and says nothing about where.
