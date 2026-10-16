@@ -36,6 +36,9 @@ import glob, os, re, struct, subprocess, sys, time, difflib
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.environ.get('SWEEP_WORK', '/tmp/cobc-port-sweep')
 RUNNER = os.environ.get('COBC370_RUNNER', 'tk5-run')
+# The library the compiler under test is in: a trial build can sit beside
+# the installed one (HERC01.COBC370.TEST.LOAD, say) without replacing it.
+LOADLIB = os.environ.get('COBC370_LOAD', 'HERC01.COBC370.LOAD')
 CONSOLE = os.environ.get('HERC_CONSOLE', 'http://localhost:8038/cgi-bin/tasks/syslog')
 PRT = os.path.expanduser(os.environ.get('TK5_PRT', '~/tk5/prt/prt00f.txt'))
 JOBCARD = ("//HERC01%s  JOB (TEST),'PORT SWEEP',CLASS=A,MSGCLASS=Z,\n"
@@ -127,7 +130,7 @@ RECEIVE INDATASET('HERC01.CBLSRC.XMIT') -
 
     step = """\
 //T{k:03d}     EXEC PGM=COBC370,REGION=8192K
-//STEPLIB  DD DSN=HERC01.COBC370.LOAD,DISP=SHR
+//STEPLIB  DD DSN={lib},DISP=SHR
 //SYSPRINT DD SYSOUT=Z
 //SYSTERM  DD SYSOUT=Z
 //SYSLIB   DD DSN=HERC01.CBLSRC,DISP=SHR
@@ -138,7 +141,7 @@ RECEIVE INDATASET('HERC01.CBLSRC.XMIT') -
         chunk = members[j::4]
         jcl = JOBCARD % chr(ord('E') + j)
         for k, m in enumerate(chunk):
-            jcl += step.format(k=k, m=m)
+            jcl += step.format(k=k, m=m, lib=LOADLIB)
         open(f'{WORK}/sweep{j}.jcl', 'w').write(jcl)
         run_jcl(f'{WORK}/sweep{j}.jcl', f'{WORK}/sweep{j}.out')
         ok = open(f'{WORK}/sweep{j}.out', encoding='latin-1').read().count('RC= 0000')
