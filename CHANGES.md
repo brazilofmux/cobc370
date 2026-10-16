@@ -7,8 +7,18 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
-## Unreleased
+## 2026-10-16 -- the new toolchain
 
+`78e91d1`, SHA256 `f80ae7f1aa5c9b95…`, 627,520 bytes, 184 tests.
+
+- Built with mvslovers' cc370 1.6.3 and libc370 2.16.0, which replace the
+  September builds. Compiling takes less than half the CPU it did:
+  BIGPARA 0.36 s against 0.83 s, COBXREF 0.34 s against 0.78 s, HELLO
+  0.02 s against 0.07 s, each pair measured in the same job on TK5. The
+  gain is in libc370's stream layer, which handles every line the
+  compiler reads and writes, and it holds for small programs and large
+  ones. The compile step is 28K smaller. The module is 12.5K larger,
+  all of it libc370's. The compiler's own code is essentially unchanged.
 - `-MMD`, with `-MF`, `-MT` and `-MP` as GCC spells them: a make rule naming
   the source and every copybook a compile opened, for incremental builds
   (mvslovers' mbt, #46).
