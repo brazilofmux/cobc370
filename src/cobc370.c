@@ -23,6 +23,7 @@
  *   ./cobc370 prog.cbl -o prog.asm
  */
 #include <setjmp.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -365,15 +366,47 @@ static jmp_buf recover_jb;
 static int recovering, nerrors;
 #define MAXERRORS 30
 
+/* The return code is the worst severity reported, on IKFCBL00's scale
+ * (measured on TK5): 4 for a W-level message, the program as written; 8
+ * for a C-level one, where the compiler made something of a doubtful
+ * entry -- generated, but COBUCLG's COND=(5,LT,COB) does not link it; 12
+ * for an E-level error, nothing generated; 16 for a D-level one, no
+ * compile at all: a table of the compiler's own is full, the source or
+ * the output is not to be had, or the compiler fails inside. */
+#define RC_WARN  4
+#define RC_COND  8
+#define RC_ERROR 12
+#define RC_TERM  16
+static int max_rc;
+
+static int cur_line(void) { return tok.line ? tok.line : src.line; }
+
+static void diag_at(int rc, const char *what, int line, const char *msg)
+{
+    fprintf(stderr, "%s:%d: %s: %s\n", src.name, line, what, msg);
+    if (max_rc < rc) max_rc = rc;
+}
+static void warn(const char *msg) { diag_at(RC_WARN, "warning", cur_line(), msg); }
+static void caution_at(int line, const char *msg) { diag_at(RC_COND, "caution", line, msg); }
+
 static void die(const char *msg)
 {
-    fprintf(stderr, "%s:%d: %s\n", src.name, tok.line ? tok.line : src.line, msg);
+    fprintf(stderr, "%s:%d: %s\n", src.name, cur_line(), msg);
+    if (!strncmp(msg, "internal:", 9)) exit(RC_TERM);
     if (recovering) {
         nerrors++;
         if (nerrors < MAXERRORS) longjmp(recover_jb, 1);
         fprintf(stderr, "%s: too many errors\n", src.name);
     }
-    exit(1);
+    exit(RC_ERROR);
+}
+
+/* A table of the compiler's own is full: not the program's fault, and no
+ * recovery, since what follows would be missing what did not fit. */
+static void limit(const char *msg)
+{
+    fprintf(stderr, "%s:%d: %s: a limit of this compiler\n", src.name, cur_line(), msg);
+    exit(RC_TERM);
 }
 
 static int is(const char *w);
@@ -1025,7 +1058,7 @@ static int ncond;
 
 static Cond *cnode(int kind)
 {
-    if (ncond >= MAXCOND) die("too many conditions in the program");
+    if (ncond >= MAXCOND) limit("too many conditions in the program");
     Cond *c = &conds[ncond++];
     memset(c, 0, sizeof *c);
     c->kind = kind;
@@ -1356,7 +1389,7 @@ static int ndops;
  * is contiguous from wherever its first operand landed. */
 static void dop_add(Stmt *st)
 {
-    if (ndops >= MAXDOP) die("too many DISPLAY, CALL or DEPENDING operands");
+    if (ndops >= MAXDOP) limit("too many DISPLAY, CALL or DEPENDING operands");
     if (!st->ndop) st->dop = &dops[ndops];
     ndops++;
 }
@@ -1615,7 +1648,7 @@ static int consume_quals(char q[][31])
     int nq = 0;
     while (is("OF") || is("IN")) {
         next();
-        if (nq >= MAXQUAL) die("too many levels of qualification");
+        if (nq >= MAXQUAL) limit("too many levels of qualification");
         if (strlen(tok.text) > 30) die("data name too long");
         strcpy(q[nq++], tok.text);
         next();
@@ -1739,7 +1772,7 @@ static void copy_statement(void)
     Src cb; memset(&cb, 0, sizeof cb);
     if (is("REPLACING")) {
         for (;;) {
-            if (cb.nrep >= 16) die("too many COPY REPLACING pairs");
+            if (cb.nrep >= 16) limit("too many COPY REPLACING pairs");
             int ps, qf, qt;
             copy_operand(cb.rep[cb.nrep].from, sizeof cb.rep[0].from, &ps, &qf);
             cb.rep[cb.nrep].pseudo = ps;
@@ -1759,7 +1792,7 @@ static void copy_statement(void)
     } else {
         if (!is(".")) die("COPY has no period");
     }
-    if (copy_depth >= MAXCOPY) die("COPY nests too deeply");
+    if (copy_depth >= MAXCOPY) limit("COPY nests too deeply");
     char path[600];
     FILE *fp = copy_open(name, lib, path, sizeof path);
     if (!fp) {
@@ -1878,7 +1911,7 @@ static void parse_special_names(void)
             next();
             if (is("STATUS")) next();
             if (is("IS")) next();
-            if (nsym >= MAXSYM) die("too many data items");
+            if (nsym >= MAXSYM) limit("too many data items");
             Sym *cn = &syms[nsym];
             memset(cn, 0, sizeof *cn);
             cn->level = 88; cn->is_switch = 1; uses_switches = 1;
@@ -1901,6 +1934,29 @@ static void parse_special_names(void)
 
 
 /* A numeric literal, rescaled to an integer at the given scale. */
+/* A numeric VALUE that does not fit its PICTURE is IKFCBL00's IKF2129I-C,
+ * which sets the item to zero. Here the digits beyond the PICTURE are
+ * dropped, as a MOVE would drop them; either way the program did not say
+ * what it meant, so it is a caution. A PICTURE with P is left alone. */
+static int value_line;
+static void value_fits(const char *lit, int digits, int scale)
+{
+    int inum = 0, frac = 0, seen_dot = 0;
+    if (scale < 0 || scale > digits) return;
+    for (const char *p = lit; *p; p++) {
+        if (*p == '.') { seen_dot = 1; continue; }
+        if (!isdigit((unsigned char)*p)) continue;
+        if (seen_dot) frac++;
+        else if (*p != '0' || inum) inum++;     /* leading zeros are no digits */
+    }
+    if (frac > scale)
+        caution_at(value_line, "the VALUE has more decimal places than its PICTURE; "
+                   "the extra digits are dropped");
+    if (inum > digits - scale)
+        caution_at(value_line, "the VALUE has more integer digits than its PICTURE; "
+                   "the high-order digits are dropped");
+}
+
 static void scale_literal(const char *lit, int scale, char *out, size_t outsz)
 {
     char digits[40]; int nd = 0, seen_dot = 0, frac = 0, neg = 0;
@@ -1962,7 +2018,7 @@ static int consume_quals(char q[][31]);
  * LINE-COUNTER; PAGE-COUNTER the program may alter. */
 static int make_counter(const char *name, int gparent)
 {
-    if (nsym >= MAXSYM) die("too many data items");
+    if (nsym >= MAXSYM) limit("too many data items");
     Sym *sy = &syms[nsym];
     memset(sy, 0, sizeof *sy);
     snprintf(sy->name, sizeof sy->name, "%s", name);
@@ -1979,7 +2035,7 @@ static int make_counter(const char *name, int gparent)
  * through the ordinary MOVE path. Unnameable from COBOL. */
 static int make_control_clone(int src)
 {
-    if (nsym >= MAXSYM) die("too many data items");
+    if (nsym >= MAXSYM) limit("too many data items");
     const Sym *o = &syms[src];
     if (o->bytes > 256) die("a control data item may be at most 256 bytes here");
     Sym *c = &syms[nsym];
@@ -2023,7 +2079,7 @@ static void parse_report_section(void)
             next();
             Report *rp = &reports[cur_report];
             {
-                if (nsym >= MAXSYM) die("too many data items");
+                if (nsym >= MAXSYM) limit("too many data items");
                 Sym *g = &syms[nsym];
                 memset(g, 0, sizeof *g);
                 snprintf(g->name, sizeof g->name, "%s", rp->name);
@@ -2057,7 +2113,7 @@ static void parse_report_section(void)
                     if (is("FINAL")) { next(); rp->ctl_final = 1; rp->nctl = 1; rp->ctl_sym[1] = -1; }
                     while (!tok.eof && !is(".") && !is("PAGE") && !is("HEADING") && !is("FIRST")
                            && !is("LAST") && !is("FOOTING") && !is("CODE")) {
-                        if (rp->nctl >= MAXCTL) die("too many levels in the CONTROL clause");
+                        if (rp->nctl >= MAXCTL) limit("too many levels in the CONTROL clause");
                         int cs = consume_sym();
                         const Sym *cy = &syms[cs];
                         if (cy->occ_parent >= 0 || cy->occurs > 0)
@@ -2211,7 +2267,7 @@ static void parse_report_section(void)
                 has_sum = 1;
                 while (!tok.eof && !is(".") && !is("UPON") && !is("RESET") && !is("COLUMN")
                        && !is("PIC") && !is("PICTURE") && !is("LINE") && !is("USAGE") && !is("GROUP")) {
-                    if (sm.nops >= MAXSUMOP) die("too many SUM operands");
+                    if (sm.nops >= MAXSUMOP) limit("too many SUM operands");
                     if (strlen(tok.text) > 30) die("data name too long");
                     strcpy(sm.op_name[sm.nops], tok.text); next();
                     if (is("OF") || is("IN")) {
@@ -2231,7 +2287,7 @@ static void parse_report_section(void)
                     next();
                     while (!tok.eof && !is(".") && !is("RESET") && !is("COLUMN") && !is("PIC")
                            && !is("PICTURE") && !is("LINE") && !is("USAGE")) {
-                        if (sm.nupon >= 4) die("too many UPON names");
+                        if (sm.nupon >= 4) limit("too many UPON names");
                         if (strlen(tok.text) > 30) die("data name too long");
                         strcpy(sm.upon_name[sm.nupon++], tok.text); next();
                     }
@@ -2261,7 +2317,7 @@ static void parse_report_section(void)
         expect(".");
 
         if (has_type) {
-            if (nrgroup >= MAXRGROUP) die("too many report groups");
+            if (nrgroup >= MAXRGROUP) limit("too many report groups");
             switch (ty) {
             case RG_PAGE_HEADING: case RG_PAGE_FOOTING:
                 if (!rp->has_page) die("PAGE HEADING and PAGE FOOTING groups need a PAGE clause in the RD -- VIII 2.21.3(3)");
@@ -2291,7 +2347,7 @@ static void parse_report_section(void)
             if (nm[0]) {
                 /* A named group is a qualifier for its sum counters:
                  * TOTAL OF DEPT-FOOT. A hidden group of no size does that. */
-                if (nsym >= MAXSYM) die("too many data items");
+                if (nsym >= MAXSYM) limit("too many data items");
                 Sym *gs = &syms[nsym];
                 memset(gs, 0, sizeof *gs);
                 snprintf(gs->name, sizeof gs->name, "%s", nm);
@@ -2308,7 +2364,7 @@ static void parse_report_section(void)
 
         if (has_line) {
             if (cur_group < 0) die("a LINE outside any report group");
-            if (nrline >= MAXRLINE) die("too many report lines");
+            if (nrline >= MAXRLINE) limit("too many report lines");
             RGroup *g = &rgroups[cur_group];
             if (!rp->has_page && l_abs)
                 die("without a PAGE clause only LINE PLUS may be used -- VIII 2.14.3(5)");
@@ -2342,8 +2398,8 @@ static void parse_report_section(void)
                 die("a SUM clause may appear only in a CONTROL FOOTING group -- VIII 2.20.3(3)");
             if (!pic[0]) die("a SUM entry needs a PICTURE");
             if (src != -1 || litlen >= 0) die("a SUM entry takes neither SOURCE nor VALUE");
-            if (nrsum >= MAXSUM) die("too many sum counters");
-            if (nsym >= MAXSYM) die("too many data items");
+            if (nrsum >= MAXSUM) limit("too many sum counters");
+            if (nsym >= MAXSYM) limit("too many data items");
             PicInfo pi;
             if (analyse_picture(pic, &pi) < 0) die(pi.err);
             if (pi.is_alpha || pi.digits == 0) die("a SUM entry's PICTURE must be numeric");
@@ -2367,7 +2423,7 @@ static void parse_report_section(void)
         if (has_col || pic[0] || src != -1 || litlen >= 0) {
             if (!has_col) die("a PICTURE without COLUMN or SUM has nothing to do -- VIII 2.5.3(10)");
             if (cur_line < 0) die("a COLUMN outside any LINE -- VIII 2.5.3(10c)");
-            if (nrfield >= MAXRFIELD) die("too many report fields");
+            if (nrfield >= MAXRFIELD) limit("too many report fields");
             if (!pic[0]) die("a COLUMN entry needs a PICTURE");
             if (src == -1 && litlen < 0) die("a COLUMN entry needs a SOURCE or a VALUE");
             if (src != -1 && litlen >= 0) die("a COLUMN entry takes SOURCE or VALUE, not both");
@@ -2383,7 +2439,7 @@ static void parse_report_section(void)
             if (litlen >= 0) { memcpy(fl->lit, lit, (size_t)litlen + 1); fl->litlen = litlen; }
             /* The field becomes an ordinary hidden item, so SOURCE placement
                reuses the existing MOVE path, editing and all. */
-            if (nsym >= MAXSYM) die("too many data items");
+            if (nsym >= MAXSYM) limit("too many data items");
             Sym *sy = &syms[nsym];
             memset(sy, 0, sizeof *sy);
             snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
@@ -2466,7 +2522,7 @@ static void parse_report_section(void)
 static void make_curdate(int *cursor)
 {
     if (curdate_sym >= 0) return;
-    if (nsym >= MAXSYM) die("too many data items");
+    if (nsym >= MAXSYM) limit("too many data items");
     uses_curdate = 1;
     Sym *sy = &syms[nsym];
     memset(sy, 0, sizeof *sy);
@@ -2496,7 +2552,7 @@ static void make_binreg(int *symvar, const char *name, const char *pic, int is_s
                         int bytes, int *cursor)
 {
     if (*symvar >= 0) return;
-    if (nsym >= MAXSYM) die("too many data items");
+    if (nsym >= MAXSYM) limit("too many data items");
     Sym *sy = &syms[nsym];
     memset(sy, 0, sizeof *sy);
     snprintf(sy->name, sizeof sy->name, "%s", name);
@@ -2547,7 +2603,7 @@ static void make_sortregs(int *cursor)
 static void make_tod(int *cursor)
 {
     if (tod_sym >= 0) return;
-    if (nsym >= MAXSYM) die("too many data items");
+    if (nsym >= MAXSYM) limit("too many data items");
     Sym *sy = &syms[nsym];
     memset(sy, 0, sizeof *sy);
     snprintf(sy->name, sizeof sy->name, "TIME-OF-DAY");
@@ -2678,7 +2734,7 @@ static void parse_data_division(void)
                     while (!tok.eof && !is(".") && !is("LABEL") && !is("BLOCK") && !is("RECORD")
                            && !is("DATA") && !is("VALUE") && !is("CODE-SET") && !is("RECORDING")
                            && !is("LINAGE")) {
-                        if (nreport >= MAXREPORT) die("too many reports");
+                        if (nreport >= MAXREPORT) limit("too many reports");
                         Report *rp = &reports[nreport];
                         memset(rp, 0, sizeof *rp);
                         snprintf(rp->name, sizeof rp->name, "%s", tok.text);
@@ -2809,7 +2865,7 @@ static void parse_data_division(void)
              * it in move mode. Every file gets the cell; only a variable
              * one uses it. */
             {
-                if (nsym >= MAXSYM) die("too many data items");
+                if (nsym >= MAXSYM) limit("too many data items");
                 /* 01 items start on a doubleword; the RDW takes the four
                  * bytes before the one the record will get. */
                 if (cursor > wslen) wslen = cursor;
@@ -2840,7 +2896,7 @@ static void parse_data_division(void)
              * THRU, or when d1 is a group, the new item is a group; alone
              * and elementary, it takes d1's description. It is an alias, so
              * it defines no bytes -- the emitter gives it an EQU. */
-            if (nsym >= MAXSYM) die("too many data items");
+            if (nsym >= MAXSYM) limit("too many data items");
             /* The 66 names storage the record has finished laying out, so
              * every group below the 01 closes first: a group still open has
              * no length yet, and a RENAMES THRU it came out empty (#34). */
@@ -2886,7 +2942,7 @@ static void parse_data_division(void)
         if (level == 88) {
             /* A condition name: no storage, it tests the item it follows. */
             if (nsym == 0) die("level 88 must follow a data item");
-            if (nsym >= MAXSYM) die("too many data items");
+            if (nsym >= MAXSYM) limit("too many data items");
             Sym *cn = &syms[nsym];
             memset(cn, 0, sizeof *cn);
             cn->level = 88; cn->is_88 = 1;
@@ -2918,7 +2974,7 @@ static void parse_data_division(void)
             for (;;) {
                 Sym *e = &syms[nsym];
                 if (nsym != first) {
-                    if (nsym >= MAXSYM) die("too many data items");
+                    if (nsym >= MAXSYM) limit("too many data items");
                     memset(e, 0, sizeof *e);
                     e->level = 88; e->is_88 = 1; e->parent = p; e->gparent = p; e->c88_next = -1;
                     snprintf(e->label, sizeof e->label, "C%04d", nsym);
@@ -2989,7 +3045,7 @@ static void parse_data_division(void)
             }
         }
 
-        if (nsym >= MAXSYM) die("too many data items");
+        if (nsym >= MAXSYM) limit("too many data items");
         Sym *sy = &syms[nsym];
         memset(sy, 0, sizeof *sy);
         snprintf(sy->label, sizeof sy->label, "D%04d", nsym);
@@ -3015,7 +3071,7 @@ static void parse_data_division(void)
         sy->linkage = in_linkage;
         if (in_linkage) {
             if (sp == 0) {                  /* a new 01: a new area */
-                if (nlinkarea >= MAXLINK) die("too many LINKAGE SECTION items");
+                if (nlinkarea >= MAXLINK) limit("too many LINKAGE SECTION items");
                 sy->link_area = nlinkarea;
                 link_root[nlinkarea++] = nsym;
             } else sy->link_area = syms[stack[0]].link_area;
@@ -3078,7 +3134,7 @@ static void parse_data_division(void)
                     if (is("TIMES")) next();
                     if (!is("DEPENDING")) die("OCCURS ... TO needs DEPENDING ON");
                     next(); if (is("ON")) next();
-                    if (npend_odo >= MAXIDX) die("too many DEPENDING ON tables");
+                    if (npend_odo >= MAXIDX) limit("too many DEPENDING ON tables");
                     snprintf(pend_odo[npend_odo].name, sizeof pend_odo[0].name, "%s", tok.text);
                     pend_odo[npend_odo].table = nsym;
                     npend_odo++;
@@ -3095,7 +3151,7 @@ static void parse_data_division(void)
                         int desc = is("DESCENDING");
                         next(); if (is("KEY")) next(); if (is("IS")) next();
                         do {
-                            if (npend_idx >= MAXIDX) die("too many indexed tables");
+                            if (npend_idx >= MAXIDX) limit("too many indexed tables");
                             snprintf(pend_idx[npend_idx].key,
                                      sizeof pend_idx[0].key, "%s", tok.text);
                             pend_idx[npend_idx].table = nsym;
@@ -3112,7 +3168,7 @@ static void parse_data_division(void)
                          * comma. Keep taking names until a clause word turns
                          * up. */
                         do {
-                            if (npend_idx >= MAXIDX) die("too many indexed tables");
+                            if (npend_idx >= MAXIDX) limit("too many indexed tables");
                             snprintf(pend_idx[npend_idx].name,
                                      sizeof pend_idx[0].name, "%s", tok.text);
                             pend_idx[npend_idx].table = nsym;
@@ -3209,6 +3265,7 @@ static void parse_data_division(void)
             }
             else if (is("DISPLAY")) { sy->usage = U_DISPLAY; saw_usage = 1; next(); }
             else if (is("VALUE")) {
+                value_line = tok.line;
                 next(); if (is("IS")) next();
                 if (is("ZERO") || is("ZEROS") || is("ZEROES")) { strcpy(sy->value, "0"); sy->has_value = 1; sy->value_zero = 1; next(); }
                 else if (is("SPACE") || is("SPACES")) { sy->has_value = 2; next(); }
@@ -3292,7 +3349,7 @@ static void parse_data_division(void)
             }
             sy->offset = cursor;
             if (sy->has_value) die("a group item may not carry VALUE here");
-            if (sp >= 32) die("group nesting too deep");
+            if (sp >= 32) limit("group nesting too deep");
             if (cur_file >= 0 && level == 1) {
                 sy->fd_file = cur_file;
                 if (files[cur_file].rec_sym < 0) files[cur_file].rec_sym = nsym;
@@ -3351,6 +3408,10 @@ static void parse_data_division(void)
                 if (sy->has_value == 1)
                     die("a numeric VALUE on a PIC X item is not implemented yet");
                 sy->bytes = pi.bytes;
+                /* IKFCBL00's IKF2126I-C: truncated to the PICTURE. */
+                if (sy->has_value == 3 && (int)strlen(sy->value) > pi.bytes)
+                    caution_at(value_line, "the VALUE literal is longer than the item; "
+                               "it is cut to the PICTURE's length");
             } else {
                 if (sy->has_value == 2)
                     die("VALUE SPACES is alphanumeric; a numeric item takes ZERO");
@@ -3360,6 +3421,7 @@ static void parse_data_division(void)
                     die("VALUE LOW-VALUES, HIGH-VALUES and QUOTES are only "
                         "implemented on PIC X items");
                 if (sy->has_value == 1) {
+                    value_fits(sy->value, pi.digits, pi.scale);
                     char scaled[34];
                     scale_literal(sy->value, sy->scale, scaled, sizeof scaled);
                     strcpy(sy->value, scaled);
@@ -3491,7 +3553,7 @@ static void parse_data_division(void)
         int nlin = 0;
         for (int i = 0; i < nfile; i++) {
             if (!files[i].linage) continue;
-            if (nsym >= MAXSYM) die("too many data items");
+            if (nsym >= MAXSYM) limit("too many data items");
             Sym *lc = &syms[nsym];
             memset(lc, 0, sizeof *lc);
             lc->level = 77;
@@ -3519,12 +3581,12 @@ static void parse_data_division(void)
             int ks = lookup(pend_idx[k].key);
             if (ks < 0) die("ASCENDING/DESCENDING KEY names an item that was not declared");
             Sym *tb = &syms[pend_idx[k].table];
-            if (tb->nkeys >= 8) die("too many KEY items on one table");
+            if (tb->nkeys >= 8) limit("too many KEY items on one table");
             if (tb->askey_sym < 0) tb->askey_sym = ks;
             tb->keys[tb->nkeys] = ks; tb->keydesc[tb->nkeys] = pend_idx[k].desc; tb->nkeys++;
             continue;
         }
-        if (nsym >= MAXSYM) die("too many data items");
+        if (nsym >= MAXSYM) limit("too many data items");
         Sym *ix = &syms[nsym];
         memset(ix, 0, sizeof *ix);
         ix->level = 77;
@@ -3705,7 +3767,7 @@ static void parse_environment(void)
             if (is("FILE-CONTROL")) { next(); expect("."); }
             while (is("SELECT")) {
                 next();
-                if (nfile >= MAXFILE) die("too many files");
+                if (nfile >= MAXFILE) limit("too many files");
                 File *f = &files[nfile];
                 memset(f, 0, sizeof *f);
                 if (is("OPTIONAL")) { f->optional = 1; next(); }   /* SELECT OPTIONAL name */
@@ -4094,7 +4156,7 @@ static const char *fig_run(int fig)
 
 static Stmt *new_stmt(int op)
 {
-    if (nstmt >= MAXSTMT) die("too many statements");
+    if (nstmt >= MAXSTMT) limit("too many statements");
     Stmt *st = &stmts[nstmt++];
     memset(st, 0, sizeof *st);
     st->op = op; st->dst = st->src = -1; st->vary_sym = -1; st->rec = -1; st->adv = -2;
@@ -4271,10 +4333,10 @@ static int corr_path(int i, int g, const char **out, int max)
 {
     const char *tmp[32]; int n = 0;
     for (int k = i; k >= 0 && k != g; k = syms[k].gparent) {
-        if (n >= 32) die("CORRESPONDING: nesting too deep");
+        if (n >= 32) limit("CORRESPONDING: nesting too deep");
         tmp[n++] = syms[k].name;
     }
-    if (n > max) die("CORRESPONDING: nesting too deep");
+    if (n > max) limit("CORRESPONDING: nesting too deep");
     for (int k = 0; k < n; k++) out[k] = tmp[n - 1 - k];
     return n;
 }
@@ -4302,7 +4364,7 @@ static int corr_pairs(int g1, int g2, int arith, int *xs, int *ys, int max)
             if (!same) continue;
             if (arith) { if (x->is_group || y->is_group || x->is_alpha || y->is_alpha || y->edited) continue; }
             else if (x->is_group && y->is_group) continue;
-            if (n >= max) die("CORRESPONDING: too many pairs");
+            if (n >= max) limit("CORRESPONDING: too many pairs");
             xs[n] = i; ys[n] = j; n++;
             break;
         }
@@ -4748,7 +4810,7 @@ static void parse_merge(void)
     int sd = file_index(tok.text);
     if (sd < 0 || !files[sd].sort) die("MERGE names something that is not an SD file");
     next();
-    if (nmerge >= MAXMERGE) die("too many MERGE statements");
+    if (nmerge >= MAXMERGE) limit("too many MERGE statements");
     use_sort = 1; use_merge = 1;
     { int cur = wslen; make_sortregs(&cur); }
     Merge *mg = &merges[nmerge];
@@ -5342,7 +5404,7 @@ static void parse_one_statement_body(void)
                     grp = nsops;
                     continue;
                 }
-                if (nsops >= MAXSOP) die("too many STRING/UNSTRING operands");
+                if (nsops >= MAXSOP) limit("too many STRING/UNSTRING operands");
                 SOp *o = &sops[nsops++];
                 memset(o, 0, sizeof *o); o->sym = o->dsym = o->insym = o->cntsym = -1;
                 parse_sop(o, 0);
@@ -5366,7 +5428,7 @@ static void parse_one_statement_body(void)
             if (is("DELIMITED")) {
                 next(); if (is("BY")) next();
                 for (;;) {
-                    if (nsops >= MAXSOP) die("too many STRING/UNSTRING operands");
+                    if (nsops >= MAXSOP) limit("too many STRING/UNSTRING operands");
                     SOp *d = &sops[nsops++];
                     memset(d, 0, sizeof *d); d->sym = d->dsym = d->insym = d->cntsym = -1;
                     if (is("ALL")) { d->all = 1; next(); }
@@ -5380,7 +5442,7 @@ static void parse_one_statement_body(void)
             st->sop_first = nsops;
             while (!tok.eof && !is(".") && !is("WITH") && !is("POINTER") && !is("TALLYING")
                    && !is("ON") && !is("OVERFLOW") && !starts_statement()) {
-                if (nsops >= MAXSOP) die("too many STRING/UNSTRING operands");
+                if (nsops >= MAXSOP) limit("too many STRING/UNSTRING operands");
                 SOp *o = &sops[nsops++];
                 memset(o, 0, sizeof *o); o->sym = o->dsym = o->insym = o->cntsym = -1;
                 o->sym = consume_sym(); o->sub = opt_subscript();
@@ -5441,7 +5503,7 @@ static void parse_one_statement_body(void)
         int recv[16], nrecv = 0;
         Node *rsub[16];
         while (!tok.eof && !is("TO") && !is("UP") && !is("DOWN")) {
-            if (nrecv >= 16) die("too many receivers in one SET");
+            if (nrecv >= 16) limit("too many receivers in one SET");
             recv[nrecv] = consume_sym();
             rsub[nrecv] = opt_subscript();
             nrecv++;
@@ -6054,7 +6116,7 @@ static void parse_one_statement_body(void)
             if (!is("WHEN")) die("SEARCH needs at least one WHEN");
             while (is("WHEN")) {
                 next();
-                if (st->nwhen >= 8) die("too many WHEN phrases on one SEARCH");
+                if (st->nwhen >= 8) limit("too many WHEN phrases on one SEARCH");
                 st->whens[st->nwhen] = parse_cond();
                 st->when_lab[st->nwhen] = ++nlabel;
                 new_stmt(ST_LABEL)->dst = st->when_lab[st->nwhen];
@@ -6101,7 +6163,7 @@ static void parse_one_statement_body(void)
             Cond *leaf = (w->kind == C_AND) ? w->cr : w;
             if (leaf->kind != C_REL || leaf->op != REL_EQ)
                 die("SEARCH ALL wants a WHEN of key (index) = value, joined by AND");
-            if (neq >= 8) die("too many keys in a SEARCH ALL WHEN");
+            if (neq >= 8) limit("too many keys in a SEARCH ALL WHEN");
             eqs[neq++] = leaf;
             if (w->kind != C_AND) break;
         }
@@ -6192,7 +6254,7 @@ static void parse_one_statement_body(void)
         if (is("USING")) {
             next();
             while (!tok.eof && !is(".") && !starts_statement()) {
-                if (st->ndop >= 64) die("too many CALL arguments: 64 is the limit here");
+                if (st->ndop >= 64) limit("more than 64 CALL arguments");
                 dop_add(st);
                 st->dop[st->ndop].sym = consume_sym();
                 st->dop[st->ndop].sub = opt_subscript();
@@ -6267,7 +6329,7 @@ static void parse_one_statement_body(void)
             next();
             while (!tok.eof && !is(".") && !is("TALLYING") && !is("REPLACING")
                    && !starts_statement()) {
-                if (ninsop >= MAXINSOP) die("too many INSPECT clauses");
+                if (ninsop >= MAXINSOP) limit("too many INSPECT clauses");
                 InsOp *o = &insops[ninsop];
                 memset(o, 0, sizeof *o);
                 o->c_sym = o->by_sym = o->bf_sym = -1;
@@ -6383,7 +6445,7 @@ static void parse_one_statement_body(void)
         if (tallying && is("REPLACING")) { next(); expect("BY"); examine_operand(&ys, ylab, &ylen); repl = 1; }
         else if (!tallying) { expect("BY"); examine_operand(&ys, ylab, &ylen); }
         if (tallying) {
-            if (ninsop >= MAXINSOP) die("too many INSPECT clauses");
+            if (ninsop >= MAXINSOP) limit("too many INSPECT clauses");
             InsOp *o = &insops[ninsop++];
             memset(o, 0, sizeof *o);
             o->c_sym = o->by_sym = o->bf_sym = -1;
@@ -6397,7 +6459,7 @@ static void parse_one_statement_body(void)
             }
         }
         if (repl) {
-            if (ninsop >= MAXINSOP) die("too many INSPECT clauses");
+            if (ninsop >= MAXINSOP) limit("too many INSPECT clauses");
             InsOp *o = &insops[ninsop++];
             memset(o, 0, sizeof *o);
             o->c_sym = o->by_sym = o->bf_sym = -1;
@@ -6554,7 +6616,7 @@ static void parse_one_statement_body(void)
             next(); at_period = 1;
             if (para_index(nm) >= 0)
                 die(a_section ? "duplicate section name" : "duplicate paragraph name");
-            if (npara >= MAXPARA) die("too many paragraphs");
+            if (npara >= MAXPARA) limit("too many paragraphs");
             snprintf(paras[npara].name, sizeof paras[npara].name, "%s", nm);
             paras[npara].is_range_end = 0;
             paras[npara].is_section = a_section;
@@ -6608,7 +6670,7 @@ static void parse_procedure(void)
         next();
         is_subprogram = 1;
         while (!is(".")) {
-            if (nusing >= MAXLINK) die("too many USING parameters");
+            if (nusing >= MAXLINK) limit("too many USING parameters");
             int i = consume_sym();
             if (!syms[i].linkage)
                 die("PROCEDURE DIVISION USING names an item that is not in the "
@@ -6627,7 +6689,7 @@ static void parse_procedure(void)
              * the statement parser sees it. */
             if (!is("USE")) { parse_sentence(); continue; }
             next();
-            if (ndecl >= MAXDECL) die("too many declarative sections");
+            if (ndecl >= MAXDECL) limit("too many declarative sections");
             if (is("BEFORE")) {
                 /* USE BEFORE REPORTING identifier, VIII 3.5: run just before
                  * the named report group is produced. */
@@ -6667,7 +6729,7 @@ static void parse_procedure(void)
                 else {
                     int fi = file_index(tok.text);
                     if (fi < 0) die("USE ... ON names something that is not a file");
-                    if (d->nfiles >= 8) die("too many files in one USE");
+                    if (d->nfiles >= 8) limit("too many files in one USE");
                     d->file[d->nfiles++] = fi;
                     next();
                 }
@@ -6678,8 +6740,11 @@ static void parse_procedure(void)
         expect("END"); expect("DECLARATIVES"); expect(".");
         decl_end_para = npara;
     }
-    int stopped = 0;
-    while (!tok.eof) parse_sentence();
+    int stopped = 0, sentences = 0;
+    while (!tok.eof) { parse_sentence(); sentences++; }
+    /* IKFCBL00's IKF1043I-W: the last sentence is taken as ended. */
+    if (sentences && !at_period && !nerrors)
+        warn("the last sentence has no period; one is assumed");
     for (int i = 0; i < nstmt; i++)
         if (stmts[i].op == ST_STOP || (is_subprogram && stmts[i].op == ST_EXITPGM))
             stopped = 1;
@@ -6918,7 +6983,7 @@ static const char *intern_mask(const unsigned char *pat, int len)
     for (int i = 0; i < nmconst; i++)
         if (mconsts[i].len == len && !memcmp(mconsts[i].b, pat, (size_t)len))
             return mconsts[i].label;
-    if (nmconst >= 64) die("too many ED patterns");
+    if (nmconst >= 64) limit("too many ED patterns");
     snprintf(mconsts[nmconst].label, sizeof mconsts[nmconst].label, "M%04d", nmconst + 1);
     memcpy(mconsts[nmconst].b, pat, (size_t)len);
     mconsts[nmconst].len = len;
@@ -6939,7 +7004,7 @@ static const char *intern_half(int v)
         die("a table or element this large needs a fullword constant, which "
             "this path does not emit yet");
     for (int i = 0; i < nhconst; i++) if (hconsts[i].v == v) return hconsts[i].label;
-    if (nhconst >= 64) die("too many halfword constants");
+    if (nhconst >= 64) limit("too many halfword constants");
     snprintf(hconsts[nhconst].label, sizeof hconsts[nhconst].label, "H%04d", nhconst + 1);
     hconsts[nhconst].v = v;
     return hconsts[nhconst++].label;
@@ -6953,7 +7018,7 @@ static int nfconst;
 static const char *intern_full(long v)
 {
     for (int i = 0; i < nfconst; i++) if (fconsts[i].v == v) return fconsts[i].label;
-    if (nfconst >= MAXFCONST) die("too many fullword constants");
+    if (nfconst >= MAXFCONST) limit("too many fullword constants");
     snprintf(fconsts[nfconst].label, sizeof fconsts[nfconst].label,
              nfconst < 999 ? "FC%03d" : "FC%04d", nfconst + 1);
     fconsts[nfconst].v = v;
@@ -7716,7 +7781,7 @@ static void gen_vsam_status(const File *f, const char *rpl, const VsFbk *tab)
 
     int ncase = 0;
     while (tab[ncase].status) ncase++;
-    if (ncase > 8) die("too many VSAM feedback cases");
+    if (ncase > 8) limit("too many VSAM feedback cases");
     if (ncase) {
         /* R15 alone does not say why, so ask the RPL. */
         rpl_load(f, rpl);
@@ -8081,7 +8146,7 @@ static const char *intern_const_len(const char *digits, int len)
             if (len > consts[i].len) consts[i].len = len;
             return consts[i].label;
         }
-    if (nconst >= MAXKCONST) die("too many numeric constants");
+    if (nconst >= MAXKCONST) limit("too many numeric constants");
     snprintf(consts[nconst].label, sizeof consts[nconst].label, "K%04d", nconst + 1);
     snprintf(consts[nconst].digits, sizeof consts[nconst].digits, "%s", digits);
     consts[nconst].len = len;
@@ -8129,7 +8194,7 @@ static const char *intern_str(const char *text, int len, int pad)
     for (int i = 0; i < nsconst; i++)
         if (sconsts[i].len == n && !memcmp(sconsts[i].text, buf, (size_t)n))
             return sconsts[i].label;
-    if (nsconst >= MAXSCONSTS) die("too many nonnumeric constants");
+    if (nsconst >= MAXSCONSTS) limit("too many nonnumeric constants");
     snprintf(sconsts[nsconst].label, sizeof sconsts[nsconst].label, "S%04d", nsconst + 1);
     sconsts[nsconst].text = pool_str(buf, n);
     sconsts[nsconst].len = n;
@@ -8177,7 +8242,7 @@ static int npend_dc;
 static int use_str, use_uns, use_inspect, max_insops, use_wto, use_wtor, use_adt, use_mvl, use_devtype, use_dcal;
 static void pend(const char *lab, const char *op, const char *opd, const char *cmt)
 {
-    if (npend_dc >= MAXSOP * 4) die("too many STRING/UNSTRING blocks");
+    if (npend_dc >= MAXSOP * 4) limit("too many STRING/UNSTRING blocks");
     pend_dc[npend_dc].lab = pool_str(lab, (int)strlen(lab));
     pend_dc[npend_dc].op  = pool_str(op,  (int)strlen(op));
     pend_dc[npend_dc].opd = pool_str(opd, (int)strlen(opd));
@@ -8418,7 +8483,7 @@ static int direct_operand(Node *r, int scale, int anyscale, int maxlen,
 static int gen_expr(Node *n, int d, int tgtscale, int want)
 {
     char b[128], wk[8], wk2[8], t[32], t2[32], op[64];
-    if (d >= 5) die("expression nests too deeply for the work-area stack");
+    if (d >= 5) limit("expression nests too deeply for the work-area stack");
     snprintf(wk,  sizeof wk,  "WK%d", d);
     snprintf(wk2, sizeof wk2, "WK%d", d + 1);
     int scale, prec, oplen = 0;
@@ -8621,7 +8686,7 @@ static int gen_expr(Node *n, int d, int tgtscale, int want)
         if (r->kind == N_NEG) die("a negative exponent is not implemented -- it has no exact decimal value");
         if (r->kind != N_SYM || syms[r->sym].scale != 0 || syms[r->sym].is_alpha || syms[r->sym].is_group)
             die("the exponent of ** must be an integer literal or an integer identifier");
-        if (d + 2 >= 5) die("expression nests too deeply for the work-area stack");
+        if (d + 2 >= 5) limit("expression nests too deeply for the work-area stack");
         int sl, pl;
         expr_shape(n->l, tgtscale, &sl, &pl);
         if (sl != 0) die("** with an identifier exponent needs an integer base; the result's scale would not be known");
@@ -8749,7 +8814,7 @@ static void gen_fpk(const char *wk, int scale)
 static void gen_fexpr(Node *n, int d)
 {
     char b[128], t[48];
-    if (d >= 7) die("expression nests too deeply for the floating-point work-area stack");
+    if (d >= 7) limit("expression nests too deeply for the floating-point work-area stack");
     use_float = 1;
     switch (n->kind) {
     case N_SYM: {
@@ -10580,7 +10645,7 @@ static unsigned char used_sv[MAXSV]; /* SVnnnn: a PERFORM site's saved exit cell
 static void perform_enter(const char *x, int r)
 {
     char b[48];
-    if (r < 0 || r >= MAXSV) die("too many PERFORM sites");
+    if (r < 0 || r >= MAXSV) limit("too many PERFORM sites");
     used_sv[r] = 1;
     snprintf(b, sizeof b, "14,%s", x);      asm_line("", "L", b, "what the exit cell holds");
     snprintf(b, sizeof b, "14,SV%04d", r);  asm_line("", "ST", b, "kept for the return");
@@ -10602,7 +10667,7 @@ static void perform_return(const char *x, int r)
 static void start_block(const char *why)
 {
     char lb[16], b[32];
-    if (nblock >= MAXBLOCK) die("too many code blocks");
+    if (nblock >= MAXBLOCK) limit("too many code blocks");
     snprintf(lb, sizeof lb, "B%04d", nblock);
     asm_line("", "BALR", "12,0", why);
     asm_line(lb, "EQU", "*", "");
@@ -16061,6 +16126,14 @@ static int write_deps(const char *df, const char *target, const char *in, int ph
     return 0;
 }
 
+/* On MVS a DD that is not there leaves errno 0, and perror() says
+ * "No Error"; say what happened. */
+static void open_failed(const char *name)
+{
+    if (errno) perror(name);
+    else fprintf(stderr, "%s: cannot be opened (is its DD statement there?)\n", name);
+}
+
 int main(int argc, char **argv)
 {
     const char *in = NULL, *outname = NULL;
@@ -16097,13 +16170,15 @@ int main(int argc, char **argv)
                        "  -I dir  a directory to find COPY text in (repeatable)\n"
                        "  -MMD    write a make rule: the output depends on the source and the\n"
                        "          copybooks it opened; -MF names the file (default: the output\n"
-                       "          with .d), -MT the target, -MP adds an empty rule per copybook\n"); return 2; }
+                       "          with .d), -MT the target, -MP adds an empty rule per copybook\n"); return RC_TERM; }
 #endif
 
+    errno = 0;
     src.fp = fopen(in, "r");
-    if (!src.fp) { perror(in); return 2; }
+    if (!src.fp) { open_failed(in); return RC_TERM; }
     src.name = in; src.p = NULL; src.line = 0;
 
+    errno = 0;
 #ifdef MVS370
     out = outname ? fopen(outname, "w") : stdout;
 #else
@@ -16112,7 +16187,7 @@ int main(int argc, char **argv)
      * mode is what turns each line into a card. */
     out = outname ? fopen(outname, "wb") : stdout;
 #endif
-    if (!out) { perror(outname); return 2; }
+    if (!out) { open_failed(outname); return RC_TERM; }
 
     next();
     parse_program_id();
@@ -16121,7 +16196,7 @@ int main(int argc, char **argv)
     parse_procedure();
     if (nerrors) {
         fprintf(stderr, "%s: %d error%s; nothing generated\n", src.name, nerrors, nerrors == 1 ? "" : "s");
-        return 1;
+        return RC_ERROR;
     }
     generate();
 
@@ -16129,15 +16204,15 @@ int main(int argc, char **argv)
      * out-of-space SYSPUNCH into ferror() and ENOSPC instead of an SD37, and
      * since 1.0.7 reports a failure writing the last block at fclose(); with
      * neither checked, a deck cut off mid-program ended RC 0 and COBCCLG
-     * assembled it (#44, from mvslovers' Mike Grossmann). RC 2 as for the
-     * other I/O failures here, so COND=(0,NE) skips the assembly. */
+     * assembled it (#44, from mvslovers' Mike Grossmann). RC 16, as for
+     * the other I/O failures here, so COBCCLG skips the assembly. */
     {
         int bad = ferror(out);
         if (out != stdout) { if (fclose(out) != 0) bad = 1; }
         else if (fflush(out) != 0) bad = 1;
         if (bad) {
             perror(outname ? outname : "output");
-            return 2;
+            return RC_TERM;
         }
     }
 #ifndef MVS370
@@ -16161,10 +16236,10 @@ int main(int argc, char **argv)
             snprintf(dfb, sizeof dfb, "%.*s.d", stem, base);
             dep_file = dfb;
         }
-        if (write_deps(dep_file, target, in, dep_phony)) return 2;
+        if (write_deps(dep_file, target, in, dep_phony)) return RC_TERM;
     }
 #else
     (void)want_deps; (void)dep_file; (void)dep_target; (void)dep_phony;
 #endif
-    return 0;
+    return max_rc;             /* 0, or 4 or 8 for warnings and cautions */
 }

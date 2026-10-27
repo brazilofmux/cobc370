@@ -168,6 +168,11 @@ copybook so that deleting one does not break the build.
 
     src/cobc370 program.cbl -o program.asm -I copybooks -MMD -MP
 
+The exit status is IKFCBL00's return code, the worst severity reported: 0
+clean, 4 warnings, 8 cautions (a doubtful entry the compiler made something
+of; the assembler is still written), 12 errors (nothing written), 16 no
+compile at all (a table of the compiler's own full, a file not to be had).
+
 ## Running on MVS 3.8j
 
 The compiler itself is a load module, `COBC370`, built on the host with

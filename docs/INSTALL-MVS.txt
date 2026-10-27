@@ -83,6 +83,23 @@ The library wants about a cylinder on a 3390.
 COBCCLG.jcl beside this file is a cataloged procedure that chains the
 whole thing: COBC370 -> IFOX00 -> IEWL -> GO, in one job.
 
+The return code is the worst severity of the compile's messages, on
+IKFCBL00's scale, so JCL written for IBM's compiler tests it rightly:
+
+   0   a clean compile.
+   4   warnings: the program as written, with something worth saying,
+       such as a last sentence without its period.
+   8   cautions: the compiler made something of a doubtful entry, such
+       as a VALUE that does not fit its PICTURE.  The assembler is
+       written, but COBCCLG, like IBM's COBUCLG, does not go on.
+  12   errors: nothing is written.
+  16   no compile at all: a table of the compiler's own is full, the
+       source or SYSPUNCH cannot be had, or the compiler failed inside.
+
+Messages go to SYSTERM, each with its line number; a warning says
+"warning:" and a caution "caution:".  COBCCLG goes on after a 4 and
+stops at 8 or more, COND=(5,LT,COBC), as COBUCLG does.
+
 
 4.  Check it works
 ------------------

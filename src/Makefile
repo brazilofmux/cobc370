@@ -73,6 +73,17 @@ test: cobc370
 	     echo "  $$t ACCEPTED -- it should have been rejected"; exit 1; \
 	   else echo "  $$t rejected"; fi; \
 	 done
+	@echo "--- the return code is IKFCBL00's: the worst severity reported ---"
+	@for t in "hello 0" "bad-rcwarn 4" "bad-rccaut 8" "bad-undeclared 12" \
+	          "bad-rclimit 16" "bad-nosuchfile 16"; do \
+	   set -- $$t; ./cobc370 $(T)/$$1.cbl -I $(T) -o /dev/null >/dev/null 2>&1; rc=$$?; \
+	   if [ $$rc -ne $$2 ]; then echo "  $$1: RC $$rc, expected $$2"; exit 1; \
+	   else echo "  $$1: RC $$rc"; fi; \
+	 done
+	@echo "--- a warning or a caution still writes the assembler ---"
+	@f=$$(mktemp); ./cobc370 $(T)/bad-rccaut.cbl -o $$f 2>/dev/null; \
+	 grep -q "CL4'ABCDEFG'" $$f || { rm -f $$f; echo "  bad-rccaut: no assembler"; exit 1; }; \
+	 rm -f $$f; echo "  bad-rccaut: written"
 	@echo "--- every error is reported, not only the first ---"
 	@n=$$(./cobc370 $(T)/bad-multi.cbl -o /dev/null 2>&1 | grep -c ':[0-9][0-9]*: '); \
 	 if [ "$$n" -ne 3 ]; then echo "  bad-multi: expected 3 messages, got $$n"; \

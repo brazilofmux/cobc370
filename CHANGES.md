@@ -7,6 +7,28 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
+## Unreleased
+
+- Return codes on IKFCBL00's scale, the worst severity reported, so JCL
+  written for IBM's compiler tests cobc370 rightly. It ended 1 for any
+  error and 2 for an I/O failure. Now: 0 clean; 4 warnings; 8 cautions,
+  where the compiler made something of a doubtful entry and still writes
+  the assembler; 12 errors, nothing written; 16 no compile at all (a table
+  of the compiler's own full, the source or SYSPUNCH not to be had, a
+  failure inside). IKFCBL00's codes measured on TK5: W 4, C 8, E 12.
+  Suggested for fort370 on H390-MVS by Bob Polmanter.
+- The first warning and cautions, each one IKFCBL00 also gives: a last
+  sentence without its period (IKF1043I-W, 4), taken as ended where it
+  had been taken silently; a VALUE literal longer than its item
+  (IKF2126I-C, 8); a numeric VALUE with more digits than its PICTURE
+  (IKF2129I-C, 8). The values are laid down as before, cut to the
+  PICTURE. None of the test programs or the production corpus draws one.
+- COBCCLG tests the compile as IBM's COBUCLG does, `COND=(5,LT,COBC)`:
+  it goes on after a 4 and stops at 8 or more. It had stopped at
+  anything but 0.
+- A DD that is missing is said to be: "dd:SYSPUNCH: cannot be opened (is
+  its DD statement there?)", where libc370 left perror() with "No Error".
+
 ## 2026-10-16 -- the new toolchain
 
 `78e91d1`, SHA256 `f80ae7f1aa5c9b95…`, 627,520 bytes, 184 tests.

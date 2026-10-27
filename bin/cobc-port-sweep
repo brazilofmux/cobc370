@@ -22,7 +22,7 @@ What is normalized before the diff, and why it is honest to do so:
     as 0xAA, 0xB3, 0xD7. The bytes in the dataset are CP037; only the
     verification channel skews them.
 
-The bad-* refusal tests stay home: their names exceed a member name,
+The bad-* refusal tests and their copybooks stay home: their names exceed a member name,
 and what they prove -- the refusal text -- is proven on the host.
 
 Assumes the TK5 rig this repository is developed against: tk5-run on PATH
@@ -82,6 +82,7 @@ def main():
         open(f'{WORK}/src/{m}', 'w').write(open(f).read())
         sh(f'{REPO}/src/cobc370', f, '-I', f'{REPO}/tests', '-o', f'{WORK}/ref/{m}.asm')
     for c in glob.glob(f'{REPO}/tests/*.cpy'):
+        if os.path.basename(c).startswith('bad-'): continue
         m = os.path.basename(c)[:-4].upper()
         open(f'{WORK}/src/{m}', 'w').write(open(c).read())
     print(f'{len(members)} tests staged and host-compiled')

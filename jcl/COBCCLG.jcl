@@ -9,6 +9,10 @@
 //*  Sample invocation at the bottom. IFOX00 needs PARM='OBJ,NODECK'
 //*  or it assembles cleanly and produces nothing, RC=16 (IFO257).
 //*
+//*  COBC370 ends with IKFCBL00's return codes, and the steps after
+//*  it test them as COBUCLG does: a 4 (warnings) goes on, an 8 or
+//*  more stops.
+//*
 //COBCCLG  PROC MEM=
 //COBC     EXEC PGM=COBC370,REGION=8192K
 //STEPLIB  DD DSN=HERC01.COBC370.LOAD,DISP=SHR
@@ -20,7 +24,7 @@
 //            SPACE=(TRK,(15,5)),
 //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
 //ASM      EXEC PGM=IFOX00,PARM='OBJ,NODECK',REGION=1024K,
-//            COND=(0,NE)
+//            COND=(5,LT,COBC)
 //SYSLIB   DD DSN=SYS1.MACLIB,DISP=SHR
 //SYSGO    DD DSN=&&OBJ,DISP=(NEW,PASS),UNIT=SYSDA,
 //            SPACE=(TRK,(15,5)),
@@ -31,13 +35,13 @@
 //SYSPRINT DD DUMMY
 //SYSIN    DD DSN=&&ASM,DISP=(OLD,DELETE)
 //LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST',REGION=1024K,
-//            COND=((0,NE,COBC),(8,LE,ASM))
+//            COND=((5,LT,COBC),(8,LE,ASM))
 //SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
 //SYSLMOD  DD DSN=&&LOAD(GO),DISP=(NEW,PASS),UNIT=SYSDA,
 //            SPACE=(TRK,(20,10,5))
 //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //SYSPRINT DD DUMMY
-//GO       EXEC PGM=*.LKED.SYSLMOD,COND=((0,NE,COBC),(8,LE,ASM))
+//GO       EXEC PGM=*.LKED.SYSLMOD,COND=((5,LT,COBC),(8,LE,ASM))
 //SYSOUT   DD SYSOUT=*
 //SYSUDUMP DD SYSOUT=*
 //         PEND
