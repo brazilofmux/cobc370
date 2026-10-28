@@ -1,6 +1,7 @@
 # build products
 src/cobc370
 src/*.o
+out/
 
 # Finder metadata
 .DS_Store

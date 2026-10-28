@@ -133,7 +133,38 @@ oracle:
 	  echo "--- $$t"; cat tests/$$t.expected; \
 	done
 
+# The MVS package, in ../out/mvs: COBC370.xmit (TSO TRANSMIT of the load
+# library), COBC370.aws (the same library and COBCCLG on a standard-label
+# tape, bin/cobc-mktape) and cobc370-mvs.zip with both and the documents.
+# The clock is pinned, as370 and ld370 stamping it into the deck and the
+# module, so two builds are the same bytes and the SHA256s reproduce; a
+# release sets MVSDATE (YYDDD) and ASMDATE (MM/DD/YY) to its own day.
+# cc370 1.6.3 with libc370 2.16.0 must be first on PATH.
+MVSDATE ?= 26301
+ASMDATE ?= 10/28/26
+MVSCLOCK = ASMDATE=$(ASMDATE) ASMTIME=12.00 LDDATE=$(MVSDATE) LDTIME=120000
+MVS = ../out/mvs
+mvs: $(MVS)/cobc370-mvs.zip
+
+$(MVS)/COBC370.xmit: cobc370.c picture.c picture_scan.c picture.h mvs370-millicode.c Makefile
+	@mkdir -p $(MVS)
+	cd .. && $(MVSCLOCK) cc370 -DMVS370 -O1 -std=gnu99 -I src \
+	    src/cobc370.c src/picture.c src/picture_scan.c src/mvs370-millicode.c \
+	    -Wl,--sparse-text -o out/mvs/COBC370 -flinker-output=xmit
+
+$(MVS)/COBC370.aws: $(MVS)/COBC370.xmit ../jcl/COBCCLG.jcl ../bin/cobc-mktape
+	LDDATE=$(MVSDATE) python3 ../bin/cobc-mktape $(MVS)/COBC370.xmit ../jcl/COBCCLG.jcl $@
+
+$(MVS)/cobc370-mvs.zip: $(MVS)/COBC370.xmit $(MVS)/COBC370.aws ../docs/INSTALL-MVS.txt ../CHANGES.md
+	rm -rf $(MVS)/cobc370-mvs $@ && mkdir -p $(MVS)/cobc370-mvs
+	cp $(MVS)/COBC370.xmit $(MVS)/COBC370.aws ../jcl/COBCCLG.jcl ../CHANGES.md $(MVS)/cobc370-mvs/
+	cp ../docs/INSTALL-MVS.txt $(MVS)/cobc370-mvs/INSTALL.txt
+	cd $(MVS)/cobc370-mvs && shasum -a 256 COBC370.xmit COBC370.aws > SHA256 \
+	    && touch -t 20$$(echo $(ASMDATE) | awk -F/ '{print $$3$$1$$2}')1200 * . \
+	    && cd .. && zip -qX -r cobc370-mvs.zip cobc370-mvs
+	@cat $(MVS)/cobc370-mvs/SHA256
+
 clean:
 	rm -f cobc370 ../tests/*.asm
 
-.PHONY: test check-asm oracle ragel clean
+.PHONY: test check-asm oracle ragel clean mvs
