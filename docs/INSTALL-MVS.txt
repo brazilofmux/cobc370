@@ -2,19 +2,50 @@ cobc370 for MVS 3.8j -- installing the compiler
 ===============================================
 
 COBC370.xmit holds one load module, COBC370: a COBOL-74 compiler that
-runs on the guest.  Nothing here needs a C compiler on MVS.  The module
+runs on the guest.  COBC370.aws is the same module on a tape image for
+Hercules (section 0).  Nothing here needs a C compiler on MVS.  The module
 was cross-compiled on a host and this file is the finished result.
 
 These instructions do not go stale, but the figures below describe one
-particular build -- the 2026-10-16 release.  Check them against
+particular build -- the 2026-10-28 release.  Check them against
 whatever you actually downloaded rather than against this file.
 
-  SHA256   f80ae7f1aa5c9b953518f836258cfae1d13df5afbc9d81b60c789461ecd2c469
-  size     627520 bytes, FB80 when it lands on the guest
-  built    from cobc370 78e91d1 with mvslovers/cc370 1.6.3
-           and mvslovers/libc370 2.16.0
-  tested   all 184 test programs compiled on the guest by this module,
-           emitting assembler byte-identical to the host compiler's
+  COBC370.xmit  SHA256 aa03e5e0e01be8ae65c35c030a8c5f4131e370f8915b56499b5e75d89d9dfa74
+                627920 bytes, FB80 when it lands on the guest
+  COBC370.aws   SHA256 3e6e55fcf5e1ba05bb2dd9f00ac3b65e9798dca0d26342089804eb620bbdf133
+                628355 bytes, volume COBC70
+  built    from cobc370 ed954d7 with mvslovers/cc370 1.6.3
+           and mvslovers/libc370 2.16.0, by make mvs
+  tested   restored from the tape on TK5, then all 184 test programs
+           compiled on the guest by that module, emitting assembler
+           byte-identical to the host compiler's
+
+
+0.  Or from tape, on Hercules
+-----------------------------
+
+COBC370.aws is the same load library on a standard-label tape, volume
+COBC70, IEBCOPY unloaded, with COBCCLG as its second file.  Mount it on
+a tape drive (from the Hercules console, devinit 480 COBC370.aws, with
+the file where Hercules looks) and run one job; then go on at section 3.
+Sections 1 and 2, the XMIT, are the same library the other way.
+
+    //RESTORE  EXEC PGM=IEBCOPY
+    //SYSPRINT DD SYSOUT=*
+    //TAPE1    DD DSN=COBC370.LOAD,UNIT=TAPE,VOL=SER=COBC70,
+    //            LABEL=(1,SL),DISP=OLD
+    //LOADLIB  DD DSN=your.COBC370.LOAD,DISP=(NEW,CATLG),
+    //            UNIT=SYSDA,SPACE=(CYL,(1,1,10))
+    //SYSUT3   DD UNIT=SYSDA,SPACE=(CYL,(1,1))
+    //SYSIN    DD *
+     COPY INDD=TAPE1,OUTDD=LOADLIB
+    /*
+
+  The library takes its DCB from the tape.  The second file,
+  COBCCLG.JCL (FB 80, LABEL=(2,SL)), is the procedure: IEBGENER it
+  into a PROCLIB member, or copy it into a job.  For a new release into
+  the library you have, give LOADLIB DISP=OLD (no SPACE) and replace
+  the member: COPY INDD=((TAPE1,R)),OUTDD=LOADLIB.
 
 
 1.  Get the XMIT onto the guest
@@ -117,7 +148,12 @@ cc370 toolchain and libc370 installed -- cc370 1.6.3 with libc370
 2.16.0 for this build, which cc370's install.sh puts in place together --
 with that cc370 first on PATH, and then, from a cobc370 checkout:
 
-    ASMDATE=10/16/26 ASMTIME=12.00 LDDATE=26289 LDTIME=120000 \
+    make -C src mvs MVSDATE=26301 ASMDATE=10/28/26
+
+writes the whole package into out/mvs: COBC370.xmit, COBC370.aws and
+cobc370-mvs.zip.  For the XMIT alone, by hand:
+
+    ASMDATE=10/28/26 ASMTIME=12.00 LDDATE=26301 LDTIME=120000 \
     cc370 -DMVS370 -O1 -std=gnu99 -I src \
           src/cobc370.c src/picture.c src/picture_scan.c \
           src/mvs370-millicode.c -Wl,--sparse-text \
@@ -126,7 +162,8 @@ with that cc370 first on PATH, and then, from a cobc370 checkout:
 The four clock variables are what make it bit-reproducible: as370 and
 ld370 each stamp the current date and time into the deck and the module,
 so without pinning them two builds of identical source differ in those
-bytes and the SHA256 above will not reproduce.  Pick any values you like
+bytes and the SHA256s above will not reproduce.  The tape's labels are
+dated from LDDATE, so its SHA256 reproduces too.  Pick any values you like
 -- they only have to match between the builds you want to compare.
 
   --sparse-text leaves the compiler's zeroed tables out of the module:

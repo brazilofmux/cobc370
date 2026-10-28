@@ -7,8 +7,20 @@ names the cobc370 commit it was built from, so `git log` between two
 entries has the detail. Tests: how many compile on the guest byte-identical
 to the host compiler, which is what the port sweep checks.
 
-## Unreleased
+## 2026-10-28 -- return codes and a tape
 
+`ed954d7`, SHA256 `aa03e5e0e01be8ae…`, 627,920 bytes, 184 tests.
+COBC370.aws SHA256 `3e6e55fcf5e1ba05…`, 628,355 bytes.
+
+- The package on a standard-label tape for Hercules, COBC370.aws, volume
+  COBC70: the load library IEBCOPY unloaded, and COBCCLG. Mount it and one
+  IEBCOPY job installs the compiler, with no file transfer and no RECEIVE
+  (INSTALL.txt, section 0). The XMIT is still there for whoever prefers
+  it. The tape is made the way fort370's is, which Bob Polmanter asked for
+  there; on TK5 the restore, the replacing restore and the port sweep of
+  the restored compiler all passed.
+- `make -C src mvs` builds the whole package with the clock pinned: the
+  XMIT, the tape and cobc370-mvs.zip, the same bytes each time.
 - Return codes on IKFCBL00's scale, the worst severity reported, so JCL
   written for IBM's compiler tests cobc370 rightly. It ended 1 for any
   error and 2 for an I/O failure. Now: 0 clean; 4 warnings; 8 cautions,

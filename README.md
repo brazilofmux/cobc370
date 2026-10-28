@@ -142,7 +142,9 @@ explains why it is not S0C7 and what was tried.
 ## Building
 
 Each dated release carries host binaries for Linux, macOS and Windows,
-built and checked by CI on their own platforms. The Linux and Windows
+built and checked by CI on their own platforms, and the MVS package:
+COBC370.xmit, COBC370.aws and cobc370-mvs.zip, whose SHA256s are in the
+release notes and reproduce from `make -C src mvs`. The Linux and Windows
 ones are static. The macOS one is unsigned: if it came through a browser,
 `xattr -d com.apple.quarantine cobc370` lets it run. To build from source:
 
@@ -177,8 +179,10 @@ compile at all (a table of the compiler's own full, a file not to be had).
 
 The compiler itself is a load module, `COBC370`, built on the host with
 [cc370](https://github.com/mvslovers/cc370) (GCC 3.4.6 for i370) against
-[libc370](https://github.com/mvslovers/libc370) and delivered as an XMIT.
-`docs/INSTALL-MVS.txt` covers receiving and installing it. On the guest it
+[libc370](https://github.com/mvslovers/libc370) and delivered as an XMIT
+and as a standard-label tape image for Hercules, `COBC370.aws`, which one
+IEBCOPY job restores. `docs/INSTALL-MVS.txt` covers installing it either way,
+and `make -C src mvs` builds both, reproducibly. On the guest it
 reads SYSIN, writes the assembler to SYSPUNCH and runs in `REGION=8192K`.
 
 `jcl/COBCCLG.jcl` is the closed loop -- COBC370, IFOX00, IEWL, GO -- with the
